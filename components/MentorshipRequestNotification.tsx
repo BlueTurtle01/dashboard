@@ -13,7 +13,7 @@ interface AthleteProfile {
   events?: {
     id: string;
     name: string;
-  } | null;
+  }[] | null;
 }
 
 interface MentorshipRequestNotificationProps {
