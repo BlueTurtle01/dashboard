@@ -176,8 +176,6 @@ type TemplateForm = {
 
 type PendingTemplateSessionSlot = {
   weekLocalId: string;
-  dayLabel: string;
-  dayNumber: number;
 };
 
 type WeekTemplateSlotRow = {
@@ -426,8 +424,6 @@ function mapTemplateToEditableSessionType(row: SessionTemplateRow): EditableSess
 function buildEditableSessionFromTemplate(
   row: SessionTemplateRow | null,
   weekNumber: number,
-  dayLabel: string,
-  dayNumber: number,
   sortOrder: number,
   exerciseNameMap: Record<string, string>,
 ): EditableSession | null {
@@ -441,10 +437,10 @@ function buildEditableSessionFromTemplate(
   return {
     localId: makeLocalId("session"),
     dbId: null,
-    dayLabel,
+    dayLabel: "",
     sortOrder,
     type: mapTemplateToEditableSessionType(row),
-    name: row.name ?? formatOptionLabel(row.subtype) ?? `Week ${weekNumber} Session ${sortOrder}`,
+    name: row.name ?? formatOptionLabel(row.subtype) ?? `Session ${sortOrder}`,
     description: row.type === "functional" ? buildFunctionalDescription(row) : row.description ?? "",
     duration: row.duration_minutes != null ? `${row.duration_minutes} min` : legacyDuration,
     intensity: row.target_intensity ?? "",
@@ -453,7 +449,7 @@ function buildEditableSessionFromTemplate(
     runTimeType: "any",
     runStartTime: "",
     isTimeStrict: false,
-    dayNumber: String(dayNumber),
+    dayNumber: "",
     numSets: (row.session_data as any)?.num_sets?.toString() ?? "",
     setDurationMinutes: (row.session_data as any)?.set_duration_minutes?.toString() ?? "",
     exercises: (row.session_template_exercises ?? [])
@@ -970,8 +966,6 @@ export default function EditProgramTemplatePage() {
           return buildEditableSessionFromTemplate(
             slot.session_templates,
             week.weekNumber,
-            slot.slot_name,
-            index + 1,
             slot.sort_order,
             exerciseNameMap,
           );
@@ -1099,16 +1093,9 @@ export default function EditProgramTemplatePage() {
     }));
   }
 
-  function addSession(weekLocalId: string) {
+  function addBlankSession(weekLocalId: string) {
     updateWeek(weekLocalId, (week) => {
       const nextSortOrder = Math.max(0, ...week.sessions.map((session) => session.sortOrder)) + 1;
-      const nextDayNumber =
-        Math.max(
-          0,
-          ...week.sessions.map(
-            (session) => Number.parseInt(session.dayNumber || "0", 10) || 0,
-          ),
-        ) + 1;
 
       return {
         ...week,
@@ -1117,10 +1104,10 @@ export default function EditProgramTemplatePage() {
           {
             localId: makeLocalId("session"),
             dbId: null,
-            dayLabel: `Day ${nextDayNumber}`,
+            dayLabel: "",
             sortOrder: nextSortOrder,
             type: "Easy",
-            name: `Week ${week.weekNumber} Session ${nextSortOrder}`,
+            name: `Session ${nextSortOrder}`,
             description: "",
             duration: "",
             intensity: "",
@@ -1129,7 +1116,7 @@ export default function EditProgramTemplatePage() {
             runTimeType: "any",
             runStartTime: "",
             isTimeStrict: false,
-            dayNumber: String(nextDayNumber),
+            dayNumber: "",
             numSets: "",
             setDurationMinutes: "",
             exercises: [],
@@ -1137,10 +1124,12 @@ export default function EditProgramTemplatePage() {
         ],
       };
     });
+
+    showTemporaryStatus("Blank session added.", 1500);
   }
 
-  async function openTemplateSessionPicker(weekLocalId: string, dayLabel: string, dayNumber: number) {
-    setPendingSessionSlot({ weekLocalId, dayLabel, dayNumber });
+  async function openTemplateSessionPicker(weekLocalId: string) {
+    setPendingSessionSlot({ weekLocalId });
     setSessionTemplateSearch("");
     setSearchingTemplates(true);
 
@@ -1191,50 +1180,6 @@ export default function EditProgramTemplatePage() {
     setSearchingTemplates(false);
   }
 
-  function createBlankSessionForDay(weekLocalId: string, dayLabel: string, dayNumber: number) {
-    updateWeek(weekLocalId, (week) => {
-      const nextSortOrder = Math.max(0, ...week.sessions.map((session) => session.sortOrder)) + 1;
-      const existingForDay = week.sessions.filter((session) => {
-        const sessionDayNumber = Number.parseInt(session.dayNumber || "0", 10) || 0;
-        return (
-          sessionDayNumber === dayNumber ||
-          normalizeDayLabel(session.dayLabel) === normalizeDayLabel(dayLabel)
-        );
-      }).length;
-
-      const sessionNameSuffix = existingForDay > 0 ? ` ${existingForDay + 1}` : "";
-
-      return {
-        ...week,
-        sessions: [
-          ...week.sessions,
-          {
-            localId: makeLocalId("session"),
-            dbId: null,
-            dayLabel,
-            sortOrder: nextSortOrder,
-            type: "Easy",
-            name: `${dayLabel} Session${sessionNameSuffix}`,
-            description: "",
-            duration: "",
-            intensity: "",
-            isKeySession: false,
-            sessionTemplateId: "",
-            runTimeType: "any",
-            runStartTime: "",
-            isTimeStrict: false,
-            dayNumber: String(dayNumber),
-            numSets: "",
-            setDurationMinutes: "",
-            exercises: [],
-          },
-        ],
-      };
-    });
-
-    cancelPendingTemplateSession();
-    showTemporaryStatus("Blank session added.", 1500);
-  }
 
   function createSessionFromTemplateRow(template: SessionTemplateRow) {
     if (!pendingSessionSlot) return;
@@ -1244,8 +1189,6 @@ export default function EditProgramTemplatePage() {
       const builtSession = buildEditableSessionFromTemplate(
         template,
         week.weekNumber,
-        pendingSessionSlot.dayLabel,
-        pendingSessionSlot.dayNumber,
         nextSortOrder,
         exerciseNameMap,
       );
@@ -1835,35 +1778,24 @@ export default function EditProgramTemplatePage() {
                         </div>
 
                         <div className="flex flex-wrap items-center justify-end gap-2">
-                          <div className="flex flex-wrap gap-2">
-                            {weekdayQuickAddOptions.map((day) => {
-                              const isPendingForDay =
-                                pendingSessionSlot?.weekLocalId === week.localId &&
-                                pendingSessionSlot.dayNumber === day.dayNumber;
-
-                              return (
-                                <button
-                                  key={day.label}
-                                  type="button"
-                                  onClick={() => openTemplateSessionPicker(week.localId, day.label, day.dayNumber)}
-                                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                                    isPendingForDay
-                                      ? "border-zinc-900 bg-zinc-900 text-white"
-                                      : "border-zinc-300 bg-white hover:bg-zinc-100"
-                                  }`}
-                                >
-                                  +{day.label}
-                                </button>
-                              );
-                            })}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => addBlankSession(week.localId)}
+                            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
+                          >
+                            Add Blank Session
+                          </button>
 
                           <button
                             type="button"
-                            onClick={() => addSession(week.localId)}
-                            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
+                            onClick={() => openTemplateSessionPicker(week.localId)}
+                            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                              pendingSessionSlot?.weekLocalId === week.localId
+                                ? "border-zinc-900 bg-zinc-900 text-white"
+                                : "border-zinc-300 bg-white hover:bg-zinc-100"
+                            }`}
                           >
-                            Add Session
+                            Add Session From Template
                           </button>
 
                           <button
@@ -2029,11 +1961,7 @@ export default function EditProgramTemplatePage() {
                             <button
                               type="button"
                               onClick={() =>
-                                createBlankSessionForDay(
-                                  pendingSessionSlot.weekLocalId,
-                                  pendingSessionSlot.dayLabel,
-                                  pendingSessionSlot.dayNumber,
-                                )
+                                addBlankSession(pendingSessionSlot.weekLocalId)
                               }
                               className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-100"
                             >
