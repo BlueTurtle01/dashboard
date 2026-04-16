@@ -217,6 +217,28 @@ export function checkTechnicalTraining(plan: GeneratedPlan): PlanWarning[] {
   return warnings;
 }
 
+export function checkMissingTaper(plan: GeneratedPlan): PlanWarning[] {
+  const warnings: PlanWarning[] = [];
+
+  if (!plan.weeks || plan.weeks.length === 0) {
+    return [];
+  }
+
+  // Check the last 2 weeks to see if there's a Taper phase
+  const lastTwoWeeks = plan.weeks.slice(-2);
+  const hasTaper = lastTwoWeeks.some((week) => week.phase === "Taper");
+
+  if (!hasTaper) {
+    warnings.push({
+      category: "preparation",
+      severity: "warning",
+      message: "Plan is missing a Taper phase in the final weeks before the event. Consider adding a taper week for peak performance.",
+    });
+  }
+
+  return warnings;
+}
+
 /**
  * Calculate all warnings for a plan
  */
@@ -237,6 +259,7 @@ export function calculateAllWarnings(
   warnings.push(...checkPlanDuration(plan));
   warnings.push(...checkLoadedTraining(plan));
   warnings.push(...checkTechnicalTraining(plan));
+  warnings.push(...checkMissingTaper(plan));
 
   return warnings;
 }

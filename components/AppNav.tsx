@@ -71,12 +71,6 @@ export default function AppNav() {
                   Coach Dashboard
                 </Link>
                 <Link
-                  href="/coach/athlete-overview"
-                  className="px-3 py-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900 rounded hover:bg-zinc-50"
-                >
-                  Athletes
-                </Link>
-                <Link
                   href="/coach/program-templates"
                   className="px-3 py-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900 rounded hover:bg-zinc-50"
                 >
