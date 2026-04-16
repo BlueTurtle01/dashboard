@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  min-height: 100vh;
+  background-color: #ffffff;
+  color: #000000;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+input,
+textarea,
+select {
+  color: #000000;
+}
+
+::placeholder {
+  color: #666666;
+  opacity: 1;
+}
+
+/* Light color palette for plan highlighting and calendar elements */
+.light-card-bg {
+  background-color: #f9fafb;
+}
+
+.light-card-border {
+  border-color: #e5e7eb;
+}
+
+.light-accent-blue {
+  background-color: #dbeafe;
+}
+
+.light-accent-amber {
+  background-color: #fef3c7;
+}
+
+.light-accent-green {
+  background-color: #d1fae5;
+}
+
+.light-accent-purple {
+  background-color: #ede9fe;
+}
+
+.light-accent-gray {
+  background-color: #e5e7eb;
+}

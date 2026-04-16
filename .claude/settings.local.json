@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Supabase__list_projects",
+      "Bash(npm install:*)",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(grep -r \"supabase.co\" .env*)",
+      "Bash(grep -v \"^\\\\s*//\")",
+      "Bash(find app:*)",
+      "Bash(npm run:*)",
+      "Bash(grep -L \"^async function\" app/**/*.tsx)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -n \"activeTab === \\\\\"training\\\\\"\\\\\\\\|activeTab === \\\\\"preferences\\\\\"\\\\\\\\|activeTab === \\\\\"constraints\\\\\"\\\\\\\\|activeTab === \\\\\"schedule\\\\\"\\\\\\\\|activeTab === \\\\\"races\\\\\"\" \"c:\\\\Users\\\\danie\\\\OneDrive\\\\Documents\\\\Coach Dashboard\\\\Coach Dashboard\\\\endurance-planner\\\\app\\\\intake\\\\page.tsx\")",
+      "Bash(grep -n \"activeTab === \\\\\"training\\\\\"\\\\\\\\|^        \\)}\" \"c:\\\\Users\\\\danie\\\\OneDrive\\\\Documents\\\\Coach Dashboard\\\\Coach Dashboard\\\\endurance-planner\\\\app\\\\intake\\\\page.tsx\")",
+      "Read(//tmp/**)",
+      "mcp__claude_ai_Supabase__list_tables",
+      "Bash(grep -l \"Target intensity\" \"c:/Users/danie/OneDrive/Documents/Coach Dashboard/Coach Dashboard/endurance-planner/app/coach\"/**/*.tsx)",
+      "Bash(find \"c:/Users/danie/OneDrive/Documents/Coach Dashboard/Coach Dashboard/endurance-planner/app\" -name \"*.tsx\" -exec grep -l \"Target intensity\" {} \\\\;)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(python3)",
+      "Bash(grep -n \"equipment_unavailable\\\\|equipment_avoid\" app/coach/plan/[planId]/page.tsx)",
+      "Bash(grep -B 5 -A 10 'equipment_unavailable' app/coach/plan/[planId]/page.tsx)",
+      "Bash(grep -n \"baseline_fitness\" app/coach/plan/[planId]/page.tsx)",
+      "Bash(grep -n \"deriveEquipmentAvoid\" app/coach/plan/[planId]/page.tsx)",
+      "Bash(grep -n \"function deriveEquipmentUnavailable\" app/coach/plan/[planId]/page.tsx)",
+      "mcp__claude_ai_Supabase__list_migrations",
+      "WebFetch(domain:lcwvxpdqscuumpgniaqh.supabase.co)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
