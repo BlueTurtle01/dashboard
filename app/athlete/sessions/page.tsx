@@ -325,6 +325,66 @@ export default function SessionsPage() {
                       </div>
                     )}
 
+                    {session.description && (
+                      <div className="mt-3 p-3 bg-zinc-50 rounded-lg text-sm text-zinc-700 whitespace-pre-wrap">
+                        {session.description}
+                      </div>
+                    )}
+
+                    {/* Extended session details */}
+                    {(session.activity || session.terrain || session.elevationGainMeters || session.packWeightKg || session.strides || session.warmupMinutes || session.cooldownMinutes || session.intervalReps) && (
+                      <div className="mt-3 space-y-2 text-sm">
+                        {session.activity && (
+                          <div className="flex gap-2">
+                            <span className="font-semibold text-zinc-600 min-w-20">Activity:</span>
+                            <span className="text-zinc-900">{session.activity}{session.subtype ? ` - ${session.subtype}` : ""}</span>
+                          </div>
+                        )}
+                        {session.terrain && (
+                          <div className="flex gap-2">
+                            <span className="font-semibold text-zinc-600 min-w-20">Terrain:</span>
+                            <span className="text-zinc-900">{session.terrain}</span>
+                          </div>
+                        )}
+                        {session.elevationGainMeters && (
+                          <div className="flex gap-2">
+                            <span className="font-semibold text-zinc-600 min-w-20">Elevation:</span>
+                            <span className="text-zinc-900">{session.elevationGainMeters}m</span>
+                          </div>
+                        )}
+                        {session.packWeightKg && (
+                          <div className="flex gap-2">
+                            <span className="font-semibold text-zinc-600 min-w-20">Pack Weight:</span>
+                            <span className="text-zinc-900">{session.packWeightKg}kg</span>
+                          </div>
+                        )}
+                        {session.strides && (
+                          <div className="flex gap-2">
+                            <span className="font-semibold text-zinc-600 min-w-20">Strides:</span>
+                            <span className="text-zinc-900">{session.strides}</span>
+                          </div>
+                        )}
+                        {session.warmupMinutes && (
+                          <div className="flex gap-2">
+                            <span className="font-semibold text-zinc-600 min-w-20">Warm-up:</span>
+                            <span className="text-zinc-900">{session.warmupMinutes} min</span>
+                          </div>
+                        )}
+                        {session.cooldownMinutes && (
+                          <div className="flex gap-2">
+                            <span className="font-semibold text-zinc-600 min-w-20">Cool-down:</span>
+                            <span className="text-zinc-900">{session.cooldownMinutes} min</span>
+                          </div>
+                        )}
+                        {session.intervalReps && (
+                          <div className="flex gap-2">
+                            <span className="font-semibold text-zinc-600 min-w-20">Intervals:</span>
+                            <span className="text-zinc-900">{session.intervalReps} x {session.intervalDuration || "?"}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {isSelected && (
                       <div className="mt-4 space-y-3 pt-3 border-t border-zinc-200">
                         <div>

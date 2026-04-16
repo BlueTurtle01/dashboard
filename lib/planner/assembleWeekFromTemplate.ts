@@ -37,6 +37,17 @@ export interface AssembledPlanSession {
   assembledFromWeekTemplate: true;
   sourceWeekTemplateId: string;
   exercises: AssembledPlanExercise[];
+  // Extended session fields
+  activity?: string;
+  subtype?: string;
+  terrain?: string;
+  elevationGainMeters?: number;
+  packWeightKg?: number;
+  strides?: string;
+  warmupMinutes?: number;
+  cooldownMinutes?: number;
+  intervalReps?: number;
+  intervalDuration?: string;
 }
 
 // ─── Day-assignment types and utilities ─────────────────────────────────────
@@ -480,6 +491,18 @@ export async function assembleWeeksFromTemplates(
           });
 
         const subtype = (st?.subtype as string | null) ?? "";
+
+        // Extract extended fields from slot data (if available - may be from program templates or week templates)
+        const activity = (slot as any)?.activity ?? (st?.activity as string | null) ?? undefined;
+        const terrain = (slot as any)?.terrain ?? undefined;
+        const elevationGainMeters = (slot as any)?.elevation_gain_meters ?? undefined;
+        const packWeightKg = (slot as any)?.pack_weight_kg ?? undefined;
+        const strides = (slot as any)?.strides ?? undefined;
+        const warmupMinutes = (slot as any)?.warmup_minutes ?? undefined;
+        const cooldownMinutes = (slot as any)?.cooldown_minutes ?? undefined;
+        const intervalReps = (slot as any)?.interval_reps ?? undefined;
+        const intervalDuration = (slot as any)?.interval_duration ?? undefined;
+
         return {
           id: `session-${week.weekNumber}-${index + 1}-wt-${slot.id as string}`,
           weekId: `week-${week.weekNumber}`,
@@ -501,6 +524,17 @@ export async function assembleWeeksFromTemplates(
           assembledFromWeekTemplate: true as const,
           sourceWeekTemplateId: templateId,
           exercises,
+          // Extended fields
+          activity,
+          subtype: subtype || undefined,
+          terrain,
+          elevationGainMeters,
+          packWeightKg,
+          strides,
+          warmupMinutes,
+          cooldownMinutes,
+          intervalReps,
+          intervalDuration,
         };
       });
 

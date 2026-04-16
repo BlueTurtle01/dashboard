@@ -99,6 +99,19 @@ type ProgramTemplateSessionRow = {
   day_number: number | null;
   session_templates: SessionTemplateRelation;
   program_template_session_exercises: ProgramTemplateSessionExerciseRow[] | null;
+  // Extended fields
+  activity: string | null;
+  subtype: string | null;
+  distance_km: number | null;
+  terrain: string | null;
+  elevation_gain_meters: number | null;
+  pack_weight_kg: number | null;
+  strides: string | null;
+  warmup_minutes: number | null;
+  cooldown_minutes: number | null;
+  interval_reps: number | null;
+  interval_duration: string | null;
+  tags: string[] | null;
 };
 
 type TemplateCard = {
@@ -1031,6 +1044,18 @@ export default function ViewProgramTemplatePage() {
             is_time_strict,
             week_number,
             day_number,
+            activity,
+            subtype,
+            distance_km,
+            terrain,
+            elevation_gain_meters,
+            pack_weight_kg,
+            strides,
+            warmup_minutes,
+            cooldown_minutes,
+            interval_reps,
+            interval_duration,
+            tags,
             session_templates:session_templates!program_template_sessions_session_template_id_fkey (
               distance_km,
               type,
@@ -1955,6 +1980,116 @@ export default function ViewProgramTemplatePage() {
                                 {session.description}
                               </div>
                             ) : null}
+
+                            {/* Extended session details */}
+                            <div className="mb-4 space-y-3">
+                              {session.activity ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                                    Activity
+                                  </div>
+                                  <div className="mt-1 font-medium text-zinc-900">
+                                    {session.activity}
+                                    {session.subtype ? ` - ${session.subtype}` : ""}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {session.terrain ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                                    Terrain
+                                  </div>
+                                  <div className="mt-1 font-medium text-zinc-900">
+                                    {session.terrain}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {session.elevation_gain_meters ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                                    Elevation Gain
+                                  </div>
+                                  <div className="mt-1 font-medium text-zinc-900">
+                                    {session.elevation_gain_meters}m
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {session.pack_weight_kg ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                                    Pack Weight
+                                  </div>
+                                  <div className="mt-1 font-medium text-zinc-900">
+                                    {session.pack_weight_kg}kg
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {session.strides ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                                    Strides
+                                  </div>
+                                  <div className="mt-1 font-medium text-zinc-900">
+                                    {session.strides}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {session.warmup_minutes ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                                    Warm-up
+                                  </div>
+                                  <div className="mt-1 font-medium text-zinc-900">
+                                    {session.warmup_minutes} min
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {session.cooldown_minutes ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                                    Cool-down
+                                  </div>
+                                  <div className="mt-1 font-medium text-zinc-900">
+                                    {session.cooldown_minutes} min
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {session.interval_reps ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                                    Interval Details
+                                  </div>
+                                  <div className="mt-1 font-medium text-zinc-900">
+                                    {session.interval_reps} x {session.interval_duration}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {session.tags && session.tags.length > 0 ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                                    Tags
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {session.tags.map((tag) => (
+                                      <span
+                                        key={tag}
+                                        className="rounded-full border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-700"
+                                      >
+                                        {tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
 
                             {(session.program_template_session_exercises ?? []).length > 0 ? (
                               <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">

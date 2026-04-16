@@ -113,6 +113,14 @@ export interface PlanSession {
   exercises: PlanExercise[];
   activity?: string;
   subtype?: string;
+  terrain?: string;
+  elevationGainMeters?: number;
+  packWeightKg?: number;
+  strides?: string;
+  warmupMinutes?: number;
+  cooldownMinutes?: number;
+  intervalReps?: number;
+  intervalDuration?: string;
 }
 
 export interface PlanWeek {
