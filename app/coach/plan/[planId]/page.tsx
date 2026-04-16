@@ -1205,6 +1205,8 @@ export default function PlanEditorPage() {
   const [history, setHistory] = useState<AthletePlanSnapshotRow[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
   const [pendingSessionSlot, setPendingSessionSlot] = useState<PendingSessionSlot | null>(null);
+  const [pendingSessionType, setPendingSessionType] = useState<"gym" | "functional" | null>(null);
+  const [creatingBlankSessionWeekId, setCreatingBlankSessionWeekId] = useState<string | null>(null);
   const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
   const [sessionTemplateResults, setSessionTemplateResults] = useState<SessionTemplateRow[]>([]);
   const [adHocMode, setAdHocMode] = useState<"search" | "create">("search");
@@ -1901,8 +1903,63 @@ export default function PlanEditorPage() {
     setSearchingTemplates(false);
   }
 
+  async function openTemplateSessionPicker(weekId: string, sessionType: "gym" | "functional") {
+    const dayLabel = autoAssignDay(weekId);
+    setPendingSessionSlot({ weekId, dayLabel });
+    setPendingSessionType(sessionType);
+    setSessionTemplateSearch("");
+    setSessionTemplateResults([]);
+    setSearchingTemplates(true);
+
+    // Load session templates of the specified type when picker opens
+    const { data, error } = await supabase
+      .from("session_templates")
+      .select("id, name, type, subtype, description, duration_minutes, distance_km, target_intensity, is_key_session")
+      .eq("type", sessionType === "gym" ? "Gym" : "Functional")
+      .eq("is_active", true)
+      .order("name");
+
+    if (!error && data) {
+      setSessionTemplateResults(data as SessionTemplateRow[]);
+    }
+  }
+
+  function addBlankSession(weekId: string) {
+    if (!plan) return;
+
+    const dayLabel = autoAssignDay(weekId);
+    const nextSession: PlanSession = {
+      id: `session-${Date.now()}`,
+      weekId,
+      sortOrder: 1,
+      dayLabel,
+      type: "Easy",
+      name: "Session",
+      description: "",
+      tags: [],
+      duration: "",
+      intensity: "",
+      isKeySession: false,
+      exercises: [],
+    };
+
+    const nextPlan: GeneratedPlan = {
+      ...plan,
+      weeks: plan.weeks.map((week) =>
+        week.id === weekId
+          ? { ...week, sessions: [...week.sessions, nextSession] }
+          : week,
+      ),
+    };
+
+    void updatePlan(nextPlan);
+    setCreatingBlankSessionWeekId(null);
+    showTemporaryStatus("Blank session added.", 1500);
+  }
+
   function cancelPendingSession() {
     setPendingSessionSlot(null);
+    setPendingSessionType(null);
     setSessionTemplateSearch("");
     setSessionTemplateResults([]);
     setSearchingTemplates(false);
@@ -2417,25 +2474,77 @@ export default function PlanEditorPage() {
                           </div>
 
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => createSession(typedWeek.id)}
-                              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                                pendingSessionSlot?.weekId === typedWeek.id
-                                  ? "border-zinc-900 bg-zinc-900 text-white"
-                                  : "border-zinc-300 bg-white hover:bg-zinc-100"
-                              }`}
-                            >
-                              + Add Session
-                            </button>
+                            {creatingBlankSessionWeekId !== typedWeek.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setCreatingBlankSessionWeekId(typedWeek.id)}
+                                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-medium hover:bg-zinc-100"
+                                >
+                                  Add Blank Session
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={() => deleteWeek(typedWeek.id)}
-                              className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                            >
-                              Delete Week
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openTemplateSessionPicker(typedWeek.id, "gym")}
+                                  className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                                    pendingSessionSlot?.weekId === typedWeek.id && pendingSessionType === "gym"
+                                      ? "border-zinc-900 bg-zinc-900 text-white"
+                                      : "border-zinc-300 bg-white hover:bg-zinc-100"
+                                  }`}
+                                >
+                                  Add Gym Session
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => openTemplateSessionPicker(typedWeek.id, "functional")}
+                                  className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                                    pendingSessionSlot?.weekId === typedWeek.id && pendingSessionType === "functional"
+                                      ? "border-zinc-900 bg-zinc-900 text-white"
+                                      : "border-zinc-300 bg-white hover:bg-zinc-100"
+                                  }`}
+                                >
+                                  Add Functional Session
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => deleteWeek(typedWeek.id)}
+                                  className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                >
+                                  Delete Week
+                                </button>
+                              </>
+                            ) : null}
+
+                            {creatingBlankSessionWeekId === typedWeek.id ? (
+                              <div className="w-full rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                                <div className="mb-4">
+                                  <h4 className="text-base font-semibold text-zinc-900">Create Blank Session</h4>
+                                  <p className="mt-1 text-sm text-zinc-600">
+                                    Create a new blank session that you can customize with all the details.
+                                  </p>
+                                </div>
+
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => addBlankSession(typedWeek.id)}
+                                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                                  >
+                                    Create
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCreatingBlankSessionWeekId(null)}
+                                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-100"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
 
                           <div className="mt-4 space-y-2">
@@ -2591,23 +2700,16 @@ export default function PlanEditorPage() {
                         <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                           <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-4">
                             <div className="flex items-center justify-between mb-4">
-                              <h3 className="text-base font-semibold">Add Session</h3>
-                              <div className="flex rounded-lg border border-zinc-200 overflow-hidden text-xs font-semibold">
-                                <button
-                                  type="button"
-                                  onClick={() => setAdHocMode("search")}
-                                  className={`px-3 py-1.5 transition ${adHocMode === "search" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"}`}
-                                >
-                                  Search Templates
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setAdHocMode("create")}
-                                  className={`px-3 py-1.5 transition ${adHocMode === "create" ? "bg-zinc-900 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"}`}
-                                >
-                                  Create New
-                                </button>
-                              </div>
+                              <h3 className="text-base font-semibold">
+                                Add {pendingSessionType === "gym" ? "Gym" : pendingSessionType === "functional" ? "Functional" : ""} Session
+                              </h3>
+                              <button
+                                type="button"
+                                onClick={() => cancelPendingSession()}
+                                className="text-sm text-zinc-500 hover:text-zinc-700"
+                              >
+                                ✕
+                              </button>
                             </div>
 
                             <div className="flex items-center gap-3 mb-4">
