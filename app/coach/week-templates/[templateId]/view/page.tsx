@@ -213,7 +213,7 @@ export default function WeekTemplateViewPage() {
           <div>
             <div className="mb-2 text-sm text-zinc-500">
               <Link href="/coach/week-templates" className="hover:underline">
-                Week Templates
+                Week Template Library
               </Link>
               <span className="mx-2">/</span>
               <span>View</span>

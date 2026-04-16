@@ -13,6 +13,7 @@ type WeekTemplateRow = {
   is_active: boolean;
   is_custom: boolean;
   coach_user_id: string | null;
+  condition_tags?: string[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -39,13 +40,64 @@ function asSingleFocusType(
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
+const conditionTagOptions = [
+  { value: "heat", label: "Heat" },
+  { value: "cold", label: "Cold" },
+  { value: "altitude", label: "Altitude" },
+  { value: "load_carriage", label: "Load carriage" },
+  { value: "no_gym", label: "No gym" },
+  { value: "night_running", label: "Night running" },
+  { value: "sand", label: "Sand" },
+  { value: "technical_terrain", label: "Technical" },
+  { value: "multi_day", label: "Multi-day" },
+] as const;
+
 export default function WeekTemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<WeekTemplateWithFocus[]>([]);
   const [slotCounts, setSlotCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [roles, setRoles] = useState<string[]>([]);
+  const [focusTypes, setFocusTypes] = useState<WeekFocusTypeRow[]>([]);
 
+  // Filter state
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const [customFilter, setCustomFilter] = useState<"all" | "system" | "custom">("all");
+  const [purposeFilter, setPurposeFilter] = useState("");
+  const [focusFilter, setFocusFilter] = useState("");
+  const [conditionFilter, setConditionFilter] = useState<string[]>([]);
+
+  const isAdmin = roles.includes("admin");
+
+  // Fetch user roles
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          setRoles([]);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id);
+
+        if (!error && data) {
+          setRoles(data.map((r) => r.role));
+        }
+      } catch (err) {
+        console.error("Error fetching roles:", err);
+      }
+    };
+
+    fetchRoles();
+  }, []);
+
+  // Fetch templates and related data
   useEffect(() => {
     async function loadWeekTemplates() {
       setLoading(true);
@@ -64,6 +116,7 @@ export default function WeekTemplatesPage() {
               is_active,
               is_custom,
               coach_user_id,
+              condition_tags,
               created_at,
               updated_at,
               week_focus_types (
@@ -83,6 +136,14 @@ export default function WeekTemplatesPage() {
 
         if (slotError) throw slotError;
 
+        const { data: focusData, error: focusError } = await supabase
+          .from("week_focus_types")
+          .select("id, name, color")
+          .order("display_order", { ascending: true, nullsFirst: false })
+          .order("name", { ascending: true });
+
+        if (focusError) throw focusError;
+
         const countMap: Record<string, number> = {};
         for (const row of (slotData ?? []) as { week_template_id: string }[]) {
           countMap[row.week_template_id] = (countMap[row.week_template_id] ?? 0) + 1;
@@ -90,6 +151,7 @@ export default function WeekTemplatesPage() {
 
         setTemplates((templateData ?? []) as WeekTemplateWithFocus[]);
         setSlotCounts(countMap);
+        setFocusTypes((focusData ?? []) as WeekFocusTypeRow[]);
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Unknown error loading week templates.";
@@ -103,20 +165,70 @@ export default function WeekTemplatesPage() {
   }, []);
 
   const filteredTemplates = useMemo(() => {
+    let result = templates;
+
+    // Search filter
     const needle = search.trim().toLowerCase();
+    if (needle) {
+      result = result.filter((template) => {
+        const focus = asSingleFocusType(template.week_focus_types);
+        return (
+          template.name.toLowerCase().includes(needle) ||
+          (template.description ?? "").toLowerCase().includes(needle) ||
+          (focus?.name ?? "").toLowerCase().includes(needle)
+        );
+      });
+    }
 
-    if (!needle) return templates;
+    // Active filter
+    if (activeFilter === "active") {
+      result = result.filter((t) => t.is_active);
+    } else if (activeFilter === "inactive") {
+      result = result.filter((t) => !t.is_active);
+    }
 
-    return templates.filter((template) => {
-      const focus = asSingleFocusType(template.week_focus_types);
+    // Custom filter
+    if (customFilter === "system") {
+      result = result.filter((t) => !t.is_custom);
+    } else if (customFilter === "custom") {
+      result = result.filter((t) => t.is_custom);
+    }
 
-      return (
-        template.name.toLowerCase().includes(needle) ||
-        (template.description ?? "").toLowerCase().includes(needle) ||
-        (focus?.name ?? "").toLowerCase().includes(needle)
-      );
+    // Purpose filter
+    if (purposeFilter) {
+      result = result.filter((t) => t.training_purpose === purposeFilter);
+    }
+
+    // Focus filter
+    if (focusFilter) {
+      result = result.filter((t) => t.focus_type_id === focusFilter);
+    }
+
+    // Condition tags filter
+    if (conditionFilter.length > 0) {
+      result = result.filter((t) => {
+        const tags = t.condition_tags ?? [];
+        return conditionFilter.some((filter) => tags.includes(filter));
+      });
+    }
+
+    return result;
+  }, [search, templates, activeFilter, customFilter, purposeFilter, focusFilter, conditionFilter]);
+
+  const hasActiveFilters =
+    activeFilter !== "all" ||
+    customFilter !== "all" ||
+    purposeFilter ||
+    focusFilter ||
+    conditionFilter.length > 0;
+
+  const uniquePurposes = useMemo(() => {
+    const purposes = new Set<string>();
+    templates.forEach((t) => {
+      if (t.training_purpose) purposes.add(t.training_purpose);
     });
-  }, [search, templates]);
+    return Array.from(purposes).sort();
+  }, [templates]);
 
   return (
     <div className="min-h-screen bg-white text-black">
@@ -128,37 +240,211 @@ export default function WeekTemplatesPage() {
                 Coach
               </Link>
               <span className="mx-2">/</span>
-              <span>Week Templates</span>
+              <span>Week Template Library</span>
             </div>
 
             <h1 className="text-3xl font-bold tracking-tight text-black">
-              Week Templates
+              Week Template Library
             </h1>
             <p className="mt-2 max-w-3xl text-sm text-zinc-600">
-              Create reusable weeks made up of specific session templates, then use
-              them later when building full plans.
+              Reusable week structures built from session templates. Browse and select
+              templates when building athlete training plans.
             </p>
           </div>
 
-          <Link
-            href="/coach/week-templates/create"
-            className="inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
-          >
-            New week template
-          </Link>
+          {isAdmin && (
+            <Link
+              href="/coach/week-templates/create"
+              className="inline-flex rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+            >
+              New template
+            </Link>
+          )}
         </div>
 
-        <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <label className="mb-2 block text-sm font-medium text-zinc-700">
-            Search templates
-          </label>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, description or focus"
-            className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-500"
-          />
+        <div className="mb-6 space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-zinc-700">
+              Search
+            </label>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, description or focus"
+              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-500"
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Status
+              </label>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setActiveFilter("all")}
+                  className={`flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                    activeFilter === "all"
+                      ? "bg-zinc-900 text-white"
+                      : "border border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setActiveFilter("active")}
+                  className={`flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                    activeFilter === "active"
+                      ? "bg-emerald-600 text-white"
+                      : "border border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  Active
+                </button>
+                <button
+                  onClick={() => setActiveFilter("inactive")}
+                  className={`flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                    activeFilter === "inactive"
+                      ? "bg-zinc-500 text-white"
+                      : "border border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  Inactive
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Type
+              </label>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setCustomFilter("all")}
+                  className={`flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                    customFilter === "all"
+                      ? "bg-zinc-900 text-white"
+                      : "border border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setCustomFilter("system")}
+                  className={`flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                    customFilter === "system"
+                      ? "bg-blue-600 text-white"
+                      : "border border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  System
+                </button>
+                <button
+                  onClick={() => setCustomFilter("custom")}
+                  className={`flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                    customFilter === "custom"
+                      ? "bg-purple-600 text-white"
+                      : "border border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  Custom
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Purpose
+              </label>
+              <select
+                value={purposeFilter}
+                onChange={(e) => setPurposeFilter(e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs outline-none transition focus:border-zinc-500"
+              >
+                <option value="">All</option>
+                {uniquePurposes.map((purpose) => (
+                  <option key={purpose} value={purpose}>
+                    {purpose}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Focus
+              </label>
+              <select
+                value={focusFilter}
+                onChange={(e) => setFocusFilter(e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs outline-none transition focus:border-zinc-500"
+              >
+                <option value="">All</option>
+                {focusTypes.map((focus) => (
+                  <option key={focus.id} value={focus.id}>
+                    {focus.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {conditionTagOptions.some((opt) =>
+            templates.some((t) => (t.condition_tags ?? []).includes(opt.value)),
+          ) && (
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Race Conditions
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {conditionTagOptions.map((option) => {
+                  const isUsed = templates.some((t) =>
+                    (t.condition_tags ?? []).includes(option.value),
+                  );
+                  const isSelected = conditionFilter.includes(option.value);
+
+                  if (!isUsed) return null;
+
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() =>
+                        setConditionFilter((prev) =>
+                          prev.includes(option.value)
+                            ? prev.filter((v) => v !== option.value)
+                            : [...prev, option.value],
+                        )
+                      }
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                        isSelected
+                          ? "bg-orange-600 text-white"
+                          : "border border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {hasActiveFilters && (
+            <button
+              onClick={() => {
+                setActiveFilter("all");
+                setCustomFilter("all");
+                setPurposeFilter("");
+                setFocusFilter("");
+                setConditionFilter([]);
+                setSearch("");
+              }}
+              className="text-xs font-medium text-zinc-500 hover:text-zinc-700"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -171,7 +457,9 @@ export default function WeekTemplatesPage() {
           </div>
         ) : filteredTemplates.length === 0 ? (
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 shadow-sm">
-            No week templates found.
+            {templates.length === 0
+              ? "No week templates in the library yet."
+              : "No templates match the current filters. Try clearing some filters."}
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
@@ -277,12 +565,14 @@ export default function WeekTemplatesPage() {
                             >
                               View
                             </Link>
-                            <Link
-                              href={`/coach/week-templates/${template.id}/edit`}
-                              className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
-                            >
-                              Edit
-                            </Link>
+                            {isAdmin && (
+                              <Link
+                                href={`/coach/week-templates/${template.id}/edit`}
+                                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
+                              >
+                                Edit
+                              </Link>
+                            )}
                           </div>
                         </td>
                       </tr>

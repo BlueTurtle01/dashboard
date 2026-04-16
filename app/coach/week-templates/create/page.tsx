@@ -732,7 +732,7 @@ export default function CreateWeekTemplatePage() {
               </Link>
               <span className="mx-2">/</span>
               <Link href="/coach/week-templates" className="hover:underline">
-                Week Templates
+                Week Template Library
               </Link>
               <span className="mx-2">/</span>
               <span>Create</span>
