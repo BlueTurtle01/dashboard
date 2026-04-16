@@ -96,11 +96,7 @@ export default function MentorshipRequestNotification({
     }
   };
 
-  const eventName = athleteProfile?.events
-    ? Array.isArray(athleteProfile.events)
-      ? athleteProfile.events[0]?.name
-      : athleteProfile.events.name
-    : null;
+  const eventName = athleteProfile?.events?.[0]?.name ?? null;
 
   return (
     <div
