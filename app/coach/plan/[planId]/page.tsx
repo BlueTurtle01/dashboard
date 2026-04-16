@@ -2599,8 +2599,15 @@ export default function PlanEditorPage() {
 
                               <div className="rounded-lg border border-zinc-200 bg-white p-3">
                                 <div className="flex items-start justify-between gap-3">
-                                  <div className="text-sm font-medium">
-                                    {session.name || "(Untitled session)"}
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-sm font-medium">
+                                      {session.name || "(Untitled session)"}
+                                    </div>
+                                    {editableSession.isInsertedAlternative && (
+                                      <span className="rounded-md border border-blue-300 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                        Alternative
+                                      </span>
+                                    )}
                                   </div>
 
                                   <button
