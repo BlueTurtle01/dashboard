@@ -272,11 +272,7 @@ export default function NewProgramTemplatePage() {
 
           {/* Goals */}
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-1 text-base font-semibold text-zinc-900">Goals</h2>
-            <p className="mb-4 text-sm text-zinc-500">
-              <strong>Event goal</strong> is the single primary goal this plan is built around.{" "}
-              <strong>Suitable race goals</strong> are all the athlete ambition levels this plan works for.
-            </p>
+            <h2 className="mb-4 text-base font-semibold text-zinc-900">Goals</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-sm font-medium text-zinc-700">
                 Event goal
@@ -292,32 +288,6 @@ export default function NewProgramTemplatePage() {
                 </select>
               </label>
             </div>
-
-            <fieldset className="mt-4">
-              <legend className="text-sm font-medium text-zinc-700 mb-2">
-                Suitable race goals <span className="font-normal text-zinc-400">(select all that apply)</span>
-              </legend>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {RACE_GOAL_OPTIONS.map((opt) => (
-                  <label
-                    key={opt.value}
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors ${
-                      form.suitableRaceGoals.includes(opt.value)
-                        ? "border-zinc-900 bg-zinc-900 text-white"
-                        : "border-zinc-200 bg-zinc-50 text-zinc-700 hover:border-zinc-400"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={form.suitableRaceGoals.includes(opt.value)}
-                      onChange={() => toggleRaceGoal(opt.value)}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
           </section>
 
           {/* Prerequisites */}

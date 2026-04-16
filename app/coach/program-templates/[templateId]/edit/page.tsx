@@ -621,14 +621,11 @@ export default function EditProgramTemplatePage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [pendingSessionSlot, setPendingSessionSlot] = useState<PendingTemplateSessionSlot | null>(null);
+  const [pendingSessionType, setPendingSessionType] = useState<"gym" | "functional" | null>(null);
   const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
   const [sessionTemplateResults, setSessionTemplateResults] = useState<SessionTemplateRow[]>([]);
   const [searchingTemplates, setSearchingTemplates] = useState(false);
 
-  const [pendingWeekTemplateLocalId, setPendingWeekTemplateLocalId] = useState<string | null>(null);
-  const [weekTemplateSearch, setWeekTemplateSearch] = useState("");
-  const [weekTemplateResults, setWeekTemplateResults] = useState<WeekTemplateRow[]>([]);
-  const [searchingWeekTemplates, setSearchingWeekTemplates] = useState(false);
   const [collapsedWeekLocalIds, setCollapsedWeekLocalIds] = useState<Record<string, boolean>>({});
   const [creatingBlankSessionWeekId, setCreatingBlankSessionWeekId] = useState<string | null>(null);
 
@@ -803,28 +800,6 @@ export default function EditProgramTemplatePage() {
     return () => window.clearTimeout(timeoutId);
   }, [sessionTemplateSearch, pendingSessionSlot]);
 
-  useEffect(() => {
-    if (!pendingWeekTemplateLocalId) {
-      setWeekTemplateSearch("");
-      setWeekTemplateResults([]);
-      setSearchingWeekTemplates(false);
-      return;
-    }
-
-    const trimmed = weekTemplateSearch.trim();
-    if (!trimmed) {
-      setWeekTemplateResults([]);
-      setSearchingWeekTemplates(false);
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void searchWeekTemplates(trimmed);
-    }, 200);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [weekTemplateSearch, pendingWeekTemplateLocalId]);
-
   function showTemporaryStatus(message: string, timeoutMs = 2500) {
     setStatusMessage(message);
     window.setTimeout(() => setStatusMessage(""), timeoutMs);
@@ -884,139 +859,6 @@ export default function EditProgramTemplatePage() {
     }
 
     setSessionTemplateResults((data ?? []) as SessionTemplateRow[]);
-  }
-
-  async function searchWeekTemplates(searchTerm: string) {
-    const trimmed = searchTerm.trim();
-    if (!trimmed) {
-      setSearchingWeekTemplates(false);
-      setWeekTemplateResults([]);
-      return;
-    }
-
-    setSearchingWeekTemplates(true);
-
-    const escaped = trimmed.replace(/,/g, " ").replace(/%/g, "").replace(/\*/g, "").trim();
-
-    const { data, error } = await supabase
-      .from("week_templates")
-      .select("id, name, description, focus_type_id, is_active, is_custom")
-      .or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%`)
-      .eq("is_active", true)
-      .order("name", { ascending: true })
-      .limit(10);
-
-    setSearchingWeekTemplates(false);
-
-    if (error) {
-      setWeekTemplateResults([]);
-      showTemporaryStatus(`Could not search week templates: ${error.message}`, 4000);
-      return;
-    }
-
-    setWeekTemplateResults((data ?? []) as WeekTemplateRow[]);
-  }
-
-  async function applyWeekTemplate(weekLocalId: string, weekTemplate: WeekTemplateRow) {
-    const { data: slotData, error: slotError } = await supabase
-      .from("week_template_slots")
-      .select(`
-        id,
-        slot_name,
-        sort_order,
-        notes,
-        is_required,
-        session_template_id,
-        session_templates (
-          id,
-          name,
-          description,
-          type,
-          activity,
-          subtype,
-          duration_minutes,
-          distance_km,
-          target_intensity,
-          session_data,
-          is_key_session,
-          session_template_exercises (
-            id,
-            session_template_id,
-            exercise_id,
-            exercise_order,
-            sets,
-            reps,
-            duration,
-            notes
-          )
-        )
-      `)
-      .eq("week_template_id", weekTemplate.id)
-      .order("sort_order", { ascending: true });
-
-    if (slotError) {
-      showTemporaryStatus(`Could not load week template slots: ${slotError.message}`, 4000);
-      return;
-    }
-
-    const slots = (slotData ?? []) as unknown as WeekTemplateSlotRow[];
-
-    updateWeek(weekLocalId, (week) => {
-      const nextSortBase = Math.max(0, ...week.sessions.map((s) => s.sortOrder));
-      const sessions = slots.map((slot, index) => {
-        if (slot.session_templates) {
-          return buildEditableSessionFromTemplate(
-            slot.session_templates,
-            week.weekNumber,
-            slot.sort_order,
-            exerciseNameMap,
-          );
-        }
-        // No linked session template — create a blank session from the slot name and notes
-        const parsed = parseSlotNotes(slot.notes ?? "");
-        return {
-          localId: makeLocalId("session"),
-          dbId: null,
-          dayLabel: slot.slot_name,
-          sortOrder: nextSortBase + index + 1,
-          type: "Easy" as EditableSession["type"],
-          name: slot.slot_name,
-          description: parsed.description ?? "",
-          duration: parsed.duration ?? "",
-          intensity: parsed.intensity ?? "",
-          isKeySession: false,
-          sessionTemplateId: "",
-          runTimeType: "any",
-          runStartTime: "",
-          isTimeStrict: false,
-          dayNumber: String(index + 1),
-          numSets: parsed.numSets ?? "",
-          setDurationMinutes: parsed.setDurationMinutes ?? "",
-          exercises: [],
-        } satisfies EditableSession;
-      });
-
-      return { ...week, sessions: sessions.filter((s): s is EditableSession => s !== null) };
-    });
-
-    setPendingWeekTemplateLocalId(null);
-    setWeekTemplateSearch("");
-    setWeekTemplateResults([]);
-    showTemporaryStatus(`Week replaced with "${weekTemplate.name}".`, 2000);
-  }
-
-  function openWeekTemplatePicker(weekLocalId: string) {
-    setPendingWeekTemplateLocalId(weekLocalId);
-    setWeekTemplateSearch("");
-    setWeekTemplateResults([]);
-    setSearchingWeekTemplates(false);
-  }
-
-  function cancelWeekTemplatePicker() {
-    setPendingWeekTemplateLocalId(null);
-    setWeekTemplateSearch("");
-    setWeekTemplateResults([]);
-    setSearchingWeekTemplates(false);
   }
 
   const sortedWeeks = useMemo(() => {
@@ -1137,12 +979,13 @@ export default function EditProgramTemplatePage() {
     setCreatingBlankSessionWeekId(null);
   }
 
-  async function openTemplateSessionPicker(weekLocalId: string) {
+  async function openTemplateSessionPicker(weekLocalId: string, sessionType: "gym" | "functional") {
     setPendingSessionSlot({ weekLocalId });
+    setPendingSessionType(sessionType);
     setSessionTemplateSearch("");
     setSearchingTemplates(true);
 
-    // Load all session templates when picker opens
+    // Load session templates of the specified type when picker opens
     const { data, error } = await supabase
       .from("session_templates")
       .select(
@@ -1170,7 +1013,7 @@ export default function EditProgramTemplatePage() {
         )
       `,
       )
-      .order("type", { ascending: true })
+      .eq("type", sessionType)
       .order("name", { ascending: true });
 
     setSearchingTemplates(false);
@@ -1184,6 +1027,7 @@ export default function EditProgramTemplatePage() {
 
   function cancelPendingTemplateSession() {
     setPendingSessionSlot(null);
+    setPendingSessionType(null);
     setSessionTemplateSearch("");
     setSessionTemplateResults([]);
     setSearchingTemplates(false);
@@ -1686,15 +1530,6 @@ export default function EditProgramTemplatePage() {
                 className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
               />
             </label>
-
-            <label className="text-sm font-medium text-zinc-700 md:col-span-2">
-              Suitable race goals (comma separated)
-              <input
-                value={form.suitableRaceGoals}
-                onChange={(e) => updateForm("suitableRaceGoals", e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-              />
-            </label>
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -1775,18 +1610,7 @@ export default function EditProgramTemplatePage() {
 
                   {!isCollapsed ? (
                     <Fragment>
-                      <div className="mb-4 flex items-center justify-between gap-4">
-                        <div>
-                          <button
-                            type="button"
-                            onClick={() => openWeekTemplatePicker(week.localId)}
-                            className="rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-                          >
-                            Use template
-                          </button>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="mb-4 flex items-center justify-end gap-2">
                           {creatingBlankSessionWeekId !== week.localId ? (
                             <>
                               <button
@@ -1799,14 +1623,26 @@ export default function EditProgramTemplatePage() {
 
                               <button
                                 type="button"
-                                onClick={() => openTemplateSessionPicker(week.localId)}
+                                onClick={() => openTemplateSessionPicker(week.localId, "gym")}
                                 className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                                  pendingSessionSlot?.weekLocalId === week.localId
+                                  pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "gym"
                                     ? "border-zinc-900 bg-zinc-900 text-white"
                                     : "border-zinc-300 bg-white hover:bg-zinc-100"
                                 }`}
                               >
-                                Add Session From Template
+                                Add Gym Session
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => openTemplateSessionPicker(week.localId, "functional")}
+                                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                                  pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "functional"
+                                    ? "border-zinc-900 bg-zinc-900 text-white"
+                                    : "border-zinc-300 bg-white hover:bg-zinc-100"
+                                }`}
+                              >
+                                Add Functional Session
                               </button>
 
                               <button
@@ -1818,7 +1654,6 @@ export default function EditProgramTemplatePage() {
                               </button>
                             </>
                           ) : null}
-                        </div>
 
                         {creatingBlankSessionWeekId === week.localId ? (
                           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
@@ -1869,73 +1704,25 @@ export default function EditProgramTemplatePage() {
                         </label>
                       </div>
 
-                      {pendingWeekTemplateLocalId === week.localId ? (
-                        <div className="mb-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                      {pendingSessionSlot?.weekLocalId === week.localId ? (
+                        <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4">
                           <div className="mb-3 flex items-start justify-between gap-4">
                             <div>
-                              <h4 className="text-base font-semibold text-zinc-900">Replace with week template</h4>
+                              <h4 className="text-base font-semibold text-zinc-900">
+                                Add {pendingSessionType === "gym" ? "Gym" : "Functional"} Session
+                              </h4>
                               <p className="mt-1 text-sm text-zinc-600">
-                                Search for a week template to replace all sessions in this week. This cannot be undone until you save.
+                                Select from existing {pendingSessionType} session templates below.
                               </p>
                             </div>
                             <button
                               type="button"
-                              onClick={cancelWeekTemplatePicker}
+                              onClick={cancelPendingTemplateSession}
                               className="shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
                             >
                               Cancel
                             </button>
                           </div>
-
-                          <input
-                            value={weekTemplateSearch}
-                            onChange={(e) => setWeekTemplateSearch(e.target.value)}
-                            placeholder="Search week templates…"
-                            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-                            autoFocus
-                          />
-
-                          <div className="mt-3 space-y-2">
-                            {weekTemplateSearch.trim().length === 0 ? (
-                              <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500">
-                                Start typing to search week templates.
-                              </div>
-                            ) : searchingWeekTemplates ? (
-                              <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500">
-                                Searching week templates…
-                              </div>
-                            ) : weekTemplateResults.length === 0 ? (
-                              <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500">
-                                No week templates matched that search.
-                              </div>
-                            ) : (
-                              weekTemplateResults.map((weekTemplate) => (
-                                <button
-                                  key={weekTemplate.id}
-                                  type="button"
-                                  onClick={() => void applyWeekTemplate(week.localId, weekTemplate)}
-                                  className="block w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left transition hover:bg-violet-100 hover:border-violet-300"
-                                >
-                                  <div className="font-medium text-zinc-900">{weekTemplate.name}</div>
-                                  {weekTemplate.description ? (
-                                    <div className="mt-1 text-sm text-zinc-500">{weekTemplate.description}</div>
-                                  ) : null}
-                                  {weekTemplate.is_custom ? (
-                                    <div className="mt-1 text-xs text-violet-600 font-medium">Custom</div>
-                                  ) : null}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {pendingSessionSlot?.weekLocalId === week.localId ? (
-                        <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4">
-                          <h4 className="text-base font-semibold text-zinc-900">Add Session</h4>
-                          <p className="mt-1 text-sm text-zinc-600">
-                            Select from existing session templates below, or create a blank session for this day.
-                          </p>
 
                           <div className="mt-4">
                             <input
@@ -1998,13 +1785,6 @@ export default function EditProgramTemplatePage() {
                               className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-100"
                             >
                               Add Blank Session
-                            </button>
-                            <button
-                              type="button"
-                              onClick={cancelPendingTemplateSession}
-                              className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-100"
-                            >
-                              Cancel
                             </button>
                           </div>
                         </div>
