@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { SessionCreationForm, type SessionFormData } from "@/app/coach/components/SessionCreationForm";
+import { FunctionalSessionForm, type FunctionalSessionFormData } from "@/app/coach/components/FunctionalSessionForm";
 
 type ProgramTemplateRow = {
   id: string;
@@ -1095,7 +1095,7 @@ export default function EditProgramTemplatePage() {
     }));
   }
 
-  function addBlankSession(weekLocalId: string, formData?: SessionFormData) {
+  function addBlankSession(weekLocalId: string, formData?: FunctionalSessionFormData) {
     updateWeek(weekLocalId, (week) => {
       const nextSortOrder = Math.max(0, ...week.sessions.map((session) => session.sortOrder)) + 1;
 
@@ -1108,19 +1108,21 @@ export default function EditProgramTemplatePage() {
             dbId: null,
             dayLabel: "",
             sortOrder: nextSortOrder,
-            type: formData?.type ?? "Easy",
-            name: formData?.name ?? `Session ${nextSortOrder}`,
+            type: formData?.activity ?? "Easy",
+            name: formData?.activity && formData?.subtype
+              ? `${formData.activity} - ${formData.subtype}`
+              : `Session ${nextSortOrder}`,
             description: formData?.description ?? "",
-            duration: formData?.duration ?? "",
-            intensity: formData?.intensity ?? "",
-            isKeySession: formData?.isKeySession ?? false,
+            duration: formData?.durationMinutes ? `${formData.durationMinutes} min` : "",
+            intensity: formData?.targetIntensity ?? "",
+            isKeySession: false,
             sessionTemplateId: "",
-            runTimeType: "any",
-            runStartTime: "",
-            isTimeStrict: false,
+            runTimeType: formData?.timeOfDay ?? "any",
+            runStartTime: formData?.startTime ?? "",
+            isTimeStrict: formData?.isTimeStrict ?? false,
             dayNumber: "",
-            numSets: "",
-            setDurationMinutes: "",
+            numSets: formData?.sets ?? "",
+            setDurationMinutes: formData?.setDurationSeconds ? String(parseInt(formData.setDurationSeconds) / 60) : "",
             exercises: [],
           },
         ],
@@ -1130,7 +1132,7 @@ export default function EditProgramTemplatePage() {
     showTemporaryStatus("Blank session added.", 1500);
   }
 
-  function handleCreateBlankSessionFromForm(weekLocalId: string, formData: SessionFormData) {
+  function handleCreateBlankSessionFromForm(weekLocalId: string, formData: FunctionalSessionFormData) {
     addBlankSession(weekLocalId, formData);
     setCreatingBlankSessionWeekId(null);
   }
@@ -1827,11 +1829,12 @@ export default function EditProgramTemplatePage() {
                               </p>
                             </div>
 
-                            <SessionCreationForm
+                            <FunctionalSessionForm
                               onSave={(formData) =>
                                 handleCreateBlankSessionFromForm(week.localId, formData)
                               }
                               onCancel={() => setCreatingBlankSessionWeekId(null)}
+                              submitButtonLabel="Create Session"
                             />
                           </div>
                         ) : null}
