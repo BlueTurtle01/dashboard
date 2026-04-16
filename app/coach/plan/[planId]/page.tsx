@@ -1206,7 +1206,7 @@ export default function PlanEditorPage() {
   const [history, setHistory] = useState<AthletePlanSnapshotRow[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
   const [pendingSessionSlot, setPendingSessionSlot] = useState<PendingSessionSlot | null>(null);
-  const [pendingSessionType, setPendingSessionType] = useState<"gym" | "functional" | null>(null);
+  const [pendingSessionType, setPendingSessionType] = useState<"gym" | "functional" | "mobility" | null>(null);
   const [creatingBlankSessionWeekId, setCreatingBlankSessionWeekId] = useState<string | null>(null);
   const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
   const [sessionTemplateResults, setSessionTemplateResults] = useState<SessionTemplateRow[]>([]);
@@ -1904,7 +1904,7 @@ export default function PlanEditorPage() {
     setSearchingTemplates(false);
   }
 
-  async function openTemplateSessionPicker(weekId: string, sessionType: "gym" | "functional") {
+  async function openTemplateSessionPicker(weekId: string, sessionType: "gym" | "functional" | "mobility") {
     const dayLabel = autoAssignDay(weekId);
     setPendingSessionSlot({ weekId, dayLabel });
     setPendingSessionType(sessionType);
@@ -2474,6 +2474,18 @@ export default function PlanEditorPage() {
                                   }`}
                                 >
                                   Add Functional Session
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => openTemplateSessionPicker(typedWeek.id, "mobility")}
+                                  className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                                    pendingSessionSlot?.weekId === typedWeek.id && pendingSessionType === "mobility"
+                                      ? "border-zinc-900 bg-zinc-900 text-white"
+                                      : "border-zinc-300 bg-white hover:bg-zinc-100"
+                                  }`}
+                                >
+                                  Add Mobility Session
                                 </button>
 
                                 <button
