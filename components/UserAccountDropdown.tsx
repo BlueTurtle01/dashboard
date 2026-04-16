@@ -12,9 +12,7 @@ export default function UserAccountDropdown() {
 
   useEffect(() => {
     const supabase = createClient();
-    const {
-      data: { user },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    const subscription = supabase.auth.onAuthStateChange((event, session) => {
       setEmail(session?.user?.email ?? null);
     });
 
@@ -24,7 +22,7 @@ export default function UserAccountDropdown() {
     });
 
     return () => {
-      user?.unsubscribe();
+      subscription.data.subscription.unsubscribe();
     };
   }, []);
 
@@ -92,8 +90,9 @@ export default function UserAccountDropdown() {
               cursor: "pointer",
               fontSize: "14px",
               color: "#d32f2f",
-              hover: { background: "#f5f5f5" },
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f5f5")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
           >
             {isLoggingOut ? "Logging out..." : "Logout"}
           </button>
