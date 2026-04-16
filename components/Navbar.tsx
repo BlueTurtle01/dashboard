@@ -97,6 +97,12 @@ export default async function Navbar() {
                 <Link href="/admin/exercises/create" className="site-navbar__dropdown-link">
                   Create Exercise
                 </Link>
+                <Link href="/admin/stretches" className="site-navbar__dropdown-link">
+                  View Stretches
+                </Link>
+                <Link href="/admin/stretches/create" className="site-navbar__dropdown-link">
+                  Create Stretch
+                </Link>
                 <Link href="/admin/functional/types/create" className="site-navbar__dropdown-link">
                   Functional Session Types
                 </Link>

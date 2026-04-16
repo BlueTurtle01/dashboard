@@ -93,6 +93,12 @@ export default function AppNav() {
                 >
                   Exercises
                 </Link>
+                <Link
+                  href="/admin/stretches"
+                  className="px-3 py-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900 rounded hover:bg-zinc-50"
+                >
+                  Stretches
+                </Link>
               </>
             )}
 
