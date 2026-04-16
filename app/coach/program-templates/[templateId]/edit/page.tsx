@@ -1980,134 +1980,136 @@ export default function EditProgramTemplatePage() {
                               </label>
                             </div>
 
-                            <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                              <div className="mb-4 flex items-center justify-between gap-4">
-                                <h5 className="text-sm font-semibold">Exercises</h5>
-                                <button
-                                  type="button"
-                                  onClick={() => addExercise(week.localId, session.localId)}
-                                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
-                                >
-                                  Add Exercise
-                                </button>
-                              </div>
+                            {!session.sessionTemplateId ? (
+                              <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                                <div className="mb-4 flex items-center justify-between gap-4">
+                                  <h5 className="text-sm font-semibold">Exercises</h5>
+                                  <button
+                                    type="button"
+                                    onClick={() => addExercise(week.localId, session.localId)}
+                                    className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
+                                  >
+                                    Add Exercise
+                                  </button>
+                                </div>
 
-                              <div className="space-y-3">
-                                {session.exercises.map((exercise) => (
-                                  <div key={exercise.localId} className="rounded-xl border border-zinc-200 bg-white p-4">
-                                    <div className="mb-3 flex items-center justify-between gap-4">
-                                      <div className="text-sm font-medium text-zinc-700">
-                                        {getExerciseHeading(exercise)}
+                                <div className="space-y-3">
+                                  {session.exercises.map((exercise) => (
+                                    <div key={exercise.localId} className="rounded-xl border border-zinc-200 bg-white p-4">
+                                      <div className="mb-3 flex items-center justify-between gap-4">
+                                        <div className="text-sm font-medium text-zinc-700">
+                                          {getExerciseHeading(exercise)}
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeExercise(week.localId, session.localId, exercise.localId)
+                                          }
+                                          className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
+                                        >
+                                          Remove
+                                        </button>
                                       </div>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          removeExercise(week.localId, session.localId, exercise.localId)
-                                        }
-                                        className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
-                                      >
-                                        Remove
-                                      </button>
+
+                                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                                        <label className="text-sm font-medium text-zinc-700 xl:col-span-2">
+                                          Exercise id
+                                          <input
+                                            value={exercise.exerciseId}
+                                            onChange={(e) =>
+                                              updateExercise(
+                                                week.localId,
+                                                session.localId,
+                                                exercise.localId,
+                                                (current) => ({
+                                                  ...current,
+                                                  exerciseId: e.target.value,
+                                                  exerciseName: exerciseNameMap[e.target.value] ?? e.target.value,
+                                                }),
+                                              )
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                          />
+                                        </label>
+
+                                        <label className="text-sm font-medium text-zinc-700">
+                                          Sets
+                                          <input
+                                            value={exercise.sets}
+                                            onChange={(e) =>
+                                              updateExercise(
+                                                week.localId,
+                                                session.localId,
+                                                exercise.localId,
+                                                (current) => ({ ...current, sets: e.target.value }),
+                                              )
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                          />
+                                        </label>
+
+                                        <label className="text-sm font-medium text-zinc-700">
+                                          Reps
+                                          <input
+                                            value={exercise.reps}
+                                            onChange={(e) =>
+                                              updateExercise(
+                                                week.localId,
+                                                session.localId,
+                                                exercise.localId,
+                                                (current) => ({ ...current, reps: e.target.value }),
+                                              )
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                          />
+                                        </label>
+
+                                        <label className="text-sm font-medium text-zinc-700">
+                                          Duration (seconds)
+                                          <input
+                                            value={exercise.durationSeconds}
+                                            onChange={(e) =>
+                                              updateExercise(
+                                                week.localId,
+                                                session.localId,
+                                                exercise.localId,
+                                                (current) => ({
+                                                  ...current,
+                                                  durationSeconds: e.target.value,
+                                                }),
+                                              )
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                          />
+                                        </label>
+
+                                        <label className="text-sm font-medium text-zinc-700 xl:col-span-5">
+                                          Notes
+                                          <input
+                                            value={exercise.notes}
+                                            onChange={(e) =>
+                                              updateExercise(
+                                                week.localId,
+                                                session.localId,
+                                                exercise.localId,
+                                                (current) => ({ ...current, notes: e.target.value }),
+                                              )
+                                            }
+                                            className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                          />
+                                        </label>
+                                      </div>
                                     </div>
+                                  ))}
 
-                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                                      <label className="text-sm font-medium text-zinc-700 xl:col-span-2">
-                                        Exercise id
-                                        <input
-                                          value={exercise.exerciseId}
-                                          onChange={(e) =>
-                                            updateExercise(
-                                              week.localId,
-                                              session.localId,
-                                              exercise.localId,
-                                              (current) => ({
-                                                ...current,
-                                                exerciseId: e.target.value,
-                                                exerciseName: exerciseNameMap[e.target.value] ?? e.target.value,
-                                              }),
-                                            )
-                                          }
-                                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                        />
-                                      </label>
-
-                                      <label className="text-sm font-medium text-zinc-700">
-                                        Sets
-                                        <input
-                                          value={exercise.sets}
-                                          onChange={(e) =>
-                                            updateExercise(
-                                              week.localId,
-                                              session.localId,
-                                              exercise.localId,
-                                              (current) => ({ ...current, sets: e.target.value }),
-                                            )
-                                          }
-                                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                        />
-                                      </label>
-
-                                      <label className="text-sm font-medium text-zinc-700">
-                                        Reps
-                                        <input
-                                          value={exercise.reps}
-                                          onChange={(e) =>
-                                            updateExercise(
-                                              week.localId,
-                                              session.localId,
-                                              exercise.localId,
-                                              (current) => ({ ...current, reps: e.target.value }),
-                                            )
-                                          }
-                                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                        />
-                                      </label>
-
-                                      <label className="text-sm font-medium text-zinc-700">
-                                        Duration (seconds)
-                                        <input
-                                          value={exercise.durationSeconds}
-                                          onChange={(e) =>
-                                            updateExercise(
-                                              week.localId,
-                                              session.localId,
-                                              exercise.localId,
-                                              (current) => ({
-                                                ...current,
-                                                durationSeconds: e.target.value,
-                                              }),
-                                            )
-                                          }
-                                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                        />
-                                      </label>
-
-                                      <label className="text-sm font-medium text-zinc-700 xl:col-span-5">
-                                        Notes
-                                        <input
-                                          value={exercise.notes}
-                                          onChange={(e) =>
-                                            updateExercise(
-                                              week.localId,
-                                              session.localId,
-                                              exercise.localId,
-                                              (current) => ({ ...current, notes: e.target.value }),
-                                            )
-                                          }
-                                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                        />
-                                      </label>
+                                  {session.exercises.length === 0 ? (
+                                    <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-5 text-sm text-zinc-500">
+                                      No exercises added yet.
                                     </div>
-                                  </div>
-                                ))}
-
-                                {session.exercises.length === 0 ? (
-                                  <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-5 text-sm text-zinc-500">
-                                    No exercises added yet.
-                                  </div>
-                                ) : null}
+                                  ) : null}
+                                </div>
                               </div>
-                            </div>
+                            ) : null}
                           </div>
                         ))}
 
