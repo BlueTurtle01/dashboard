@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { userHasRole } from "@/lib/auth/get-current-user";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function CoachPerformancePage() {
   const hasAdminRole = await userHasRole("admin");
 

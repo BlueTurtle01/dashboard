@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+export const dynamic = "force-dynamic";
+
 type ExerciseRow = {
   id: string;
   name: string;

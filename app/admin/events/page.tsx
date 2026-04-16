@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { RaceConditions } from "@/lib/planner/types";
 
+export const dynamic = "force-dynamic";
+
 type EventRow = {
   id: string;
   name: string;
