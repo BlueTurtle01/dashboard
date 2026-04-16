@@ -77,10 +77,11 @@ function pickBestDay(preferred: string[], used: Set<string>, allowReuse = true):
 
 /**
  * Given a flat list of sessions for one week plus athlete availability, assigns
- * a dayLabel to each session. Long sessions go on the preferred long day, gym
- * sessions on available gym days, everything else on available run days.
- * Each day is used only once where possible; the function falls back to
- * reusing days if the athlete hasn't provided enough slots.
+ * a dayLabel to each session. Prioritizes spacing out sessions with rest days
+ * between them where possible:
+ *
+ * 1. Long sessions are placed first on preferred/available run days
+ * 2. Remaining sessions (gym and other) are placed to maximize spacing
  *
  * Sessions that already have a real dayLabel are left unchanged.
  */
@@ -98,11 +99,12 @@ export function assignDayLabelsToSessions<T extends { type: string; dayLabel: st
   const usedDays = new Set<string>();
   const assignment = new Map<T, string>();
 
-  // Priority order: long sessions → gym sessions → everything else
+  // Priority order: long sessions first → gym sessions → everything else
   const longSessions = sessions.filter(isLong);
   const gymSessions = sessions.filter((s) => s.type === "Gym" && !isLong(s));
   const otherSessions = sessions.filter((s) => s.type !== "Gym" && !isLong(s));
 
+  // 1. Place long sessions first (on preferred long day)
   for (const session of longSessions) {
     const preferred = longDay ? [longDay] : runDays;
     const day = pickBestDay(preferred, usedDays);
@@ -110,16 +112,59 @@ export function assignDayLabelsToSessions<T extends { type: string; dayLabel: st
     usedDays.add(day);
   }
 
-  for (const session of gymSessions) {
-    const day = pickBestDay(gymDays.length ? gymDays : CANONICAL_DAY_ORDER, usedDays);
-    assignment.set(session, day);
-    usedDays.add(day);
-  }
+  // 2. Place gym sessions, trying to spread them out
+  const allRemaining = [...gymSessions, ...otherSessions];
+  if (allRemaining.length > 0) {
+    const dayIndices = new Map<string, number>();
+    for (let i = 0; i < CANONICAL_DAY_ORDER.length; i++) {
+      dayIndices.set(CANONICAL_DAY_ORDER[i], i);
+    }
 
-  for (const session of otherSessions) {
-    const day = pickBestDay(runDays.length ? runDays : CANONICAL_DAY_ORDER, usedDays);
-    assignment.set(session, day);
-    usedDays.add(day);
+    // Sort remaining sessions to place gym sessions first, then others
+    const toPlace = [...gymSessions, ...otherSessions];
+
+    // For each remaining session, find the best available day
+    // that has at least 1 unused day between it and the previously used days
+    for (const session of toPlace) {
+      const isGym = gymSessions.includes(session);
+      const preferredList = isGym
+        ? (gymDays.length ? gymDays : CANONICAL_DAY_ORDER)
+        : (runDays.length ? runDays : CANONICAL_DAY_ORDER);
+
+      // Find best day from preferred list, preferring days with spacing
+      let bestDay: string | null = null;
+      let bestScore = -Infinity;
+
+      for (const day of preferredList) {
+        if (usedDays.has(day)) continue;
+
+        // Score this day based on distance from used days (prefer spacing)
+        let minDistance = 7; // Large default
+        const dayIdx = dayIndices.get(day) ?? -1;
+        for (const usedDay of usedDays) {
+          const usedIdx = dayIndices.get(usedDay) ?? -1;
+          const distance = Math.min(
+            Math.abs(dayIdx - usedIdx),
+            7 - Math.abs(dayIdx - usedIdx) // Account for week wraparound
+          );
+          minDistance = Math.min(minDistance, distance);
+        }
+
+        // Prefer days with more distance from other sessions
+        if (bestDay === null || minDistance > bestScore) {
+          bestDay = day;
+          bestScore = minDistance;
+        }
+      }
+
+      // Fallback to first available day if no spacing preference works
+      if (!bestDay) {
+        bestDay = preferredList.find((d) => !usedDays.has(d)) ?? preferredList[0];
+      }
+
+      assignment.set(session, bestDay);
+      usedDays.add(bestDay);
+    }
   }
 
   return sessions.map((s) => {

@@ -67,6 +67,18 @@ type ProgramTemplateSessionRow = {
   day_number: number | null;
   num_sets: number | null;
   set_duration_minutes: number | null;
+  activity: string | null;
+  subtype: string | null;
+  distance_km: number | null;
+  terrain: string | null;
+  elevation_gain_meters: number | null;
+  pack_weight_kg: number | null;
+  strides: string | null;
+  warmup_minutes: number | null;
+  cooldown_minutes: number | null;
+  interval_reps: number | null;
+  interval_duration: string | null;
+  tags: string[] | null;
   program_template_session_exercises: ProgramTemplateSessionExerciseRow[] | null;
 };
 
@@ -141,6 +153,19 @@ type EditableSession = {
   numSets: string;
   setDurationMinutes: string;
   exercises: EditableExercise[];
+  // Extended fields from FunctionalSessionForm
+  activity?: string;
+  subtype?: string;
+  distanceKm?: string;
+  terrain?: string;
+  elevation?: string;
+  packWeightKg?: string;
+  strides?: string;
+  warmUpMinutes?: string;
+  coolDownMinutes?: string;
+  intervalReps?: string;
+  intervalDuration?: string;
+  tags?: string[];
 };
 
 type EditableWeek = {
@@ -740,6 +765,18 @@ export default function EditProgramTemplatePage() {
             day_number,
             num_sets,
             set_duration_minutes,
+            activity,
+            subtype,
+            distance_km,
+            terrain,
+            elevation_gain_meters,
+            pack_weight_kg,
+            strides,
+            warmup_minutes,
+            cooldown_minutes,
+            interval_reps,
+            interval_duration,
+            tags,
             program_template_session_exercises (
               id,
               program_template_session_id,
@@ -966,6 +1003,19 @@ export default function EditProgramTemplatePage() {
             numSets: formData?.sets ?? "",
             setDurationMinutes: formData?.setDurationSeconds ? String(parseInt(formData.setDurationSeconds) / 60) : "",
             exercises: [],
+            // Store all extended fields
+            activity: formData?.activity ?? "",
+            subtype: formData?.subtype ?? "",
+            distanceKm: formData?.distanceKm ?? "",
+            terrain: formData?.terrain ?? "",
+            elevation: formData?.elevation ?? "",
+            packWeightKg: formData?.packWeightKg ?? "",
+            strides: formData?.strides ?? "",
+            warmUpMinutes: formData?.warmUpMinutes ?? "",
+            coolDownMinutes: formData?.coolDownMinutes ?? "",
+            intervalReps: formData?.intervalReps ?? "",
+            intervalDuration: formData?.intervalDuration ?? "",
+            tags: formData?.tags ?? [],
           },
         ],
       };
@@ -1925,6 +1975,192 @@ export default function EditProgramTemplatePage() {
                                   className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
                                 />
                               </label>
+
+                              {/* Extended session fields */}
+                              {session.activity && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Activity
+                                  <input
+                                    value={session.activity}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        activity: e.target.value,
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.subtype && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Subtype
+                                  <input
+                                    value={session.subtype}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        subtype: e.target.value,
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.distanceKm && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Distance (km)
+                                  <input
+                                    value={session.distanceKm}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        distanceKm: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. 10"
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.terrain && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Terrain
+                                  <input
+                                    value={session.terrain}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        terrain: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. road, trail, mixed"
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.elevation && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Elevation Gain (m)
+                                  <input
+                                    value={session.elevation}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        elevation: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. 500"
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.packWeightKg && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Pack Weight (kg)
+                                  <input
+                                    value={session.packWeightKg}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        packWeightKg: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. 15"
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.strides && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Strides
+                                  <input
+                                    value={session.strides}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        strides: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. 10x100m"
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.warmUpMinutes && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Warm-up (min)
+                                  <input
+                                    value={session.warmUpMinutes}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        warmUpMinutes: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. 10"
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.coolDownMinutes && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Cool-down (min)
+                                  <input
+                                    value={session.coolDownMinutes}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        coolDownMinutes: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. 10"
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.intervalReps && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Interval Reps
+                                  <input
+                                    value={session.intervalReps}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        intervalReps: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. 8"
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
+
+                              {session.intervalDuration && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Interval Duration
+                                  <input
+                                    value={session.intervalDuration}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        intervalDuration: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. 400m or 3min"
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  />
+                                </label>
+                              )}
 
                               <label className="text-sm font-medium text-zinc-700">
                                 Run time type
