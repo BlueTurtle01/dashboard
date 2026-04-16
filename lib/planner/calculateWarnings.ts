@@ -52,7 +52,7 @@ export function calculateAllWarnings(
           if (race) {
             warnings.push({
               type: "error",
-              message: `Week ${week.weekNumber}: "${session.name}" scheduled on same day as ${race.name}.`,
+              message: `Week ${week.weekNumber}: "${session.name}" scheduled on same day as prep race "${race.name}". Delete or move the session.`,
               weekNumber: week.weekNumber,
             });
           }

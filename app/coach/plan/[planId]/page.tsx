@@ -1274,29 +1274,23 @@ export default function PlanEditorPage() {
   }
 
   function generatePrepRaceWarnings(plan: GeneratedPlan | null): any[] {
-    if (!plan || !plan.weeks || prepRaces.length === 0) return [];
+    if (!plan || !plan.weeks) return [];
 
     const warnings: any[] = [];
-    const conflictMap = new Map<string, { raceName: string; sessions: string[] }>();
+
+    // Check against both prepRaces and prepRaceMarkers
+    const allRaces = [...(prepRaces || [])];
 
     for (const week of plan.weeks) {
       for (const session of week.sessions) {
         const conflict = checkPrepRaceConflict(week.weekNumber, session.dayLabel);
         if (conflict) {
-          const key = conflict.race_name;
-          if (!conflictMap.has(key)) {
-            conflictMap.set(key, { raceName: conflict.race_name, sessions: [] });
-          }
-          conflictMap.get(key)!.sessions.push(session.name || "(Untitled)");
+          warnings.push({
+            type: "error",
+            message: `Week ${week.weekNumber}: "${session.name}" is scheduled on the same day as prep race "${conflict.race_name}". Delete or move the session.`,
+          });
         }
       }
-    }
-
-    for (const [, conflict] of conflictMap) {
-      warnings.push({
-        type: "error",
-        message: `${conflict.raceName}: Scheduled on the same day as prep race (${conflict.sessions.join(", ")})`,
-      });
     }
 
     return warnings;
