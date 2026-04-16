@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { SessionCreationForm, type SessionFormData } from "@/app/coach/components/SessionCreationForm";
 
 type ProgramTemplateRow = {
   id: string;
@@ -629,6 +630,7 @@ export default function EditProgramTemplatePage() {
   const [weekTemplateResults, setWeekTemplateResults] = useState<WeekTemplateRow[]>([]);
   const [searchingWeekTemplates, setSearchingWeekTemplates] = useState(false);
   const [collapsedWeekLocalIds, setCollapsedWeekLocalIds] = useState<Record<string, boolean>>({});
+  const [creatingBlankSessionWeekId, setCreatingBlankSessionWeekId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1093,7 +1095,7 @@ export default function EditProgramTemplatePage() {
     }));
   }
 
-  function addBlankSession(weekLocalId: string) {
+  function addBlankSession(weekLocalId: string, formData?: SessionFormData) {
     updateWeek(weekLocalId, (week) => {
       const nextSortOrder = Math.max(0, ...week.sessions.map((session) => session.sortOrder)) + 1;
 
@@ -1106,12 +1108,12 @@ export default function EditProgramTemplatePage() {
             dbId: null,
             dayLabel: "",
             sortOrder: nextSortOrder,
-            type: "Easy",
-            name: `Session ${nextSortOrder}`,
-            description: "",
-            duration: "",
-            intensity: "",
-            isKeySession: false,
+            type: formData?.type ?? "Easy",
+            name: formData?.name ?? `Session ${nextSortOrder}`,
+            description: formData?.description ?? "",
+            duration: formData?.duration ?? "",
+            intensity: formData?.intensity ?? "",
+            isKeySession: formData?.isKeySession ?? false,
             sessionTemplateId: "",
             runTimeType: "any",
             runStartTime: "",
@@ -1126,6 +1128,11 @@ export default function EditProgramTemplatePage() {
     });
 
     showTemporaryStatus("Blank session added.", 1500);
+  }
+
+  function handleCreateBlankSessionFromForm(weekLocalId: string, formData: SessionFormData) {
+    addBlankSession(weekLocalId, formData);
+    setCreatingBlankSessionWeekId(null);
   }
 
   async function openTemplateSessionPicker(weekLocalId: string) {
@@ -1778,34 +1785,56 @@ export default function EditProgramTemplatePage() {
                         </div>
 
                         <div className="flex flex-wrap items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => addBlankSession(week.localId)}
-                            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
-                          >
-                            Add Blank Session
-                          </button>
+                          {creatingBlankSessionWeekId !== week.localId ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setCreatingBlankSessionWeekId(week.localId)}
+                                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
+                              >
+                                Add Blank Session
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={() => openTemplateSessionPicker(week.localId)}
-                            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                              pendingSessionSlot?.weekLocalId === week.localId
-                                ? "border-zinc-900 bg-zinc-900 text-white"
-                                : "border-zinc-300 bg-white hover:bg-zinc-100"
-                            }`}
-                          >
-                            Add Session From Template
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => openTemplateSessionPicker(week.localId)}
+                                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                                  pendingSessionSlot?.weekLocalId === week.localId
+                                    ? "border-zinc-900 bg-zinc-900 text-white"
+                                    : "border-zinc-300 bg-white hover:bg-zinc-100"
+                                }`}
+                              >
+                                Add Session From Template
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={() => removeWeek(week.localId)}
-                            className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
-                          >
-                            Remove Week
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => removeWeek(week.localId)}
+                                className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
+                              >
+                                Remove Week
+                              </button>
+                            </>
+                          ) : null}
                         </div>
+
+                        {creatingBlankSessionWeekId === week.localId ? (
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                            <div className="mb-4">
+                              <h4 className="text-base font-semibold text-zinc-900">Create Blank Session</h4>
+                              <p className="mt-1 text-sm text-zinc-600">
+                                Fill in the session details below to create a new blank session.
+                              </p>
+                            </div>
+
+                            <SessionCreationForm
+                              onSave={(formData) =>
+                                handleCreateBlankSessionFromForm(week.localId, formData)
+                              }
+                              onCancel={() => setCreatingBlankSessionWeekId(null)}
+                            />
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="mb-4 grid gap-4 md:grid-cols-2">
@@ -1994,20 +2023,6 @@ export default function EditProgramTemplatePage() {
 
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                               <label className="text-sm font-medium text-zinc-700">
-                                Day label
-                                <input
-                                  value={session.dayLabel}
-                                  onChange={(e) =>
-                                    updateSession(week.localId, session.localId, (current) => ({
-                                      ...current,
-                                      dayLabel: e.target.value,
-                                    }))
-                                  }
-                                  className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                />
-                              </label>
-
-                              <label className="text-sm font-medium text-zinc-700">
                                 Session type
                                 <select
                                   value={session.type}
@@ -2148,20 +2163,6 @@ export default function EditProgramTemplatePage() {
                                 </select>
                               </label>
 
-                              <label className="text-sm font-medium text-zinc-700">
-                                Run start time
-                                <input
-                                  value={session.runStartTime}
-                                  onChange={(e) =>
-                                    updateSession(week.localId, session.localId, (current) => ({
-                                      ...current,
-                                      runStartTime: e.target.value,
-                                    }))
-                                  }
-                                  placeholder="09:00"
-                                  className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                />
-                              </label>
                             </div>
 
                             <div className="mt-4 grid gap-3 md:grid-cols-2">
