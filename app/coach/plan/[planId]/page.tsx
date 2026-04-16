@@ -2736,24 +2736,63 @@ export default function PlanEditorPage() {
 
               {/* Warnings Tab */}
               {activeTab === "warnings" && (
-                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
-                  <div className="flex items-start gap-4">
-                    <div className="text-2xl">ℹ️</div>
-                    <div>
-                      <h3 className="font-semibold text-blue-900">View All Warnings</h3>
-                      <p className="mt-2 text-sm text-blue-800">
-                        All plan warnings are shown in one place for easy review. Go to the Warnings page to see all warnings across all your plans.
-                      </p>
-                      <div className="mt-4">
-                        <Link
-                          href="/coach/warnings"
-                          className="inline-block rounded-lg border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                        >
-                          Go to Warnings Page
-                        </Link>
+                <div className="space-y-4">
+                  {!plan?.warnings || plan.warnings.length === 0 ? (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+                      <div className="flex items-start gap-4">
+                        <div className="text-2xl">✓</div>
+                        <div>
+                          <h3 className="font-semibold text-emerald-900">No warnings</h3>
+                          <p className="mt-2 text-sm text-emerald-800">
+                            This plan looks good with no conflicts or issues detected.
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      {plan.warnings.map((warning: any, idx) => {
+                        const isError = warning.type === "error";
+                        const isWarning = warning.type === "warning";
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`rounded-lg border-l-4 p-4 ${
+                              isError
+                                ? "border-l-red-600 border-r border-b border-t border-red-200 bg-red-50"
+                                : isWarning
+                                  ? "border-l-amber-600 border-r border-b border-t border-amber-200 bg-amber-50"
+                                  : "border-l-blue-600 border-r border-b border-t border-blue-200 bg-blue-50"
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div
+                                className={`text-lg leading-none mt-0.5 ${
+                                  isError ? "text-red-600" : isWarning ? "text-amber-600" : "text-blue-600"
+                                }`}
+                              >
+                                {isError && "🚨"}
+                                {isWarning && "⚠️"}
+                                {!isError && !isWarning && "ℹ️"}
+                              </div>
+                              <div
+                                className={`text-sm ${
+                                  isError
+                                    ? "text-red-900 font-semibold"
+                                    : isWarning
+                                      ? "text-amber-900 font-semibold"
+                                      : "text-blue-900"
+                                }`}
+                              >
+                                {warning.message}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
               )}
 
