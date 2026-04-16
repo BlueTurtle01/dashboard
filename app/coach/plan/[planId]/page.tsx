@@ -7,8 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 import WarningList from "@/components/WarningList";
 import WeekTemplatePicker from "@/components/WeekTemplatePicker";
 import AdHocSessionForm from "@/components/AdHocSessionForm";
+import { FunctionalSessionForm, type FunctionalSessionFormData } from "@/app/coach/components/FunctionalSessionForm";
 import { calculateAllWarnings } from "@/lib/planner/warningRules";
-import { GeneratedPlan, PlanExercise, PlanSession, TrainingPurpose, TRAINING_PURPOSES } from "@/lib/planner/types";
+import { GeneratedPlan, PlanExercise, PlanSession, PlanSessionType, TrainingPurpose, TRAINING_PURPOSES } from "@/lib/planner/types";
 
 const canonicalDayOrder = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -1924,39 +1925,6 @@ export default function PlanEditorPage() {
     }
   }
 
-  function addBlankSession(weekId: string) {
-    if (!plan) return;
-
-    const dayLabel = autoAssignDay(weekId);
-    const nextSession: PlanSession = {
-      id: `session-${Date.now()}`,
-      weekId,
-      sortOrder: 1,
-      dayLabel,
-      type: "Easy",
-      name: "Session",
-      description: "",
-      tags: [],
-      duration: "",
-      intensity: "",
-      isKeySession: false,
-      exercises: [],
-    };
-
-    const nextPlan: GeneratedPlan = {
-      ...plan,
-      weeks: plan.weeks.map((week) =>
-        week.id === weekId
-          ? { ...week, sessions: [...week.sessions, nextSession] }
-          : week,
-      ),
-    };
-
-    void updatePlan(nextPlan);
-    setCreatingBlankSessionWeekId(null);
-    showTemporaryStatus("Blank session added.", 1500);
-  }
-
   function cancelPendingSession() {
     setPendingSessionSlot(null);
     setPendingSessionType(null);
@@ -2523,26 +2491,69 @@ export default function PlanEditorPage() {
                                 <div className="mb-4">
                                   <h4 className="text-base font-semibold text-zinc-900">Create Blank Session</h4>
                                   <p className="mt-1 text-sm text-zinc-600">
-                                    Create a new blank session that you can customize with all the details.
+                                    Fill in the session details below to create a new blank session.
                                   </p>
                                 </div>
 
-                                <div className="flex gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => addBlankSession(typedWeek.id)}
-                                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                                  >
-                                    Create
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setCreatingBlankSessionWeekId(null)}
-                                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-100"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
+                                <FunctionalSessionForm
+                                  onSave={(formData) => {
+                                    if (!plan) return;
+                                    const dayLabel = pendingSessionSlot?.dayLabel || autoAssignDay(typedWeek.id);
+                                    // Map activity to a valid PlanSessionType
+                                    const mapActivityToType = (activity: string): PlanSessionType => {
+                                      const lower = (activity || "").toLowerCase();
+                                      if (lower.includes("gym")) return "Gym";
+                                      if (lower.includes("functional")) return "functional";
+                                      if (lower.includes("long")) return "Long";
+                                      if (lower.includes("recovery")) return "Recovery";
+                                      if (lower.includes("steady")) return "Steady";
+                                      if (lower.includes("rest")) return "Rest";
+                                      if (lower.includes("loaded")) return "Loaded";
+                                      if (lower.includes("recce")) return "Recce";
+                                      if (lower.includes("navigation")) return "Navigation";
+                                      return "Easy";
+                                    };
+                                    const nextSession: PlanSession = {
+                                      id: `session-${Date.now()}`,
+                                      weekId: typedWeek.id,
+                                      sortOrder: typedWeek.sessions.length + 1,
+                                      dayLabel,
+                                      type: mapActivityToType(formData.activity),
+                                      name: formData.activity && formData.subtype
+                                        ? `${formData.activity} - ${formData.subtype}`
+                                        : formData.activity || "Session",
+                                      description: formData.description || "",
+                                      tags: formData.tags || [],
+                                      duration: formData.durationMinutes ? `${formData.durationMinutes} min` : "",
+                                      intensity: formData.targetIntensity || "",
+                                      isKeySession: false,
+                                      exercises: [],
+                                      activity: formData.activity,
+                                      subtype: formData.subtype,
+                                      terrain: formData.terrain,
+                                      elevationGainMeters: formData.elevation ? parseInt(formData.elevation) : undefined,
+                                      packWeightKg: formData.packWeightKg ? parseFloat(formData.packWeightKg) : undefined,
+                                      strides: formData.strides,
+                                      warmupMinutes: formData.warmUpMinutes ? parseInt(formData.warmUpMinutes) : undefined,
+                                      cooldownMinutes: formData.coolDownMinutes ? parseInt(formData.coolDownMinutes) : undefined,
+                                      intervalReps: formData.intervalReps ? parseInt(formData.intervalReps) : undefined,
+                                      intervalDuration: formData.intervalDuration,
+                                    };
+                                    const nextPlan: GeneratedPlan = {
+                                      ...plan,
+                                      weeks: plan.weeks.map((week) =>
+                                        week.id === typedWeek.id
+                                          ? { ...week, sessions: [...week.sessions, nextSession] }
+                                          : week,
+                                      ),
+                                    };
+                                    void updatePlan(nextPlan);
+                                    setCreatingBlankSessionWeekId(null);
+                                    showTemporaryStatus("Blank session added.", 1500);
+                                  }}
+                                  onCancel={() => setCreatingBlankSessionWeekId(null)}
+                                  submitButtonLabel="Create Session"
+                                />
                               </div>
                             ) : null}
                           </div>

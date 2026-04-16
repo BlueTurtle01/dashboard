@@ -26,7 +26,8 @@
       "Bash(grep -n \"function deriveEquipmentUnavailable\" app/coach/plan/[planId]/page.tsx)",
       "mcp__claude_ai_Supabase__list_migrations",
       "WebFetch(domain:lcwvxpdqscuumpgniaqh.supabase.co)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(curl -s http://localhost:3001/)"
     ]
   }
 }
