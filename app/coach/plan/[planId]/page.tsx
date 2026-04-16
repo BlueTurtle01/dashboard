@@ -2777,12 +2777,24 @@ export default function PlanEditorPage() {
 
               {/* Warnings Tab */}
               {activeTab === "warnings" && (
-                <div className="rounded-2xl border bg-white p-6 shadow-sm">
-                  {plan.warnings && plan.warnings.length > 0 ? (
-                    <WarningList warnings={plan.warnings} />
-                  ) : (
-                    <div className="text-sm text-zinc-500">No warnings. Plan looks good!</div>
-                  )}
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+                  <div className="flex items-start gap-4">
+                    <div className="text-2xl">ℹ️</div>
+                    <div>
+                      <h3 className="font-semibold text-blue-900">View All Warnings</h3>
+                      <p className="mt-2 text-sm text-blue-800">
+                        All plan warnings are shown in one place for easy review. Go to the Warnings page to see all warnings across all your plans.
+                      </p>
+                      <div className="mt-4">
+                        <Link
+                          href="/coach/warnings"
+                          className="inline-block rounded-lg border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                        >
+                          Go to Warnings Page
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 

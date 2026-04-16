@@ -219,44 +219,63 @@ export default function WarningsPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {plan.warnings.map((warning) => (
-                    <div
-                      key={warning.hash}
-                      className={`rounded-lg border p-3 ${
-                        warning.type === "error"
-                          ? "border-red-200 bg-red-50"
-                          : warning.type === "warning"
-                            ? "border-amber-200 bg-amber-50"
-                            : "border-zinc-200 bg-zinc-50"
-                      } ${warning.isRead ? "opacity-60" : ""}`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div
-                          className={`text-sm ${
-                            warning.type === "error"
-                              ? "text-red-900"
-                              : warning.type === "warning"
-                                ? "text-amber-900"
-                                : "text-zinc-900"
-                          }`}
-                        >
-                          {warning.type === "error" && "⚠️ "}
-                          {warning.type === "warning" && "⚡ "}
-                          {warning.message}
+                  {plan.warnings.map((warning) => {
+                    const isError = warning.type === "error";
+                    const isWarning = warning.type === "warning";
+                    const isInfo = warning.type === "info";
+
+                    return (
+                      <div
+                        key={warning.hash}
+                        className={`rounded-lg border-l-4 p-4 ${
+                          isError
+                            ? "border-l-red-600 border-r border-b border-t border-red-200 bg-red-50"
+                            : isWarning
+                              ? "border-l-amber-600 border-r border-b border-t border-amber-200 bg-amber-50"
+                              : "border-l-blue-600 border-r border-b border-t border-blue-200 bg-blue-50"
+                        } ${warning.isRead ? "opacity-60" : ""}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 flex-1">
+                            <div
+                              className={`text-lg leading-none mt-0.5 ${
+                                isError ? "text-red-600" : isWarning ? "text-amber-600" : "text-blue-600"
+                              }`}
+                            >
+                              {isError && "🚨"}
+                              {isWarning && "⚠️"}
+                              {isInfo && "ℹ️"}
+                            </div>
+                            <div
+                              className={`text-sm ${
+                                isError
+                                  ? "text-red-900 font-semibold"
+                                  : isWarning
+                                    ? "text-amber-900 font-semibold"
+                                    : "text-blue-900"
+                              }`}
+                            >
+                              {warning.message}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => toggleWarningRead(warning.hash, warning.isRead)}
+                            className={`shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs font-semibold transition ${
+                              warning.isRead
+                                ? "border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
+                                : isError
+                                  ? "border border-red-600 bg-red-600 text-white hover:bg-red-700"
+                                  : isWarning
+                                    ? "border border-amber-600 bg-amber-600 text-white hover:bg-amber-700"
+                                    : "border border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                            }`}
+                          >
+                            {warning.isRead ? "Mark unread" : "Mark read"}
+                          </button>
                         </div>
-                        <button
-                          onClick={() => toggleWarningRead(warning.hash, warning.isRead)}
-                          className={`whitespace-nowrap rounded px-2 py-1 text-xs font-semibold transition ${
-                            warning.isRead
-                              ? "border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
-                              : "border border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-700"
-                          }`}
-                        >
-                          {warning.isRead ? "Mark unread" : "Mark read"}
-                        </button>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
