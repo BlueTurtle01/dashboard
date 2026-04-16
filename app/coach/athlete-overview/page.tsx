@@ -286,7 +286,7 @@ export default function CoachAthleteOverviewPage() {
         return;
       }
 
-      const mappedAthletes: AthleteOption[] = (data ?? [])
+      const mappedAthletes = (data ?? [])
         .map((row: any) => {
           const athlete = Array.isArray(row.athlete_profiles)
             ? row.athlete_profiles[0]
@@ -323,7 +323,7 @@ export default function CoachAthleteOverviewPage() {
             tags: athlete.tags,
           };
         })
-        .filter((athlete: AthleteOption | null): athlete is AthleteOption => athlete !== null);
+        .filter((athlete: AthleteOption | null): athlete is AthleteOption => athlete !== null) as AthleteOption[];
 
       setAthletes(mappedAthletes);
       setLoadingAthletes(false);
