@@ -312,6 +312,7 @@ export default function SessionsPage() {
                         {session.type}
                       </span>
                       {session.isKeySession && <span className="text-xs font-semibold px-2 py-1 rounded bg-amber-100 text-amber-900">Key</span>}
+                      {(session as any).isInsertedAlternative && <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-100 text-blue-900">Alternative</span>}
                     </div>
 
                     <p className="text-sm text-zinc-600 mt-1">

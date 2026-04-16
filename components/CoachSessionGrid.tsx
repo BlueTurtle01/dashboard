@@ -481,9 +481,27 @@ export default function CoachSessionGrid({
                                       display: "flex",
                                       alignItems: "center",
                                       gap: "6px",
+                                      flexWrap: "wrap",
                                     }}
                                   >
                                     {session.name || "Untitled Session"}
+                                    {(session as any).isInsertedAlternative && (
+                                      <span style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                        background: "#dbeafe",
+                                        color: "#1e40af",
+                                        fontSize: "10px",
+                                        fontWeight: 700,
+                                        flexShrink: 0,
+                                        border: "1px solid #93c5fd",
+                                      }}>
+                                        ALT
+                                      </span>
+                                    )}
                                     {completedSessionIds.has(session.id) && (
                                       <span style={{
                                         display: "inline-flex",

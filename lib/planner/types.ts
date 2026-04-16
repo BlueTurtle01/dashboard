@@ -121,6 +121,7 @@ export interface PlanSession {
   cooldownMinutes?: number;
   intervalReps?: number;
   intervalDuration?: string;
+  isInsertedAlternative?: boolean;
 }
 
 export interface PlanWeek {
