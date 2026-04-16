@@ -1250,10 +1250,10 @@ export default function PlanEditorPage() {
     window.setTimeout(() => setStatusMessage(""), timeoutMs);
   }
 
-  function getPrepRaceOnDate(dateStr: string): { race_name: string } | null {
+  function getPrepRaceOnDate(dateStr: string): { race_name: string; date: string } | null {
     // dateStr should be in YYYY-MM-DD format
     const race = prepRaces.find((r) => r.date === dateStr);
-    return race ? { race_name: race.race_name } : null;
+    return race ? { race_name: race.race_name, date: race.date } : null;
   }
 
   function checkPrepRaceConflict(weekNumber: number, dayLabel: string | null | undefined): { race_name: string; date: string } | null {
