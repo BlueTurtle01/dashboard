@@ -7,8 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import WarningList from "@/components/WarningList";
 import WeekTemplatePicker from "@/components/WeekTemplatePicker";
 import AdHocSessionForm from "@/components/AdHocSessionForm";
-import { recalculatePlanWarnings } from "@/lib/planner/recalculatePlanWarnings";
-import { calculateAllWarnings } from "@/lib/planner/calculateWarnings";
+import { calculateAllWarnings } from "@/lib/planner/warningRules";
 import { GeneratedPlan, PlanExercise, PlanSession, TrainingPurpose, TRAINING_PURPOSES } from "@/lib/planner/types";
 
 const canonicalDayOrder = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
@@ -1250,15 +1249,10 @@ export default function PlanEditorPage() {
     window.setTimeout(() => setStatusMessage(""), timeoutMs);
   }
 
-  function getPrepRaceOnDate(dateStr: string): { race_name: string; date: string } | null {
-    // dateStr should be in YYYY-MM-DD format
-    const race = prepRaces.find((r) => r.date === dateStr);
-    return race ? { race_name: race.race_name, date: race.date } : null;
-  }
-
-  function checkPrepRaceConflict(weekNumber: number, dayLabel: string | null | undefined): { race_name: string; date: string } | null {
+  function getPrepRaceConflict(weekNumber: number, dayLabel: string | null | undefined): { race_name: string } | null {
     if (!dayLabel || !plan || !plan.startDate) return null;
 
+    // Map day labels to offsets
     const dayMap: Record<string, number> = {
       "Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3,
       "Friday": 4, "Saturday": 5, "Sunday": 6,
@@ -1267,33 +1261,13 @@ export default function PlanEditorPage() {
     const dayOffset = dayMap[dayLabel.trim()];
     if (dayOffset === undefined) return null;
 
+    // Calculate session date
     const weekStart = addDaysToIso(plan.startDate, (weekNumber - 1) * 7);
     const sessionDateStr = addDaysToIso(weekStart, dayOffset);
 
-    return getPrepRaceOnDate(sessionDateStr);
-  }
-
-  function generatePrepRaceWarnings(plan: GeneratedPlan | null): any[] {
-    if (!plan || !plan.weeks) return [];
-
-    const warnings: any[] = [];
-
-    // Check against both prepRaces and prepRaceMarkers
-    const allRaces = [...(prepRaces || [])];
-
-    for (const week of plan.weeks) {
-      for (const session of week.sessions) {
-        const conflict = checkPrepRaceConflict(week.weekNumber, session.dayLabel);
-        if (conflict) {
-          warnings.push({
-            type: "error",
-            message: `Week ${week.weekNumber}: "${session.name}" is scheduled on the same day as prep race "${conflict.race_name}". Delete or move the session.`,
-          });
-        }
-      }
-    }
-
-    return warnings;
+    // Check if any prep race is on this date
+    const race = prepRaces.find((r) => r.date === sessionDateStr);
+    return race ? { race_name: race.race_name } : null;
   }
 
   async function loadWeekFocusTypes() {
@@ -1430,25 +1404,22 @@ export default function PlanEditorPage() {
   useEffect(() => {
     // Calculate warnings when plan loads, content changes, or when athleteContext becomes available
     if (plan) {
-      const existingWarnings = recalculatePlanWarnings(plan).warnings || [];
       const athleteEquipmentAvoid = deriveEquipmentAvoid(athleteContext);
       const athleteEquipmentUnavailable = deriveEquipmentUnavailable(athleteContext);
-      const holidayEquipmentUnavailable = athleteContext?.holiday_equipment_unavailable || [];
-      const newWarnings = calculateAllWarnings(plan, athleteEquipmentAvoid, athleteEquipmentUnavailable, holidayEquipmentUnavailable);
-      const prepRaceWarnings = generatePrepRaceWarnings(plan);
+      const newWarnings = calculateAllWarnings(plan, athleteEquipmentUnavailable, athleteEquipmentAvoid);
 
-      const allWarnings = [
-        ...existingWarnings,
-        ...newWarnings,
-        ...prepRaceWarnings,
-      ] as any[];
+      // Transform warnings to add 'type' field for backward compatibility with warnings page
+      const transformedWarnings = newWarnings.map((w: any) => ({
+        ...w,
+        type: w.severity, // Map severity to type for display compatibility
+      })) as any[];
 
       // Only update if warnings actually changed to avoid unnecessary renders
-      const warningsChanged = JSON.stringify(plan.warnings) !== JSON.stringify(allWarnings);
+      const warningsChanged = JSON.stringify(plan.warnings) !== JSON.stringify(transformedWarnings);
       if (warningsChanged) {
         setPlan({
           ...plan,
-          warnings: allWarnings as any,
+          warnings: transformedWarnings,
         });
       }
     }
@@ -1642,19 +1613,15 @@ export default function PlanEditorPage() {
 
   async function updatePlan(nextPlan: GeneratedPlan) {
     const adjustedPlan = reconcileMobilitySessionsBeforeGym(nextPlan);
-    const existingWarnings = recalculatePlanWarnings(adjustedPlan).warnings || [];
     const athleteEquipmentAvoid = deriveEquipmentAvoid(athleteContext);
     const athleteEquipmentUnavailable = deriveEquipmentUnavailable(athleteContext);
-    const holidayEquipmentUnavailable = athleteContext?.holiday_equipment_unavailable || [];
-    const newWarnings = calculateAllWarnings(adjustedPlan, athleteEquipmentAvoid, athleteEquipmentUnavailable, holidayEquipmentUnavailable);
-    const prepRaceWarnings = generatePrepRaceWarnings(adjustedPlan);
+    const newWarnings = calculateAllWarnings(adjustedPlan, athleteEquipmentUnavailable, athleteEquipmentAvoid);
 
-    // Combine existing warnings with new calculated warnings (avoiding duplicates)
-    const allWarnings = [
-      ...existingWarnings,
-      ...newWarnings,
-      ...prepRaceWarnings,
-    ] as any[];
+    // Transform warnings to add 'type' field for backward compatibility with warnings page
+    const allWarnings = newWarnings.map((w: any) => ({
+      ...w,
+      type: w.severity, // Map severity to type for display compatibility
+    })) as any[];
 
     const recalculated: GeneratedPlan = {
       ...adjustedPlan,
@@ -1681,17 +1648,15 @@ export default function PlanEditorPage() {
       return;
     }
 
-    const existingWarnings = recalculatePlanWarnings(plan).warnings || [];
     const athleteEquipmentAvoid = deriveEquipmentAvoid(athleteContext);
     const athleteEquipmentUnavailable = deriveEquipmentUnavailable(athleteContext);
-    const holidayEquipmentUnavailable = athleteContext?.holiday_equipment_unavailable || [];
-    const newWarnings = calculateAllWarnings(plan, athleteEquipmentAvoid, athleteEquipmentUnavailable, holidayEquipmentUnavailable);
+    const newWarnings = calculateAllWarnings(plan, athleteEquipmentUnavailable, athleteEquipmentAvoid);
 
-    // Combine existing warnings with new calculated warnings
-    const allWarnings = [
-      ...existingWarnings,
-      ...newWarnings,
-    ] as any[];
+    // Transform warnings to add 'type' field for backward compatibility with warnings page
+    const allWarnings = newWarnings.map((w: any) => ({
+      ...w,
+      type: w.severity, // Map severity to type for display compatibility
+    })) as any[];
 
     const recalculated: GeneratedPlan = {
       ...plan,
@@ -2490,7 +2455,7 @@ export default function PlanEditorPage() {
                             dayAliases[session.dayLabel.trim().toLowerCase()]
                               ? session.dayLabel
                               : null;
-                          const prepRaceConflict = checkPrepRaceConflict(typedWeek.weekNumber, session.dayLabel);
+                          const prepRaceConflict = getPrepRaceConflict(typedWeek.weekNumber, session.dayLabel);
 
                           return (
                             <div
