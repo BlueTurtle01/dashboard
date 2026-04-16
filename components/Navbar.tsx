@@ -81,6 +81,28 @@ export default async function Navbar() {
             </div>
           )}
 
+          {canAccessCoachArea && (
+            <div className="site-navbar__dropdown">
+              <button className="site-navbar__dropdown-trigger" type="button">
+                Mobility
+              </button>
+              <div className="site-navbar__dropdown-menu">
+                <Link
+                  href="/coach/mobility-sessions"
+                  className="site-navbar__dropdown-link"
+                >
+                  View Mobility Sessions
+                </Link>
+                <Link
+                  href="/coach/mobility-sessions/create"
+                  className="site-navbar__dropdown-link"
+                >
+                  Create Mobility Session
+                </Link>
+              </div>
+            </div>
+          )}
+
 
           {isAdmin && (
             <div className="site-navbar__dropdown">
