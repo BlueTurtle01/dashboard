@@ -564,6 +564,19 @@ function mapToForm(
             dayNumber: session.day_number?.toString() ?? "",
             numSets: session.num_sets?.toString() ?? "",
             setDurationMinutes: session.set_duration_minutes?.toString() ?? "",
+            // Extended session fields
+            activity: session.activity ?? "",
+            subtype: session.subtype ?? "",
+            distanceKm: session.distance_km?.toString() ?? "",
+            terrain: session.terrain ?? "",
+            elevation: session.elevation_gain_meters?.toString() ?? "",
+            packWeightKg: session.pack_weight_kg?.toString() ?? "",
+            strides: session.strides ?? "",
+            warmUpMinutes: session.warmup_minutes?.toString() ?? "",
+            coolDownMinutes: session.cooldown_minutes?.toString() ?? "",
+            intervalReps: session.interval_reps?.toString() ?? "",
+            intervalDuration: session.interval_duration ?? "",
+            tags: session.tags ?? [],
             exercises: (session.program_template_session_exercises ?? [])
               .slice()
               .sort((a, b) => a.sort_order - b.sort_order)
@@ -1338,6 +1351,19 @@ export default function EditProgramTemplatePage() {
           day_number: Number.parseInt(session.dayNumber || "0", 10) || null,
           num_sets: session.numSets ? Number.parseInt(session.numSets, 10) || null : null,
           set_duration_minutes: session.setDurationMinutes ? parseFloat(session.setDurationMinutes) || null : null,
+          // Extended session fields
+          activity: session.activity || null,
+          subtype: session.subtype || null,
+          distance_km: session.distanceKm ? parseFloat(session.distanceKm) || null : null,
+          terrain: session.terrain || null,
+          elevation_gain_meters: session.elevation ? parseInt(session.elevation, 10) || null : null,
+          pack_weight_kg: session.packWeightKg ? parseFloat(session.packWeightKg) || null : null,
+          strides: session.strides || null,
+          warmup_minutes: session.warmUpMinutes ? parseInt(session.warmUpMinutes, 10) || null : null,
+          cooldown_minutes: session.coolDownMinutes ? parseInt(session.coolDownMinutes, 10) || null : null,
+          interval_reps: session.intervalReps ? parseInt(session.intervalReps, 10) || null : null,
+          interval_duration: session.intervalDuration || null,
+          tags: (session.tags && session.tags.length > 0) ? session.tags : null,
         };
 
         let persistedSessionId = session.dbId;
