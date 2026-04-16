@@ -55,12 +55,6 @@ export default async function Navbar() {
             </Link>
           )}
 
-          {canAccessCoachArea && (
-            <Link href="/coach/athlete-overview" className="site-navbar__link">
-              Athletes
-            </Link>
-          )}
-
           <Link href="/coaches" className="site-navbar__link">
             Coaches
           </Link>
