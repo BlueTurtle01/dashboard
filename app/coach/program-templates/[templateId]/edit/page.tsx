@@ -1139,11 +1139,49 @@ export default function EditProgramTemplatePage() {
     });
   }
 
-  function openTemplateSessionPicker(weekLocalId: string, dayLabel: string, dayNumber: number) {
+  async function openTemplateSessionPicker(weekLocalId: string, dayLabel: string, dayNumber: number) {
     setPendingSessionSlot({ weekLocalId, dayLabel, dayNumber });
     setSessionTemplateSearch("");
-    setSessionTemplateResults([]);
+    setSearchingTemplates(true);
+
+    // Load all session templates when picker opens
+    const { data, error } = await supabase
+      .from("session_templates")
+      .select(
+        `
+        id,
+        name,
+        description,
+        type,
+        activity,
+        subtype,
+        duration_minutes,
+        distance_km,
+        target_intensity,
+        session_data,
+        is_key_session,
+        session_template_exercises (
+          id,
+          session_template_id,
+          exercise_id,
+          exercise_order,
+          sets,
+          reps,
+          duration,
+          notes
+        )
+      `,
+      )
+      .order("type", { ascending: true })
+      .order("name", { ascending: true });
+
     setSearchingTemplates(false);
+
+    if (!error && data) {
+      setSessionTemplateResults((data ?? []) as SessionTemplateRow[]);
+    } else {
+      setSessionTemplateResults([]);
+    }
   }
 
   function cancelPendingTemplateSession() {
@@ -1932,30 +1970,26 @@ export default function EditProgramTemplatePage() {
                         <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4">
                           <h4 className="text-base font-semibold text-zinc-900">Add Session</h4>
                           <p className="mt-1 text-sm text-zinc-600">
-                            Search existing session templates, or add a blank session for this day.
+                            Select from existing session templates below, or create a blank session for this day.
                           </p>
 
                           <div className="mt-4">
                             <input
                               value={sessionTemplateSearch}
                               onChange={(e) => setSessionTemplateSearch(e.target.value)}
-                              placeholder={`Search templates for ${pendingSessionSlot.dayLabel}`}
+                              placeholder={`Filter templates (type to search)…`}
                               className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
                             />
                           </div>
 
                           <div className="mt-4 space-y-3">
-                            {sessionTemplateSearch.trim().length === 0 ? (
+                            {searchingTemplates ? (
                               <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-                                Start typing to search session templates.
-                              </div>
-                            ) : searchingTemplates ? (
-                              <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-                                Searching session templates…
+                                Loading session templates…
                               </div>
                             ) : sessionTemplateResults.length === 0 ? (
                               <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-                                No session templates matched that search.
+                                {sessionTemplateSearch.trim() ? "No session templates matched that search." : "No session templates available."}
                               </div>
                             ) : (
                               sessionTemplateResults.map((template) => {
