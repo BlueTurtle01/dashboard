@@ -106,7 +106,7 @@ export default function SessionsPage() {
     fetchData();
   }, []);
 
-  const handleLogCompletion = async (sessionId: string) => {
+  const handleLogCompletion = async (sessionId: string, alternativeSessionId?: string) => {
     if (perceivedEffort === null || actualDuration === null) {
       setError("Please fill in effort and duration");
       return;
@@ -133,6 +133,28 @@ export default function SessionsPage() {
       const activePlan = planData.data as GeneratedPlan;
       const displayedWeek = activePlan.weeks[displayWeekIndex];
       if (!displayedWeek) return;
+
+      // If this is an alternative session and there's a main session already completed,
+      // we need to first remove the main session's completion
+      // Conversely, if this is a main session and an alternative is completed, remove the alternative
+      if (alternativeSessionId && completions.has(alternativeSessionId)) {
+        // Remove the alternative session's completion
+        const { error: deleteError } = await supabase
+          .from("session_completions")
+          .delete()
+          .eq("athlete_user_id", user.id)
+          .eq("session_id", alternativeSessionId);
+
+        if (deleteError) {
+          setError("Failed to update completion");
+          return;
+        }
+
+        // Remove from local state
+        const newCompletions = new Map(completions);
+        newCompletions.delete(alternativeSessionId);
+        setCompletions(newCompletions);
+      }
 
       const { error: upsertError } = await supabase
         .from("session_completions")
@@ -229,6 +251,40 @@ export default function SessionsPage() {
     weekStartDate = `${day} ${month}`;
   }
 
+  // Group sessions: find main sessions and their alternatives
+  const sessionGroups: Array<{ mainSession: PlanSession; alternativeSession: PlanSession | null }> = [];
+  const processedSessionIds = new Set<string>();
+
+  displayWeek.sessions.forEach((session) => {
+    if (processedSessionIds.has(session.id)) return;
+
+    const isAlternative = (session as any).isInsertedAlternative === true;
+
+    if (isAlternative) {
+      // Skip alternatives here - they'll be paired with their main session
+      return;
+    }
+
+    processedSessionIds.add(session.id);
+
+    // Find alternative session (same day, not same session)
+    const alternativeSession = displayWeek.sessions.find((s) => {
+      if (s.id === session.id) return false;
+      if ((s as any).isInsertedAlternative !== true) return false;
+      if (s.dayLabel !== session.dayLabel) return false;
+      return true;
+    }) || null;
+
+    if (alternativeSession) {
+      processedSessionIds.add(alternativeSession.id);
+    }
+
+    sessionGroups.push({
+      mainSession: session,
+      alternativeSession: alternativeSession as PlanSession | null,
+    });
+  });
+
   const getSessionColor = (type: string) => {
     const colors: Record<string, string> = {
       Long: "bg-blue-100 text-blue-900",
@@ -281,171 +337,254 @@ export default function SessionsPage() {
         )}
 
         <div className="space-y-4">
-          {displayWeek.sessions.map((session) => {
-            const isCompleted = completions.has(session.id);
-            const completion = completions.get(session.id);
-            const isSelected = selectedSessionId === session.id;
+          {sessionGroups.map((group) => {
+            const mainSession = group.mainSession;
+            const alternativeSession = group.alternativeSession;
 
             return (
-              <div
-                key={session.id}
-                className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm hover:border-zinc-300 transition-colors"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="pt-1">
-                    <button
-                      onClick={() => setSelectedSessionId(isSelected ? null : session.id)}
-                      className={`flex items-center justify-center w-6 h-6 rounded-full border-2 transition-colors ${
-                        isCompleted
-                          ? "bg-emerald-100 border-emerald-600"
-                          : "border-zinc-300 hover:border-zinc-400"
-                      }`}
-                    >
-                      {isCompleted && <span className="text-emerald-600 text-sm font-bold">✓</span>}
-                    </button>
-                  </div>
+              <div key={mainSession.id} className="space-y-2">
+                {/* Main session card */}
+                <SessionCard
+                  session={mainSession}
+                  isCompleted={completions.has(mainSession.id)}
+                  completion={completions.get(mainSession.id)}
+                  isSelected={selectedSessionId === mainSession.id}
+                  onSelectToggle={() => setSelectedSessionId(selectedSessionId === mainSession.id ? null : mainSession.id)}
+                  getSessionColor={getSessionColor}
+                  isSubmitting={submitting}
+                  perceivedEffort={perceivedEffort}
+                  setPerceivedEffort={setPerceivedEffort}
+                  actualDuration={actualDuration}
+                  setActualDuration={setActualDuration}
+                  notes={notes}
+                  setNotes={setNotes}
+                  onLogCompletion={() => handleLogCompletion(mainSession.id, alternativeSession?.id)}
+                  alternativeSessionId={alternativeSession?.id}
+                />
 
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-lg">{session.name}</h3>
-                      <span className={`text-xs font-semibold px-2 py-1 rounded ${getSessionColor(session.type)}`}>
-                        {session.type}
-                      </span>
-                      {session.isKeySession && <span className="text-xs font-semibold px-2 py-1 rounded bg-amber-100 text-amber-900">Key</span>}
-                      {(session as any).isInsertedAlternative && <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-100 text-blue-900">Alternative</span>}
-                    </div>
-
-                    <p className="text-sm text-zinc-600 mt-1">
-                      {session.dayLabel} • {session.duration} • {session.intensity}
-                    </p>
-
-                    {isCompleted && completion && (
-                      <div className="mt-2 text-xs text-zinc-500">
-                        <p>Effort: {completion.perceived_effort}/10 • Duration: {completion.actual_duration_minutes} min</p>
-                        {completion.notes && <p className="mt-1">Notes: {completion.notes}</p>}
-                      </div>
-                    )}
-
-                    {session.description && (
-                      <div className="mt-3 p-3 bg-zinc-50 rounded-lg text-sm text-zinc-700 whitespace-pre-wrap">
-                        {session.description}
-                      </div>
-                    )}
-
-                    {/* Extended session details */}
-                    {(session.activity || session.terrain || session.elevationGainMeters || session.packWeightKg || session.strides || session.warmupMinutes || session.cooldownMinutes || session.intervalReps) && (
-                      <div className="mt-3 space-y-2 text-sm">
-                        {session.activity && (
-                          <div className="flex gap-2">
-                            <span className="font-semibold text-zinc-600 min-w-20">Activity:</span>
-                            <span className="text-zinc-900">{session.activity}{session.subtype ? ` - ${session.subtype}` : ""}</span>
-                          </div>
-                        )}
-                        {session.terrain && (
-                          <div className="flex gap-2">
-                            <span className="font-semibold text-zinc-600 min-w-20">Terrain:</span>
-                            <span className="text-zinc-900">{session.terrain}</span>
-                          </div>
-                        )}
-                        {session.elevationGainMeters && (
-                          <div className="flex gap-2">
-                            <span className="font-semibold text-zinc-600 min-w-20">Elevation:</span>
-                            <span className="text-zinc-900">{session.elevationGainMeters}m</span>
-                          </div>
-                        )}
-                        {session.packWeightKg && (
-                          <div className="flex gap-2">
-                            <span className="font-semibold text-zinc-600 min-w-20">Pack Weight:</span>
-                            <span className="text-zinc-900">{session.packWeightKg}kg</span>
-                          </div>
-                        )}
-                        {session.strides && (
-                          <div className="flex gap-2">
-                            <span className="font-semibold text-zinc-600 min-w-20">Strides:</span>
-                            <span className="text-zinc-900">{session.strides}</span>
-                          </div>
-                        )}
-                        {session.warmupMinutes && (
-                          <div className="flex gap-2">
-                            <span className="font-semibold text-zinc-600 min-w-20">Warm-up:</span>
-                            <span className="text-zinc-900">{session.warmupMinutes} min</span>
-                          </div>
-                        )}
-                        {session.cooldownMinutes && (
-                          <div className="flex gap-2">
-                            <span className="font-semibold text-zinc-600 min-w-20">Cool-down:</span>
-                            <span className="text-zinc-900">{session.cooldownMinutes} min</span>
-                          </div>
-                        )}
-                        {session.intervalReps && (
-                          <div className="flex gap-2">
-                            <span className="font-semibold text-zinc-600 min-w-20">Intervals:</span>
-                            <span className="text-zinc-900">{session.intervalReps} x {session.intervalDuration || "?"}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {isSelected && (
-                      <div className="mt-4 space-y-3 pt-3 border-t border-zinc-200">
-                        <div>
-                          <label className="text-xs font-semibold text-zinc-700">Perceived Effort (1-10)</label>
-                          <div className="flex gap-2 mt-2">
-                            {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => (
-                              <button
-                                key={num}
-                                onClick={() => setPerceivedEffort(num)}
-                                className={`w-8 h-8 rounded text-xs font-semibold transition-colors ${
-                                  perceivedEffort === num
-                                    ? "bg-zinc-900 text-white"
-                                    : "border border-zinc-300 hover:border-zinc-400"
-                                }`}
-                              >
-                                {num}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-semibold text-zinc-700">Duration (minutes)</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={actualDuration || ""}
-                            onChange={(e) => setActualDuration(e.target.value ? parseInt(e.target.value) : null)}
-                            className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-                            placeholder="e.g., 45"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-semibold text-zinc-700">Notes (optional)</label>
-                          <textarea
-                            rows={2}
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-                            placeholder="How did it go?"
-                          />
-                        </div>
-
-                        <button
-                          onClick={() => handleLogCompletion(session.id)}
-                          disabled={submitting}
-                          className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-                        >
-                          {submitting ? "Saving…" : "Log Session"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                {/* Alternative session card */}
+                {alternativeSession && (
+                  <SessionCard
+                    session={alternativeSession}
+                    isCompleted={completions.has(alternativeSession.id)}
+                    completion={completions.get(alternativeSession.id)}
+                    isSelected={selectedSessionId === alternativeSession.id}
+                    onSelectToggle={() => setSelectedSessionId(selectedSessionId === alternativeSession.id ? null : alternativeSession.id)}
+                    getSessionColor={getSessionColor}
+                    isSubmitting={submitting}
+                    perceivedEffort={perceivedEffort}
+                    setPerceivedEffort={setPerceivedEffort}
+                    actualDuration={actualDuration}
+                    setActualDuration={setActualDuration}
+                    notes={notes}
+                    setNotes={setNotes}
+                    onLogCompletion={() => handleLogCompletion(alternativeSession.id, mainSession.id)}
+                    alternativeSessionId={mainSession.id}
+                    isAlternative={true}
+                  />
+                )}
               </div>
             );
           })}
         </div>
       </div>
     </main>
+  );
+}
+
+interface SessionCardProps {
+  session: PlanSession;
+  isCompleted: boolean;
+  completion: SessionCompletion | undefined;
+  isSelected: boolean;
+  onSelectToggle: () => void;
+  getSessionColor: (type: string) => string;
+  isSubmitting: boolean;
+  perceivedEffort: number | null;
+  setPerceivedEffort: (value: number) => void;
+  actualDuration: number | null;
+  setActualDuration: (value: number | null) => void;
+  notes: string;
+  setNotes: (value: string) => void;
+  onLogCompletion: () => void;
+  alternativeSessionId?: string;
+  isAlternative?: boolean;
+}
+
+function SessionCard({
+  session,
+  isCompleted,
+  completion,
+  isSelected,
+  onSelectToggle,
+  getSessionColor,
+  isSubmitting,
+  perceivedEffort,
+  setPerceivedEffort,
+  actualDuration,
+  setActualDuration,
+  notes,
+  setNotes,
+  onLogCompletion,
+  alternativeSessionId,
+  isAlternative = false,
+}: SessionCardProps) {
+  return (
+    <div
+      className={`rounded-2xl border bg-white p-4 shadow-sm hover:border-zinc-300 transition-colors ${
+        isAlternative ? "border-blue-100 bg-blue-50" : "border-zinc-200"
+      }`}
+    >
+      <div className="flex items-start gap-4">
+        <div className="pt-1">
+          <button
+            onClick={onSelectToggle}
+            className={`flex items-center justify-center w-6 h-6 rounded-full border-2 transition-colors ${
+              isCompleted
+                ? "bg-emerald-100 border-emerald-600"
+                : "border-zinc-300 hover:border-zinc-400"
+            }`}
+          >
+            {isCompleted && <span className="text-emerald-600 text-sm font-bold">✓</span>}
+          </button>
+        </div>
+
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-lg">{session.name}</h3>
+            <span className={`text-xs font-semibold px-2 py-1 rounded ${getSessionColor(session.type)}`}>
+              {session.type}
+            </span>
+            {session.isKeySession && <span className="text-xs font-semibold px-2 py-1 rounded bg-amber-100 text-amber-900">Key</span>}
+            {isAlternative && <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-100 text-blue-900">Alternative</span>}
+          </div>
+
+          <p className="text-sm text-zinc-600 mt-1">
+            {session.dayLabel} • {session.duration} • {session.intensity}
+          </p>
+
+          {isCompleted && completion && (
+            <div className="mt-2 text-xs text-zinc-500">
+              <p>Effort: {completion.perceived_effort}/10 • Duration: {completion.actual_duration_minutes} min</p>
+              {completion.notes && <p className="mt-1">Notes: {completion.notes}</p>}
+            </div>
+          )}
+
+          {session.description && (
+            <div className="mt-3 p-3 bg-zinc-50 rounded-lg text-sm text-zinc-700 whitespace-pre-wrap">
+              {session.description}
+            </div>
+          )}
+
+          {/* Extended session details */}
+          {(session.activity || session.terrain || session.elevationGainMeters || session.packWeightKg || session.strides || session.warmupMinutes || session.cooldownMinutes || session.intervalReps) && (
+            <div className="mt-3 space-y-2 text-sm">
+              {session.activity && (
+                <div className="flex gap-2">
+                  <span className="font-semibold text-zinc-600 min-w-20">Activity:</span>
+                  <span className="text-zinc-900">{session.activity}{session.subtype ? ` - ${session.subtype}` : ""}</span>
+                </div>
+              )}
+              {session.terrain && (
+                <div className="flex gap-2">
+                  <span className="font-semibold text-zinc-600 min-w-20">Terrain:</span>
+                  <span className="text-zinc-900">{session.terrain}</span>
+                </div>
+              )}
+              {session.elevationGainMeters && (
+                <div className="flex gap-2">
+                  <span className="font-semibold text-zinc-600 min-w-20">Elevation:</span>
+                  <span className="text-zinc-900">{session.elevationGainMeters}m</span>
+                </div>
+              )}
+              {session.packWeightKg && (
+                <div className="flex gap-2">
+                  <span className="font-semibold text-zinc-600 min-w-20">Pack Weight:</span>
+                  <span className="text-zinc-900">{session.packWeightKg}kg</span>
+                </div>
+              )}
+              {session.strides && (
+                <div className="flex gap-2">
+                  <span className="font-semibold text-zinc-600 min-w-20">Strides:</span>
+                  <span className="text-zinc-900">{session.strides}</span>
+                </div>
+              )}
+              {session.warmupMinutes && (
+                <div className="flex gap-2">
+                  <span className="font-semibold text-zinc-600 min-w-20">Warm-up:</span>
+                  <span className="text-zinc-900">{session.warmupMinutes} min</span>
+                </div>
+              )}
+              {session.cooldownMinutes && (
+                <div className="flex gap-2">
+                  <span className="font-semibold text-zinc-600 min-w-20">Cool-down:</span>
+                  <span className="text-zinc-900">{session.cooldownMinutes} min</span>
+                </div>
+              )}
+              {session.intervalReps && (
+                <div className="flex gap-2">
+                  <span className="font-semibold text-zinc-600 min-w-20">Intervals:</span>
+                  <span className="text-zinc-900">{session.intervalReps} x {session.intervalDuration || "?"}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isSelected && (
+            <div className="mt-4 space-y-3 pt-3 border-t border-zinc-200">
+              <div>
+                <label className="text-xs font-semibold text-zinc-700">Perceived Effort (1-10)</label>
+                <div className="flex gap-2 mt-2">
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setPerceivedEffort(num)}
+                      className={`w-8 h-8 rounded text-xs font-semibold transition-colors ${
+                        perceivedEffort === num
+                          ? "bg-zinc-900 text-white"
+                          : "border border-zinc-300 hover:border-zinc-400"
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-700">Duration (minutes)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={actualDuration || ""}
+                  onChange={(e) => setActualDuration(e.target.value ? parseInt(e.target.value) : null)}
+                  className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="e.g., 45"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-700">Notes (optional)</label>
+                <textarea
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="How did it go?"
+                />
+              </div>
+
+              <button
+                onClick={onLogCompletion}
+                disabled={isSubmitting}
+                className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+              >
+                {isSubmitting ? "Saving…" : "Log Session"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
