@@ -7,6 +7,8 @@ export type PlanWarning = {
   severity: "error" | "warning"; // error = red 🚨, warning = amber ⚠️
   message: string;
   weekNumber?: number;
+  sessionId?: string;
+  exerciseId?: string;
 };
 
 /**
@@ -86,13 +88,20 @@ export function checkEquipmentConflicts(
       }
 
       // Check exercise equipment
+      const exerciseEquipmentMap = new Map<string, { equipment: Set<string>; exerciseId: string }>();
       if (session.exercises && Array.isArray(session.exercises)) {
         for (const exercise of session.exercises) {
+          const exerciseId = (exercise as any).id || (exercise as any).exerciseId;
           if ((exercise as any).equipment && Array.isArray((exercise as any).equipment)) {
+            const equipSet = new Set<string>();
             for (const equip of (exercise as any).equipment) {
               if (equip) {
+                equipSet.add(equip);
                 sessionEquipment.add(equip);
               }
+            }
+            if (exerciseId && equipSet.size > 0) {
+              exerciseEquipmentMap.set(exerciseId, { equipment: equipSet, exerciseId });
             }
           }
         }
@@ -101,11 +110,22 @@ export function checkEquipmentConflicts(
       // Check unavailable equipment
       for (const equip of sessionEquipment) {
         if (unavailableEquipment.includes(equip)) {
+          // Find which exercise(s) have this equipment
+          let exerciseId: string | undefined;
+          for (const [exId, { equipment }] of exerciseEquipmentMap) {
+            if (equipment.has(equip)) {
+              exerciseId = exId;
+              break;
+            }
+          }
+
           warnings.push({
             category: "equipment",
             severity: "error",
             message: `Week ${week.weekNumber}: "${session.name}" requires ${equip.replace(/_/g, " ")}, which the athlete doesn't have.`,
             weekNumber: week.weekNumber,
+            sessionId: session.id,
+            exerciseId: exerciseId,
           });
         }
       }
@@ -113,11 +133,22 @@ export function checkEquipmentConflicts(
       // Check avoided equipment
       for (const equip of sessionEquipment) {
         if (avoidedEquipment.includes(equip)) {
+          // Find which exercise(s) have this equipment
+          let exerciseId: string | undefined;
+          for (const [exId, { equipment }] of exerciseEquipmentMap) {
+            if (equipment.has(equip)) {
+              exerciseId = exId;
+              break;
+            }
+          }
+
           warnings.push({
             category: "equipment",
             severity: "warning",
             message: `Week ${week.weekNumber}: "${session.name}" uses ${equip.replace(/_/g, " ")}, which the athlete prefers to avoid.`,
             weekNumber: week.weekNumber,
+            sessionId: session.id,
+            exerciseId: exerciseId,
           });
         }
       }

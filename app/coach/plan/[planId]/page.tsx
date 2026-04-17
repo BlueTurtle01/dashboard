@@ -10,6 +10,7 @@ import AdHocSessionForm from "@/components/AdHocSessionForm";
 import { FunctionalSessionForm, type FunctionalSessionFormData } from "@/app/coach/components/FunctionalSessionForm";
 import { calculateAllWarnings } from "@/lib/planner/warningRules";
 import { GeneratedPlan, PlanExercise, PlanSession, PlanSessionType, TrainingPurpose, TRAINING_PURPOSES } from "@/lib/planner/types";
+import { findAlternativesForPicker } from "@/lib/planner/exerciseSwap";
 
 const canonicalDayOrder = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -1220,6 +1221,7 @@ export default function PlanEditorPage() {
   const [trainingCamps, setTrainingCamps] = useState<TrainingCamp[]>([]);
   const [athleteEvents, setAthleteEvents] = useState<Array<any>>([]);
   const [prepRaces, setPrepRaces] = useState<Array<{ date: string; race_name: string }>>([]);
+  const [equipmentConflictAlternatives, setEquipmentConflictAlternatives] = useState<Record<string, any[]>>({});
 
   function toggleWeekExpanded(weekId: string) {
     const newExpanded = new Set(expandedWeeks);
@@ -1332,6 +1334,47 @@ export default function PlanEditorPage() {
     void loadWeekFocusTypes();
     void loadPlanAndHistory();
   }, [planId]);
+
+  useEffect(() => {
+    async function loadEquipmentConflictAlternatives() {
+      if (!plan || !athleteContext) return;
+
+      const unavailableEquipment = deriveEquipmentAvoid(athleteContext);
+      if (unavailableEquipment.length === 0) {
+        setEquipmentConflictAlternatives({});
+        return;
+      }
+
+      const alternatives: Record<string, any[]> = {};
+
+      // Scan all sessions for exercises with equipmentConflict flag
+      for (const week of plan.weeks) {
+        for (const session of week.sessions) {
+          for (const exercise of session.exercises) {
+            if (exercise.equipmentConflict && exercise.exerciseId) {
+              // Load alternatives for this exercise if we haven't already
+              if (!alternatives[exercise.exerciseId]) {
+                try {
+                  const alts = await findAlternativesForPicker(exercise.exerciseId, {
+                    unavailableEquipment,
+                    avoidEquipment: [],
+                  }, supabase);
+                  alternatives[exercise.exerciseId] = alts;
+                } catch (err) {
+                  console.error(`Failed to load alternatives for ${exercise.exerciseId}:`, err);
+                  alternatives[exercise.exerciseId] = [];
+                }
+              }
+            }
+          }
+        }
+      }
+
+      setEquipmentConflictAlternatives(alternatives);
+    }
+
+    void loadEquipmentConflictAlternatives();
+  }, [plan, athleteContext]);
 
   useEffect(() => {
     async function loadAthleteContext() {
@@ -2145,6 +2188,44 @@ export default function PlanEditorPage() {
     );
   }
 
+  function swapExercise(weekId: string, sessionId: string, exerciseId: string, alternativeExercise: any) {
+    if (!plan) return;
+
+    const nextPlan: GeneratedPlan = {
+      ...plan,
+      weeks: plan.weeks.map((week) => {
+        if (week.id !== weekId) return week;
+
+        return {
+          ...week,
+          sessions: week.sessions.map((session) => {
+            if (session.id !== sessionId) return session;
+
+            return {
+              ...session,
+              exercises: session.exercises.map((exercise) => {
+                if (exercise.id !== exerciseId) return exercise;
+
+                return {
+                  ...exercise,
+                  id: alternativeExercise.id,
+                  name: alternativeExercise.name,
+                  equipment: alternativeExercise.equipment || [],
+                  equipmentConflict: undefined,
+                  swappedFromExerciseId: exercise.exerciseId || exercise.id,
+                  swappedFromName: exercise.name,
+                  exerciseId: alternativeExercise.id,
+                };
+              }),
+            };
+          }),
+        };
+      }),
+    };
+
+    void updatePlan(nextPlan);
+  }
+
   function dismissAlternative(sessionId: string) {
     if (!plan) return;
 
@@ -2886,6 +2967,20 @@ export default function PlanEditorPage() {
                       {plan.warnings.map((warning: any, idx) => {
                         const isError = warning.type === "error";
                         const isWarning = warning.type === "warning";
+                        const isEquipmentConflict = warning.message?.includes("requires") && warning.message?.includes("which the athlete");
+
+                        // Extract exercise ID from equipment conflict warnings
+                        let exerciseId: string | null = null;
+                        let weekId: string | null = null;
+                        let sessionId: string | null = null;
+
+                        if (isEquipmentConflict && warning.weekNumber !== undefined && warning.sessionId && warning.exerciseId) {
+                          weekId = String(warning.weekNumber);
+                          sessionId = warning.sessionId;
+                          exerciseId = warning.exerciseId;
+                        }
+
+                        const alternatives = exerciseId ? equipmentConflictAlternatives[exerciseId] : undefined;
 
                         return (
                           <div
@@ -2908,16 +3003,31 @@ export default function PlanEditorPage() {
                                 {isWarning && "⚠️"}
                                 {!isError && !isWarning && "ℹ️"}
                               </div>
-                              <div
-                                className={`text-sm ${
-                                  isError
-                                    ? "text-red-900 font-semibold"
-                                    : isWarning
-                                      ? "text-amber-900 font-semibold"
-                                      : "text-blue-900"
-                                }`}
-                              >
-                                {warning.message}
+                              <div className="flex-1">
+                                <div
+                                  className={`text-sm ${
+                                    isError
+                                      ? "text-red-900 font-semibold"
+                                      : isWarning
+                                        ? "text-amber-900 font-semibold"
+                                        : "text-blue-900"
+                                  }`}
+                                >
+                                  {warning.message}
+                                </div>
+                                {isEquipmentConflict && alternatives && alternatives.length > 0 && weekId && sessionId && exerciseId && (
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {alternatives.slice(0, 3).map((alt) => (
+                                      <button
+                                        key={alt.id}
+                                        onClick={() => swapExercise(weekId!, sessionId!, exerciseId!, alt)}
+                                        className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+                                      >
+                                        Swap to {alt.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
