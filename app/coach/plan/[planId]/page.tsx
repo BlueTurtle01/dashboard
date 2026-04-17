@@ -1352,6 +1352,7 @@ export default function PlanEditorPage() {
         for (const session of week.sessions) {
           for (const exercise of session.exercises) {
             if (exercise.equipmentConflict && exercise.exerciseId) {
+              console.log(`Found equipment conflict on exercise: ${exercise.name} (id: ${exercise.exerciseId})`);
               // Load alternatives for this exercise if we haven't already
               if (!alternatives[exercise.exerciseId]) {
                 try {
@@ -1359,6 +1360,7 @@ export default function PlanEditorPage() {
                     unavailableEquipment,
                     avoidEquipment: [],
                   }, supabase);
+                  console.log(`Loaded ${alts.length} alternatives for ${exercise.exerciseId}:`, alts.map(a => a.name));
                   alternatives[exercise.exerciseId] = alts;
                 } catch (err) {
                   console.error(`Failed to load alternatives for ${exercise.exerciseId}:`, err);
@@ -1370,6 +1372,7 @@ export default function PlanEditorPage() {
         }
       }
 
+      console.log("Finished loading equipment conflict alternatives:", alternatives);
       setEquipmentConflictAlternatives(alternatives);
     }
 
