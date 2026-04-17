@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { buildRaceHistorySummary, buildExperienceGaps } from "@/lib/planner/raceHistorySummary";
 
 type AthleteOption = {
   user_id: string;
@@ -30,6 +31,7 @@ type AthleteProfile = {
     id: string;
     name: string;
     event_date: string | null;
+    race_conditions?: any;
   } | null;
 };
 
@@ -75,6 +77,24 @@ type TrainingCamp = {
   notes: string | null;
   status: "pending" | "acknowledged";
   created_at: string;
+};
+
+type RaceHistoryEntry = {
+  id?: string;
+  preparation_race_id: string;
+  finish_time: string;
+  notes: string;
+  race?: {
+    name: string;
+    event_date: string | null;
+    distance_km: number | null;
+    event_type: string | null;
+    location: string | null;
+    terrain_type: string | null;
+    climate_type: string | null;
+    elevation_gain_m: number | null;
+    race_conditions: any | null;
+  };
 };
 
 const TEST_COACH_USER_ID = "bff5270a-cdc6-4bc4-a008-3530259d57e6";
@@ -215,6 +235,7 @@ export default function CoachAthleteOverviewPage() {
   const [athletes, setAthletes] = useState<AthleteOption[]>([]);
   const [selectedAthleteId, setSelectedAthleteId] = useState("");
   const [profile, setProfile] = useState<AthleteProfile | null>(null);
+  const [raceHistory, setRaceHistory] = useState<RaceHistoryEntry[]>([]);
   const [latestPlan, setLatestPlan] = useState<AthletePlanSummary | null>(null);
   const [completionStats, setCompletionStats] = useState<CompletionStat[]>([]);
   const [athleteEvents, setAthleteEvents] = useState<AthleteEvent[]>([]);
@@ -230,7 +251,7 @@ export default function CoachAthleteOverviewPage() {
   const [athletesError, setAthletesError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [planError, setPlanError] = useState("");
-  const [activeTab, setActiveTab] = useState<"profile" | "health" | "dates" | "plans" | "warnings">("profile");
+  const [activeTab, setActiveTab] = useState<"summary" | "profile" | "health" | "dates" | "plans" | "warnings">("summary");
   const [planWarnings, setPlanWarnings] = useState<any[]>([]);
 
   const athleteIdFromUrl = searchParams.get("athleteId") ?? "";
@@ -392,7 +413,8 @@ export default function CoachAthleteOverviewPage() {
           event:events!athlete_profiles_selected_event_id_fkey (
             id,
             name,
-            event_date
+            event_date,
+            race_conditions
           )
         `)
         .eq("user_id", selectedAthleteId)
@@ -417,6 +439,42 @@ export default function CoachAthleteOverviewPage() {
       cancelled = true;
     };
   }, [athletes, selectedAthleteId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRaceHistory() {
+      if (!selectedAthleteId) {
+        setRaceHistory([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("athlete_race_history")
+        .select("id, preparation_race_id, finish_time, notes, preparation_races(id, name, event_date, distance_km, event_type, location, terrain_type, climate_type, elevation_gain_m, race_conditions)")
+        .eq("athlete_user_id", selectedAthleteId)
+        .order("preparation_races(event_date)", { ascending: false });
+
+      if (cancelled) return;
+
+      if (!error && data) {
+        const transformed = (data as any[]).map((entry) => ({
+          id: entry.id,
+          preparation_race_id: entry.preparation_race_id,
+          finish_time: entry.finish_time || "",
+          notes: entry.notes || "",
+          race: Array.isArray(entry.preparation_races) ? entry.preparation_races[0] : entry.preparation_races,
+        }));
+        setRaceHistory(transformed);
+      }
+    }
+
+    void loadRaceHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAthleteId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -927,10 +985,11 @@ export default function CoachAthleteOverviewPage() {
 
             {/* Tabs */}
             <div className="mb-6 flex border-b border-zinc-200 gap-0 overflow-x-auto">
-              {(["profile", "health", "dates", "plans", "warnings"] as const).map((tab) => {
+              {(["summary", "profile", "health", "dates", "plans", "warnings"] as const).map((tab) => {
                 const isActive = activeTab === tab;
                 const warningCount = planWarnings.length;
                 const tabLabels: Record<typeof tab, string> = {
+                  summary: "Summary",
                   profile: "Profile",
                   health: "Health",
                   dates: "Important Dates",
@@ -956,6 +1015,77 @@ export default function CoachAthleteOverviewPage() {
                 );
               })}
             </div>
+
+            {/* Summary Tab */}
+            {activeTab === "summary" && (
+            <div className="space-y-6">
+              {loadingProfile || !profile ? (
+                <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                  <p className="text-sm text-zinc-600">Loading athlete summary…</p>
+                </div>
+              ) : (
+                <>
+                  {/* Experience Summary */}
+                  <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                    <h2 className="text-lg font-semibold text-zinc-900">Experience Summary</h2>
+                    <p className="mt-4 text-sm text-zinc-700 leading-6">
+                      {buildRaceHistorySummary(
+                        (raceHistory || []).map((entry) => ({
+                          name: entry.race?.name || "Unknown",
+                          distance_km: entry.race?.distance_km || null,
+                          terrain_type: entry.race?.terrain_type || null,
+                          climate_type: entry.race?.climate_type || null,
+                          race_conditions: entry.race?.race_conditions || null,
+                        }))
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Experience Gaps */}
+                  {profile.event && (
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                      <h2 className="text-lg font-semibold text-zinc-900">Experience Gaps</h2>
+                      {(() => {
+                        const gaps = buildExperienceGaps(
+                          (raceHistory || []).map((entry) => ({
+                            name: entry.race?.name || "Unknown",
+                            distance_km: entry.race?.distance_km || null,
+                            terrain_type: entry.race?.terrain_type || null,
+                            climate_type: entry.race?.climate_type || null,
+                            race_conditions: entry.race?.race_conditions || null,
+                          })),
+                          {
+                            name: profile.event.name,
+                            event_type: profile.event_type,
+                            terrain_type: (profile.event_profile as any)?.terrain || null,
+                            climate_type: (profile.event_profile as any)?.climate || null,
+                            race_conditions: profile.event.race_conditions,
+                          }
+                        );
+
+                        return gaps.length === 0 ? (
+                          <p className="mt-4 text-sm text-emerald-700 bg-emerald-50 rounded-xl px-4 py-3">
+                            ✓ Athlete has experience in all areas required for this event!
+                          </p>
+                        ) : (
+                          <div className="mt-4 space-y-2">
+                            {gaps.map((gap, idx) => (
+                              <div
+                                key={idx}
+                                className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                              >
+                                ⚠ {gap}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            )}
 
             {/* Profile Tab */}
             {activeTab === "profile" && (

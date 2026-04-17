@@ -94,6 +94,7 @@ export default function NewGymSessionTemplatePage() {
   const [searchingExercises, setSearchingExercises] = useState(false);
   const [exerciseResults, setExerciseResults] = useState<ExerciseSearchRow[]>([]);
   const [allEquipment, setAllEquipment] = useState<string[]>([]);
+  const [loadingEquipment, setLoadingEquipment] = useState(true);
   const [selectedExercises, setSelectedExercises] = useState<SelectedExercise[]>([]);
 
   const [saving, setSaving] = useState(false);
@@ -120,15 +121,30 @@ export default function NewGymSessionTemplatePage() {
     let cancelled = false;
 
     async function loadAllEquipment() {
+      setLoadingEquipment(true);
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from("equipment_options")
-        .select("slug")
-        .order("name", { ascending: true });
 
-      if (!cancelled && !error && data) {
-        const slugs = (data as { slug: string }[]).map((row) => row.slug).sort();
-        setAllEquipment(slugs);
+      // Try to get equipment from exercises table and extract unique equipment values
+      const { data, error } = await supabase.from("exercises").select("equipment").not("equipment", "is", null);
+
+      if (!cancelled) {
+        setLoadingEquipment(false);
+        if (!error && data) {
+          // Flatten all equipment arrays and get unique values
+          const allEquipmentSet = new Set<string>();
+          for (const row of data as { equipment: string[] | null }[]) {
+            if (row.equipment && Array.isArray(row.equipment)) {
+              for (const eq of row.equipment) {
+                allEquipmentSet.add(eq);
+              }
+            }
+          }
+
+          const sorted = Array.from(allEquipmentSet).sort();
+          setAllEquipment(sorted);
+        } else if (error) {
+          console.error("Error loading equipment:", error);
+        }
       }
     }
 
@@ -519,22 +535,38 @@ export default function NewGymSessionTemplatePage() {
                 <label className="mb-2 block text-sm font-semibold text-zinc-900">
                   Filter by equipment
                 </label>
-                <select
-                  multiple
-                  value={selectedEquipment}
-                  onChange={(event) =>
-                    setSelectedEquipment(Array.from(event.target.selectedOptions, (o) => o.value))
-                  }
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-                >
-                  {allEquipment.map((equipment) => (
-                    <option key={equipment} value={equipment}>
-                      {equipment}
-                    </option>
-                  ))}
-                </select>
+                {loadingEquipment ? (
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+                    Loading equipment options…
+                  </div>
+                ) : allEquipment.length === 0 ? (
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+                    No equipment options available
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      multiple
+                      value={selectedEquipment}
+                      onChange={(event) =>
+                        setSelectedEquipment(Array.from(event.target.selectedOptions, (o) => o.value))
+                      }
+                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                      size={Math.min(allEquipment.length, 6)}
+                    >
+                      {allEquipment.map((equipment) => (
+                        <option key={equipment} value={equipment}>
+                          {equipment}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Hold Ctrl/Cmd to select multiple equipment types
+                    </p>
+                  </>
+                )}
                 {selectedEquipment.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {selectedEquipment.map((eq) => (
                       <button
                         key={eq}

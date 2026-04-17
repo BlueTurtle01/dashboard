@@ -170,8 +170,6 @@ const defaultProfile: AthleteProfile = {
   tempUserKey: "test-user-1",
   equipmentUnavailable: [],
   equipmentAvoid: [],
-  injuries: [],
-  imbalances: [],
   blockedDates: [],
   eventType: "",
   selectedEventId: "",
@@ -257,9 +255,6 @@ export default function IntakePage() {
   const [equipmentOptions, setEquipmentOptions] = useState<string[]>([]);
   const [eventOptions, setEventOptions] = useState<EventOption[]>([]);
   const [preparationRaceOptions, setPreparationRaceOptions] = useState<PrepRaceOption[]>([]);
-  const [injuryAreaOptions, setInjuryAreaOptions] = useState<LookupOption[]>([]);
-  const [imbalanceAreaOptions, setImbalanceAreaOptions] = useState<LookupOption[]>([]);
-  const [imbalanceTypeOptions, setImbalanceTypeOptions] = useState<LookupOption[]>([]);
   const [prepRaceSearchQuery, setPrepRaceSearchQuery] = useState("");
   const [prepRaceSearchResults, setPrepRaceSearchResults] = useState<PrepRaceOption[]>([]);
   const [holidayEvents, setHolidayEvents] = useState<Array<{ id?: string; start_date: string; end_date: string }>>([]);
@@ -283,9 +278,6 @@ export default function IntakePage() {
           equipmentResponse,
           eventsResponse,
           preparationRacesResponse,
-          injuryAreasResponse,
-          imbalanceAreasResponse,
-          imbalanceTypesResponse,
           holidayEventsResponse,
           raceHistoryResponse,
         ] = await Promise.all([
@@ -305,21 +297,6 @@ export default function IntakePage() {
             .select("id, name, event_date, distance_km, event_type, location, terrain_type, climate_type, elevation_gain_m, race_conditions")
             .eq("is_active", true)
             .order("event_date"),
-          supabase
-            .from("injury_areas")
-            .select("id, name, slug")
-            .eq("is_active", true)
-            .order("sort_order"),
-          supabase
-            .from("imbalance_areas")
-            .select("id, name, slug")
-            .eq("is_active", true)
-            .order("sort_order"),
-          supabase
-            .from("imbalance_types")
-            .select("id, name, slug")
-            .eq("is_active", true)
-            .order("sort_order"),
           currentUserId
             ? supabase
                 .from("athlete_events")
@@ -348,18 +325,6 @@ export default function IntakePage() {
           throw new Error(`Failed to load preparation races: ${preparationRacesResponse.error.message}`);
         }
 
-        if (injuryAreasResponse.error) {
-          throw new Error(`Failed to load injury areas: ${injuryAreasResponse.error.message}`);
-        }
-
-        if (imbalanceAreasResponse.error) {
-          throw new Error(`Failed to load imbalance areas: ${imbalanceAreasResponse.error.message}`);
-        }
-
-        if (imbalanceTypesResponse.error) {
-          throw new Error(`Failed to load imbalance types: ${imbalanceTypesResponse.error.message}`);
-        }
-
         if (cancelled) return;
 
         const loadedEvents = (eventsResponse.data ?? []) as EventOption[];
@@ -373,9 +338,6 @@ export default function IntakePage() {
 
         setEventOptions(loadedEvents);
         setPreparationRaceOptions(loadedPrepRaces);
-        setInjuryAreaOptions((injuryAreasResponse.data ?? []) as LookupOption[]);
-        setImbalanceAreaOptions((imbalanceAreasResponse.data ?? []) as LookupOption[]);
-        setImbalanceTypeOptions((imbalanceTypesResponse.data ?? []) as LookupOption[]);
         const loadedHolidayEvents = (holidayEventsResponse.data ?? []) as any;
         setHolidayEvents(loadedHolidayEvents);
         setOriginalHolidayEvents(loadedHolidayEvents);
@@ -413,16 +375,6 @@ export default function IntakePage() {
             tempUserKey: existingProfile.tempUserKey ?? defaultProfile.tempUserKey,
             equipmentUnavailable: existingProfile.equipmentUnavailable ?? [],
             equipmentAvoid: existingProfile.equipmentAvoid ?? [],
-            injuries: (existingProfile.injuries ?? []).map((inj) => ({
-              area: inj.area ?? "",
-              severity: inj.severity ?? "low",
-              notes: inj.notes ?? "",
-            })),
-            imbalances: (existingProfile.imbalances ?? []).map((imb) => ({
-              area: imb.area ?? "",
-              side: imb.side ?? "left",
-              type: imb.type ?? "",
-            })),
             blockedDates: existingProfile.blockedDates ?? [],
             selectedEventId,
             raceGoal: existingProfile.raceGoal ?? defaultProfile.raceGoal,
@@ -721,39 +673,6 @@ export default function IntakePage() {
     }));
   }
 
-  function addInjury() {
-    setProfile((p) => ({
-      ...p,
-      injuries: [...p.injuries, { area: "", severity: "low", notes: "" }],
-    }));
-  }
-
-  function updateInjury(index: number, field: "area" | "severity" | "notes", value: string) {
-    setProfile((p) => ({
-      ...p,
-      injuries: p.injuries.map((inj, i) =>
-        i === index ? { ...inj, [field]: value } : inj,
-      ),
-    }));
-  }
-
-  function removeInjury(index: number) {
-    setProfile((p) => ({
-      ...p,
-      injuries: p.injuries.filter((_, i) => i !== index),
-    }));
-  }
-
-  function addImbalance() {
-    setProfile((p) => ({
-      ...p,
-      imbalances: [
-        ...p.imbalances,
-        { area: "", side: "left", type: "" },
-      ],
-    }));
-  }
-
   async function searchPrepRaces(query: string) {
     if (!query.trim()) {
       setPrepRaceSearchResults([]);
@@ -787,22 +706,6 @@ export default function IntakePage() {
     }
     setPrepRaceSearchQuery("");
     setPrepRaceSearchResults([]);
-  }
-
-  function updateImbalance(index: number, field: "area" | "side" | "type", value: string) {
-    setProfile((p) => ({
-      ...p,
-      imbalances: p.imbalances.map((imb, i) =>
-        i === index ? { ...imb, [field]: value } : imb,
-      ),
-    }));
-  }
-
-  function removeImbalance(index: number) {
-    setProfile((p) => ({
-      ...p,
-      imbalances: p.imbalances.filter((_, i) => i !== index),
-    }));
   }
 
   function updateEventProfile(
@@ -1941,139 +1844,6 @@ export default function IntakePage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold">Injuries</h2>
-            <button
-              type="button"
-              onClick={addInjury}
-              className="rounded-xl border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-100"
-            >
-              + Add Injury
-            </button>
-          </div>
-
-          <div className="mt-4 space-y-4">
-            {profile.injuries.length === 0 ? (
-              <p className="text-sm text-zinc-500">No injuries added.</p>
-            ) : (
-              profile.injuries.map((inj, i) => (
-                <div
-                  key={i}
-                  className="grid gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-[1.2fr_180px_1fr_90px]"
-                >
-                  <select
-                    className="rounded-xl border border-zinc-300 px-4 py-3"
-                    value={inj.area}
-                    onChange={(e) => updateInjury(i, "area", e.target.value)}
-                  >
-                    <option value="">Select area</option>
-                    {injuryAreaOptions.map((area) => (
-                      <option key={area.id} value={area.slug}>
-                        {area.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    className="rounded-xl border border-zinc-300 px-4 py-3"
-                    value={inj.severity}
-                    onChange={(e) => updateInjury(i, "severity", e.target.value)}
-                  >
-                    <option value="low">Low</option>
-                    <option value="moderate">Moderate</option>
-                    <option value="high">High</option>
-                  </select>
-
-                  <input
-                    className="rounded-xl border border-zinc-300 px-4 py-3"
-                    placeholder="Notes"
-                    value={inj.notes}
-                    onChange={(e) => updateInjury(i, "notes", e.target.value)}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => removeInjury(i)}
-                    className="rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold">Imbalances</h2>
-            <button
-              type="button"
-              onClick={addImbalance}
-              className="rounded-xl border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-100"
-            >
-              + Add Imbalance
-            </button>
-          </div>
-
-          <div className="mt-4 space-y-4">
-            {profile.imbalances.length === 0 ? (
-              <p className="text-sm text-zinc-500">No imbalances added.</p>
-            ) : (
-              profile.imbalances.map((imb, i) => (
-                <div
-                  key={i}
-                  className="grid gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-[1.1fr_160px_1fr_90px]"
-                >
-                  <select
-                    className="rounded-xl border border-zinc-300 px-4 py-3"
-                    value={imb.area}
-                    onChange={(e) => updateImbalance(i, "area", e.target.value)}
-                  >
-                    <option value="">Select area</option>
-                    {imbalanceAreaOptions.map((area) => (
-                      <option key={area.id} value={area.slug}>
-                        {area.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    className="rounded-xl border border-zinc-300 px-4 py-3"
-                    value={imb.side}
-                    onChange={(e) => updateImbalance(i, "side", e.target.value)}
-                  >
-                    <option value="left">Left</option>
-                    <option value="right">Right</option>
-                    <option value="bilateral">Bilateral</option>
-                  </select>
-
-                  <select
-                    className="rounded-xl border border-zinc-300 px-4 py-3"
-                    value={imb.type}
-                    onChange={(e) => updateImbalance(i, "type", e.target.value)}
-                  >
-                    <option value="">Select type</option>
-                    {imbalanceTypeOptions.map((type) => (
-                      <option key={type.id} value={type.slug}>
-                        {type.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => removeImbalance(i)}
-                    className="rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
         </>
         )}
 

@@ -4,18 +4,6 @@ function getSupabase() {
   return createClient();
 }
 
-export type AthleteInjury = {
-  area: string;
-  severity: string;
-  notes: string;
-};
-
-export type AthleteImbalance = {
-  area: string;
-  side: string;
-  type: string;
-};
-
 export type AthleteEventProfile = {
   heatAccess: string;
   saunaAccess: boolean;
@@ -33,8 +21,6 @@ export type AthleteProfile = {
   tempUserKey?: string;
   equipmentUnavailable: string[];
   equipmentAvoid: string[];
-  injuries: AthleteInjury[];
-  imbalances: AthleteImbalance[];
   blockedDates: string[];
   eventType?: string;
   selectedEventId: string;
@@ -98,20 +84,7 @@ type EquipmentJoinRow = {
   equipment_options: { slug: string } | { slug: string }[] | null;
 };
 
-type AreaJoinRow = {
-  body_areas: { label: string } | { label: string }[] | null;
-  severity?: string | null;
-  notes?: string | null;
-  side?: string | null;
-  type?: string | null;
-};
-
 const DEFAULT_TEMP_USER_KEY = "test-user-1";
-
-function mapAreaLabel(row: AreaJoinRow) {
-  const area = Array.isArray(row.body_areas) ? row.body_areas[0] ?? null : row.body_areas;
-  return area?.label ?? "";
-}
 
 function normalisePreparationRaces(value: unknown): PreparationRace[] {
   if (!Array.isArray(value)) return [];
@@ -134,15 +107,11 @@ function mapRowToProfile(
   row: AthleteProfileRow,
   equipmentUnavailable: string[],
   equipmentAvoid: string[],
-  injuries: AthleteInjury[],
-  imbalances: AthleteImbalance[],
 ): AthleteProfile {
   return {
     tempUserKey: row.temp_user_key ?? DEFAULT_TEMP_USER_KEY,
     equipmentUnavailable,
     equipmentAvoid,
-    injuries,
-    imbalances,
     blockedDates: row.blocked_dates ?? [],
     selectedEventId: row.selected_event_id ?? "",
     raceGoal: row.race_goal ?? "finish",
@@ -262,8 +231,6 @@ export async function loadAthleteProfile(): Promise<AthleteProfile | null> {
   const [
     { data: unavailableData, error: unavailableError },
     { data: avoidData, error: avoidError },
-    { data: injuriesData, error: injuriesError },
-    { data: imbalancesData, error: imbalancesError },
   ] = await Promise.all([
     supabase
       .from("athlete_equipment_unavailable")
@@ -273,16 +240,6 @@ export async function loadAthleteProfile(): Promise<AthleteProfile | null> {
       .from("athlete_equipment_avoid")
       .select(`equipment_options ( slug )`)
       .eq("athlete_profile_id", athleteId),
-    supabase
-      .from("athlete_injuries")
-      .select(`severity, notes, sort_order, body_areas ( label )`)
-      .eq("athlete_profile_id", athleteId)
-      .order("sort_order"),
-    supabase
-      .from("athlete_imbalances")
-      .select(`side, type, sort_order, body_areas ( label )`)
-      .eq("athlete_profile_id", athleteId)
-      .order("sort_order"),
   ]);
 
   if (unavailableError) {
@@ -291,31 +248,11 @@ export async function loadAthleteProfile(): Promise<AthleteProfile | null> {
   if (avoidError) {
     throw new Error(`Failed to load avoided equipment: ${avoidError.message}`);
   }
-  if (injuriesError) {
-    throw new Error(`Failed to load injuries: ${injuriesError.message}`);
-  }
-  if (imbalancesError) {
-    throw new Error(`Failed to load imbalances: ${imbalancesError.message}`);
-  }
-
-  const injuries: AthleteInjury[] = ((injuriesData ?? []) as AreaJoinRow[]).map((row) => ({
-    area: mapAreaLabel(row),
-    severity: row.severity ?? "low",
-    notes: row.notes ?? "",
-  }));
-
-  const imbalances: AthleteImbalance[] = ((imbalancesData ?? []) as AreaJoinRow[]).map((row) => ({
-    area: mapAreaLabel(row),
-    side: row.side ?? "left",
-    type: row.type ?? "tightness",
-  }));
 
   return mapRowToProfile(
     profileData as AthleteProfileRow,
     mapEquipmentRows(unavailableData as EquipmentJoinRow[]),
     mapEquipmentRows(avoidData as EquipmentJoinRow[]),
-    injuries,
-    imbalances,
   );
 }
 
@@ -404,39 +341,18 @@ export async function saveAthleteProfile(profile: AthleteProfile): Promise<Athle
   const uniqueEquipmentSlugs = [
     ...new Set([...(profile.equipmentUnavailable ?? []), ...(profile.equipmentAvoid ?? [])]),
   ];
-  const uniqueAreaLabels = [
-    ...new Set([
-      ...(profile.injuries ?? [])
-        .map((item) => item.area.trim())
-        .filter(Boolean),
-      ...(profile.imbalances ?? [])
-        .map((item) => item.area.trim())
-        .filter(Boolean),
-    ]),
-  ];
 
   const equipmentResponse =
     uniqueEquipmentSlugs.length > 0
       ? await supabase.from("equipment_options").select("id, slug").in("slug", uniqueEquipmentSlugs)
       : { data: [], error: null };
 
-  const bodyAreasResponse =
-    uniqueAreaLabels.length > 0
-      ? await supabase.from("body_areas").select("id, label").in("label", uniqueAreaLabels)
-      : { data: [], error: null };
-
   if (equipmentResponse.error) {
     throw new Error(`Failed to load equipment options for save: ${equipmentResponse.error.message}`);
-  }
-  if (bodyAreasResponse.error) {
-    throw new Error(`Failed to load body areas for save: ${bodyAreasResponse.error.message}`);
   }
 
   const equipmentIdBySlug = new Map(
     (equipmentResponse.data ?? []).map((row: { id: string; slug: string }) => [row.slug, row.id]),
-  );
-  const bodyAreaIdByLabel = new Map(
-    (bodyAreasResponse.data ?? []).map((row: { id: string; label: string }) => [row.label, row.id]),
   );
 
   const unavailableRows = (profile.equipmentUnavailable ?? [])
@@ -449,56 +365,12 @@ export async function saveAthleteProfile(profile: AthleteProfile): Promise<Athle
     .filter((id): id is string => Boolean(id))
     .map((equipmentId) => ({ athlete_profile_id: athleteId, equipment_option_id: equipmentId }));
 
-  const injuryRows = (profile.injuries ?? [])
-    .map((injury, index) => ({
-      athlete_profile_id: athleteId,
-      body_area_id: bodyAreaIdByLabel.get(injury.area.trim()) ?? null,
-      severity: injury.severity ?? "low",
-      notes: injury.notes ?? "",
-      sort_order: index + 1,
-    }))
-    .filter(
-      (
-        row,
-      ): row is {
-        athlete_profile_id: string;
-        body_area_id: string;
-        severity: string;
-        notes: string;
-        sort_order: number;
-      } => Boolean(row.body_area_id),
-    );
-
-  const imbalanceRows = (profile.imbalances ?? [])
-    .map((imbalance, index) => ({
-      athlete_profile_id: athleteId,
-      body_area_id: bodyAreaIdByLabel.get(imbalance.area.trim()) ?? null,
-      side: imbalance.side ?? "left",
-      type: imbalance.type ?? "tightness",
-      sort_order: index + 1,
-    }))
-    .filter(
-      (
-        row,
-      ): row is {
-        athlete_profile_id: string;
-        body_area_id: string;
-        side: string;
-        type: string;
-        sort_order: number;
-      } => Boolean(row.body_area_id),
-    );
-
   const [
     { error: deleteUnavailableError },
     { error: deleteAvoidError },
-    { error: deleteInjuriesError },
-    { error: deleteImbalancesError },
   ] = await Promise.all([
     supabase.from("athlete_equipment_unavailable").delete().eq("athlete_profile_id", athleteId),
     supabase.from("athlete_equipment_avoid").delete().eq("athlete_profile_id", athleteId),
-    supabase.from("athlete_injuries").delete().eq("athlete_profile_id", athleteId),
-    supabase.from("athlete_imbalances").delete().eq("athlete_profile_id", athleteId),
   ]);
 
   if (deleteUnavailableError) {
@@ -506,12 +378,6 @@ export async function saveAthleteProfile(profile: AthleteProfile): Promise<Athle
   }
   if (deleteAvoidError) {
     throw new Error(`Failed to clear avoided equipment: ${deleteAvoidError.message}`);
-  }
-  if (deleteInjuriesError) {
-    throw new Error(`Failed to clear injuries: ${deleteInjuriesError.message}`);
-  }
-  if (deleteImbalancesError) {
-    throw new Error(`Failed to clear imbalances: ${deleteImbalancesError.message}`);
   }
 
   if (unavailableRows.length > 0) {
@@ -524,21 +390,9 @@ export async function saveAthleteProfile(profile: AthleteProfile): Promise<Athle
     if (error) throw new Error(`Failed to save avoided equipment: ${error.message}`);
   }
 
-  if (injuryRows.length > 0) {
-    const { error } = await supabase.from("athlete_injuries").insert(injuryRows);
-    if (error) throw new Error(`Failed to save injuries: ${error.message}`);
-  }
-
-  if (imbalanceRows.length > 0) {
-    const { error } = await supabase.from("athlete_imbalances").insert(imbalanceRows);
-    if (error) throw new Error(`Failed to save imbalances: ${error.message}`);
-  }
-
   return mapRowToProfile(
     upsertedProfile as AthleteProfileRow,
     unavailableRows.length > 0 ? profile.equipmentUnavailable ?? [] : [],
     avoidRows.length > 0 ? profile.equipmentAvoid ?? [] : [],
-    profile.injuries ?? [],
-    profile.imbalances ?? [],
   );
 }
