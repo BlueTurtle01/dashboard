@@ -119,18 +119,19 @@ export default function SessionsPage() {
 
       if (!user) return;
 
-      const planData = await supabase
+      const planDataResult = await supabase
         .from("athlete_plans")
-        .select("id")
+        .select("id, plan_json")
         .eq("athlete_user_id", user.id)
         .eq("status", "active")
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (!planData.data) return;
+      if (!planDataResult.data) return;
 
-      const activePlan = planData.data as GeneratedPlan;
+      const activePlan = planDataResult.data.plan_json as GeneratedPlan;
+      const activePlanId = planDataResult.data.id;
       const displayedWeek = activePlan.weeks[displayWeekIndex];
       if (!displayedWeek) return;
 
@@ -161,7 +162,7 @@ export default function SessionsPage() {
         .upsert(
           {
             athlete_user_id: user.id,
-            plan_id: activePlan.id,
+            plan_id: activePlanId,
             session_id: sessionId,
             week_number: displayedWeek.weekNumber,
             perceived_effort: perceivedEffort,
