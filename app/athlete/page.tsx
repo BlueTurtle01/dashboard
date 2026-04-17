@@ -40,6 +40,7 @@ export default function AthletePage() {
   const [trainingCampDateRanges, setTrainingCampDateRanges] = useState<Array<{ start: string; end: string }>>([]);
   const [trainingCamps, setTrainingCamps] = useState<Array<{ id: string; title: string; start: string; end: string }>>([]);
   const [completedSessionIds, setCompletedSessionIds] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const fetchPlan = async () => {
@@ -193,6 +194,66 @@ export default function AthletePage() {
     fetchPlan();
   }, [planId]);
 
+  const handleMoveSession = async (sessionId: string, targetWeekId: string, targetDay: string) => {
+    if (!plan || !planId) return;
+
+    try {
+      setSaving(true);
+
+      // Find the session and update its day
+      const updatedPlan = JSON.parse(JSON.stringify(plan)) as GeneratedPlan;
+      let foundSession = false;
+
+      for (const week of updatedPlan.weeks) {
+        const sessionIndex = week.sessions.findIndex((s) => s.id === sessionId);
+        if (sessionIndex !== -1) {
+          // Remove from current location
+          const [session] = week.sessions.splice(sessionIndex, 1);
+
+          // Find target week and add to it
+          const targetWeek = updatedPlan.weeks.find((w) => w.id === targetWeekId);
+          if (targetWeek) {
+            // Update the session's dayLabel
+            session.dayLabel = targetDay as any;
+            targetWeek.sessions.push(session);
+            foundSession = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundSession) return;
+
+      // Update local state
+      setPlan(updatedPlan);
+
+      // Save to database
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("athlete_plans")
+        .update({ plan_json: updatedPlan })
+        .eq("id", planId);
+
+      if (error) {
+        console.error("Failed to save plan:", error);
+        // Revert on error - refetch
+        const { data } = await supabase
+          .from("athlete_plans")
+          .select("plan_json")
+          .eq("id", planId)
+          .maybeSingle();
+
+        if (data?.plan_json) {
+          setPlan(data.plan_json as GeneratedPlan);
+        }
+      }
+    } catch (err) {
+      console.error("Error moving session:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
@@ -264,8 +325,9 @@ export default function AthletePage() {
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <CoachSessionGrid
               plan={plan}
-              editable={false}
+              editable={!saving}
               sessionLinkPrefix="/athlete/session/"
+              onMoveSession={handleMoveSession}
               prepRaceMarkers={plan.prepRaceMarkers}
               showRestDays
               blockedDates={blockedDates}
