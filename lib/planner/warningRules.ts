@@ -121,6 +121,12 @@ export function checkEquipmentConflicts(
             }
           }
 
+          // If not found in exercises, use the first exercise's ID as fallback
+          if (!exerciseId && session.exercises && session.exercises.length > 0) {
+            const firstExercise = session.exercises[0] as any;
+            exerciseId = firstExercise.exerciseId || firstExercise.id;
+          }
+
           warnings.push({
             category: "equipment",
             severity: "error",
@@ -143,6 +149,12 @@ export function checkEquipmentConflicts(
               exerciseId = dbExerciseId || planExId;
               break;
             }
+          }
+
+          // If not found in exercises, use the first exercise's ID as fallback
+          if (!exerciseId && session.exercises && session.exercises.length > 0) {
+            const firstExercise = session.exercises[0] as any;
+            exerciseId = firstExercise.exerciseId || firstExercise.id;
           }
 
           warnings.push({
