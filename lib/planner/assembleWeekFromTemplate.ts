@@ -15,6 +15,10 @@ export interface AssembledPlanExercise {
   originalSets: number | null;
   originalReps: number | null;
   originalDurationSeconds: number | null;
+  equipment?: string[];
+  equipmentConflict?: boolean;
+  swappedFromExerciseId?: string;
+  swappedFromName?: string;
 }
 
 export interface AssembledPlanSession {
@@ -256,6 +260,7 @@ export async function assembleWeeksFromTemplates(
   intensityScalar: number,
   supabase: SupabaseClient,
   athleteAvailability: AthleteAvailability | null = null,
+  unavailableEquipment?: string[],
 ): Promise<Map<string, AssembledPlanSession[]>> {
   const result = new Map<string, AssembledPlanSession[]>();
 
@@ -547,6 +552,25 @@ export async function assembleWeeksFromTemplates(
 
     console.log(`[assembly] Week ${week.weekNumber} assembled ${withDays.length} sessions`);
     result.set(week.id, withDays);
+  }
+
+  // Detect equipment conflicts if unavailable equipment list is provided
+  if (unavailableEquipment && unavailableEquipment.length > 0) {
+    for (const [weekId, sessions] of result.entries()) {
+      const conflictDetected = sessions.map((session) => ({
+        ...session,
+        exercises: session.exercises.map((exercise) => {
+          const hasConflict = (exercise.equipment || []).some((eq) =>
+            unavailableEquipment.includes(eq)
+          );
+          return {
+            ...exercise,
+            equipmentConflict: hasConflict ? true : undefined,
+          };
+        }),
+      }));
+      result.set(weekId, conflictDetected);
+    }
   }
 
   return result;

@@ -96,6 +96,10 @@ export interface PlanExercise {
   reps: number | null;
   durationSeconds?: number | null;
   equipment?: string[];
+  exerciseId?: string;              // DB id of the exercises row; carried for swap lookups
+  equipmentConflict?: boolean;      // set when exercise equipment conflicts with athlete unavailable list
+  swappedFromExerciseId?: string;   // set when this exercise replaced another
+  swappedFromName?: string;         // display name of the original exercise
 }
 
 export interface PlanSession {
