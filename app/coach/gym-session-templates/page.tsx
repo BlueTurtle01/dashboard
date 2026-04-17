@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 type ExerciseLookupRow = {
   id: string;
@@ -278,11 +279,14 @@ async function updateCustomGymSessionTemplate(template: GymSessionTemplate) {
 
 export default function SessionTemplateDashboardPage() {
   const supabase = createClient();
+  const router = useRouter();
   const [statusMessage, setStatusMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [allTemplates, setAllTemplates] = useState<GymSessionTemplate[]>([]);
   const [customTemplates, setCustomTemplates] = useState<GymSessionTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
   const [expandedCustomTemplateId, setExpandedCustomTemplateId] = useState<string | null>(null);
@@ -292,6 +296,45 @@ export default function SessionTemplateDashboardPage() {
 
   const [customTemplateNames, setCustomTemplateNames] = useState<Record<string, string>>({});
   const [savingNameTemplateId, setSavingNameTemplateId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkAdminRole() {
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          setIsAdmin(false);
+          setCheckingAuth(false);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "admin");
+
+        if (!cancelled) {
+          setIsAdmin(!error && data && data.length > 0);
+          setCheckingAuth(false);
+        }
+      } catch (error) {
+        console.error("Failed to check admin role:", error);
+        if (!cancelled) {
+          setIsAdmin(false);
+          setCheckingAuth(false);
+        }
+      }
+    }
+
+    void checkAdminRole();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -511,23 +554,35 @@ export default function SessionTemplateDashboardPage() {
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto max-w-7xl px-6 py-12">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Gym Session Templates</h1>
-            <p className="mt-3 max-w-3xl text-zinc-600">
-              Browse and view existing gym session templates.
+        {checkingAuth ? (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-zinc-600">Checking access…</p>
+          </div>
+        ) : !isAdmin ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
+            <p className="text-sm font-medium text-red-900">
+              Only admins can manage gym session templates.
             </p>
           </div>
+        ) : (
+          <>
+            <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">Gym Session Templates</h1>
+                <p className="mt-3 max-w-3xl text-zinc-600">
+                  Browse and view existing gym session templates.
+                </p>
+              </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/coach/gym-session-templates/create"
-              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
-            >
-              Create Gym Template
-            </Link>
-          </div>
-        </div>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/coach/gym-session-templates/create"
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+                >
+                  Create Gym Template
+                </Link>
+              </div>
+            </div>
 
         {statusMessage ? (
           <div className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-900">
@@ -859,6 +914,8 @@ export default function SessionTemplateDashboardPage() {
             </div>
           </section>
         </div>
+          </>
+        )}
       </div>
     </main>
   );
