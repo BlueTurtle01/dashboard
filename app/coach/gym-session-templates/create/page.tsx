@@ -18,6 +18,7 @@ type SelectedExercise = {
   name: string;
   description: string;
   pattern: string | null;
+  equipment: string[] | null;
   sets: string;
   reps: string;
   duration: string;
@@ -89,8 +90,10 @@ export default function NewGymSessionTemplatePage() {
   const [loadingVariantNumber, setLoadingVariantNumber] = useState(false);
 
   const [exerciseSearch, setExerciseSearch] = useState("");
+  const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
   const [searchingExercises, setSearchingExercises] = useState(false);
   const [exerciseResults, setExerciseResults] = useState<ExerciseSearchRow[]>([]);
+  const [allEquipment, setAllEquipment] = useState<string[]>([]);
   const [selectedExercises, setSelectedExercises] = useState<SelectedExercise[]>([]);
 
   const [saving, setSaving] = useState(false);
@@ -116,26 +119,59 @@ export default function NewGymSessionTemplatePage() {
   useEffect(() => {
     let cancelled = false;
 
+    async function loadAllEquipment() {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("equipment_options")
+        .select("slug")
+        .order("name", { ascending: true });
+
+      if (!cancelled && !error && data) {
+        const slugs = (data as { slug: string }[]).map((row) => row.slug).sort();
+        setAllEquipment(slugs);
+      }
+    }
+
+    void loadAllEquipment();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
     async function searchExercises() {
       const trimmed = exerciseSearch.trim();
 
-      if (!trimmed) {
-        setExerciseResults([]);
-        setSearchingExercises(false);
-        return;
+      const supabase = createClient();
+
+      let query = supabase
+        .from("exercises")
+        .select("id, name, description, pattern, equipment")
+        .order("name", { ascending: true })
+        .limit(20);
+
+      if (trimmed) {
+        const escaped = trimmed.replace(/,/g, " ").replace(/%/g, "").replace(/\*/g, "").trim();
+        query = query.or(
+          `name.ilike.%${escaped}%,description.ilike.%${escaped}%,pattern.ilike.%${escaped}%`
+        );
+      }
+
+      if (selectedEquipment.length > 0) {
+        // Filter exercises that have at least one of the selected equipment
+        query = query.filter(
+          "equipment",
+          "cs",
+          `{${selectedEquipment.map((e) => `"${e}"`).join(",")}}`
+        );
       }
 
       setSearchingExercises(true);
 
-      const escaped = trimmed.replace(/,/g, " ").replace(/%/g, "").replace(/\*/g, "").trim();
-
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("exercises")
-        .select("id, name, description, pattern, equipment")
-        .or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%,pattern.ilike.%${escaped}%`)
-        .order("name", { ascending: true })
-        .limit(20);
+      const { data, error } = await query;
 
       if (cancelled) return;
 
@@ -156,7 +192,7 @@ export default function NewGymSessionTemplatePage() {
     return () => {
       cancelled = true;
     };
-  }, [exerciseSearch]);
+  }, [exerciseSearch, selectedEquipment]);
 
   useEffect(() => {
     let cancelled = false;
@@ -225,6 +261,7 @@ export default function NewGymSessionTemplatePage() {
         name: exercise.name,
         description: exercise.description,
         pattern: exercise.pattern,
+        equipment: exercise.equipment || null,
         sets: "",
         reps: "",
         duration: "",
@@ -478,6 +515,43 @@ export default function NewGymSessionTemplatePage() {
                 />
               </div>
 
+              <div className="mt-4">
+                <label className="mb-2 block text-sm font-semibold text-zinc-900">
+                  Filter by equipment
+                </label>
+                <select
+                  multiple
+                  value={selectedEquipment}
+                  onChange={(event) =>
+                    setSelectedEquipment(Array.from(event.target.selectedOptions, (o) => o.value))
+                  }
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                >
+                  {allEquipment.map((equipment) => (
+                    <option key={equipment} value={equipment}>
+                      {equipment}
+                    </option>
+                  ))}
+                </select>
+                {selectedEquipment.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedEquipment.map((eq) => (
+                      <button
+                        key={eq}
+                        type="button"
+                        onClick={() =>
+                          setSelectedEquipment((prev) => prev.filter((e) => e !== eq))
+                        }
+                        className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-900 hover:bg-blue-200"
+                      >
+                        {eq}
+                        <span>×</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="mt-4 space-y-3">
                 {!exerciseSearch.trim() ? (
                   <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
@@ -505,6 +579,18 @@ export default function NewGymSessionTemplatePage() {
                           <div className="mt-1 text-sm text-zinc-600">
                             {exercise.description || "—"}
                           </div>
+                          {exercise.equipment && exercise.equipment.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {exercise.equipment.map((eq) => (
+                                <span
+                                  key={eq}
+                                  className="inline-block rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-900"
+                                >
+                                  {eq}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className="shrink-0 text-right text-xs text-zinc-500">
@@ -545,6 +631,18 @@ export default function NewGymSessionTemplatePage() {
                             {selectedExercise.description}
                           </p>
                         ) : null}
+                        {selectedExercise.equipment && selectedExercise.equipment.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {selectedExercise.equipment.map((eq) => (
+                              <span
+                                key={eq}
+                                className="inline-block rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-900"
+                              >
+                                {eq}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap gap-2">

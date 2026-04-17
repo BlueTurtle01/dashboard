@@ -234,6 +234,19 @@ export default function SessionDetailPage() {
                     )}
                   </div>
 
+                  {exercise.equipment && exercise.equipment.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {exercise.equipment.map((eq, eqIdx) => (
+                        <span
+                          key={`${exercise.id}-equipment-${eqIdx}`}
+                          className="text-xs rounded-full bg-blue-100 px-2 py-0.5 text-blue-700"
+                        >
+                          {eq}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   {exercise.tags && exercise.tags.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {exercise.tags.map((tag, tagIdx) => (

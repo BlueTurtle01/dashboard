@@ -521,7 +521,7 @@ export default function SessionTemplateDashboardPage() {
 
           <div className="flex flex-wrap gap-3">
             <Link
-              href="/coach/gym-session-templates/new"
+              href="/coach/gym-session-templates/create"
               className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
             >
               Create Gym Template

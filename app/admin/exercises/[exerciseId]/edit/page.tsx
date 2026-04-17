@@ -68,6 +68,13 @@ export default function EditExercisePage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  // Alternative exercises state
+  type AlternativeLink = { id: string; alternativeExerciseId: string; alternativeName: string; priority: number };
+  const [alternatives, setAlternatives] = useState<AlternativeLink[]>([]);
+  const [altSearch, setAltSearch] = useState("");
+  const [altSearchResults, setAltSearchResults] = useState<ExerciseRow[]>([]);
+  const [loadingAltSearch, setLoadingAltSearch] = useState(false);
+
   useEffect(() => {
     async function loadPageData() {
       if (!exerciseId) {
@@ -86,7 +93,7 @@ export default function EditExercisePage() {
       setErrorMessage("");
       setSuccessMessage("");
 
-      const [exerciseResult, movementTagsResult, equipmentResult, musclesResult] =
+      const [exerciseResult, movementTagsResult, equipmentResult, musclesResult, alternativesResult] =
         await Promise.all([
           supabase
             .from("exercises")
@@ -108,6 +115,11 @@ export default function EditExercisePage() {
             .eq("is_active", true)
             .order("sort_order", { ascending: true })
             .order("label", { ascending: true }),
+          supabase
+            .from("exercise_alternative_links")
+            .select("id, priority, alternative_exercise_id, exercises!alternative_exercise_id(name)")
+            .eq("exercise_id", exerciseId)
+            .order("priority"),
         ]);
 
       const errors: string[] = [];
@@ -139,6 +151,19 @@ export default function EditExercisePage() {
       } else {
         muscleOptions = (musclesResult.data || []) as MuscleOption[];
         setAllMuscleOptions(muscleOptions);
+      }
+
+      // Process alternatives
+      if (alternativesResult.error) {
+        errors.push(`Could not load alternatives: ${alternativesResult.error.message}`);
+      } else if (alternativesResult.data) {
+        const alts = (alternativesResult.data as any[]).map((row: any) => ({
+          id: row.id,
+          alternativeExerciseId: row.alternative_exercise_id,
+          alternativeName: row.exercises?.name || "",
+          priority: row.priority,
+        }));
+        setAlternatives(alts);
       }
 
       if (!exerciseResult.error && exerciseResult.data) {
@@ -284,6 +309,64 @@ export default function EditExercisePage() {
     setSelectedSecondaryMuscles((current) =>
       current.filter((option) => option.id !== optionId)
     );
+  }
+
+  async function handleSearchAlternatives() {
+    if (!altSearch.trim()) {
+      setAltSearchResults([]);
+      return;
+    }
+
+    setLoadingAltSearch(true);
+    const query = altSearch.trim().toLowerCase();
+    const { data, error } = await supabase
+      .from("exercises")
+      .select("id, name, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern")
+      .neq("id", exerciseId)
+      .limit(8);
+
+    if (!error && data) {
+      const filtered = (data as ExerciseRow[]).filter(
+        (ex) =>
+          (ex.name.toLowerCase().includes(query) || ex.id.toLowerCase().includes(query)) &&
+          !alternatives.some((alt) => alt.alternativeExerciseId === ex.id)
+      );
+      setAltSearchResults(filtered);
+    }
+    setLoadingAltSearch(false);
+  }
+
+  async function handleAddAlternative(altEx: ExerciseRow) {
+    const { error } = await supabase.from("exercise_alternative_links").insert({
+      exercise_id: exerciseId,
+      alternative_exercise_id: altEx.id,
+      priority: alternatives.length,
+    });
+
+    if (!error) {
+      setAlternatives([
+        ...alternatives,
+        {
+          id: `new-${Math.random()}`,
+          alternativeExerciseId: altEx.id,
+          alternativeName: altEx.name,
+          priority: alternatives.length,
+        },
+      ]);
+      setAltSearch("");
+      setAltSearchResults([]);
+    }
+  }
+
+  async function handleRemoveAlternative(linkId: string) {
+    const { error } = await supabase
+      .from("exercise_alternative_links")
+      .delete()
+      .eq("id", linkId);
+
+    if (!error) {
+      setAlternatives(alternatives.filter((alt) => alt.id !== linkId));
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -609,6 +692,103 @@ export default function EditExercisePage() {
 
           {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
           {successMessage ? <p style={successStyle}>{successMessage}</p> : null}
+
+          {/* Alternative Exercises Section */}
+          <div style={{ marginTop: "32px", paddingTop: "24px", borderTop: "1px solid #e5e5e5" }}>
+            <h3 style={{ marginBottom: "16px", fontSize: "18px", fontWeight: "600" }}>Alternative Exercises</h3>
+
+            {/* Live Search */}
+            <div style={{ marginBottom: "16px" }}>
+              <label style={labelStyle}>Search for alternatives</label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  type="text"
+                  value={altSearch}
+                  onChange={(e) => setAltSearch(e.target.value)}
+                  onKeyUp={handleSearchAlternatives}
+                  placeholder="Search by name or ID..."
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+              </div>
+
+              {/* Search Results */}
+              {altSearchResults.length > 0 && (
+                <div style={{ marginTop: "8px", border: "1px solid #e5e5e5", borderRadius: "6px", maxHeight: "200px", overflowY: "auto" }}>
+                  {altSearchResults.map((result) => (
+                    <div
+                      key={result.id}
+                      style={{
+                        padding: "8px 12px",
+                        borderBottom: "1px solid #f0f0f0",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span style={{ fontSize: "14px" }}>{result.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAddAlternative(result)}
+                        style={{
+                          padding: "4px 12px",
+                          background: "#007bff",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                        }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Current Alternatives List */}
+            {alternatives.length > 0 && (
+              <div style={{ marginTop: "16px" }}>
+                <h4 style={{ marginBottom: "12px", fontSize: "14px", fontWeight: "500" }}>Linked alternatives:</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {alternatives.map((alt) => (
+                    <div
+                      key={alt.id}
+                      style={{
+                        padding: "12px",
+                        background: "#f8f9fa",
+                        borderRadius: "6px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: "500" }}>{alt.alternativeName}</div>
+                        <div style={{ fontSize: "12px", color: "#666" }}>Priority: {alt.priority}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAlternative(alt.id)}
+                        style={{
+                          padding: "4px 12px",
+                          background: "#dc3545",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div style={buttonRowStyle}>
             <button type="submit" disabled={saving} style={buttonStyle}>

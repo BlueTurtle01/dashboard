@@ -1362,7 +1362,7 @@ export default function ViewProgramTemplatePage() {
 
       const { data: athleteProfileRow, error: athleteError } = await supabase
         .from("athlete_profiles")
-        .select("selected_event_id, selected_preparation_race_ids, preferred_long_session_day, available_gym_days, available_run_days")
+        .select("selected_event_id, selected_preparation_race_ids, preferred_long_session_day, available_gym_days, available_run_days, athlete_equipment_unavailable(equipment_options(slug))")
         .eq("user_id", athleteId)
         .maybeSingle();
 
@@ -1449,6 +1449,13 @@ export default function ViewProgramTemplatePage() {
         available_run_days: (athleteProfileRow as Record<string, unknown>).available_run_days as string[] | null ?? null,
       } : null;
 
+      // Extract unavailable equipment slugs
+      const unavailableEquipment = athleteProfileRow?.athlete_equipment_unavailable
+        ? (athleteProfileRow.athlete_equipment_unavailable as any[])
+            .map((row: any) => row.equipment_options?.slug)
+            .filter((slug: any): slug is string => Boolean(slug))
+        : [];
+
       const assembledByWeekId = await assembleWeeksFromTemplates(
         emptyWeeks,
         conditionKeys,
@@ -1456,6 +1463,7 @@ export default function ViewProgramTemplatePage() {
         athleteProfile?.intensityScalar ?? 1,
         supabase,
         athleteAvailability,
+        unavailableEquipment,
       );
 
       const planJson = {
