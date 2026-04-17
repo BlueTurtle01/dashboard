@@ -1347,24 +1347,61 @@ export default function PlanEditorPage() {
 
       const alternatives: Record<string, any[]> = {};
 
-      // Scan all sessions for exercises with equipmentConflict flag
+      // First, enrich exercises with equipment data if missing
+      const exerciseIdsNeeded = new Set<string>();
       for (const week of plan.weeks) {
         for (const session of week.sessions) {
           for (const exercise of session.exercises) {
-            if (exercise.equipmentConflict && exercise.exerciseId) {
-              console.log(`Found equipment conflict on exercise: ${exercise.name} (id: ${exercise.exerciseId})`);
+            const ex = exercise as any;
+            if (ex.exerciseId && !ex.equipment) {
+              exerciseIdsNeeded.add(ex.exerciseId);
+            }
+          }
+        }
+      }
+
+      // Batch-fetch equipment data for exercises that need it
+      const equipmentByExerciseId = new Map<string, string[]>();
+      if (exerciseIdsNeeded.size > 0) {
+        const { data: exercises } = await supabase
+          .from("exercises")
+          .select("id, equipment")
+          .in("id", Array.from(exerciseIdsNeeded));
+
+        if (exercises) {
+          for (const ex of exercises) {
+            equipmentByExerciseId.set(ex.id, ex.equipment || []);
+          }
+        }
+      }
+
+      // Scan all sessions for exercises that conflict with unavailable equipment
+      for (const week of plan.weeks) {
+        for (const session of week.sessions) {
+          for (const exercise of session.exercises) {
+            const ex = exercise as any;
+            let equipment = ex.equipment || [];
+
+            // Fill in equipment from database if not in plan
+            if (equipment.length === 0 && ex.exerciseId && equipmentByExerciseId.has(ex.exerciseId)) {
+              equipment = equipmentByExerciseId.get(ex.exerciseId) || [];
+            }
+
+            // Check if this exercise has unavailable equipment
+            const hasConflict = equipment.some((eq: string) => unavailableEquipment.includes(eq));
+
+            if (hasConflict && ex.exerciseId) {
               // Load alternatives for this exercise if we haven't already
-              if (!alternatives[exercise.exerciseId]) {
+              if (!alternatives[ex.exerciseId]) {
                 try {
-                  const alts = await findAlternativesForPicker(exercise.exerciseId, {
+                  const alts = await findAlternativesForPicker(ex.exerciseId, {
                     unavailableEquipment,
                     avoidEquipment: [],
                   }, supabase);
-                  console.log(`Loaded ${alts.length} alternatives for ${exercise.exerciseId}:`, alts.map(a => a.name));
-                  alternatives[exercise.exerciseId] = alts;
+                  alternatives[ex.exerciseId] = alts;
                 } catch (err) {
-                  console.error(`Failed to load alternatives for ${exercise.exerciseId}:`, err);
-                  alternatives[exercise.exerciseId] = [];
+                  console.error(`Failed to load alternatives for ${ex.exerciseId}:`, err);
+                  alternatives[ex.exerciseId] = [];
                 }
               }
             }
@@ -1372,7 +1409,6 @@ export default function PlanEditorPage() {
         }
       }
 
-      console.log("Finished loading equipment conflict alternatives:", alternatives);
       setEquipmentConflictAlternatives(alternatives);
     }
 
