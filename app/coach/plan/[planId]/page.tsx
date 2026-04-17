@@ -665,6 +665,7 @@ async function buildExercisesFromSupabaseTemplate(
     .select(
       `
         id,
+        exercise_id,
         exercise_order,
         sets,
         reps,
@@ -699,6 +700,7 @@ async function buildExercisesFromSupabaseTemplate(
       durationSeconds: row.duration ? parseInt(row.duration, 10) : null,
       tags: [],
       equipment: (exercise as any)?.equipment ?? [],
+      exerciseId: (row as any).exercise_id,
     };
   });
 }
@@ -1201,6 +1203,11 @@ export default function PlanEditorPage() {
   const [savingToAthlete, setSavingToAthlete] = useState(false);
   const [searchingTemplates, setSearchingTemplates] = useState(false);
   const [hydratingAlternatives, setHydratingAlternatives] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   const [planRow, setPlanRow] = useState<AthletePlanRow | null>(null);
   const [plan, setPlan] = useState<GeneratedPlan | null>(null);
@@ -1363,15 +1370,21 @@ export default function PlanEditorPage() {
       // Batch-fetch equipment data for exercises that need it
       const equipmentByExerciseId = new Map<string, string[]>();
       if (exerciseIdsNeeded.size > 0) {
-        const { data: exercises } = await supabase
-          .from("exercises")
-          .select("id, equipment")
-          .in("id", Array.from(exerciseIdsNeeded));
+        try {
+          const { data: exercises, error } = await supabase
+            .from("exercises")
+            .select("id, equipment")
+            .in("id", Array.from(exerciseIdsNeeded));
 
-        if (exercises) {
-          for (const ex of exercises) {
-            equipmentByExerciseId.set(ex.id, ex.equipment || []);
+          if (error) {
+            console.error("Error fetching exercises:", error);
+          } else if (exercises) {
+            for (const ex of exercises) {
+              equipmentByExerciseId.set(ex.id, ex.equipment || []);
+            }
           }
+        } catch (err) {
+          console.error("Exception fetching exercises:", err);
         }
       }
 
@@ -2228,7 +2241,7 @@ export default function PlanEditorPage() {
   }
 
   function swapExercise(weekId: string, sessionId: string, exerciseId: string, alternativeExercise: any) {
-    if (!plan) return;
+    if (!plan || !weekId) return;
 
     const nextPlan: GeneratedPlan = {
       ...plan,
@@ -2243,15 +2256,17 @@ export default function PlanEditorPage() {
             return {
               ...session,
               exercises: session.exercises.map((exercise) => {
-                if (exercise.id !== exerciseId) return exercise;
+                // Match by database exerciseId
+                const ex = exercise as any;
+                if (ex.exerciseId !== exerciseId) return exercise;
 
                 return {
                   ...exercise,
-                  id: alternativeExercise.id,
+                  id: `exercise-${alternativeExercise.id}`,
                   name: alternativeExercise.name,
                   equipment: alternativeExercise.equipment || [],
                   equipmentConflict: undefined,
-                  swappedFromExerciseId: exercise.exerciseId || exercise.id,
+                  swappedFromExerciseId: ex.exerciseId,
                   swappedFromName: exercise.name,
                   exerciseId: alternativeExercise.id,
                 };
@@ -2321,21 +2336,25 @@ export default function PlanEditorPage() {
               Back to Plans
             </Link>
 
-            <button
-              onClick={recalculateWarningsOnly}
-              disabled={Boolean(buttonsDisabled)}
-              className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100 disabled:opacity-50"
-            >
-              Recalculate Warnings
-            </button>
+            {isHydrated && (
+              <>
+                <button
+                  onClick={recalculateWarningsOnly}
+                  disabled={buttonsDisabled}
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100 disabled:opacity-50"
+                >
+                  Recalculate Warnings
+                </button>
 
-            <button
-              onClick={revertToLatestSaved}
-              disabled={Boolean(loading || !planRow)}
-              className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100 disabled:opacity-50"
-            >
-              Revert
-            </button>
+                <button
+                  onClick={revertToLatestSaved}
+                  disabled={loading || !planRow}
+                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100 disabled:opacity-50"
+                >
+                  Revert
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -3014,7 +3033,9 @@ export default function PlanEditorPage() {
                         let sessionId: string | null = null;
 
                         if (isEquipmentConflict && warning.weekNumber !== undefined && warning.sessionId && warning.exerciseId) {
-                          weekId = String(warning.weekNumber);
+                          // Find the actual week ID from the plan by week number
+                          const weekForNumber = plan?.weeks.find(w => w.weekNumber === warning.weekNumber);
+                          weekId = weekForNumber?.id || null;
                           sessionId = warning.sessionId;
                           exerciseId = warning.exerciseId;
                         }
