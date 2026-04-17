@@ -323,13 +323,12 @@ export default function EditExercisePage() {
       .from("exercises")
       .select("id, name, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern")
       .neq("id", exerciseId)
+      .ilike("name", `%${altSearch}%`)
       .limit(8);
 
     if (!error && data) {
       const filtered = (data as ExerciseRow[]).filter(
-        (ex) =>
-          (ex.name.toLowerCase().includes(query) || ex.id.toLowerCase().includes(query)) &&
-          !alternatives.some((alt) => alt.alternativeExerciseId === ex.id)
+        (ex) => !alternatives.some((alt) => alt.alternativeExerciseId === ex.id)
       );
       setAltSearchResults(filtered);
     }

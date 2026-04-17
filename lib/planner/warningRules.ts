@@ -87,11 +87,12 @@ export function checkEquipmentConflicts(
         }
       }
 
-      // Check exercise equipment
-      const exerciseEquipmentMap = new Map<string, { equipment: Set<string>; exerciseId: string }>();
+      // Check exercise equipment and build a map for later reference
+      const exerciseEquipmentMap = new Map<string, { equipment: Set<string>; planExerciseId: string; dbExerciseId?: string }>();
       if (session.exercises && Array.isArray(session.exercises)) {
         for (const exercise of session.exercises) {
-          const exerciseId = (exercise as any).id || (exercise as any).exerciseId;
+          const planExerciseId = (exercise as any).id;
+          const dbExerciseId = (exercise as any).exerciseId;
           if ((exercise as any).equipment && Array.isArray((exercise as any).equipment)) {
             const equipSet = new Set<string>();
             for (const equip of (exercise as any).equipment) {
@@ -100,8 +101,8 @@ export function checkEquipmentConflicts(
                 sessionEquipment.add(equip);
               }
             }
-            if (exerciseId && equipSet.size > 0) {
-              exerciseEquipmentMap.set(exerciseId, { equipment: equipSet, exerciseId });
+            if (planExerciseId && equipSet.size > 0) {
+              exerciseEquipmentMap.set(planExerciseId, { equipment: equipSet, planExerciseId, dbExerciseId });
             }
           }
         }
@@ -112,9 +113,10 @@ export function checkEquipmentConflicts(
         if (unavailableEquipment.includes(equip)) {
           // Find which exercise(s) have this equipment
           let exerciseId: string | undefined;
-          for (const [exId, { equipment }] of exerciseEquipmentMap) {
+          for (const [planExId, { equipment, dbExerciseId }] of exerciseEquipmentMap) {
             if (equipment.has(equip)) {
-              exerciseId = exId;
+              // Use the DB exercise ID for alternatives lookup
+              exerciseId = dbExerciseId || planExId;
               break;
             }
           }
@@ -135,9 +137,10 @@ export function checkEquipmentConflicts(
         if (avoidedEquipment.includes(equip)) {
           // Find which exercise(s) have this equipment
           let exerciseId: string | undefined;
-          for (const [exId, { equipment }] of exerciseEquipmentMap) {
+          for (const [planExId, { equipment, dbExerciseId }] of exerciseEquipmentMap) {
             if (equipment.has(equip)) {
-              exerciseId = exId;
+              // Use the DB exercise ID for alternatives lookup
+              exerciseId = dbExerciseId || planExId;
               break;
             }
           }

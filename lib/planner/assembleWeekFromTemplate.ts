@@ -380,7 +380,7 @@ export async function assembleWeeksFromTemplates(
           reps,
           duration,
           notes,
-          exercises ( id, name )
+          exercises ( id, name, equipment )
         )
       )
     `)
@@ -492,6 +492,7 @@ export async function assembleWeeksFromTemplates(
               originalSets: (ex.sets as number | null) ?? null,
               originalReps: (ex.reps as number | null) ?? null,
               originalDurationSeconds: rawDurSec,
+              equipment: (exerciseRecord?.equipment as string[] | undefined) ?? undefined,
             };
           });
 

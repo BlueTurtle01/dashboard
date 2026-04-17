@@ -201,6 +201,11 @@ export interface PlanExerciseRecord {
   sets: number | null;
   reps: number | null;
   duration_seconds?: number | null;
+  equipment?: string[];
+  exercise_id?: string;
+  equipment_conflict?: boolean;
+  swapped_from_exercise_id?: string;
+  swapped_from_name?: string;
 }
 
 export interface DehydratedPlan {

@@ -71,6 +71,11 @@ exercises.push({
   sets: exercise.sets,
   reps: exercise.reps,
   duration_seconds: exercise.durationSeconds ?? null,
+  equipment: exercise.equipment,
+  exercise_id: exercise.exerciseId,
+  equipment_conflict: exercise.equipmentConflict,
+  swapped_from_exercise_id: exercise.swappedFromExerciseId,
+  swapped_from_name: exercise.swappedFromName,
 });
       }
     }
@@ -93,6 +98,11 @@ const item: PlanExercise = {
   sets: exercise.sets ?? null,
   reps: exercise.reps ?? null,
   durationSeconds: exercise.duration_seconds ?? null,
+  equipment: exercise.equipment,
+  exerciseId: exercise.exercise_id,
+  equipmentConflict: exercise.equipment_conflict,
+  swappedFromExerciseId: exercise.swapped_from_exercise_id,
+  swappedFromName: exercise.swapped_from_name,
 };
 
     const list = exercisesBySession.get(exercise.session_id) ?? [];
