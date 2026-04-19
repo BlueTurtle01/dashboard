@@ -259,21 +259,35 @@ export default function CoachSessionGrid({
         }}
       >
         <div />
-        {DAYS.map((day) => (
-          <div
-            key={day}
-            style={{
-              fontWeight: "bold",
-              textAlign: "center",
-              padding: "10px",
-              background: "#f3f4f6",
-              border: "1px solid #d1d5db",
-              borderRadius: "8px",
-            }}
-          >
-            {day}
-          </div>
-        ))}
+        {(() => {
+          // Compute actual day headers from the first week's dates
+          const weekStarts = getPlanWeekStartDates(plan);
+          const firstWeek = weekStarts[0];
+          const headerDays = firstWeek
+            ? DAYS.map((_, idx) => {
+                const date = addDays(firstWeek.monday, idx);
+                const jsDay = date.getDay(); // 0=Sun, 1=Mon, etc.
+                const actualDayIndex = (jsDay + 6) % 7; // Convert to Mon=0
+                return DAYS[actualDayIndex];
+              })
+            : DAYS;
+
+          return headerDays.map((day) => (
+            <div
+              key={day}
+              style={{
+                fontWeight: "bold",
+                textAlign: "center",
+                padding: "10px",
+                background: "#f3f4f6",
+                border: "1px solid #d1d5db",
+                borderRadius: "8px",
+              }}
+            >
+              {day}
+            </div>
+          ));
+        })()}
 
         {plan.weeks.map((week) => {
           const summary = calculateWeekLoadSummary(week);
