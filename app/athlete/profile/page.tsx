@@ -287,7 +287,7 @@ export default function AthleteProfilePage() {
         const userId = user.id;
 
         // Load athlete profile
-        const existingProfile = await loadAthleteProfile(userId);
+        const existingProfile = await loadAthleteProfile();
 
         // Fetch events
         const { data: eventsResponse } = await Promise.all([
