@@ -283,8 +283,8 @@ export default function IntakePage() {
   const [preparationRaceOptions, setPreparationRaceOptions] = useState<PrepRaceOption[]>([]);
   const [prepRaceSearchQuery, setPrepRaceSearchQuery] = useState("");
   const [prepRaceSearchResults, setPrepRaceSearchResults] = useState<PrepRaceOption[]>([]);
-  const [holidayEvents, setHolidayEvents] = useState<Array<{ id?: string; start_date: string; end_date: string }>>([]);
-  const [originalHolidayEvents, setOriginalHolidayEvents] = useState<Array<{ id?: string; start_date: string; end_date: string }>>([]);
+  const [holidayEvents, setHolidayEvents] = useState<Array<{ id?: string; start_date: string; end_date: string; equipmentUnavailable?: string[] }>>([]);
+  const [originalHolidayEvents, setOriginalHolidayEvents] = useState<Array<{ id?: string; start_date: string; end_date: string; equipmentUnavailable?: string[] }>>([]);
   const [medicalClearanceDate, setMedicalClearanceDate] = useState<string>("");
   const [medicalClearanceId, setMedicalClearanceId] = useState<string>("");
   const [raceHistory, setRaceHistory] = useState<RaceHistoryEntry[]>([]);
@@ -2089,40 +2089,72 @@ export default function IntakePage() {
               holidayEvents.map((event, i) => (
                 <div
                   key={i}
-                  className="grid gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-[1fr_1fr_100px]"
+                  className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-3"
                 >
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-zinc-700">
-                      Start date
-                    </label>
-                    <input
-                      type="date"
-                      value={event.start_date}
-                      onChange={(e) => updateHolidayRange(i, "start_date", e.target.value)}
-                      className="w-full rounded-xl border border-zinc-300 px-4 py-3"
-                    />
+                  <div className="grid gap-3 md:grid-cols-[1fr_1fr_100px]">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-zinc-700">
+                        Start date
+                      </label>
+                      <input
+                        type="date"
+                        value={event.start_date}
+                        onChange={(e) => updateHolidayRange(i, "start_date", e.target.value)}
+                        className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-zinc-700">
+                        End date
+                      </label>
+                      <input
+                        type="date"
+                        value={event.end_date}
+                        onChange={(e) => updateHolidayRange(i, "end_date", e.target.value)}
+                        className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                      />
+                    </div>
+
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => removeHolidayRange(i)}
+                        className="w-full rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
 
                   <div>
                     <label className="mb-2 block text-sm font-medium text-zinc-700">
-                      End date
+                      Equipment unavailable during this period:
                     </label>
-                    <input
-                      type="date"
-                      value={event.end_date}
-                      onChange={(e) => updateHolidayRange(i, "end_date", e.target.value)}
-                      className="w-full rounded-xl border border-zinc-300 px-4 py-3"
-                    />
-                  </div>
-
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      onClick={() => removeHolidayRange(i)}
-                      className="w-full rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      {equipmentOptions.map((eq) => (
+                        <button
+                          key={eq}
+                          type="button"
+                          onClick={() => {
+                            const current = event.equipmentUnavailable ?? [];
+                            const updated = current.includes(eq)
+                              ? current.filter(e => e !== eq)
+                              : [...current, eq];
+                            const newEvents = [...holidayEvents];
+                            newEvents[i] = { ...event, equipmentUnavailable: updated };
+                            setHolidayEvents(newEvents);
+                          }}
+                          className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                            (event.equipmentUnavailable ?? []).includes(eq)
+                              ? "bg-red-600 text-white"
+                              : "border border-zinc-300 bg-white hover:bg-zinc-100"
+                          }`}
+                        >
+                          {eq}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))

@@ -54,6 +54,12 @@ type CompletionStat = {
   completionPct: number;
 };
 
+type HolidayEquipmentEntry = {
+  start_date: string;
+  end_date: string;
+  unavailable_equipment: string[];
+};
+
 type AthleteEvent = {
   id: string;
   event_type: "injury" | "holiday" | "medical_clearance";
@@ -63,6 +69,7 @@ type AthleteEvent = {
   end_date: string | null;
   status: "pending" | "acknowledged";
   created_at: string;
+  equipment_unavailable?: string[];
 };
 
 type TrainingCamp = {
@@ -246,6 +253,7 @@ export default function CoachAthleteOverviewPage() {
   const [bookedPrepRaces, setBookedPrepRaces] = useState<any[]>([]);
   const [unavailableEquipment, setUnavailableEquipment] = useState<string[]>([]);
   const [avoidEquipment, setAvoidEquipment] = useState<string[]>([]);
+  const [holidayEquipment, setHolidayEquipment] = useState<HolidayEquipmentEntry[]>([]);
   const [latestPlan, setLatestPlan] = useState<AthletePlanSummary | null>(null);
   const [completionStats, setCompletionStats] = useState<CompletionStat[]>([]);
   const [athleteEvents, setAthleteEvents] = useState<AthleteEvent[]>([]);
@@ -439,7 +447,16 @@ export default function CoachAthleteOverviewPage() {
         return;
       }
 
-      setProfile((data as AthleteProfile | null) ?? null);
+      const athleteProfile = (data as AthleteProfile | null) ?? null;
+      setProfile(athleteProfile);
+
+      // Extract holiday equipment from profile
+      if (athleteProfile && (athleteProfile as any).holiday_equipment_unavailable) {
+        setHolidayEquipment((athleteProfile as any).holiday_equipment_unavailable);
+      } else {
+        setHolidayEquipment([]);
+      }
+
       setLoadingProfile(false);
     }
 
@@ -1418,18 +1435,32 @@ export default function CoachAthleteOverviewPage() {
                         {athleteEvents.filter(e => e.event_type === 'holiday').length > 0 && (
                           <div>
                             <p className="text-sm font-semibold text-zinc-900">Scheduled breaks:</p>
-                            <ul className="mt-2 space-y-1 ml-4">
-                              {athleteEvents.filter(e => e.event_type === 'holiday').map((holiday) => (
-                                <li key={holiday.id} className="flex items-start gap-2 text-sm text-zinc-700">
-                                  <span className="text-blue-400 mt-0.5">•</span>
-                                  <div>
-                                    <p>{holiday.title}</p>
-                                    <p className="text-xs text-zinc-500">
-                                      {formatDate(holiday.start_date)} to {formatDate(holiday.end_date)}
-                                    </p>
-                                  </div>
-                                </li>
-                              ))}
+                            <ul className="mt-2 space-y-3 ml-4">
+                              {athleteEvents.filter(e => e.event_type === 'holiday').map((holiday) => {
+                                const holidayEquip = holidayEquipment.find(
+                                  he => he.start_date === holiday.start_date && he.end_date === holiday.end_date
+                                );
+                                return (
+                                  <li key={holiday.id} className="flex items-start gap-2 text-sm text-zinc-700">
+                                    <span className="text-blue-400 mt-0.5">•</span>
+                                    <div className="flex-1">
+                                      <p className="font-medium">{holiday.title}</p>
+                                      <p className="text-xs text-zinc-500">
+                                        {formatDate(holiday.start_date)} to {formatDate(holiday.end_date)}
+                                      </p>
+                                      {holidayEquip && holidayEquip.unavailable_equipment.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                          {holidayEquip.unavailable_equipment.map((eq) => (
+                                            <span key={eq} className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                                              No {eq}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         )}
