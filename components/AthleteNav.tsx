@@ -6,6 +6,11 @@ import { usePathname } from "next/navigation";
 export default function AthleteNav() {
   const pathname = usePathname();
 
+  // Hide nav on profile page
+  if (pathname.startsWith("/athlete/profile")) {
+    return null;
+  }
+
   const tabs = [
     { href: "/athlete", label: "My Plan" },
     { href: "/athlete/sessions", label: "Sessions" },
