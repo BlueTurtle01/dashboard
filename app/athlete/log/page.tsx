@@ -344,6 +344,48 @@ export default function LogPage() {
     }
   };
 
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm("Delete this entry?")) return;
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("athlete_events")
+        .delete()
+        .eq("id", eventId);
+
+      if (error) {
+        alert("Failed to delete event");
+        return;
+      }
+
+      setEvents((prev) => prev.filter((e) => e.id !== eventId));
+    } catch (err) {
+      alert("Error deleting event");
+    }
+  };
+
+  const handleDeleteTrainingCamp = async (campId: string) => {
+    if (!confirm("Delete this training camp?")) return;
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("training_camps")
+        .delete()
+        .eq("id", campId);
+
+      if (error) {
+        alert("Failed to delete training camp");
+        return;
+      }
+
+      setTrainingCamps((prev) => prev.filter((c) => c.id !== campId));
+    } catch (err) {
+      alert("Error deleting training camp");
+    }
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
@@ -694,13 +736,21 @@ export default function LogPage() {
                         </p>
                       </div>
 
-                      <span className={`text-xs font-semibold px-2 py-1 rounded whitespace-nowrap ${
-                        isPending
-                          ? "bg-amber-100 text-amber-900"
-                          : "bg-green-100 text-green-900"
-                      }`}>
-                        {isPending ? "Pending" : "Acknowledged"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold px-2 py-1 rounded whitespace-nowrap ${
+                          isPending
+                            ? "bg-amber-100 text-amber-900"
+                            : "bg-green-100 text-green-900"
+                        }`}>
+                          {isPending ? "Pending" : "Acknowledged"}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteEvent(event.id)}
+                          className="rounded px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -807,13 +857,21 @@ export default function LogPage() {
                         </p>
                       </div>
 
-                      <span className={`text-xs font-semibold px-2 py-1 rounded whitespace-nowrap ${
-                        isPending
-                          ? "bg-violet-100 text-violet-900"
-                          : "bg-green-100 text-green-900"
-                      }`}>
-                        {isPending ? "Pending" : "Acknowledged"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-semibold px-2 py-1 rounded whitespace-nowrap ${
+                          isPending
+                            ? "bg-violet-100 text-violet-900"
+                            : "bg-green-100 text-green-900"
+                        }`}>
+                          {isPending ? "Pending" : "Acknowledged"}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteTrainingCamp(camp.id)}
+                          className="rounded px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

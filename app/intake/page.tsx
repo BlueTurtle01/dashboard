@@ -52,6 +52,9 @@ type RaceHistoryEntry = {
   finish_time_hours?: number;
   finish_time_minutes?: number;
   finish_time_seconds?: number;
+  did_finish?: boolean;
+  muscles_hurt?: string[];
+  breathing_feedback?: string;
   notes: string;
   race?: {
     name: string;
@@ -124,6 +127,29 @@ const DAYS_OF_WEEK = [
   { value: "friday", label: "Fri" },
   { value: "saturday", label: "Sat" },
   { value: "sunday", label: "Sun" },
+] as const;
+
+const MUSCLE_GROUPS = [
+  "Quads",
+  "Hamstrings",
+  "Glutes",
+  "Calves",
+  "Shins",
+  "Feet",
+  "Lower back",
+  "Upper back",
+  "Shoulders",
+  "Neck",
+  "Hip flexors",
+  "Knees",
+  "Ankles",
+] as const;
+
+const BREATHING_OPTIONS = [
+  "Comfortable",
+  "Slightly challenged",
+  "Very challenging",
+  "Had to walk/slow down",
 ] as const;
 
 const ATHLETE_AVAILABLE_TAGS = [
@@ -250,7 +276,7 @@ export default function IntakePage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"event" | "training" | "preferences" | "constraints" | "schedule" | "races" | "history">("event");
+  const [activeTab, setActiveTab] = useState<"event" | "training" | "preferences" | "constraints" | "schedule" | "races" | "history" | "health">("event");
 
   const [equipmentOptions, setEquipmentOptions] = useState<string[]>([]);
   const [eventOptions, setEventOptions] = useState<EventOption[]>([]);
@@ -259,6 +285,8 @@ export default function IntakePage() {
   const [prepRaceSearchResults, setPrepRaceSearchResults] = useState<PrepRaceOption[]>([]);
   const [holidayEvents, setHolidayEvents] = useState<Array<{ id?: string; start_date: string; end_date: string }>>([]);
   const [originalHolidayEvents, setOriginalHolidayEvents] = useState<Array<{ id?: string; start_date: string; end_date: string }>>([]);
+  const [medicalClearanceDate, setMedicalClearanceDate] = useState<string>("");
+  const [medicalClearanceId, setMedicalClearanceId] = useState<string>("");
   const [raceHistory, setRaceHistory] = useState<RaceHistoryEntry[]>([]);
   const [raceHistorySearchQuery, setRaceHistorySearchQuery] = useState("");
   const [raceHistorySearchResults, setRaceHistorySearchResults] = useState<PrepRaceOption[]>([]);
@@ -279,6 +307,7 @@ export default function IntakePage() {
           eventsResponse,
           preparationRacesResponse,
           holidayEventsResponse,
+          medicalClearanceResponse,
           raceHistoryResponse,
         ] = await Promise.all([
           loadAthleteProfile(),
@@ -303,6 +332,15 @@ export default function IntakePage() {
                 .select("id, start_date, end_date")
                 .eq("athlete_user_id", currentUserId)
                 .eq("event_type", "holiday")
+            : Promise.resolve({ data: [] }),
+          currentUserId
+            ? supabase
+                .from("athlete_events")
+                .select("id, start_date")
+                .eq("athlete_user_id", currentUserId)
+                .eq("event_type", "medical_clearance")
+                .order("start_date", { ascending: false })
+                .limit(1)
             : Promise.resolve({ data: [] }),
           currentUserId
             ? supabase
@@ -341,6 +379,13 @@ export default function IntakePage() {
         const loadedHolidayEvents = (holidayEventsResponse.data ?? []) as any;
         setHolidayEvents(loadedHolidayEvents);
         setOriginalHolidayEvents(loadedHolidayEvents);
+
+        // Load medical clearance
+        const medicalClearances = (medicalClearanceResponse.data ?? []) as any[];
+        if (medicalClearances.length > 0) {
+          setMedicalClearanceDate(medicalClearances[0].start_date || "");
+          setMedicalClearanceId(medicalClearances[0].id || "");
+        }
 
         // Transform race history data to include joined race details
         const loadedRaceHistory = ((raceHistoryResponse.data ?? []) as any[]).map((entry: any) => {
@@ -601,6 +646,9 @@ export default function IntakePage() {
           finish_time_hours: 0,
           finish_time_minutes: 0,
           finish_time_seconds: 0,
+          did_finish: true,
+          muscles_hurt: [],
+          breathing_feedback: "",
           notes: "",
           race,
         },
@@ -612,25 +660,29 @@ export default function IntakePage() {
 
   function updateRaceHistoryEntry(
     index: number,
-    field: "finish_time_days" | "finish_time_hours" | "finish_time_minutes" | "finish_time_seconds" | "notes",
-    value: string
+    field: "finish_time_days" | "finish_time_hours" | "finish_time_minutes" | "finish_time_seconds" | "notes" | "did_finish" | "breathing_feedback",
+    value: string | boolean
   ) {
     setRaceHistory((prev) =>
       prev.map((entry, i) => {
         if (i !== index) return entry;
 
-        const numValue = field === "notes" ? value : Math.max(0, parseInt(value, 10) || 0);
-
-        if (field === "notes") {
-          return { ...entry, notes: value };
+        if (field === "notes" || field === "breathing_feedback") {
+          return { ...entry, [field]: value as string };
         }
 
+        if (field === "did_finish") {
+          return { ...entry, did_finish: value as boolean };
+        }
+
+        const numValue = Math.max(0, parseInt(value as string, 10) || 0);
         const updated = { ...entry, [field]: numValue };
+
         // Recompute finish_time string from components
-        const days = field === "finish_time_days" ? (numValue as number) : entry.finish_time_days || 0;
-        const hours = field === "finish_time_hours" ? (numValue as number) : entry.finish_time_hours || 0;
-        const minutes = field === "finish_time_minutes" ? (numValue as number) : entry.finish_time_minutes || 0;
-        const seconds = field === "finish_time_seconds" ? (numValue as number) : entry.finish_time_seconds || 0;
+        const days = field === "finish_time_days" ? numValue : entry.finish_time_days || 0;
+        const hours = field === "finish_time_hours" ? numValue : entry.finish_time_hours || 0;
+        const minutes = field === "finish_time_minutes" ? numValue : entry.finish_time_minutes || 0;
+        const seconds = field === "finish_time_seconds" ? numValue : entry.finish_time_seconds || 0;
 
         updated.finish_time = formatFinishTime(days, hours, minutes, seconds);
         return updated;
@@ -644,6 +696,20 @@ export default function IntakePage() {
       void supabase.from("athlete_race_history").delete().eq("id", entry.id);
     }
     setRaceHistory((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function toggleMusclePain(index: number, muscle: string) {
+    setRaceHistory((prev) =>
+      prev.map((entry, i) => {
+        if (i !== index) return entry;
+        const current = entry.muscles_hurt || [];
+        if (current.includes(muscle)) {
+          return { ...entry, muscles_hurt: current.filter((m) => m !== muscle) };
+        } else {
+          return { ...entry, muscles_hurt: [...current, muscle] };
+        }
+      })
+    );
   }
 
   function addBlockedDate() {
@@ -835,6 +901,9 @@ export default function IntakePage() {
               athlete_user_id: userId,
               preparation_race_id: entry.preparation_race_id,
               finish_time: entry.finish_time || null,
+              did_finish: entry.did_finish ?? true,
+              muscles_hurt: entry.muscles_hurt || [],
+              breathing_feedback: entry.breathing_feedback || null,
               notes: entry.notes || null,
             },
             { onConflict: "athlete_user_id,preparation_race_id" }
@@ -842,6 +911,28 @@ export default function IntakePage() {
 
           if (error) {
             console.error("Error upserting race history entry:", error);
+          }
+        }
+
+        // Save medical clearance
+        if (medicalClearanceDate) {
+          if (medicalClearanceId) {
+            // Update existing clearance
+            await supabase
+              .from("athlete_events")
+              .update({
+                start_date: medicalClearanceDate,
+              })
+              .eq("id", medicalClearanceId);
+          } else {
+            // Insert new clearance
+            await supabase.from("athlete_events").insert({
+              athlete_user_id: userId,
+              event_type: "medical_clearance",
+              title: "Medical Clearance",
+              start_date: medicalClearanceDate,
+              status: "acknowledged",
+            });
           }
         }
       }
@@ -965,6 +1056,16 @@ export default function IntakePage() {
             }`}
           >
             Race History
+          </button>
+          <button
+            onClick={() => setActiveTab("health")}
+            className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+              activeTab === "health"
+                ? "border-zinc-900 text-zinc-900"
+                : "border-transparent text-zinc-500 hover:text-zinc-700"
+            }`}
+          >
+            Health
           </button>
         </div>
 
@@ -1678,9 +1779,20 @@ export default function IntakePage() {
                     )}
 
                     <div className="space-y-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-600">Finish Time</label>
-                        <div className="grid grid-cols-4 gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={entry.did_finish ?? true}
+                          onChange={(e) => updateRaceHistoryEntry(i, "did_finish", e.target.checked)}
+                          className="rounded"
+                        />
+                        <span className="text-xs font-medium text-zinc-600">I finished this race</span>
+                      </label>
+
+                      {entry.did_finish !== false && (
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-zinc-600">Finish Time</label>
+                          <div className="grid grid-cols-4 gap-2">
                           <div>
                             <label className="mb-1 block text-xs text-zinc-500">Days</label>
                             <input
@@ -1727,10 +1839,48 @@ export default function IntakePage() {
                           </div>
                         </div>
                       </div>
+                      )}
+
+                      <div>
+                        <label className="mb-2 block text-xs font-medium text-zinc-600">Muscles that hurt or felt tight</label>
+                        <div className="flex flex-wrap gap-2">
+                          {MUSCLE_GROUPS.map((muscle) => (
+                            <button
+                              key={muscle}
+                              type="button"
+                              onClick={() => toggleMusclePain(i, muscle)}
+                              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                                (entry.muscles_hurt || []).includes(muscle)
+                                  ? "bg-red-200 text-red-800"
+                                  : "border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
+                              }`}
+                            >
+                              {muscle}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-xs font-medium text-zinc-600">Breathing during race</label>
+                        <select
+                          value={entry.breathing_feedback || ""}
+                          onChange={(e) => updateRaceHistoryEntry(i, "breathing_feedback", e.target.value)}
+                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                        >
+                          <option value="">Select breathing difficulty...</option>
+                          {BREATHING_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
                       <textarea
                         className="w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm resize-none"
                         rows={2}
-                        placeholder="Notes (e.g. conditions, how it went...)"
+                        placeholder="Additional notes (conditions, how it went, etc)…"
                         value={entry.notes}
                         onChange={(e) => updateRaceHistoryEntry(i, "notes", e.target.value)}
                       />
@@ -1796,6 +1946,33 @@ export default function IntakePage() {
               </div>
             );
           })()}
+        </section>
+        )}
+
+        {/* Health Tab */}
+        {activeTab === "health" && (
+        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">Medical Clearance</h2>
+          <p className="mt-1 text-sm text-zinc-600">
+            Confirm the date you received medical clearance to resume training.
+          </p>
+
+          <div className="mt-4 max-w-md">
+            <label className="mb-2 block text-sm font-medium text-zinc-700">
+              Medical Clearance Date
+            </label>
+            <input
+              type="date"
+              className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+              value={medicalClearanceDate}
+              onChange={(e) => setMedicalClearanceDate(e.target.value)}
+            />
+            {medicalClearanceDate && (
+              <p className="mt-2 text-sm text-emerald-700">
+                ✓ Cleared on {new Date(medicalClearanceDate).toLocaleDateString()}
+              </p>
+            )}
+          </div>
         </section>
         )}
 

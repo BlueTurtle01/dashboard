@@ -191,6 +191,11 @@ function getWeeksFromToday(value: string | null | undefined) {
   return `${pastWeeks} week${pastWeeks === 1 ? "" : "s"} ago`;
 }
 
+function getFirstName(fullName: string | null | undefined): string {
+  if (!fullName) return "—";
+  return fullName.split(" ")[0];
+}
+
 function formatJson(value: unknown) {
   if (value == null) return "—";
   if (typeof value === "string") return value;
@@ -848,7 +853,7 @@ export default function CoachAthleteOverviewPage() {
               Coach Dashboard
             </p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight">
-              Athlete Overview
+              {getFirstName(selectedAthleteName || profile?.full_name) ? `${getFirstName(selectedAthleteName || profile?.full_name)}'s Overview` : "Athlete Overview"}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">
               Use this page as the launch point for planning work for a single athlete.
@@ -886,7 +891,7 @@ export default function CoachAthleteOverviewPage() {
               <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-zinc-900">
-                    Planning actions for {selectedAthleteName || profile?.full_name || "this athlete"}
+                    Planning actions for {getFirstName(selectedAthleteName || profile?.full_name) || "this athlete"}
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm text-zinc-600">
                     Start a brand new athlete plan, begin from a reusable template, or resume the latest saved athlete plan.
@@ -923,7 +928,7 @@ export default function CoachAthleteOverviewPage() {
                     Athlete
                   </div>
                   <div className="mt-2 text-sm text-zinc-900">
-                    <div className="font-semibold">{selectedAthleteName || profile?.full_name || "—"}</div>
+                    <div className="font-semibold">{getFirstName(selectedAthleteName || profile?.full_name) || "—"}</div>
                     {profile?.tags && profile.tags.length > 0 && (
                       <div className="mt-2 text-xs text-zinc-600">
                         {(() => {
@@ -1025,26 +1030,121 @@ export default function CoachAthleteOverviewPage() {
                 </div>
               ) : (
                 <>
-                  {/* Experience Summary */}
+                  {/* Athlete Overview */}
                   <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-                    <h2 className="text-lg font-semibold text-zinc-900">Experience Summary</h2>
-                    <p className="mt-4 text-sm text-zinc-700 leading-6">
-                      {buildRaceHistorySummary(
-                        (raceHistory || []).map((entry) => ({
-                          name: entry.race?.name || "Unknown",
-                          distance_km: entry.race?.distance_km || null,
-                          terrain_type: entry.race?.terrain_type || null,
-                          climate_type: entry.race?.climate_type || null,
-                          race_conditions: entry.race?.race_conditions || null,
-                        }))
-                      )}
-                    </p>
+                    <h2 className="text-lg font-semibold text-zinc-900">Athlete Overview</h2>
+                    <dl className="mt-4 space-y-3">
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Name</dt>
+                        <dd className="mt-1 text-sm text-zinc-900">{getFirstName(profile.full_name) || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Age</dt>
+                        <dd className="mt-1 text-sm text-zinc-900">
+                          {profile.date_of_birth
+                            ? `${Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years old`
+                            : "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Member since</dt>
+                        <dd className="mt-1 text-sm text-zinc-900">{formatDate(profile.created_at)}</dd>
+                      </div>
+                    </dl>
                   </div>
 
-                  {/* Experience Gaps */}
+                  {/* Event Details */}
                   {profile.event && (
                     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-                      <h2 className="text-lg font-semibold text-zinc-900">Experience Gaps</h2>
+                      <h2 className="text-lg font-semibold text-zinc-900">Event Goal</h2>
+                      <dl className="mt-4 space-y-3">
+                        <div>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Event</dt>
+                          <dd className="mt-1 text-sm text-zinc-900">{profile.event.name || "—"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Date</dt>
+                          <dd className="mt-1 text-sm text-zinc-900">{formatDate(profile.event.event_date)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Timeframe</dt>
+                          <dd className="mt-1 text-sm text-zinc-900">{getWeeksFromToday(profile.event.event_date)}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  )}
+
+                  {/* Experience Summary */}
+                  <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                    <h2 className="text-lg font-semibold text-zinc-900">Race History</h2>
+                    {raceHistory && raceHistory.length > 0 ? (
+                      <>
+                        <p className="mt-4 text-sm text-zinc-700 leading-6">
+                          {buildRaceHistorySummary(
+                            (raceHistory || []).map((entry) => ({
+                              name: entry.race?.name || "Unknown",
+                              distance_km: entry.race?.distance_km || null,
+                              terrain_type: entry.race?.terrain_type || null,
+                              climate_type: entry.race?.climate_type || null,
+                              race_conditions: entry.race?.race_conditions || null,
+                            }))
+                          )}
+                        </p>
+                        <div className="mt-4 space-y-2 text-sm text-zinc-700">
+                          <p className="font-semibold">Recent races:</p>
+                          <ul className="space-y-1 ml-4">
+                            {raceHistory.slice(0, 5).map((entry, idx) => (
+                              <li key={idx} className="flex items-start gap-2">
+                                <span className="text-zinc-400 mt-0.5">•</span>
+                                <div>
+                                  <p>{entry.race?.name || "Unknown"}</p>
+                                  {entry.race?.distance_km && (
+                                    <p className="text-xs text-zinc-500">{entry.race.distance_km}km</p>
+                                  )}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="mt-4 text-sm text-zinc-500 italic">No race history recorded yet</p>
+                    )}
+                  </div>
+
+                  {/* Booked Prep Races */}
+                  {profile.event && (
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                      <h2 className="text-lg font-semibold text-zinc-900">Booked Prep Races</h2>
+                      {raceHistory && raceHistory.length > 0 ? (
+                        <div className="mt-4 space-y-3">
+                          <p className="text-sm text-zinc-600">Preparation races for {profile.event.name}:</p>
+                          <ul className="space-y-2 ml-4">
+                            {raceHistory.map((entry, idx) => (
+                              <li key={idx} className="flex items-start gap-3 text-sm">
+                                <span className="text-blue-400 mt-0.5 font-bold">•</span>
+                                <div className="flex-1">
+                                  <p className="font-medium text-zinc-900">{entry.race?.name || "Unknown"}</p>
+                                  <div className="mt-1 space-y-0.5 text-xs text-zinc-500">
+                                    {entry.race?.distance_km && <p>Distance: {entry.race.distance_km}km</p>}
+                                    {entry.finish_time && <p>Finish time: {entry.finish_time}</p>}
+                                    {entry.race?.event_date && <p>Date: {formatDate(entry.race.event_date)}</p>}
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p className="mt-4 text-sm text-zinc-500 italic">No prep races booked</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Experience Comparison */}
+                  {profile.event && (
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                      <h2 className="text-lg font-semibold text-zinc-900">Experience Assessment</h2>
                       {(() => {
                         const gaps = buildExperienceGaps(
                           (raceHistory || []).map((entry) => ({
@@ -1055,31 +1155,176 @@ export default function CoachAthleteOverviewPage() {
                             race_conditions: entry.race?.race_conditions || null,
                           })),
                           {
-                            name: profile.event.name,
-                            event_type: profile.event_type,
+                            name: profile.event?.name || "",
+                            event_type: null,
                             terrain_type: (profile.event_profile as any)?.terrain || null,
                             climate_type: (profile.event_profile as any)?.climate || null,
-                            race_conditions: profile.event.race_conditions,
+                            race_conditions: profile.event?.race_conditions as any,
                           }
                         );
 
-                        return gaps.length === 0 ? (
-                          <p className="mt-4 text-sm text-emerald-700 bg-emerald-50 rounded-xl px-4 py-3">
-                            ✓ Athlete has experience in all areas required for this event!
-                          </p>
-                        ) : (
-                          <div className="mt-4 space-y-2">
-                            {gaps.map((gap, idx) => (
-                              <div
-                                key={idx}
-                                className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-                              >
-                                ⚠ {gap}
+                        const eventProfile = profile.event_profile as any || {};
+                        const eventTerrain = eventProfile.terrain || "Road";
+                        const eventClimate = eventProfile.climate || "Temperate";
+
+                        return (
+                          <div className="mt-4 space-y-4">
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b border-zinc-200 text-left">
+                                    <th className="pb-3 font-semibold text-zinc-900">Experience Type</th>
+                                    <th className="pb-3 font-semibold text-zinc-900">Event Requires</th>
+                                    <th className="pb-3 font-semibold text-zinc-900">Athlete Has</th>
+                                    <th className="pb-3 font-semibold text-zinc-900">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-100">
+                                  <tr>
+                                    <td className="py-3 text-zinc-700">Distance</td>
+                                    <td className="py-3 text-zinc-700">{profile.event.name || "—"}</td>
+                                    <td className="py-3 text-zinc-700">
+                                      {raceHistory && raceHistory.length > 0
+                                        ? `${raceHistory.length} race${raceHistory.length === 1 ? "" : "s"}`
+                                        : "None"}
+                                    </td>
+                                    <td className="py-3">
+                                      {raceHistory && raceHistory.length > 0 ? (
+                                        <span className="inline-block px-2 py-1 rounded bg-emerald-100 text-xs font-semibold text-emerald-900">✓</span>
+                                      ) : (
+                                        <span className="inline-block px-2 py-1 rounded bg-amber-100 text-xs font-semibold text-amber-900">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="py-3 text-zinc-700">Terrain</td>
+                                    <td className="py-3 text-zinc-700">{eventTerrain}</td>
+                                    <td className="py-3 text-zinc-700">
+                                      {raceHistory && raceHistory.some(r => r.race?.terrain_type)
+                                        ? raceHistory.filter(r => r.race?.terrain_type).map(r => r.race?.terrain_type).join(", ")
+                                        : "None"}
+                                    </td>
+                                    <td className="py-3">
+                                      {raceHistory && raceHistory.some(r => r.race?.terrain_type) ? (
+                                        <span className="inline-block px-2 py-1 rounded bg-emerald-100 text-xs font-semibold text-emerald-900">✓</span>
+                                      ) : (
+                                        <span className="inline-block px-2 py-1 rounded bg-amber-100 text-xs font-semibold text-amber-900">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="py-3 text-zinc-700">Climate</td>
+                                    <td className="py-3 text-zinc-700">{eventClimate}</td>
+                                    <td className="py-3 text-zinc-700">
+                                      {raceHistory && raceHistory.some(r => r.race?.climate_type)
+                                        ? raceHistory.filter(r => r.race?.climate_type).map(r => r.race?.climate_type).join(", ")
+                                        : "None"}
+                                    </td>
+                                    <td className="py-3">
+                                      {raceHistory && raceHistory.some(r => r.race?.climate_type) ? (
+                                        <span className="inline-block px-2 py-1 rounded bg-emerald-100 text-xs font-semibold text-emerald-900">✓</span>
+                                      ) : (
+                                        <span className="inline-block px-2 py-1 rounded bg-amber-100 text-xs font-semibold text-amber-900">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {gaps.length > 0 && (
+                              <div className="space-y-2 pt-2">
+                                <p className="text-sm font-semibold text-amber-900">Areas to focus on:</p>
+                                <div className="space-y-2">
+                                  {gaps.map((gap, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-2"
+                                    >
+                                      <span className="shrink-0 mt-0.5">⚠</span>
+                                      <span>{gap}</span>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            ))}
+                            )}
                           </div>
                         );
                       })()}
+                    </div>
+                  )}
+
+                  {/* Plan Status */}
+                  {latestPlan && (
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                      <h2 className="text-lg font-semibold text-zinc-900">Current Plan</h2>
+                      <dl className="mt-4 space-y-3">
+                        <div>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Plan name</dt>
+                          <dd className="mt-1 text-sm text-zinc-900">{latestPlan.name || "—"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Status</dt>
+                          <dd className="mt-1 text-sm">
+                            <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                              latestPlan.is_active
+                                ? 'bg-emerald-100 text-emerald-900'
+                                : 'bg-zinc-100 text-zinc-900'
+                            }`}>
+                              {latestPlan.is_active ? "Active" : "Inactive"}
+                            </span>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Updated</dt>
+                          <dd className="mt-1 text-sm text-zinc-900">{formatDate(latestPlan.updated_at)}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  )}
+
+                  {/* Training Constraints */}
+                  {athleteEvents.length > 0 && (
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                      <h2 className="text-lg font-semibold text-zinc-900">Training Constraints</h2>
+                      <div className="mt-4 space-y-4">
+                        {athleteEvents.filter(e => e.event_type === 'injury').length > 0 && (
+                          <div>
+                            <p className="text-sm font-semibold text-zinc-900">Active injuries:</p>
+                            <ul className="mt-2 space-y-1 ml-4">
+                              {athleteEvents.filter(e => e.event_type === 'injury').map((injury) => (
+                                <li key={injury.id} className="flex items-start gap-2 text-sm text-zinc-700">
+                                  <span className="text-rose-400 mt-0.5">•</span>
+                                  <div>
+                                    <p>{injury.title}</p>
+                                    {injury.description && (
+                                      <p className="text-xs text-zinc-500">{injury.description}</p>
+                                    )}
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {athleteEvents.filter(e => e.event_type === 'holiday').length > 0 && (
+                          <div>
+                            <p className="text-sm font-semibold text-zinc-900">Scheduled breaks:</p>
+                            <ul className="mt-2 space-y-1 ml-4">
+                              {athleteEvents.filter(e => e.event_type === 'holiday').map((holiday) => (
+                                <li key={holiday.id} className="flex items-start gap-2 text-sm text-zinc-700">
+                                  <span className="text-blue-400 mt-0.5">•</span>
+                                  <div>
+                                    <p>{holiday.title}</p>
+                                    <p className="text-xs text-zinc-500">
+                                      {formatDate(holiday.start_date)} to {formatDate(holiday.end_date)}
+                                    </p>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </>
@@ -1092,7 +1337,7 @@ export default function CoachAthleteOverviewPage() {
             <div className="space-y-6">
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
                 <h2 className="text-xl font-semibold text-zinc-900">
-                  {selectedAthleteName || profile?.full_name || "Unnamed athlete"}
+                  {getFirstName(selectedAthleteName || profile?.full_name) || "Unnamed athlete"}
                 </h2>
                 <p className="mt-1 text-sm text-zinc-500">Basic information</p>
 
@@ -1158,39 +1403,88 @@ export default function CoachAthleteOverviewPage() {
 
             {/* Health Tab */}
             {activeTab === "health" && (
-            <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold text-zinc-900 mb-6">Health & Constraints</h2>
+            <div className="space-y-6">
+              {/* Injuries & Clearances */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-4">Health Diary</h2>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                <div>
-                  <h3 className="text-lg font-semibold text-zinc-900">Injuries</h3>
-                  {injuries.length > 0 ? (
-                    <ul className="mt-4 space-y-2">
-                      {injuries.map((injury) => (
-                        <li key={injury} className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-                          {injury}
-                        </li>
+                {athleteEvents.length > 0 ? (
+                  <div className="space-y-3">
+                    {athleteEvents
+                      .filter(e => e.event_type === 'injury')
+                      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                      .map((event) => (
+                        <div key={event.id} className="border-l-4 border-rose-300 pl-4 py-2">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="font-semibold text-zinc-900 text-sm">{event.title}</div>
+                              {event.description && (
+                                <p className="text-xs text-zinc-600 mt-1">{event.description}</p>
+                              )}
+                              <p className="text-xs text-zinc-500 mt-2 font-medium">
+                                Reported: {formatDateTime(event.created_at)}
+                              </p>
+                              {event.status === 'acknowledged' && (
+                                <p className="text-xs text-emerald-600 mt-1">✓ Acknowledged by coach</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-4 text-sm text-zinc-500">No injuries recorded.</p>
-                  )}
-                </div>
 
-                <div>
-                  <h3 className="text-lg font-semibold text-zinc-900">Imbalances</h3>
-                  {imbalances.length > 0 ? (
-                    <ul className="mt-4 space-y-2">
-                      {imbalances.map((imbalance) => (
-                        <li key={imbalance} className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-                          {imbalance}
-                        </li>
+                    {athleteEvents.filter(e => e.event_type === 'injury').length === 0 && (
+                      <p className="text-sm text-zinc-500 italic">No injuries recorded</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-500">No health entries recorded</p>
+                )}
+              </div>
+
+              {/* Medical Clearances */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-4">Medical Clearances</h2>
+
+                {athleteEvents && athleteEvents.length > 0 && athleteEvents.some(e => e.event_type === 'medical_clearance') ? (
+                  <div className="space-y-3">
+                    {athleteEvents
+                      .filter(e => e.event_type === 'medical_clearance')
+                      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                      .map((clearance) => (
+                        <div key={clearance.id} className="border-l-4 border-emerald-300 pl-4 py-2 bg-emerald-50 rounded">
+                          <div className="font-semibold text-emerald-900 text-sm">✓ Medical Clearance Granted</div>
+                          {clearance.description && (
+                                <p className="text-xs text-emerald-700 mt-1">{clearance.description}</p>
+                              )}
+                          <p className="text-xs text-emerald-600 mt-2 font-medium">
+                            Cleared on: {formatDate(clearance.start_date)}
+                          </p>
+                          <p className="text-xs text-emerald-600">
+                            Recorded: {formatDateTime(clearance.created_at)}
+                          </p>
+                        </div>
                       ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-4 text-sm text-zinc-500">No imbalances recorded.</p>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-500 italic">No medical clearances recorded yet</p>
+                )}
+              </div>
+
+              {/* Imbalances */}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-4">Imbalances & Restrictions</h2>
+
+                {imbalances.length > 0 ? (
+                  <ul className="space-y-2">
+                    {imbalances.map((imbalance) => (
+                      <li key={imbalance} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        {imbalance}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-zinc-500">No imbalances recorded.</p>
+                )}
               </div>
             </div>
             )}
