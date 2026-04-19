@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import WarningList from "@/components/WarningList";
 import WeekTemplatePicker from "@/components/WeekTemplatePicker";
 import AdHocSessionForm from "@/components/AdHocSessionForm";
-import { FunctionalSessionForm, type FunctionalSessionFormData } from "@/app/coach/components/FunctionalSessionForm";
+import { UnifiedSessionForm, type UnifiedSessionFormData } from "@/app/coach/components/UnifiedSessionForm";
 import { calculateAllWarnings } from "@/lib/planner/warningRules";
 import { GeneratedPlan, PlanExercise, PlanSession, PlanSessionType, TrainingPurpose, TRAINING_PURPOSES } from "@/lib/planner/types";
 import { findAlternativesForPicker } from "@/lib/planner/exerciseSwap";
@@ -2646,7 +2646,7 @@ export default function PlanEditorPage() {
                                   </p>
                                 </div>
 
-                                <FunctionalSessionForm
+                                <UnifiedSessionForm
                                   onSave={(formData) => {
                                     if (!plan) return;
                                     const dayLabel = pendingSessionSlot?.dayLabel || autoAssignDay(typedWeek.id);

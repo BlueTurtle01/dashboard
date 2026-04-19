@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { FunctionalSessionForm, type FunctionalSessionFormData } from "@/app/coach/components/FunctionalSessionForm";
+import { UnifiedSessionForm, type UnifiedSessionFormData } from "@/app/coach/components/UnifiedSessionForm";
 
 type ProgramTemplateRow = {
   id: string;
@@ -987,7 +987,7 @@ export default function EditProgramTemplatePage() {
     }));
   }
 
-  function addBlankSession(weekLocalId: string, formData?: FunctionalSessionFormData) {
+  function addBlankSession(weekLocalId: string, formData?: UnifiedSessionFormData) {
     updateWeek(weekLocalId, (week) => {
       const nextSortOrder = Math.max(0, ...week.sessions.map((session) => session.sortOrder)) + 1;
 
@@ -1037,7 +1037,7 @@ export default function EditProgramTemplatePage() {
     showTemporaryStatus("Blank session added.", 1500);
   }
 
-  function handleCreateBlankSessionFromForm(weekLocalId: string, formData: FunctionalSessionFormData) {
+  function handleCreateBlankSessionFromForm(weekLocalId: string, formData: UnifiedSessionFormData) {
     addBlankSession(weekLocalId, formData);
     setCreatingBlankSessionWeekId(null);
   }
@@ -1752,7 +1752,7 @@ export default function EditProgramTemplatePage() {
                               </p>
                             </div>
 
-                            <FunctionalSessionForm
+                            <UnifiedSessionForm
                               onSave={(formData) =>
                                 handleCreateBlankSessionFromForm(week.localId, formData)
                               }
@@ -2254,7 +2254,7 @@ export default function EditProgramTemplatePage() {
                               </label>
                             </div>
 
-                            {!session.sessionTemplateId ? (
+                            {!session.sessionTemplateId && !session.activity ? (
                               <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                                 <div className="mb-4 flex items-center justify-between gap-4">
                                   <h5 className="text-sm font-semibold">Exercises</h5>

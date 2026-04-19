@@ -1,0 +1,831 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+export type UnifiedSessionFormData = {
+  description: string;
+  activity: string;
+  subtype: string;
+  durationMinutes: string;
+  distanceKm: string;
+  targetIntensity: string;
+  terrain: string;
+  elevation: string;
+  packWeightKg: string;
+  strides: string;
+  warmUpMinutes: string;
+  coolDownMinutes: string;
+  intervalReps: string;
+  intervalDuration: string;
+  timeOfDay: string;
+  startTime: string;
+  isTimeStrict: boolean;
+  sets: string;
+  setDurationSeconds: string;
+  restSeconds: string;
+  notes: string;
+  tags: string[];
+};
+
+type ActivityOption = {
+  id: string;
+  slug: string;
+  label: string;
+};
+
+type SubtypeOption = {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
+};
+
+type IntensityOption = {
+  id: string;
+  label: string;
+  slug: string;
+};
+
+type FieldVisibility = {
+  show_distance: boolean;
+  show_duration: boolean;
+  show_target_intensity: boolean;
+  show_terrain: boolean;
+  show_elevation: boolean;
+  show_pack_weight: boolean;
+  show_sets: boolean;
+  show_set_duration: boolean;
+  show_rest_seconds: boolean;
+};
+
+type FieldConfigRow = FieldVisibility & {
+  target_activity: string | null;
+  target_subtype: string | null;
+};
+
+interface UnifiedSessionFormProps {
+  initialData?: Partial<UnifiedSessionFormData>;
+  generatedNamePreview?: string;
+  loadingGeneratedNumber?: boolean;
+  onSave: (data: UnifiedSessionFormData) => void;
+  onCancel: () => void;
+  isSaving?: boolean;
+  submitButtonLabel?: string;
+}
+
+const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
+  show_distance: true,
+  show_duration: true,
+  show_target_intensity: true,
+  show_terrain: true,
+  show_elevation: true,
+  show_pack_weight: true,
+  show_sets: false,
+  show_set_duration: false,
+  show_rest_seconds: false,
+};
+
+const SUGGESTED_TAGS = [
+  "bodyweight", "core", "fallback", "fartlek", "hinge", "home",
+  "intervals", "legs", "low-impact", "lower-body", "mobility",
+  "pack-carry", "posterior-chain", "recovery", "stability",
+  "strength", "upper-body", "heat", "night", "trail", "sand",
+];
+
+const terrainOptions = [
+  "road",
+  "trail",
+  "mixed",
+  "sand",
+  "treadmill",
+  "stairs",
+  "indoor",
+  "water",
+  "any",
+] as const;
+
+const timeOfDayOptions = [
+  "any",
+  "morning",
+  "afternoon",
+  "evening",
+  "night",
+  "race_simulation",
+] as const;
+
+function formatLabel(value: string | null | undefined) {
+  if (!value) return "—";
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function createEmptyForm(): UnifiedSessionFormData {
+  return {
+    description: "",
+    activity: "",
+    subtype: "",
+    durationMinutes: "",
+    distanceKm: "",
+    targetIntensity: "",
+    terrain: "any",
+    elevation: "",
+    packWeightKg: "",
+    strides: "",
+    warmUpMinutes: "",
+    coolDownMinutes: "",
+    intervalReps: "",
+    intervalDuration: "",
+    timeOfDay: "any",
+    startTime: "",
+    isTimeStrict: false,
+    sets: "",
+    setDurationSeconds: "",
+    restSeconds: "",
+    notes: "",
+    tags: [],
+  };
+}
+
+function shouldShowTerrainForActivity(activity: string): boolean {
+  const activityLower = (activity || "").toLowerCase();
+  const noTerrainActivities = ["swimming", "swim", "stairs", "stair", "strength", "core"];
+  return !noTerrainActivities.some((a) => activityLower.includes(a));
+}
+
+export function UnifiedSessionForm({
+  initialData,
+  generatedNamePreview,
+  loadingGeneratedNumber = false,
+  onSave,
+  onCancel,
+  isSaving = false,
+  submitButtonLabel = "Save",
+}: UnifiedSessionFormProps) {
+  const [form, setForm] = useState<UnifiedSessionFormData>(
+    initialData ? { ...createEmptyForm(), ...initialData } : createEmptyForm()
+  );
+
+  const [tagSearch, setTagSearch] = useState("");
+  const [activityOptions, setActivityOptions] = useState<ActivityOption[]>([]);
+  const [subtypeOptionsByActivitySlug, setSubtypeOptionsByActivitySlug] = useState<
+    Record<string, SubtypeOption[]>
+  >({});
+  const [fieldConfigMap, setFieldConfigMap] = useState<Record<string, FieldVisibility>>({});
+  const [intensityOptions, setIntensityOptions] = useState<IntensityOption[]>([]);
+  const [loadingOptionData, setLoadingOptionData] = useState(false);
+
+  async function loadActivityAndSubtypeOptions() {
+    setLoadingOptionData(true);
+
+    const supabase = createClient();
+    const [activitiesResult, subtypesResult, linksResult, fieldConfigResult, intensitiesResult] = await Promise.all([
+      supabase
+        .from("session_activities")
+        .select("id, slug, label, sort_order, is_active")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("label", { ascending: true }),
+      supabase
+        .from("session_subtypes")
+        .select("id, slug, label, sort_order, is_active")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .order("label", { ascending: true }),
+      supabase
+        .from("session_activity_subtypes")
+        .select("activity_id, subtype_id, sort_order")
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("session_template_field_config_resolved")
+        .select(
+          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_rest_seconds",
+        ),
+      supabase
+        .from("training_intensities")
+        .select("id, label, slug")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
+    ]);
+
+    if (!activitiesResult.error && activitiesResult.data) {
+      const activities = activitiesResult.data;
+      const normalized = activities.map((row: any) => ({
+        id: row.id,
+        slug: row.slug,
+        label: row.label,
+      }));
+      setActivityOptions(normalized);
+    }
+
+    if (!subtypesResult.error && subtypesResult.data && !linksResult.error && linksResult.data) {
+      const subtypes = subtypesResult.data;
+      const links = linksResult.data;
+
+      const subtypeById = new Map(
+        subtypes.map((row: any) => [
+          row.id,
+          {
+            id: row.id,
+            slug: row.slug,
+            label: row.label,
+            sortOrder: row.sort_order ?? 0,
+          },
+        ]),
+      );
+
+      const activitySlugById = new Map(
+        activitiesResult.data?.map((row: any) => [row.id, row.slug]) ?? []
+      );
+      const subtypeMap: Record<string, SubtypeOption[]> = {};
+
+      for (const link of links as any[]) {
+        const activitySlug = activitySlugById.get(link.activity_id);
+        const subtype = subtypeById.get(link.subtype_id);
+
+        if (!activitySlug || !subtype) continue;
+
+        if (!subtypeMap[activitySlug]) {
+          subtypeMap[activitySlug] = [];
+        }
+
+        subtypeMap[activitySlug].push({
+          ...subtype,
+          sortOrder: link.sort_order ?? subtype.sortOrder ?? 0,
+        });
+      }
+
+      for (const activitySlug of Object.keys(subtypeMap)) {
+        subtypeMap[activitySlug] = subtypeMap[activitySlug]
+          .sort((a, b) => {
+            if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+            return a.label.localeCompare(b.label);
+          })
+          .filter(
+            (option, index, array) =>
+              array.findIndex((candidate) => candidate.id === option.id) === index,
+          );
+      }
+
+      setSubtypeOptionsByActivitySlug(subtypeMap);
+    }
+
+    if (!fieldConfigResult.error && fieldConfigResult.data) {
+      const configMap: Record<string, FieldVisibility> = {};
+      for (const row of fieldConfigResult.data as FieldConfigRow[]) {
+        const key = `${row.target_activity ?? "*"}:${row.target_subtype ?? "*"}`;
+        configMap[key] = {
+          show_distance: row.show_distance,
+          show_duration: row.show_duration,
+          show_target_intensity: row.show_target_intensity,
+          show_terrain: row.show_terrain,
+          show_elevation: row.show_elevation,
+          show_pack_weight: row.show_pack_weight,
+          show_sets: row.show_sets,
+          show_set_duration: row.show_set_duration,
+          show_rest_seconds: row.show_rest_seconds,
+        };
+      }
+      setFieldConfigMap(configMap);
+    }
+
+    if (!intensitiesResult.error && intensitiesResult.data) {
+      setIntensityOptions(intensitiesResult.data as IntensityOption[]);
+    }
+
+    setLoadingOptionData(false);
+  }
+
+  useEffect(() => {
+    void loadActivityAndSubtypeOptions();
+  }, []);
+
+  const allowedSubtypeOptionsForSelectedActivity = useMemo(() => {
+    if (!form.activity) return [];
+    return subtypeOptionsByActivitySlug[form.activity] ?? [];
+  }, [form.activity, subtypeOptionsByActivitySlug]);
+
+  useEffect(() => {
+    if (loadingOptionData) return;
+    if (activityOptions.length === 0) return;
+
+    setForm((current) => {
+      let nextActivity = current.activity;
+      if (!nextActivity || !activityOptions.some((option) => option.slug === nextActivity)) {
+        nextActivity = activityOptions[0]?.slug ?? "";
+      }
+
+      const allowedSubtypes = subtypeOptionsByActivitySlug[nextActivity] ?? [];
+      let nextSubtype = current.subtype;
+
+      if (!nextSubtype || !allowedSubtypes.some((option) => option.slug === nextSubtype)) {
+        nextSubtype = allowedSubtypes[0]?.slug ?? "";
+      }
+
+      if (nextActivity === current.activity && nextSubtype === current.subtype) {
+        return current;
+      }
+
+      return {
+        ...current,
+        activity: nextActivity,
+        subtype: nextSubtype,
+      };
+    });
+  }, [loadingOptionData, activityOptions, subtypeOptionsByActivitySlug]);
+
+  useEffect(() => {
+    if (loadingOptionData) return;
+    if (!form.activity) return;
+
+    const allowedSubtypes = subtypeOptionsByActivitySlug[form.activity] ?? [];
+    if (allowedSubtypes.length === 0) return;
+
+    if (!allowedSubtypes.some((option) => option.slug === form.subtype)) {
+      setForm((current) => ({
+        ...current,
+        subtype: allowedSubtypes[0]?.slug ?? "",
+      }));
+    }
+  }, [form.activity, form.subtype, loadingOptionData, subtypeOptionsByActivitySlug]);
+
+  const fieldVis = useMemo((): FieldVisibility => {
+    if (!form.activity || !form.subtype) return FIELD_VISIBILITY_DEFAULTS;
+    return (
+      fieldConfigMap[`${form.activity}:${form.subtype}`] ??
+      fieldConfigMap[`${form.activity}:*`] ??
+      fieldConfigMap[`*:*`] ??
+      FIELD_VISIBILITY_DEFAULTS
+    );
+  }, [form.activity, form.subtype, fieldConfigMap]);
+
+  function updateForm<K extends keyof UnifiedSessionFormData>(
+    field: K,
+    value: UnifiedSessionFormData[K],
+  ) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  const handleSave = () => {
+    onSave(form);
+  };
+
+  return (
+    <div className="space-y-4">
+      {loadingOptionData ? (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+          Loading activity and subtype options...
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold text-zinc-900">Activity</span>
+          <select
+            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+            value={form.activity}
+            onChange={(e) => updateForm("activity", e.target.value)}
+            disabled={loadingOptionData}
+          >
+            {activityOptions.length === 0 ? (
+              <option value="">No activities available</option>
+            ) : (
+              activityOptions.map((option) => (
+                <option key={option.id} value={option.slug}>
+                  {option.label}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold text-zinc-900">Subtype</span>
+          <select
+            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+            value={form.subtype}
+            onChange={(e) => updateForm("subtype", e.target.value)}
+            disabled={loadingOptionData || allowedSubtypeOptionsForSelectedActivity.length === 0}
+          >
+            {allowedSubtypeOptionsForSelectedActivity.length === 0 ? (
+              <option value="">No subtypes available</option>
+            ) : (
+              allowedSubtypeOptionsForSelectedActivity.map((option) => (
+                <option key={option.id} value={option.slug}>
+                  {option.label}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </div>
+
+      {generatedNamePreview && (
+        <div>
+          <span className="mb-1 block text-sm font-semibold text-zinc-900">Template name</span>
+          <div className="w-full rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm text-zinc-900">
+            {loadingGeneratedNumber ? (
+              <span className="text-zinc-500">Calculating next number…</span>
+            ) : (
+              generatedNamePreview
+            )}
+          </div>
+        </div>
+      )}
+
+      <label className="block">
+        <span className="mb-1 block text-sm font-semibold text-zinc-900">Description</span>
+        <textarea
+          className="min-h-[90px] w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+          value={form.description}
+          onChange={(e) => updateForm("description", e.target.value)}
+          placeholder="Short description of the session"
+        />
+      </label>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {fieldVis.show_target_intensity ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Target Intensity
+            </span>
+            <select
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.targetIntensity}
+              onChange={(e) => updateForm("targetIntensity", e.target.value)}
+            >
+              <option value="">Select an intensity...</option>
+              {intensityOptions.map((option) => (
+                <option key={option.id} value={option.label}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {fieldVis.show_duration ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Duration (minutes)
+            </span>
+            <input
+              type="number"
+              min="0"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.durationMinutes}
+              onChange={(e) => updateForm("durationMinutes", e.target.value)}
+              placeholder="90"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_distance ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Distance (km)
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.distanceKm}
+              onChange={(e) => updateForm("distanceKm", e.target.value)}
+              placeholder="12"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_sets ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">Sets</span>
+            <input
+              type="number"
+              min="1"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.sets}
+              onChange={(e) => updateForm("sets", e.target.value)}
+              placeholder="6"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_set_duration ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Set Duration (seconds)
+            </span>
+            <input
+              type="number"
+              min="1"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.setDurationSeconds}
+              onChange={(e) => updateForm("setDurationSeconds", e.target.value)}
+              placeholder="60"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_rest_seconds ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Rest Between Sets (seconds)
+            </span>
+            <input
+              type="number"
+              min="0"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.restSeconds}
+              onChange={(e) => updateForm("restSeconds", e.target.value)}
+              placeholder="90"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_terrain && shouldShowTerrainForActivity(form.activity) ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">Terrain</span>
+            <select
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.terrain}
+              onChange={(e) => updateForm("terrain", e.target.value)}
+            >
+              {terrainOptions.map((option) => (
+                <option key={option} value={option}>
+                  {formatLabel(option)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {fieldVis.show_elevation ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Elevation / Steepness
+            </span>
+            <input
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.elevation}
+              onChange={(e) => updateForm("elevation", e.target.value)}
+              placeholder="e.g. Hilly, steep, rolling"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_pack_weight ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Pack Weight (kg)
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.packWeightKg}
+              onChange={(e) => updateForm("packWeightKg", e.target.value)}
+              placeholder="6"
+            />
+          </label>
+        ) : null}
+
+        {form.activity.toLowerCase() === "run" ? (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold text-zinc-900">
+                Strides
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                value={form.strides}
+                onChange={(e) => updateForm("strides", e.target.value)}
+                placeholder="20"
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Optional: Number of strides at the end of the run
+              </p>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold text-zinc-900">
+                Warm Up
+              </span>
+              <select
+                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                value={form.warmUpMinutes}
+                onChange={(e) => updateForm("warmUpMinutes", e.target.value)}
+              >
+                <option value="">— None —</option>
+                <option value="5">5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="20">20 minutes</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold text-zinc-900">
+                Cool Down
+              </span>
+              <select
+                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                value={form.coolDownMinutes}
+                onChange={(e) => updateForm("coolDownMinutes", e.target.value)}
+              >
+                <option value="">— None —</option>
+                <option value="5">5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="20">20 minutes</option>
+              </select>
+            </label>
+
+            {form.subtype.toLowerCase().includes("interval") ? (
+              <>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-zinc-900">
+                    Interval Reps
+                  </span>
+                  <input
+                    type="text"
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                    value={form.intervalReps}
+                    onChange={(e) => updateForm("intervalReps", e.target.value)}
+                    placeholder="e.g. 10x1min or 6x3min"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Repetition format and duration
+                  </p>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-zinc-900">
+                    Recovery / Interval Duration
+                  </span>
+                  <input
+                    type="text"
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                    value={form.intervalDuration}
+                    onChange={(e) => updateForm("intervalDuration", e.target.value)}
+                    placeholder="e.g. 1min jog or 2min walk"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Recovery period between intervals
+                  </p>
+                </label>
+              </>
+            ) : null}
+          </>
+        ) : null}
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold text-zinc-900">
+            Time of Day
+          </span>
+          <select
+            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+            value={form.timeOfDay}
+            onChange={(e) => updateForm("timeOfDay", e.target.value)}
+          >
+            {timeOfDayOptions.map((option) => (
+              <option key={option} value={option}>
+                {formatLabel(option)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold text-zinc-900">
+            Exact Start Time
+          </span>
+          <input
+            type="time"
+            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+            value={form.startTime}
+            onChange={(e) => updateForm("startTime", e.target.value)}
+          />
+        </label>
+      </div>
+
+      <label className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+        <input
+          type="checkbox"
+          checked={form.isTimeStrict}
+          onChange={(e) => updateForm("isTimeStrict", e.target.checked)}
+        />
+        <span className="text-sm font-medium text-zinc-900">
+          Exact start time is strict
+        </span>
+      </label>
+
+      <label className="block">
+        <span className="mb-1 block text-sm font-semibold text-zinc-900">Notes</span>
+        <textarea
+          className="min-h-[90px] w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+          value={form.notes}
+          onChange={(e) => updateForm("notes", e.target.value)}
+          placeholder="Extra guidance for the coach or athlete"
+        />
+      </label>
+
+      <div>
+        <span className="mb-1 block text-sm font-semibold text-zinc-900">Tags</span>
+
+        {/* Selected tags */}
+        {form.tags.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1">
+            {form.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => updateForm("tags", form.tags.filter((t) => t !== tag))}
+                  className="ml-0.5 leading-none text-zinc-400 hover:text-white"
+                  aria-label={`Remove ${tag}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Search input */}
+        <input
+          className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+          value={tagSearch}
+          onChange={(e) => setTagSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && tagSearch.trim()) {
+              e.preventDefault();
+              const tag = tagSearch.trim().toLowerCase();
+              if (!form.tags.includes(tag)) {
+                updateForm("tags", [...form.tags, tag]);
+              }
+              setTagSearch("");
+            }
+          }}
+          placeholder="Search or type a tag, press Enter to add"
+        />
+
+        {/* Suggestions */}
+        {(() => {
+          const q = tagSearch.trim().toLowerCase();
+          const suggestions = SUGGESTED_TAGS.filter(
+            (t) => (!q || t.includes(q)) && !form.tags.includes(t)
+          ).slice(0, 12);
+          if (suggestions.length === 0) return null;
+          return (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {suggestions.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => {
+                    updateForm("tags", [...form.tags, tag]);
+                    setTagSearch("");
+                  }}
+                  className="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 transition-colors hover:border-zinc-900 hover:bg-zinc-100"
+                >
+                  + {tag}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving || loadingOptionData || loadingGeneratedNumber}
+          className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 transition disabled:opacity-50 hover:bg-emerald-100"
+        >
+          {isSaving ? "Saving..." : submitButtonLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isSaving}
+          className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-100"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
