@@ -317,6 +317,17 @@ export default function CoachSessionGrid({
                 const isInHoliday = cellDate && isDateInHoliday(cellDate);
                 const isInTrainingCamp = cellDate && isDateInTrainingCamp(cellDate);
 
+                // Compute actual day of week from the cell date
+                let displayDay = day;
+                if (cellDate) {
+                  const dateObj = new Date(cellDate);
+                  if (!isNaN(dateObj.getTime())) {
+                    const jsDay = dateObj.getDay(); // 0=Sun, 1=Mon, etc.
+                    const actualDayIndex = (jsDay + 6) % 7; // Convert to Mon=0
+                    displayDay = DAYS[actualDayIndex];
+                  }
+                }
+
                 return (
                   <div
                     key={`${week.id}-${day}`}
@@ -346,7 +357,7 @@ export default function CoachSessionGrid({
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", gap: "8px" }}>
                       <div>
-                        <div style={{ fontSize: "11px", color: "#9ca3af" }}>{day}</div>
+                        <div style={{ fontSize: "11px", color: "#9ca3af" }}>{displayDay}</div>
                         <div style={{ fontSize: "11px", color: isBlocked ? "#b91c1c" : "#6b7280", marginTop: "2px" }}>
                           {cellDate || "—"}
                         </div>
