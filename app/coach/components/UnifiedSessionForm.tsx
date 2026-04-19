@@ -19,8 +19,6 @@ export type UnifiedSessionFormData = {
   intervalReps: string;
   intervalDuration: string;
   timeOfDay: string;
-  startTime: string;
-  isTimeStrict: boolean;
   sets: string;
   setDurationSeconds: string;
   restSeconds: string;
@@ -138,8 +136,6 @@ function createEmptyForm(): UnifiedSessionFormData {
     intervalReps: "",
     intervalDuration: "",
     timeOfDay: "any",
-    startTime: "",
-    isTimeStrict: false,
     sets: "",
     setDurationSeconds: "",
     restSeconds: "",
