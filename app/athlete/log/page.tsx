@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 interface AthleteEvent {
   id: string;
-  event_type: "injury" | "holiday";
+  event_type: "injury" | "holiday" | "medical_clearance";
   title: string;
   description: string | null;
   start_date: string | null;
