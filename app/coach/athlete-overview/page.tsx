@@ -241,6 +241,7 @@ export default function CoachAthleteOverviewPage() {
   const [selectedAthleteId, setSelectedAthleteId] = useState("");
   const [profile, setProfile] = useState<AthleteProfile | null>(null);
   const [raceHistory, setRaceHistory] = useState<RaceHistoryEntry[]>([]);
+  const [bookedPrepRaces, setBookedPrepRaces] = useState<any[]>([]);
   const [latestPlan, setLatestPlan] = useState<AthletePlanSummary | null>(null);
   const [completionStats, setCompletionStats] = useState<CompletionStat[]>([]);
   const [athleteEvents, setAthleteEvents] = useState<AthleteEvent[]>([]);
@@ -480,6 +481,52 @@ export default function CoachAthleteOverviewPage() {
       cancelled = true;
     };
   }, [selectedAthleteId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBookedPrepRaces() {
+      if (!selectedAthleteId || !profile?.selected_event_id) {
+        setBookedPrepRaces([]);
+        return;
+      }
+
+      try {
+        // Get the athlete's profile to find selectedPreparationRaceIds
+        const { data: profileData } = await supabase
+          .from("athlete_profiles")
+          .select("selected_preparation_race_ids")
+          .eq("user_id", selectedAthleteId)
+          .maybeSingle();
+
+        if (!profileData?.selected_preparation_race_ids || profileData.selected_preparation_race_ids.length === 0) {
+          setBookedPrepRaces([]);
+          return;
+        }
+
+        // Fetch the actual prep races
+        const { data, error } = await supabase
+          .from("preparation_races")
+          .select("id, name, event_date, distance_km, event_type, location, terrain_type, climate_type, elevation_gain_m, race_conditions")
+          .in("id", profileData.selected_preparation_race_ids)
+          .order("event_date", { ascending: true });
+
+        if (cancelled) return;
+
+        if (!error && data) {
+          setBookedPrepRaces(data);
+        }
+      } catch (err) {
+        console.error("Error loading booked prep races:", err);
+      }
+    }
+
+    void loadBookedPrepRaces();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAthleteId, profile?.selected_event_id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1116,19 +1163,18 @@ export default function CoachAthleteOverviewPage() {
                   {profile.event && (
                     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
                       <h2 className="text-lg font-semibold text-zinc-900">Booked Prep Races</h2>
-                      {raceHistory && raceHistory.length > 0 ? (
+                      {bookedPrepRaces && bookedPrepRaces.length > 0 ? (
                         <div className="mt-4 space-y-3">
                           <p className="text-sm text-zinc-600">Preparation races for {profile.event.name}:</p>
                           <ul className="space-y-2 ml-4">
-                            {raceHistory.map((entry, idx) => (
+                            {bookedPrepRaces.map((race, idx) => (
                               <li key={idx} className="flex items-start gap-3 text-sm">
                                 <span className="text-blue-400 mt-0.5 font-bold">•</span>
                                 <div className="flex-1">
-                                  <p className="font-medium text-zinc-900">{entry.race?.name || "Unknown"}</p>
+                                  <p className="font-medium text-zinc-900">{race.name}</p>
                                   <div className="mt-1 space-y-0.5 text-xs text-zinc-500">
-                                    {entry.race?.distance_km && <p>Distance: {entry.race.distance_km}km</p>}
-                                    {entry.finish_time && <p>Finish time: {entry.finish_time}</p>}
-                                    {entry.race?.event_date && <p>Date: {formatDate(entry.race.event_date)}</p>}
+                                    {race.distance_km && <p>Distance: {race.distance_km}km</p>}
+                                    {race.event_date && <p>Date: {formatDate(race.event_date)}</p>}
                                   </div>
                                 </div>
                               </li>
@@ -1284,7 +1330,7 @@ export default function CoachAthleteOverviewPage() {
                   )}
 
                   {/* Training Constraints */}
-                  {athleteEvents.length > 0 && (
+                  {(athleteEvents.length > 0 || profile?.equipment_unavailable?.length > 0 || profile?.equipment_avoid?.length > 0) && (
                     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
                       <h2 className="text-lg font-semibold text-zinc-900">Training Constraints</h2>
                       <div className="mt-4 space-y-4">
@@ -1322,6 +1368,30 @@ export default function CoachAthleteOverviewPage() {
                                 </li>
                               ))}
                             </ul>
+                          </div>
+                        )}
+                        {profile?.equipment_unavailable && profile.equipment_unavailable.length > 0 && (
+                          <div>
+                            <p className="text-sm font-semibold text-zinc-900">Unavailable equipment:</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {(profile.equipment_unavailable as string[]).map((eq) => (
+                                <span key={eq} className="inline-block rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+                                  {eq}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {profile?.equipment_avoid && profile.equipment_avoid.length > 0 && (
+                          <div>
+                            <p className="text-sm font-semibold text-zinc-900">Prefers to avoid:</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {(profile.equipment_avoid as string[]).map((eq) => (
+                                <span key={eq} className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+                                  {eq}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
