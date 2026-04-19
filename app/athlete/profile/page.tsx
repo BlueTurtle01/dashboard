@@ -366,10 +366,10 @@ export default function AthleteProfilePage() {
   }
 
   function updateHolidayEvent(index: number, field: "start_date" | "end_date", value: string) {
-    setProfile((prev) =>
+    setHolidayEvents((prev) =>
       prev.map((event, i) =>
         i === index ? { ...event, [field]: value } : event,
-      ) as any
+      )
     );
   }
 
