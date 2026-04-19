@@ -244,6 +244,8 @@ export default function CoachAthleteOverviewPage() {
   const [profile, setProfile] = useState<AthleteProfile | null>(null);
   const [raceHistory, setRaceHistory] = useState<RaceHistoryEntry[]>([]);
   const [bookedPrepRaces, setBookedPrepRaces] = useState<any[]>([]);
+  const [unavailableEquipment, setUnavailableEquipment] = useState<string[]>([]);
+  const [avoidEquipment, setAvoidEquipment] = useState<string[]>([]);
   const [latestPlan, setLatestPlan] = useState<AthletePlanSummary | null>(null);
   const [completionStats, setCompletionStats] = useState<CompletionStat[]>([]);
   const [athleteEvents, setAthleteEvents] = useState<AthleteEvent[]>([]);
@@ -529,6 +531,53 @@ export default function CoachAthleteOverviewPage() {
       cancelled = true;
     };
   }, [selectedAthleteId, profile?.selected_event_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEquipmentConstraints() {
+      if (!profile?.id) {
+        setUnavailableEquipment([]);
+        setAvoidEquipment([]);
+        return;
+      }
+
+      try {
+        // Fetch unavailable equipment
+        const { data: unavailable } = await supabase
+          .from("athlete_equipment_unavailable")
+          .select("equipment_options(name)")
+          .eq("athlete_profile_id", profile.id);
+
+        // Fetch avoid equipment
+        const { data: avoid } = await supabase
+          .from("athlete_equipment_avoid")
+          .select("equipment_options(name)")
+          .eq("athlete_profile_id", profile.id);
+
+        if (cancelled) return;
+
+        const unavailableNames = unavailable?.map((item: any) =>
+          Array.isArray(item.equipment_options) ? item.equipment_options[0]?.name : item.equipment_options?.name
+        ).filter(Boolean) || [];
+
+        const avoidNames = avoid?.map((item: any) =>
+          Array.isArray(item.equipment_options) ? item.equipment_options[0]?.name : item.equipment_options?.name
+        ).filter(Boolean) || [];
+
+        setUnavailableEquipment(unavailableNames);
+        setAvoidEquipment(avoidNames);
+      } catch (err) {
+        console.error("Error loading equipment constraints:", err);
+      }
+    }
+
+    void loadEquipmentConstraints();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1332,7 +1381,7 @@ export default function CoachAthleteOverviewPage() {
                   )}
 
                   {/* Training Constraints */}
-                  {(athleteEvents.length > 0 || (profile?.equipment_unavailable ?? []).length > 0 || (profile?.equipment_avoid ?? []).length > 0) && (
+                  {(athleteEvents.length > 0 || unavailableEquipment.length > 0 || avoidEquipment.length > 0) && (
                     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
                       <h2 className="text-lg font-semibold text-zinc-900">Training Constraints</h2>
                       <div className="mt-4 space-y-4">
@@ -1372,11 +1421,11 @@ export default function CoachAthleteOverviewPage() {
                             </ul>
                           </div>
                         )}
-                        {profile?.equipment_unavailable && profile.equipment_unavailable.length > 0 && (
+                        {unavailableEquipment.length > 0 && (
                           <div>
                             <p className="text-sm font-semibold text-zinc-900">Unavailable equipment:</p>
                             <div className="mt-2 flex flex-wrap gap-2">
-                              {(profile.equipment_unavailable as string[]).map((eq) => (
+                              {unavailableEquipment.map((eq) => (
                                 <span key={eq} className="inline-block rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
                                   {eq}
                                 </span>
@@ -1384,11 +1433,11 @@ export default function CoachAthleteOverviewPage() {
                             </div>
                           </div>
                         )}
-                        {profile?.equipment_avoid && profile.equipment_avoid.length > 0 && (
+                        {avoidEquipment.length > 0 && (
                           <div>
                             <p className="text-sm font-semibold text-zinc-900">Prefers to avoid:</p>
                             <div className="mt-2 flex flex-wrap gap-2">
-                              {(profile.equipment_avoid as string[]).map((eq) => (
+                              {avoidEquipment.map((eq) => (
                                 <span key={eq} className="inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
                                   {eq}
                                 </span>
