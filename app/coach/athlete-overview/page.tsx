@@ -1332,7 +1332,7 @@ export default function CoachAthleteOverviewPage() {
                   )}
 
                   {/* Training Constraints */}
-                  {(athleteEvents.length > 0 || profile?.equipment_unavailable?.length > 0 || profile?.equipment_avoid?.length > 0) && (
+                  {(athleteEvents.length > 0 || (profile?.equipment_unavailable ?? []).length > 0 || (profile?.equipment_avoid ?? []).length > 0) && (
                     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
                       <h2 className="text-lg font-semibold text-zinc-900">Training Constraints</h2>
                       <div className="mt-4 space-y-4">
