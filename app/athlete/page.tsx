@@ -231,8 +231,8 @@ export default function AthletePage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-zinc-50 to-white">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8">
+      <div className="px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl mb-8">
           <h1 className="text-2xl font-bold">{plan.eventName}</h1>
           <p className="mt-1 text-zinc-600">{plan.eventDate}</p>
           <div className="mt-4 flex gap-3">
@@ -245,28 +245,30 @@ export default function AthletePage() {
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="mb-8 border-b border-zinc-200">
-          <div className="flex gap-4">
-            {(["calendar", "journey"] as const).map((tab) => {
-              const tabLabels = {
-                calendar: "Calendar",
-                journey: "Your Journey",
-              };
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === tab
-                      ? "border-zinc-900 text-zinc-900"
-                      : "border-transparent text-zinc-600 hover:text-zinc-900"
-                  }`}
-                >
-                  {tabLabels[tab]}
-                </button>
-              );
-            })}
+        <div className="mx-auto max-w-6xl">
+          {/* Tab Navigation */}
+          <div className="mb-8 border-b border-zinc-200">
+            <div className="flex gap-4">
+              {(["calendar", "journey"] as const).map((tab) => {
+                const tabLabels = {
+                  calendar: "Calendar",
+                  journey: "Your Journey",
+                };
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === tab
+                        ? "border-zinc-900 text-zinc-900"
+                        : "border-transparent text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    {tabLabels[tab]}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -290,9 +292,11 @@ export default function AthletePage() {
 
         {/* Tab 2: Journey */}
         {activeTab === "journey" && (
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-zinc-900 mb-6">Your Journey</h2>
-            <PlanNarrativeView weeks={generatePlanNarrative(plan)} holidays={holidays} trainingCamps={trainingCamps} />
+          <div className="mx-auto max-w-6xl">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-semibold text-zinc-900 mb-6">Your Journey</h2>
+              <PlanNarrativeView weeks={generatePlanNarrative(plan)} holidays={holidays} trainingCamps={trainingCamps} />
+            </div>
           </div>
         )}
       </div>
