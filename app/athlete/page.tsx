@@ -213,7 +213,7 @@ export default function AthletePage() {
     try {
       const supabase = createClient();
       await supabase.from("athlete_plans").update({
-        plan_json: JSON.stringify(updatedPlan),
+        plan_json: updatedPlan,
       }).eq("id", planId);
     } catch (err) {
       console.error("Error moving session:", err);
