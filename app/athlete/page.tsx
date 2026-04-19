@@ -68,7 +68,16 @@ export default function AthletePage() {
         }
 
         const planRecord = planData[0];
-        const planDataObj = planRecord.plan_json as GeneratedPlan;
+        let planDataObj: GeneratedPlan;
+        try {
+          planDataObj = typeof planRecord.plan_json === "string"
+            ? JSON.parse(planRecord.plan_json)
+            : planRecord.plan_json;
+        } catch (e) {
+          setError("Failed to parse plan data");
+          setLoading(false);
+          return;
+        }
 
         if (!planDataObj.eventDate || !planDataObj.eventName || !Array.isArray(planDataObj.weeks)) {
           setError("Plan is missing required fields (eventDate, eventName, or weeks)");
