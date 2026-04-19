@@ -6,12 +6,21 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { GeneratedPlan, PlanSession } from "@/lib/planner/types";
 
+type SessionStretch = {
+  id: string;
+  name: string;
+  holdDurationSeconds: number | null;
+  notes: string;
+  sortOrder: number;
+};
+
 export default function SessionDetailPage() {
   const params = useParams();
   const sessionId = params.sessionId as string;
 
   const [plan, setPlan] = useState<GeneratedPlan | null>(null);
   const [session, setSession] = useState<PlanSession | null>(null);
+  const [stretches, setStretches] = useState<SessionStretch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +71,27 @@ export default function SessionDetailPage() {
         }
 
         setSession(foundSession);
+
+        // Fetch stretches if this session has a mobilitySessionId
+        const mobilitySessionId = (foundSession as any).mobilitySessionId;
+        if (mobilitySessionId) {
+          const { data: stretchData } = await supabase
+            .from("mobility_session_stretches")
+            .select("id, sort_order, hold_duration_seconds, notes, stretches(id, name)")
+            .eq("mobility_session_id", mobilitySessionId)
+            .order("sort_order");
+
+          if (stretchData) {
+            setStretches(stretchData.map((row: any) => ({
+              id: row.id,
+              name: row.stretches?.name ?? "Unknown stretch",
+              holdDurationSeconds: row.hold_duration_seconds ?? null,
+              notes: row.notes ?? "",
+              sortOrder: row.sort_order,
+            })));
+          }
+        }
+
         setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred while loading session details");
@@ -274,6 +304,27 @@ export default function SessionDetailPage() {
                   <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).cooldownMinutes} min</p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {stretches.length > 0 && (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <h2 className="font-semibold text-zinc-900">Stretches</h2>
+            <div className="mt-4 space-y-3">
+              {stretches.map((stretch, idx) => (
+                <div key={stretch.id} className="flex items-start gap-4 border-l-4 border-emerald-300 pl-4 py-1">
+                  <div className="flex-1">
+                    <p className="font-semibold text-zinc-900">{idx + 1}. {stretch.name}</p>
+                    {stretch.holdDurationSeconds && (
+                      <p className="mt-0.5 text-xs text-zinc-500">Hold: {stretch.holdDurationSeconds}s</p>
+                    )}
+                    {stretch.notes && (
+                      <p className="mt-0.5 text-xs text-zinc-500">{stretch.notes}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
