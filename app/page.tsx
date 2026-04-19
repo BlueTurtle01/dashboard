@@ -295,7 +295,7 @@ export default function Home() {
               </Link>
 
               <Link
-                href={buildAthleteHref("/athlete", selectedAthleteId)}
+                href={buildAthleteHref("/athlete/profile", selectedAthleteId)}
                 className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100"
               >
                 Athlete Profile
