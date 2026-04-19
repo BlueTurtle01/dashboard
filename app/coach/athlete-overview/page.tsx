@@ -549,19 +549,16 @@ export default function CoachAthleteOverviewPage() {
         // Fetch unavailable equipment
         const { data: unavailable, error: unavailError } = await supabase
           .from("athlete_equipment_unavailable")
-          .select("equipment_options(name)")
+          .select("equipment_options(slug)")
           .eq("athlete_profile_id", profile.id);
 
         // Fetch avoid equipment
         const { data: avoid, error: avoidError } = await supabase
           .from("athlete_equipment_avoid")
-          .select("equipment_options(name)")
+          .select("equipment_options(slug)")
           .eq("athlete_profile_id", profile.id);
 
         if (cancelled) return;
-
-        console.log("Unavailable equipment data:", unavailable, "Error:", unavailError);
-        console.log("Avoid equipment data:", avoid, "Error:", avoidError);
 
         if (unavailError) {
           console.error("Error loading unavailable equipment:", unavailError);
@@ -570,24 +567,18 @@ export default function CoachAthleteOverviewPage() {
           console.error("Error loading avoid equipment:", avoidError);
         }
 
-        const mapEquipmentNames = (rows: any[] | null) => {
+        const mapEquipmentSlugs = (rows: any[] | null) => {
           return (rows || []).map((item: any) => {
             if (!item.equipment_options) return null;
             if (Array.isArray(item.equipment_options)) {
-              return item.equipment_options[0]?.name;
+              return item.equipment_options[0]?.slug;
             }
-            return item.equipment_options.name;
+            return item.equipment_options.slug;
           }).filter(Boolean);
         };
 
-        const unavailableNames = mapEquipmentNames(unavailable);
-        const avoidNames = mapEquipmentNames(avoid);
-
-        console.log("Mapped unavailable names:", unavailableNames);
-        console.log("Mapped avoid names:", avoidNames);
-
-        setUnavailableEquipment(unavailableNames);
-        setAvoidEquipment(avoidNames);
+        setUnavailableEquipment(mapEquipmentSlugs(unavailable));
+        setAvoidEquipment(mapEquipmentSlugs(avoid));
       } catch (err) {
         console.error("Error loading equipment constraints:", err);
       }
