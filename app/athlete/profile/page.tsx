@@ -290,14 +290,6 @@ export default function AthleteProfilePage() {
         const existingProfile = await loadAthleteProfile();
 
         // Fetch events
-        const { data: eventsResponse } = await Promise.all([
-          supabase.from("events").select("id, name, event_type, event_date, terrain_type, climate_type, location, race_conditions"),
-          supabase.from("preparation_races").select("id, name, event_date, distance_km, event_type, location, terrain_type, climate_type, elevation_gain_m, race_conditions").order("event_date"),
-          supabase.from("athlete_events").select("id, start_date, end_date, title").eq("athlete_user_id", userId).eq("event_type", "holiday"),
-          supabase.from("athlete_events").select("id, start_date").eq("athlete_user_id", userId).eq("event_type", "medical_clearance"),
-          supabase.from("athlete_race_history").select("id, preparation_race_id, finish_time, notes, preparation_races(id, name, event_date, distance_km, event_type, location, terrain_type, climate_type, elevation_gain_m, race_conditions)").eq("athlete_user_id", userId).order("preparation_races(event_date)", { ascending: false }),
-        ]).then((responses) => responses);
-
         const [eventsData, racesData, holidaysData, medicalData, historyData] = await Promise.all([
           supabase.from("events").select("id, name, event_type, event_date, terrain_type, climate_type, location, race_conditions"),
           supabase.from("preparation_races").select("id, name, event_date, distance_km, event_type, location, terrain_type, climate_type, elevation_gain_m, race_conditions").order("event_date"),
