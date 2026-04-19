@@ -113,39 +113,60 @@ export default async function Navbar() {
                 <Link href="/admin/coach-performance" className="site-navbar__dropdown-link">
                   Coach Performance
                 </Link>
-                <Link href="/admin/exercises" className="site-navbar__dropdown-link">
-                  View Exercises
-                </Link>
-                <Link href="/admin/exercises/create" className="site-navbar__dropdown-link">
-                  Create Exercise
-                </Link>
-                <Link href="/admin/stretches" className="site-navbar__dropdown-link">
-                  View Stretches
-                </Link>
-                <Link href="/admin/stretches/create" className="site-navbar__dropdown-link">
-                  Create Stretch
-                </Link>
-                <Link href="/admin/functional/types/create" className="site-navbar__dropdown-link">
-                  Functional Session Types
-                </Link>
-                <Link href="/intake" className="site-navbar__dropdown-link">
-                  Athlete Intake
-                </Link>
-                                <Link href="/admin/session-template-field-config/" className="site-navbar__dropdown-link">
-                  Session Template Tag Config
-                </Link>
-                <Link href="/coach/gym-session-templates" className="site-navbar__dropdown-link">
-                  View Gym Templates
-                </Link>
-                <Link href="/coach/gym-session-templates/create" className="site-navbar__dropdown-link">
-                  Create Gym Template
-                </Link>
-                <Link href="/coach/functional-session-templates" className="site-navbar__dropdown-link">
-                  View Functional Templates
-                </Link>
-                <Link href="/coach/functional-session-templates/create" className="site-navbar__dropdown-link">
-                  Create Functional Template
-                </Link>
+
+                {/* Library Management */}
+                <div style={{ borderTop: "1px solid #e5e5e5", marginTop: "8px", paddingTop: "8px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#666", padding: "4px 12px", textTransform: "uppercase" }}>
+                    Library
+                  </div>
+                  <Link href="/admin/exercises" className="site-navbar__dropdown-link">
+                    Exercises
+                  </Link>
+                  <Link href="/admin/exercises/create" className="site-navbar__dropdown-link">
+                    Create Exercise
+                  </Link>
+                  <Link href="/admin/stretches" className="site-navbar__dropdown-link">
+                    Stretches
+                  </Link>
+                  <Link href="/admin/stretches/create" className="site-navbar__dropdown-link">
+                    Create Stretch
+                  </Link>
+                </div>
+
+                {/* Templates */}
+                <div style={{ borderTop: "1px solid #e5e5e5", marginTop: "8px", paddingTop: "8px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#666", padding: "4px 12px", textTransform: "uppercase" }}>
+                    Templates
+                  </div>
+                  <Link href="/coach/gym-session-templates" className="site-navbar__dropdown-link">
+                    Gym Sessions
+                  </Link>
+                  <Link href="/coach/gym-session-templates/create" className="site-navbar__dropdown-link">
+                    Create Gym Session
+                  </Link>
+                  <Link href="/coach/functional-session-templates" className="site-navbar__dropdown-link">
+                    Functional Sessions
+                  </Link>
+                  <Link href="/coach/functional-session-templates/create" className="site-navbar__dropdown-link">
+                    Create Functional Session
+                  </Link>
+                  <Link href="/admin/functional/types/create" className="site-navbar__dropdown-link">
+                    Functional Types
+                  </Link>
+                </div>
+
+                {/* Configuration */}
+                <div style={{ borderTop: "1px solid #e5e5e5", marginTop: "8px", paddingTop: "8px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#666", padding: "4px 12px", textTransform: "uppercase" }}>
+                    Configuration
+                  </div>
+                  <Link href="/admin/session-template-field-config/" className="site-navbar__dropdown-link">
+                    Session Template Tags
+                  </Link>
+                  <Link href="/intake" className="site-navbar__dropdown-link">
+                    Athlete Intake
+                  </Link>
+                </div>
               </div>
             </div>
           )}

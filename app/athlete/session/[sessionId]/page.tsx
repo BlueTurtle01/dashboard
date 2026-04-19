@@ -193,6 +193,84 @@ export default function SessionDetailPage() {
           </div>
         )}
 
+        {/* Session Attributes */}
+        {((session as any).strides ||
+          (session as any).terrain ||
+          (session as any).elevationGainMeters ||
+          (session as any).packWeightKg ||
+          (session as any).warmupMinutes ||
+          (session as any).cooldownMinutes ||
+          (session as any).intervalReps ||
+          (session as any).intervalDuration ||
+          (session as any).activity ||
+          (session as any).subtype) && (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <h2 className="font-semibold text-zinc-900">Session Details</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {(session as any).activity && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Activity</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).activity}</p>
+                </div>
+              )}
+              {(session as any).subtype && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Subtype</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).subtype}</p>
+                </div>
+              )}
+              {(session as any).strides && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Strides</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).strides}</p>
+                </div>
+              )}
+              {(session as any).terrain && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Terrain</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).terrain}</p>
+                </div>
+              )}
+              {(session as any).elevationGainMeters && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Elevation Gain</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).elevationGainMeters}m</p>
+                </div>
+              )}
+              {(session as any).packWeightKg && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Pack Weight</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).packWeightKg}kg</p>
+                </div>
+              )}
+              {(session as any).warmupMinutes && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Warmup</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).warmupMinutes} min</p>
+                </div>
+              )}
+              {(session as any).cooldownMinutes && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Cooldown</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).cooldownMinutes} min</p>
+                </div>
+              )}
+              {(session as any).intervalReps && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Interval Reps</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).intervalReps}</p>
+                </div>
+              )}
+              {(session as any).intervalDuration && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Interval Duration</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).intervalDuration}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {session.exercises && session.exercises.length > 0 && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="font-semibold text-zinc-900">Exercises</h2>

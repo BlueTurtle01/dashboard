@@ -2859,6 +2859,36 @@ export default function PlanEditorPage() {
                                     </ul>
                                   </div>
                                 ) : null}
+
+                                {/* Session Attributes */}
+                                {!isGymSession && (
+                                  <div className="pt-2 space-y-1 text-sm text-zinc-700">
+                                    {(session as any).strides && (
+                                      <div><strong>Strides:</strong> {(session as any).strides}</div>
+                                    )}
+                                    {(session as any).terrain && (
+                                      <div><strong>Terrain:</strong> {(session as any).terrain}</div>
+                                    )}
+                                    {(session as any).elevationGainMeters && (
+                                      <div><strong>Elevation Gain:</strong> {(session as any).elevationGainMeters}m</div>
+                                    )}
+                                    {(session as any).packWeightKg && (
+                                      <div><strong>Pack Weight:</strong> {(session as any).packWeightKg}kg</div>
+                                    )}
+                                    {(session as any).warmupMinutes && (
+                                      <div><strong>Warmup:</strong> {(session as any).warmupMinutes} min</div>
+                                    )}
+                                    {(session as any).cooldownMinutes && (
+                                      <div><strong>Cooldown:</strong> {(session as any).cooldownMinutes} min</div>
+                                    )}
+                                    {(session as any).intervalReps && (
+                                      <div><strong>Intervals:</strong> {(session as any).intervalReps} reps</div>
+                                    )}
+                                    {(session as any).intervalDuration && (
+                                      <div><strong>Interval Duration:</strong> {(session as any).intervalDuration}</div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
