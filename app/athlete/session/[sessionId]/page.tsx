@@ -202,6 +202,7 @@ export default function SessionDetailPage() {
           (session as any).cooldownMinutes ||
           (session as any).intervalReps ||
           (session as any).intervalDuration ||
+          (session as any).intervalRestSeconds ||
           (session as any).activity ||
           (session as any).subtype) && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -210,25 +211,19 @@ export default function SessionDetailPage() {
               {(session as any).activity && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Activity</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).activity}</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900 capitalize">{(session as any).activity}</p>
                 </div>
               )}
               {(session as any).subtype && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Subtype</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).subtype}</p>
-                </div>
-              )}
-              {(session as any).strides && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Strides</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).strides}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Session Type</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900 capitalize">{(session as any).subtype}</p>
                 </div>
               )}
               {(session as any).terrain && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Terrain</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).terrain}</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900 capitalize">{(session as any).terrain}</p>
                 </div>
               )}
               {(session as any).elevationGainMeters && (
@@ -243,28 +238,40 @@ export default function SessionDetailPage() {
                   <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).packWeightKg}kg</p>
                 </div>
               )}
-              {(session as any).warmupMinutes && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Warmup</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).warmupMinutes} min</p>
-                </div>
-              )}
-              {(session as any).cooldownMinutes && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Cooldown</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).cooldownMinutes} min</p>
-                </div>
-              )}
               {(session as any).intervalReps && (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Interval Reps</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).intervalReps}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Intervals</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).intervalReps} sets</p>
                 </div>
               )}
               {(session as any).intervalDuration && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Interval Duration</p>
                   <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).intervalDuration}</p>
+                </div>
+              )}
+              {(session as any).intervalRestSeconds && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Rest Between Sets</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).intervalRestSeconds}s</p>
+                </div>
+              )}
+              {(session as any).strides && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Strides</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).strides}</p>
+                </div>
+              )}
+              {(session as any).warmupMinutes && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Warm-up</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).warmupMinutes} min</p>
+                </div>
+              )}
+              {(session as any).cooldownMinutes && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Cool-down</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).cooldownMinutes} min</p>
                 </div>
               )}
             </div>

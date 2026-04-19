@@ -125,6 +125,7 @@ export interface PlanSession {
   cooldownMinutes?: number;
   intervalReps?: number;
   intervalDuration?: string;
+  intervalRestSeconds?: number;
   isInsertedAlternative?: boolean;
 }
 

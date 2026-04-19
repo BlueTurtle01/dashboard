@@ -52,6 +52,7 @@ export interface AssembledPlanSession {
   cooldownMinutes?: number;
   intervalReps?: number;
   intervalDuration?: string;
+  intervalRestSeconds?: number;
 }
 
 // ─── Day-assignment types and utilities ─────────────────────────────────────
@@ -372,6 +373,7 @@ export async function assembleWeeksFromTemplates(
         distance_km,
         target_intensity,
         is_key_session,
+        session_data,
         session_template_exercises (
           id,
           exercise_id,
@@ -498,16 +500,22 @@ export async function assembleWeeksFromTemplates(
 
         const subtype = (st?.subtype as string | null) ?? "";
 
-        // Extract extended fields from slot data (if available - may be from program templates or week templates)
+        // Extract extended fields from slot data, falling back to session_data jsonb
+        const sd = (st?.session_data as Record<string, unknown> | null) ?? {};
         const activity = (slot as any)?.activity ?? (st?.activity as string | null) ?? undefined;
-        const terrain = (slot as any)?.terrain ?? undefined;
-        const elevationGainMeters = (slot as any)?.elevation_gain_meters ?? undefined;
-        const packWeightKg = (slot as any)?.pack_weight_kg ?? undefined;
+        const terrain = (slot as any)?.terrain ?? (sd.terrain as string | undefined) ?? undefined;
+        const elevationGainMeters = (slot as any)?.elevation_gain_meters ?? (sd.elevation as number | undefined) ?? undefined;
+        const packWeightKg = (slot as any)?.pack_weight_kg ?? (sd.pack_weight_kg as number | undefined) ?? undefined;
         const strides = (slot as any)?.strides ?? undefined;
         const warmupMinutes = (slot as any)?.warmup_minutes ?? undefined;
         const cooldownMinutes = (slot as any)?.cooldown_minutes ?? undefined;
-        const intervalReps = (slot as any)?.interval_reps ?? undefined;
-        const intervalDuration = (slot as any)?.interval_duration ?? undefined;
+        const sdIntervalReps = typeof sd.sets === "number" ? sd.sets : undefined;
+        const sdIntervalDuration = typeof sd.set_duration_seconds === "number"
+          ? `${sd.set_duration_seconds}s`
+          : undefined;
+        const intervalReps = (slot as any)?.interval_reps ?? sdIntervalReps;
+        const intervalDuration = (slot as any)?.interval_duration ?? sdIntervalDuration;
+        const intervalRestSeconds = (slot as any)?.rest_seconds ?? (typeof sd.rest_seconds === "number" ? sd.rest_seconds : undefined);
 
         return {
           id: `session-${week.weekNumber}-${index + 1}-wt-${slot.id as string}`,
@@ -541,6 +549,7 @@ export async function assembleWeeksFromTemplates(
           cooldownMinutes,
           intervalReps,
           intervalDuration,
+          intervalRestSeconds,
         };
       });
 
