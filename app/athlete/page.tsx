@@ -180,18 +180,40 @@ export default function AthletePage() {
     };
   }, []);
 
-  async function handleMoveSession(sessionId: string, newDate: string) {
-    if (!planId) return;
+  async function handleMoveSession(sessionId: string, targetWeekId: string, targetDay: string) {
+    if (!planId || !plan) return;
 
+    // Build updated plan: remove session from old position, place in new week+day
+    const updatedPlan = {
+      ...plan,
+      weeks: plan.weeks.map((week) => {
+        const hasSession = week.sessions.some((s) => s.id === sessionId);
+        const isTarget = week.id === targetWeekId;
+
+        if (!hasSession && !isTarget) return week;
+
+        let sessions = week.sessions.filter((s) => s.id !== sessionId);
+
+        if (isTarget) {
+          const movedSession = plan.weeks
+            .flatMap((w) => w.sessions)
+            .find((s) => s.id === sessionId);
+          if (movedSession) {
+            sessions = [...sessions, { ...movedSession, weekId: targetWeekId, dayLabel: targetDay }];
+          }
+        }
+
+        return { ...week, sessions };
+      }),
+    };
+
+    setPlan(updatedPlan);
     setSaving(true);
+
     try {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) return;
-
       await supabase.from("athlete_plans").update({
-        plan_json: JSON.stringify(plan),
+        plan_json: JSON.stringify(updatedPlan),
       }).eq("id", planId);
     } catch (err) {
       console.error("Error moving session:", err);

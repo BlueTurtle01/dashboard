@@ -64,7 +64,7 @@ export default function SessionDetailPage() {
         setSession(foundSession);
         setLoading(false);
       } catch (err) {
-        setError("An error occurred while loading session details");
+        setError(err instanceof Error ? err.message : "An error occurred while loading session details");
         setLoading(false);
       }
     };
