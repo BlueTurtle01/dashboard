@@ -52,48 +52,47 @@ export default function AthletePage() {
         const userId = user.id;
 
         // Load plan data
-        const { data: planData, error: planError } = await supabase
+        const { data, error: queryError } = await supabase
           .from("athlete_plans")
           .select("id, plan_json")
-          .eq("athlete_user_id", userId);
+          .eq("athlete_user_id", userId)
+          .eq("status", "active")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        if (planError) {
-          throw new Error(`Failed to load plan: ${planError.message}`);
-        }
-
-        if (!planData || planData.length === 0) {
-          setError("No plan found. Please create a plan first.");
+        if (queryError) {
+          setError("Failed to load plan");
           setLoading(false);
           return;
         }
 
-        const planRecord = planData[0];
-        let planDataObj: GeneratedPlan;
-        try {
-          planDataObj = typeof planRecord.plan_json === "string"
-            ? JSON.parse(planRecord.plan_json)
-            : planRecord.plan_json;
-        } catch (e) {
-          setError("Failed to parse plan data");
-          setLoading(false);
-          return;
-        }
+        if (data && data.plan_json) {
+          const planData = data.plan_json as GeneratedPlan;
+          const fetchedPlanId = data.id;
 
-        if (!planDataObj.eventDate || !planDataObj.eventName || !Array.isArray(planDataObj.weeks)) {
-          setError("Plan is missing required fields (eventDate, eventName, or weeks)");
-          setLoading(false);
-          return;
+          // Validate the plan has required fields
+          if (!planData.eventDate || !planData.eventName || !Array.isArray(planData.weeks)) {
+            setError("Plan is missing required fields (eventDate, eventName, or weeks)");
+            setPlan(null);
+            setPlanId(null);
+          } else {
+            // Validate eventDate is parseable
+            const testDate = new Date(planData.eventDate);
+            if (isNaN(testDate.getTime())) {
+              setError(`Invalid event date format: ${planData.eventDate}`);
+              setPlan(null);
+              setPlanId(null);
+            } else {
+              setPlan(planData);
+              setPlanId(fetchedPlanId);
+            }
+          }
+        } else {
+          setError(null);
+          setPlan(null);
+          setPlanId(null);
         }
-
-        const testDate = new Date(planDataObj.eventDate);
-        if (isNaN(testDate.getTime())) {
-          setError(`Invalid event date format: ${planDataObj.eventDate}`);
-          setLoading(false);
-          return;
-        }
-
-        setPlanId(planRecord.id);
-        setPlan(planDataObj);
 
         // Fetch holiday events
         const { data: eventsData } = await supabase
