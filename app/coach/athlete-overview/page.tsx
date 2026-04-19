@@ -27,6 +27,8 @@ type AthleteProfile = {
   event_profile: unknown;
   selected_event_id: string | null;
   tags?: string[];
+  equipment_unavailable?: string[];
+  equipment_avoid?: string[];
   event: {
     id: string;
     name: string;
