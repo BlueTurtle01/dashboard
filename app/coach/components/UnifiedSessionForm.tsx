@@ -704,29 +704,7 @@ export function UnifiedSessionForm({
           </select>
         </label>
 
-        <label className="block">
-          <span className="mb-1 block text-sm font-semibold text-zinc-900">
-            Exact Start Time
-          </span>
-          <input
-            type="time"
-            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-            value={form.startTime}
-            onChange={(e) => updateForm("startTime", e.target.value)}
-          />
-        </label>
       </div>
-
-      <label className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-        <input
-          type="checkbox"
-          checked={form.isTimeStrict}
-          onChange={(e) => updateForm("isTimeStrict", e.target.checked)}
-        />
-        <span className="text-sm font-medium text-zinc-900">
-          Exact start time is strict
-        </span>
-      </label>
 
       <label className="block">
         <span className="mb-1 block text-sm font-semibold text-zinc-900">Notes</span>
