@@ -537,33 +537,54 @@ export default function CoachAthleteOverviewPage() {
 
     async function loadEquipmentConstraints() {
       if (!profile?.id) {
+        console.log("No profile ID, clearing equipment");
         setUnavailableEquipment([]);
         setAvoidEquipment([]);
         return;
       }
 
+      console.log("Loading equipment for profile ID:", profile.id);
+
       try {
         // Fetch unavailable equipment
-        const { data: unavailable } = await supabase
+        const { data: unavailable, error: unavailError } = await supabase
           .from("athlete_equipment_unavailable")
           .select("equipment_options(name)")
           .eq("athlete_profile_id", profile.id);
 
         // Fetch avoid equipment
-        const { data: avoid } = await supabase
+        const { data: avoid, error: avoidError } = await supabase
           .from("athlete_equipment_avoid")
           .select("equipment_options(name)")
           .eq("athlete_profile_id", profile.id);
 
         if (cancelled) return;
 
-        const unavailableNames = unavailable?.map((item: any) =>
-          Array.isArray(item.equipment_options) ? item.equipment_options[0]?.name : item.equipment_options?.name
-        ).filter(Boolean) || [];
+        console.log("Unavailable equipment data:", unavailable, "Error:", unavailError);
+        console.log("Avoid equipment data:", avoid, "Error:", avoidError);
 
-        const avoidNames = avoid?.map((item: any) =>
-          Array.isArray(item.equipment_options) ? item.equipment_options[0]?.name : item.equipment_options?.name
-        ).filter(Boolean) || [];
+        if (unavailError) {
+          console.error("Error loading unavailable equipment:", unavailError);
+        }
+        if (avoidError) {
+          console.error("Error loading avoid equipment:", avoidError);
+        }
+
+        const mapEquipmentNames = (rows: any[] | null) => {
+          return (rows || []).map((item: any) => {
+            if (!item.equipment_options) return null;
+            if (Array.isArray(item.equipment_options)) {
+              return item.equipment_options[0]?.name;
+            }
+            return item.equipment_options.name;
+          }).filter(Boolean);
+        };
+
+        const unavailableNames = mapEquipmentNames(unavailable);
+        const avoidNames = mapEquipmentNames(avoid);
+
+        console.log("Mapped unavailable names:", unavailableNames);
+        console.log("Mapped avoid names:", avoidNames);
 
         setUnavailableEquipment(unavailableNames);
         setAvoidEquipment(avoidNames);
