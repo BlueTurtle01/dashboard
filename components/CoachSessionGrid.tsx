@@ -289,6 +289,14 @@ export default function CoachSessionGrid({
           ));
         })()}
 
+        {(() => {
+          const firstWeekStart = weekStarts[0];
+          const daysBeforeMonday = firstWeekStart ? firstWeekStart.monday.getDay() - 1 : 0;
+          return Array.from({ length: Math.max(0, daysBeforeMonday) }).map((_, idx) => (
+            <div key={`empty-${idx}`} />
+          ));
+        })()}
+
         {plan.weeks.map((week) => {
           const summary = calculateWeekLoadSummary(week);
           const weekWarning = getWeekWarning(week);

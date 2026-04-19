@@ -27,7 +27,8 @@
       "mcp__claude_ai_Supabase__list_migrations",
       "WebFetch(domain:lcwvxpdqscuumpgniaqh.supabase.co)",
       "Bash(npx tsc:*)",
-      "Bash(curl -s http://localhost:3001/)"
+      "Bash(curl -s http://localhost:3001/)",
+      "Bash(git checkout *)"
     ]
   }
 }
