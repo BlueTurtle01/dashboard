@@ -123,10 +123,11 @@ export interface PlanSession {
   strides?: string;
   warmupMinutes?: number;
   cooldownMinutes?: number;
-  intervalReps?: number;
+  intervalReps?: string | number;
   intervalDuration?: string;
   intervalRestSeconds?: number;
   isInsertedAlternative?: boolean;
+  mobilitySessionId?: string;
 }
 
 export interface PlanWeek {

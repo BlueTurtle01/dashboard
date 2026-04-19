@@ -1216,6 +1216,7 @@ export default function PlanEditorPage() {
   const [pendingSessionSlot, setPendingSessionSlot] = useState<PendingSessionSlot | null>(null);
   const [pendingSessionType, setPendingSessionType] = useState<"gym" | "functional" | "mobility" | null>(null);
   const [creatingBlankSessionWeekId, setCreatingBlankSessionWeekId] = useState<string | null>(null);
+  const [autoAddPostRunRecovery, setAutoAddPostRunRecovery] = useState(false);
   const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
   const [sessionTemplateResults, setSessionTemplateResults] = useState<SessionTemplateRow[]>([]);
   const [adHocMode, setAdHocMode] = useState<"search" | "create">("search");
@@ -2326,7 +2327,21 @@ export default function PlanEditorPage() {
             ) : null}
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium select-none hover:bg-zinc-50">
+              <span
+                role="switch"
+                aria-checked={autoAddPostRunRecovery}
+                onClick={() => setAutoAddPostRunRecovery((v) => !v)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${autoAddPostRunRecovery ? "bg-emerald-500" : "bg-zinc-300"}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${autoAddPostRunRecovery ? "translate-x-4" : "translate-x-0"}`}
+                />
+              </span>
+              Auto-add post-run recovery
+            </label>
+
             <Link
               href={
                 planRow ? `/coach?athleteId=${encodeURIComponent(planRow.athlete_user_id)}` : "/coach"
@@ -2690,17 +2705,43 @@ export default function PlanEditorPage() {
                                       intervalReps: formData.intervalReps ? parseInt(formData.intervalReps) : undefined,
                                       intervalDuration: formData.intervalDuration,
                                     };
+                                    const isRunSession = ["Easy", "Long", "Recovery", "Steady"].includes(
+                                      mapActivityToType(formData.activity),
+                                    );
+                                    const sessionsToAdd: PlanSession[] = [nextSession];
+                                    if (autoAddPostRunRecovery && isRunSession) {
+                                      sessionsToAdd.push({
+                                        id: `session-${Date.now()}-recovery`,
+                                        weekId: typedWeek.id,
+                                        sortOrder: nextSession.sortOrder + 1,
+                                        dayLabel,
+                                        type: "Recovery",
+                                        name: "Post-Run Recovery",
+                                        description: "Post-run mobility session to restore range of motion and aid recovery.",
+                                        tags: ["mobility", "recovery"],
+                                        duration: "15 min",
+                                        intensity: "low",
+                                        isKeySession: false,
+                                        exercises: [],
+                                        mobilitySessionId: "post_run_recovery",
+                                      });
+                                    }
                                     const nextPlan: GeneratedPlan = {
                                       ...plan,
                                       weeks: plan.weeks.map((week) =>
                                         week.id === typedWeek.id
-                                          ? { ...week, sessions: [...week.sessions, nextSession] }
+                                          ? { ...week, sessions: [...week.sessions, ...sessionsToAdd] }
                                           : week,
                                       ),
                                     };
                                     void updatePlan(nextPlan);
                                     setCreatingBlankSessionWeekId(null);
-                                    showTemporaryStatus("Blank session added.", 1500);
+                                    showTemporaryStatus(
+                                      autoAddPostRunRecovery && isRunSession
+                                        ? "Run session + post-run recovery added."
+                                        : "Blank session added.",
+                                      1500,
+                                    );
                                   }}
                                   onCancel={() => setCreatingBlankSessionWeekId(null)}
                                   submitButtonLabel="Create Session"

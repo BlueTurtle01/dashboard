@@ -50,7 +50,7 @@ export interface AssembledPlanSession {
   strides?: string;
   warmupMinutes?: number;
   cooldownMinutes?: number;
-  intervalReps?: number;
+  intervalReps?: string | number;
   intervalDuration?: string;
   intervalRestSeconds?: number;
 }
@@ -500,22 +500,18 @@ export async function assembleWeeksFromTemplates(
 
         const subtype = (st?.subtype as string | null) ?? "";
 
-        // Extract extended fields from slot data, falling back to session_data jsonb
+        // Extract extended fields — slot columns take priority, then session_data jsonb
         const sd = (st?.session_data as Record<string, unknown> | null) ?? {};
         const activity = (slot as any)?.activity ?? (st?.activity as string | null) ?? undefined;
-        const terrain = (slot as any)?.terrain ?? (sd.terrain as string | undefined) ?? undefined;
-        const elevationGainMeters = (slot as any)?.elevation_gain_meters ?? (sd.elevation as number | undefined) ?? undefined;
-        const packWeightKg = (slot as any)?.pack_weight_kg ?? (sd.pack_weight_kg as number | undefined) ?? undefined;
-        const strides = (slot as any)?.strides ?? undefined;
-        const warmupMinutes = (slot as any)?.warmup_minutes ?? undefined;
-        const cooldownMinutes = (slot as any)?.cooldown_minutes ?? undefined;
-        const sdIntervalReps = typeof sd.sets === "number" ? sd.sets : undefined;
-        const sdIntervalDuration = typeof sd.set_duration_seconds === "number"
-          ? `${sd.set_duration_seconds}s`
-          : undefined;
-        const intervalReps = (slot as any)?.interval_reps ?? sdIntervalReps;
-        const intervalDuration = (slot as any)?.interval_duration ?? sdIntervalDuration;
-        const intervalRestSeconds = (slot as any)?.rest_seconds ?? (typeof sd.rest_seconds === "number" ? sd.rest_seconds : undefined);
+        const terrain = (slot as any)?.terrain ?? (sd.terrain as string | null) ?? undefined;
+        const elevationGainMeters = sd.elevation as number | undefined ?? undefined;
+        const packWeightKg = sd.pack_weight_kg as number | null ?? undefined;
+        const strides = typeof sd.strides === "number" ? String(sd.strides) : (sd.strides as string | null) ?? undefined;
+        const warmupMinutes = sd.warm_up_minutes as number | null ?? undefined;
+        const cooldownMinutes = sd.cool_down_minutes as number | null ?? undefined;
+        const intervalReps = sd.interval_reps as string | null ?? undefined;
+        const intervalDuration = sd.interval_duration as string | null ?? undefined;
+        const intervalRestSeconds = typeof sd.rest_seconds === "number" ? sd.rest_seconds : undefined;
 
         return {
           id: `session-${week.weekNumber}-${index + 1}-wt-${slot.id as string}`,
