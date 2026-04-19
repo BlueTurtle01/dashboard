@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { assembleWeeksFromTemplates, buildConditionKeys, assignDayLabelsToSessions } from "@/lib/planner/assembleWeekFromTemplate";
+import { assignDayLabelsToSessions } from "@/lib/planner/assembleWeekFromTemplate";
 
 type TemplateTag = {
   id: string;
@@ -1428,43 +1428,11 @@ export default function ViewProgramTemplatePage() {
         }))
         .filter((m) => m.weekNumber > 0 && m.weekNumber <= computedWeeks);
 
-      // Identify empty weeks and assemble them from templates
-      const emptyWeeks = weeks
-        .filter((week) => !sessionsByWeek.has(week.id) || sessionsByWeek.get(week.id)!.length === 0)
-        .slice(0, computedWeeks)
-        .map((week) => ({
-          id: week.id,
-          weekNumber: week.week_number,
-          focus: deloadWeekNums.has(week.week_number) ? "Deload" : week.focus,
-        }));
-
-      const conditionKeys = buildConditionKeys(
-        raceConditions,
-        true, // default to gym available until has_access_to_gym column exists
-      );
-
       const athleteAvailability = athleteProfileRow ? {
         preferred_long_session_day: (athleteProfileRow as Record<string, unknown>).preferred_long_session_day as string | null ?? null,
         available_gym_days: (athleteProfileRow as Record<string, unknown>).available_gym_days as string[] | null ?? null,
         available_run_days: (athleteProfileRow as Record<string, unknown>).available_run_days as string[] | null ?? null,
       } : null;
-
-      // Extract unavailable equipment slugs
-      const unavailableEquipment = athleteProfileRow?.athlete_equipment_unavailable
-        ? (athleteProfileRow.athlete_equipment_unavailable as any[])
-            .map((row: any) => row.equipment_options?.slug)
-            .filter((slug: any): slug is string => Boolean(slug))
-        : [];
-
-      const assembledByWeekId = await assembleWeeksFromTemplates(
-        emptyWeeks,
-        conditionKeys,
-        athleteProfile?.enduranceScalar ?? 1,
-        athleteProfile?.intensityScalar ?? 1,
-        supabase,
-        athleteAvailability,
-        unavailableEquipment,
-      );
 
       const planJson = {
         id: buildClientId("plan"),
@@ -1487,20 +1455,16 @@ export default function ViewProgramTemplatePage() {
           .slice(0, computedWeeks)
           .map((week) => {
             const weekSessions = sessionsByWeek.get(week.id) ?? [];
-            const assembledSessions = assembledByWeekId.get(week.id) ?? [];
-            const allSessions = weekSessions.length > 0 ? weekSessions : assembledSessions;
 
             return {
               id: `week-${week.week_number}`,
               weekNumber: week.week_number,
               focus: deloadWeekNums.has(week.week_number) ? "Deload" : (week.focus ?? ""),
               notes: week.notes ?? "",
-              assembledFromTemplates: assembledSessions.length > 0,
+              assembledFromTemplates: false,
               sessions: (() => {
-                if (allSessions.length === 0) return [];
-                // Assembled sessions already have day labels assigned from intake preferences
-                if (assembledSessions.length > 0) return assembledSessions;
-                // Build regular sessions with a temporary _isLong marker for day assignment
+                if (weekSessions.length === 0) return [];
+                // Build sessions with a temporary _isLong marker for day assignment
                 const built = weekSessions.map((session, index) => {
                   const { scalar, mode } = getScalarForSession(session, athleteProfile);
                   const scaledDuration = scaleMinutes(session.duration, scalar);

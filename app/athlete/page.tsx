@@ -257,14 +257,6 @@ export default function AthletePage() {
         <div className="mx-auto max-w-6xl mb-8">
           <h1 className="text-2xl font-bold">{plan.eventName}</h1>
           <p className="mt-1 text-zinc-600">{plan.eventDate}</p>
-          <div className="mt-4 flex gap-3">
-            <Link
-              href="/athlete/profile"
-              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-100"
-            >
-              Go to Profile
-            </Link>
-          </div>
         </div>
 
         <div className="mx-auto max-w-6xl">
