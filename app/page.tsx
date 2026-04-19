@@ -295,10 +295,10 @@ export default function Home() {
               </Link>
 
               <Link
-                href={buildAthleteHref("/intake", selectedAthleteId)}
+                href={buildAthleteHref("/athlete", selectedAthleteId)}
                 className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100"
               >
-                Athlete Intake
+                Athlete Profile
               </Link>
             </div>
           </section>

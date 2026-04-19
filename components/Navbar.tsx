@@ -44,7 +44,7 @@ export default async function Navbar() {
           )}
 
           {isAthlete && (
-            <Link href="/intake" className="site-navbar__link">
+            <Link href="/athlete" className="site-navbar__link">
               Profile
             </Link>
           )}
@@ -163,8 +163,8 @@ export default async function Navbar() {
                   <Link href="/admin/session-template-field-config/" className="site-navbar__dropdown-link">
                     Session Template Tags
                   </Link>
-                  <Link href="/intake" className="site-navbar__dropdown-link">
-                    Athlete Intake
+                  <Link href="/athlete" className="site-navbar__dropdown-link">
+                    Athlete Profile
                   </Link>
                 </div>
               </div>
