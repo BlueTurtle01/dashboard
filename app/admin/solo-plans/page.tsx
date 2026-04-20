@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { findUserByEmail } from "@/lib/actions/findUserByEmail";
 
 type SoloPlanAssignment = {
   id: string;
@@ -164,20 +165,12 @@ export default function AdminSoloPlanPage() {
     setSuccessMessage("");
 
     try {
-      const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers();
-
-      if (usersError) {
-        setErrorMessage("Could not find users.");
-        setAssigningPlan(false);
-        return;
-      }
-
-      const targetUser = usersData.users.find(
-        (u) => u.email?.toLowerCase() === formData.userEmail.toLowerCase()
+      const { user: targetUser, error: userError } = await findUserByEmail(
+        formData.userEmail
       );
 
-      if (!targetUser) {
-        setErrorMessage(`User with email "${formData.userEmail}" not found.`);
+      if (userError || !targetUser) {
+        setErrorMessage(userError || "Could not find user.");
         setAssigningPlan(false);
         return;
       }
