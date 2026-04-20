@@ -9,7 +9,6 @@ interface SessionCompletion {
   session_id: string;
   week_number: number;
   perceived_effort: number | null;
-  actual_duration_minutes: number | null;
   notes: string | null;
   completed_at: string;
 }
@@ -26,7 +25,6 @@ export default function SessionsPage() {
 
   // Form state for selected session
   const [perceivedEffort, setPerceivedEffort] = useState<number | null>(null);
-  const [actualDuration, setActualDuration] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -107,8 +105,8 @@ export default function SessionsPage() {
   }, []);
 
   const handleLogCompletion = async (sessionId: string, alternativeSessionId?: string) => {
-    if (perceivedEffort === null || actualDuration === null) {
-      setError("Please fill in effort and duration");
+    if (perceivedEffort === null) {
+      setError("Please select an effort level");
       return;
     }
 
@@ -166,7 +164,6 @@ export default function SessionsPage() {
             session_id: sessionId,
             week_number: displayedWeek.weekNumber,
             perceived_effort: perceivedEffort,
-            actual_duration_minutes: actualDuration,
             notes: notes || null,
             completed_at: new Date().toISOString(),
           },
@@ -186,7 +183,6 @@ export default function SessionsPage() {
         session_id: sessionId,
         week_number: displayedWeek.weekNumber,
         perceived_effort: perceivedEffort,
-        actual_duration_minutes: actualDuration,
         notes: notes || null,
         completed_at: new Date().toISOString(),
       };
@@ -195,7 +191,6 @@ export default function SessionsPage() {
       // Reset form
       setSelectedSessionId(null);
       setPerceivedEffort(null);
-      setActualDuration(null);
       setNotes("");
       setError(null);
     } catch (err) {
@@ -466,7 +461,7 @@ function SessionCard({
 
           {isCompleted && completion && (
             <div className="mt-2 text-xs text-zinc-500">
-              <p>Effort: {completion.perceived_effort}/10 • Duration: {completion.actual_duration_minutes} min</p>
+              <p>Effort: {completion.perceived_effort}/10</p>
               {completion.notes && <p className="mt-1">Notes: {completion.notes}</p>}
             </div>
           )}
@@ -550,18 +545,6 @@ function SessionCard({
                     </button>
                   ))}
                 </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-zinc-700">Duration (minutes)</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={actualDuration || ""}
-                  onChange={(e) => setActualDuration(e.target.value ? parseInt(e.target.value) : null)}
-                  className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="e.g., 45"
-                />
               </div>
 
               <div>

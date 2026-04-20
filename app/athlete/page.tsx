@@ -157,7 +157,7 @@ export default function AthletePage() {
 
         // Fetch completed session IDs
         const { data: sessionsData } = await supabase
-          .from("athlete_session_completion")
+          .from("session_completions")
           .select("session_id")
           .eq("athlete_user_id", userId);
 
