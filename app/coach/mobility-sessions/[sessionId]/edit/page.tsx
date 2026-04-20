@@ -30,6 +30,20 @@ type StretchRow = {
   movement_tags: string[];
 };
 
+type SessionTemplateOption = {
+  id: string;
+  name: string;
+  type: "functional" | "gym";
+};
+
+type PairedSession = {
+  id: string;
+  sessionTemplateId: string;
+  templateName: string;
+  templateType: "functional" | "gym";
+  autoAddEnabled: boolean;
+};
+
 const DIFFICULTY_LEVELS = ["beginner", "intermediate", "advanced"];
 const FOCUS_AREAS = ["flexibility", "mobility", "recovery", "warm-up", "cool-down", "active recovery"];
 
@@ -51,6 +65,11 @@ export default function EditMobilitySessionPage() {
   const [loadingStretches, setLoadingStretches] = useState(true);
   const [loadingSession, setLoadingSession] = useState(true);
 
+  const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
+  const [allSessionTemplates, setAllSessionTemplates] = useState<SessionTemplateOption[]>([]);
+  const [pairedSessions, setPairedSessions] = useState<PairedSession[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -59,9 +78,10 @@ export default function EditMobilitySessionPage() {
     async function loadData() {
       setLoadingSession(true);
       setLoadingStretches(true);
+      setLoadingTemplates(true);
       setErrorMessage("");
 
-      const [sessionResult, stretchesResult, junctionResult] = await Promise.all([
+      const [sessionResult, stretchesResult, junctionResult, templatesResult, pairsResult] = await Promise.all([
         supabase
           .from("mobility_sessions")
           .select("id, name, description, duration_minutes, difficulty_level, focus_areas")
@@ -76,12 +96,21 @@ export default function EditMobilitySessionPage() {
           .select("id, stretch_id, sort_order, hold_duration_seconds, notes, stretches(id, name)")
           .eq("mobility_session_id", sessionId)
           .order("sort_order"),
+        supabase
+          .from("session_templates")
+          .select("id, name, type")
+          .order("type, name"),
+        supabase
+          .from("mobility_session_pairs")
+          .select("id, session_template_id, auto_add_enabled, session_templates(name, type)")
+          .eq("mobility_session_id", sessionId),
       ]);
 
       if (sessionResult.error) {
         setErrorMessage(`Could not load session: ${sessionResult.error.message}`);
         setLoadingSession(false);
         setLoadingStretches(false);
+        setLoadingTemplates(false);
         return;
       }
 
@@ -118,6 +147,29 @@ export default function EditMobilitySessionPage() {
           })),
         );
       }
+
+      if (templatesResult.data) {
+        setAllSessionTemplates(
+          (templatesResult.data as any[]).map((r) => ({
+            id: r.id,
+            name: r.name,
+            type: r.type,
+          })),
+        );
+      }
+      setLoadingTemplates(false);
+
+      if (pairsResult.data) {
+        setPairedSessions(
+          (pairsResult.data as any[]).map((row) => ({
+            id: row.id,
+            sessionTemplateId: row.session_template_id,
+            templateName: row.session_templates?.name ?? "Unknown",
+            templateType: row.session_templates?.type ?? "functional",
+            autoAddEnabled: row.auto_add_enabled ?? false,
+          })),
+        );
+      }
     }
 
     loadData();
@@ -138,6 +190,17 @@ export default function EditMobilitySessionPage() {
       })
       .slice(0, 10);
   }, [allStretches, stretchSearch, selectedStretches]);
+
+  const filteredSessionTemplates = useMemo(() => {
+    const query = sessionTemplateSearch.trim().toLowerCase();
+    return allSessionTemplates
+      .filter((t) => !pairedSessions.some((p) => p.sessionTemplateId === t.id))
+      .filter((t) => {
+        if (!query) return false;
+        return t.name.toLowerCase().includes(query) || t.type.toLowerCase().includes(query);
+      })
+      .slice(0, 10);
+  }, [allSessionTemplates, sessionTemplateSearch, pairedSessions]);
 
   function addStretch(stretch: StretchOption) {
     setSelectedStretches((prev) => [
@@ -187,6 +250,50 @@ export default function EditMobilitySessionPage() {
   function toggleFocusArea(area: string) {
     setSelectedFocusAreas((prev) =>
       prev.includes(area) ? prev.filter((a) => a !== area) : [...prev, area],
+    );
+  }
+
+  async function addSessionTemplatePair(template: SessionTemplateOption) {
+    const { error } = await supabase
+      .from("mobility_session_pairs")
+      .insert({
+        mobility_session_id: sessionId,
+        session_template_id: template.id,
+        auto_add_enabled: false,
+      });
+
+    if (!error) {
+      setPairedSessions((prev) => [
+        ...prev,
+        {
+          id: `temp-${Date.now()}`,
+          sessionTemplateId: template.id,
+          templateName: template.name,
+          templateType: template.type,
+          autoAddEnabled: false,
+        },
+      ]);
+      setSessionTemplateSearch("");
+    }
+  }
+
+  async function removeSessionTemplatePair(pairId: string) {
+    await supabase
+      .from("mobility_session_pairs")
+      .delete()
+      .eq("id", pairId);
+
+    setPairedSessions((prev) => prev.filter((p) => p.id !== pairId));
+  }
+
+  async function toggleAutoAdd(pairId: string, currentState: boolean) {
+    await supabase
+      .from("mobility_session_pairs")
+      .update({ auto_add_enabled: !currentState })
+      .eq("id", pairId);
+
+    setPairedSessions((prev) =>
+      prev.map((p) => (p.id === pairId ? { ...p, autoAddEnabled: !currentState } : p)),
     );
   }
 
@@ -262,7 +369,7 @@ export default function EditMobilitySessionPage() {
     setTimeout(() => router.push("/coach/mobility-sessions"), 1200);
   }
 
-  if (loadingSession) {
+  if (loadingSession || loadingStretches || loadingTemplates) {
     return (
       <main style={pageStyle}>
         <div style={cardStyle}>
@@ -354,6 +461,65 @@ export default function EditMobilitySessionPage() {
                 )}
               </div>
             ) : null}
+          </div>
+
+          <label htmlFor="session-template-search" style={labelStyle}>Pair with Session Templates (Auto-Add to Plans)</label>
+          <div style={pickerWrapStyle}>
+            <input
+              id="session-template-search"
+              value={sessionTemplateSearch}
+              onChange={(e) => setSessionTemplateSearch(e.target.value)}
+              placeholder="Search functional or gym sessions…"
+              style={inputStyle}
+            />
+            {sessionTemplateSearch.trim() ? (
+              <div style={dropdownStyle}>
+                {loadingTemplates ? (
+                  <div style={dropdownMessageStyle}>Loading session templates…</div>
+                ) : filteredSessionTemplates.length > 0 ? (
+                  filteredSessionTemplates.map((template) => (
+                    <button key={template.id} type="button" onClick={() => addSessionTemplatePair(template)} style={dropdownItemStyle}>
+                      <div style={{ fontWeight: 600 }}>{template.name}</div>
+                      <div style={dropdownMetaStyle}>{template.type}</div>
+                    </button>
+                  ))
+                ) : (
+                  <div style={dropdownMessageStyle}>No matching templates found.</div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div style={selectedSectionStyle}>
+            <div style={selectedHeaderStyle}>
+              <h3 style={selectedTitleStyle}>Paired Sessions ({pairedSessions.length})</h3>
+            </div>
+            {pairedSessions.length === 0 ? (
+              <p style={helperStyle}>No sessions paired yet. When coaches add one of these templates to a plan, this mobility session can be automatically added as recovery.</p>
+            ) : (
+              <div style={stretchListContainerStyle}>
+                {pairedSessions.map((pair) => (
+                  <div key={pair.id} style={stretchItemStyle}>
+                    <div style={stretchItemHeaderStyle}>
+                      <span style={stretchNameInListStyle}>{pair.templateName}</span>
+                      <div style={{ fontSize: "12px", color: "#6b7280", marginRight: "auto", marginLeft: "8px" }}>({pair.templateType})</div>
+                      <div style={stretchItemButtonsStyle}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", marginRight: "8px", fontSize: "13px", cursor: "pointer", color: "#374151" }}>
+                          <input
+                            type="checkbox"
+                            checked={pair.autoAddEnabled}
+                            onChange={() => toggleAutoAdd(pair.id, pair.autoAddEnabled)}
+                            style={{ cursor: "pointer" }}
+                          />
+                          Auto-add
+                        </label>
+                        <button type="button" onClick={() => removeSessionTemplatePair(pair.id)} style={removeButtonStyle}>✕</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div style={selectedSectionStyle}>
