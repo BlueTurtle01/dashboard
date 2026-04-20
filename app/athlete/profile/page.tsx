@@ -276,6 +276,7 @@ export default function IntakePage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSoloPlanHolder, setIsSoloPlanHolder] = useState(false);
   const [activeTab, setActiveTab] = useState<"event" | "training" | "preferences" | "constraints" | "schedule" | "races" | "history" | "health">("event");
 
   const [equipmentOptions, setEquipmentOptions] = useState<string[]>([]);
@@ -300,6 +301,17 @@ export default function IntakePage() {
       try {
         const supabaseAuth = await supabase.auth.getUser();
         const currentUserId = supabaseAuth.data?.user?.id;
+
+        // Check if user is solo_plan_holder
+        if (currentUserId) {
+          const { data: roleData } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", currentUserId)
+            .eq("role", "solo_plan_holder")
+            .maybeSingle();
+          setIsSoloPlanHolder(!!roleData);
+        }
 
         const [
           existingProfile,
@@ -1075,9 +1087,10 @@ export default function IntakePage() {
           <h2 className="text-xl font-semibold">Event</h2>
 
           <select
-            className="mt-4 w-full rounded-xl border border-zinc-300 px-4 py-3"
+            className={`mt-4 w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
             value={profile.selectedEventId}
             onChange={(e) => handleEventChange(e.target.value)}
+            disabled={isSoloPlanHolder}
           >
             <option value="">Select event</option>
             {eventOptions.map((event) => (
@@ -1121,9 +1134,10 @@ export default function IntakePage() {
               Event Goal
             </label>
             <select
-              className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+              className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
               value={profile.raceGoal ?? defaultProfile.raceGoal}
               onChange={(e) => updateRaceGoal(e.target.value)}
+              disabled={isSoloPlanHolder}
             >
               {raceGoalOptions.map((goal) => (
                 <option key={goal.value} value={goal.value}>
@@ -1131,6 +1145,9 @@ export default function IntakePage() {
                 </option>
               ))}
             </select>
+            {isSoloPlanHolder && (
+              <SoloPlanDisabledField disabled={true} tooltip="💡 Choose your goal so a coach can tailor sessions and intensity to your target outcome." />
+            )}
           </div>
         </section>
         )}
@@ -1147,9 +1164,10 @@ export default function IntakePage() {
                 Baseline Fitness
               </span>
               <select
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
                 value={profile.baselineFitness ?? defaultProfile.baselineFitness}
                 onChange={(e) => updateBaselineFitness(e.target.value)}
+                disabled={isSoloPlanHolder}
               >
                 {baselineFitnessOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -1167,11 +1185,12 @@ export default function IntakePage() {
                 type="number"
                 min="0"
                 max="14"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
                 value={profile.currentTrainingDaysPerWeek ?? 0}
                 onChange={(e) =>
                   updateTrainingMetric("currentTrainingDaysPerWeek", e.target.value)
                 }
+                disabled={isSoloPlanHolder}
               />
             </label>
 
@@ -1183,11 +1202,12 @@ export default function IntakePage() {
                 type="number"
                 min="0"
                 max="14"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
                 value={profile.availableTrainingDaysPerWeek ?? 0}
                 onChange={(e) =>
                   updateTrainingMetric("availableTrainingDaysPerWeek", e.target.value)
                 }
+                disabled={isSoloPlanHolder}
               />
             </label>
 
@@ -1199,11 +1219,12 @@ export default function IntakePage() {
                 type="number"
                 min="0"
                 step="0.5"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
                 value={profile.weeklyTrainingHours ?? 0}
                 onChange={(e) =>
                   updateTrainingMetric("weeklyTrainingHours", e.target.value)
                 }
+                disabled={isSoloPlanHolder}
               />
             </label>
 
@@ -2213,7 +2234,25 @@ export default function IntakePage() {
             Continue to Plan
           </Link>
         </div>
+
+        {isSoloPlanHolder && (
+          <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm text-amber-900">
+              <strong>📋 Unlock personalization:</strong> This plan is currently generic. Completing your profile details above would let a coach personalize it with your specific fitness level, equipment access, race history, and training preferences.
+            </p>
+          </div>
+        )}
       </div>
     </main>
   );
+}
+
+interface SoloPlanFieldProps {
+  disabled: boolean;
+  tooltip: string;
+}
+
+function SoloPlanDisabledField({ disabled, tooltip }: SoloPlanFieldProps) {
+  if (!disabled) return null;
+  return <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.5rem" }}>{tooltip}</p>;
 }
