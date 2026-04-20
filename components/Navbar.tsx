@@ -108,20 +108,23 @@ export default async function Navbar() {
 
 
           {isAdmin && (
-            <div className="site-navbar__dropdown">
-              <button className="site-navbar__dropdown-trigger" type="button">
-                Admin
-              </button>
-              <div className="site-navbar__dropdown-menu">
-                <Link href="/admin/coach-performance" className="site-navbar__dropdown-link">
-                  Coach Performance
-                </Link>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <div className="site-navbar__dropdown">
+                <button className="site-navbar__dropdown-trigger" type="button">
+                  Admin
+                </button>
+                <div className="site-navbar__dropdown-menu">
+                  <Link href="/admin/coach-performance" className="site-navbar__dropdown-link">
+                    Coach Performance
+                  </Link>
+                </div>
+              </div>
 
-                {/* Library Management */}
-                <div style={{ borderTop: "1px solid #e5e5e5", marginTop: "8px", paddingTop: "8px" }}>
-                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#666", padding: "4px 12px", textTransform: "uppercase" }}>
-                    Library
-                  </div>
+              <div className="site-navbar__dropdown">
+                <button className="site-navbar__dropdown-trigger" type="button">
+                  Library
+                </button>
+                <div className="site-navbar__dropdown-menu">
                   <Link href="/admin/exercises" className="site-navbar__dropdown-link">
                     Exercises
                   </Link>
@@ -135,12 +138,13 @@ export default async function Navbar() {
                     Create Stretch
                   </Link>
                 </div>
+              </div>
 
-                {/* Templates */}
-                <div style={{ borderTop: "1px solid #e5e5e5", marginTop: "8px", paddingTop: "8px" }}>
-                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#666", padding: "4px 12px", textTransform: "uppercase" }}>
-                    Templates
-                  </div>
+              <div className="site-navbar__dropdown">
+                <button className="site-navbar__dropdown-trigger" type="button">
+                  Templates
+                </button>
+                <div className="site-navbar__dropdown-menu">
                   <Link href="/coach/gym-session-templates" className="site-navbar__dropdown-link">
                     Gym Sessions
                   </Link>
@@ -157,12 +161,13 @@ export default async function Navbar() {
                     Functional Types
                   </Link>
                 </div>
+              </div>
 
-                {/* Configuration */}
-                <div style={{ borderTop: "1px solid #e5e5e5", marginTop: "8px", paddingTop: "8px" }}>
-                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#666", padding: "4px 12px", textTransform: "uppercase" }}>
-                    Configuration
-                  </div>
+              <div className="site-navbar__dropdown">
+                <button className="site-navbar__dropdown-trigger" type="button">
+                  Config
+                </button>
+                <div className="site-navbar__dropdown-menu">
                   <Link href="/admin/session-template-field-config/" className="site-navbar__dropdown-link">
                     Session Template Tags
                   </Link>
