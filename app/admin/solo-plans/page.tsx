@@ -17,15 +17,6 @@ type SoloPlanAssignment = {
 type ProgramTemplate = {
   id: string;
   name: string;
-  slug: string;
-  discipline: string;
-  plan_length_weeks: number;
-  description: string | null;
-};
-
-type ProgramTemplate = {
-  id: string;
-  name: string;
   discipline: string;
   plan_length_weeks: number;
   description: string | null;
