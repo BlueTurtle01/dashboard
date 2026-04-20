@@ -175,6 +175,28 @@ export default function AdminSoloPlanPage() {
         return;
       }
 
+      // Ensure athlete profile exists
+      const { data: existingProfile } = await supabase
+        .from("athlete_profiles")
+        .select("id")
+        .eq("user_id", targetUser.id)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        const { error: profileError } = await supabase
+          .from("athlete_profiles")
+          .insert({
+            user_id: targetUser.id,
+            email: targetUser.email,
+          });
+
+        if (profileError) {
+          setErrorMessage(`Could not create athlete profile: ${profileError.message}`);
+          setAssigningPlan(false);
+          return;
+        }
+      }
+
       const planJson = generateBasicPlan(selectedTemplate.plan_length_weeks, 1);
 
       const { data: planData, error: planError } = await supabase
