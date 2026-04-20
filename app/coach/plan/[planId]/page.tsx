@@ -1207,6 +1207,10 @@ export default function PlanEditorPage() {
 
   useEffect(() => {
     setIsHydrated(true);
+    const saved = localStorage.getItem("autoAddPostRunRecovery");
+    if (saved === "true") {
+      setAutoAddPostRunRecovery(true);
+    }
   }, []);
 
   const [planRow, setPlanRow] = useState<AthletePlanRow | null>(null);
@@ -1230,6 +1234,8 @@ export default function PlanEditorPage() {
   const [athleteEvents, setAthleteEvents] = useState<Array<any>>([]);
   const [prepRaces, setPrepRaces] = useState<Array<{ date: string; race_name: string }>>([]);
   const [equipmentConflictAlternatives, setEquipmentConflictAlternatives] = useState<Record<string, any[]>>({});
+  const [pairedMobilitySessions, setPairedMobilitySessions] = useState<Array<any>>([]);
+  const [allMobilitySessions, setAllMobilitySessions] = useState<Array<any>>([]);
 
   function toggleWeekExpanded(weekId: string) {
     const newExpanded = new Set(expandedWeeks);
@@ -1453,6 +1459,35 @@ export default function PlanEditorPage() {
 
     void loadAthleteContext();
   }, [planRow]);
+
+  useEffect(() => {
+    async function loadMobilitySessions() {
+      const { data, error } = await supabase
+        .from("mobility_sessions")
+        .select("id, name, description, duration_minutes")
+        .order("name");
+
+      if (!error && data) {
+        setAllMobilitySessions(data);
+      }
+    }
+
+    void loadMobilitySessions();
+  }, []);
+
+  useEffect(() => {
+    async function loadPairedMobilitySessions() {
+      const { data, error } = await supabase
+        .from("mobility_session_pairs")
+        .select("id, session_template_id, auto_add_enabled, mobility_sessions(id, name, description, duration_minutes)");
+
+      if (!error && data) {
+        setPairedMobilitySessions(data);
+      }
+    }
+
+    void loadPairedMobilitySessions();
+  }, []);
 
   useEffect(() => {
     async function loadTrainingCampsAndEvents() {
@@ -2332,7 +2367,11 @@ export default function PlanEditorPage() {
               <span
                 role="switch"
                 aria-checked={autoAddPostRunRecovery}
-                onClick={() => setAutoAddPostRunRecovery((v) => !v)}
+                onClick={() => {
+                  const newValue = !autoAddPostRunRecovery;
+                  setAutoAddPostRunRecovery(newValue);
+                  localStorage.setItem("autoAddPostRunRecovery", newValue ? "true" : "false");
+                }}
                 className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${autoAddPostRunRecovery ? "bg-emerald-500" : "bg-zinc-300"}`}
               >
                 <span
@@ -2708,6 +2747,7 @@ export default function PlanEditorPage() {
                                     const isRunSession = ["Easy", "Long", "Recovery", "Steady"].includes(
                                       mapActivityToType(formData.activity),
                                     );
+                                    const isGymSession = mapActivityToType(formData.activity) === "Gym";
                                     const sessionsToAdd: PlanSession[] = [nextSession];
                                     if (autoAddPostRunRecovery && isRunSession) {
                                       sessionsToAdd.push({
@@ -2725,6 +2765,28 @@ export default function PlanEditorPage() {
                                         exercises: [],
                                         mobilitySessionId: "post_run_recovery",
                                       });
+                                    }
+                                    if (formData.selectedMobilitySessionId) {
+                                      const mobilitySession = allMobilitySessions.find(
+                                        (m) => m.id === formData.selectedMobilitySessionId
+                                      );
+                                      if (mobilitySession) {
+                                        sessionsToAdd.push({
+                                          id: `session-${Date.now()}-mobility`,
+                                          weekId: typedWeek.id,
+                                          sortOrder: nextSession.sortOrder + 1,
+                                          dayLabel,
+                                          type: "Recovery",
+                                          name: mobilitySession.name,
+                                          description: mobilitySession.description || AUTO_MOBILITY_DESCRIPTION,
+                                          tags: ["mobility", "recovery"],
+                                          duration: mobilitySession.duration_minutes ? `${mobilitySession.duration_minutes} min` : "15 min",
+                                          intensity: "low",
+                                          isKeySession: false,
+                                          exercises: [],
+                                          mobilitySessionId: mobilitySession.id,
+                                        });
+                                      }
                                     }
                                     const nextPlan: GeneratedPlan = {
                                       ...plan,

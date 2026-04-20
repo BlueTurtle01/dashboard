@@ -24,6 +24,8 @@ export type UnifiedSessionFormData = {
   restSeconds: string;
   notes: string;
   tags: string[];
+  sourceSessionTemplateId?: string;
+  selectedMobilitySessionId?: string;
 };
 
 type ActivityOption = {
@@ -171,12 +173,14 @@ export function UnifiedSessionForm({
   const [fieldConfigMap, setFieldConfigMap] = useState<Record<string, FieldVisibility>>({});
   const [intensityOptions, setIntensityOptions] = useState<IntensityOption[]>([]);
   const [loadingOptionData, setLoadingOptionData] = useState(false);
+  const [allMobilitySessions, setAllMobilitySessions] = useState<Array<{ id: string; name: string; description: string; duration_minutes: number | null }>>([]);
+  const [mobilitySearchQuery, setMobilitySearchQuery] = useState("");
 
   async function loadActivityAndSubtypeOptions() {
     setLoadingOptionData(true);
 
     const supabase = createClient();
-    const [activitiesResult, subtypesResult, linksResult, fieldConfigResult, intensitiesResult] = await Promise.all([
+    const [activitiesResult, subtypesResult, linksResult, fieldConfigResult, intensitiesResult, mobilitySessions] = await Promise.all([
       supabase
         .from("session_activities")
         .select("id, slug, label, sort_order, is_active")
@@ -203,6 +207,10 @@ export function UnifiedSessionForm({
         .select("id, label, slug")
         .eq("is_active", true)
         .order("sort_order", { ascending: true }),
+      supabase
+        .from("mobility_sessions")
+        .select("id, name, description, duration_minutes")
+        .order("name"),
     ]);
 
     if (!activitiesResult.error && activitiesResult.data) {
@@ -288,6 +296,10 @@ export function UnifiedSessionForm({
 
     if (!intensitiesResult.error && intensitiesResult.data) {
       setIntensityOptions(intensitiesResult.data as IntensityOption[]);
+    }
+
+    if (!mobilitySessions.error && mobilitySessions.data) {
+      setAllMobilitySessions(mobilitySessions.data);
     }
 
     setLoadingOptionData(false);
@@ -711,6 +723,54 @@ export function UnifiedSessionForm({
           placeholder="Extra guidance for the coach or athlete"
         />
       </label>
+
+      <div>
+        <span className="mb-1 block text-sm font-semibold text-zinc-900">Add Paired Mobility Session (Optional)</span>
+        <div className="relative">
+          <input
+            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+            value={mobilitySearchQuery}
+            onChange={(e) => setMobilitySearchQuery(e.target.value)}
+            placeholder="Search mobility sessions…"
+          />
+          {mobilitySearchQuery.trim() && allMobilitySessions.length > 0 ? (
+            <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-xl border border-zinc-300 bg-white shadow-lg">
+              {allMobilitySessions
+                .filter((m) => m.name.toLowerCase().includes(mobilitySearchQuery.toLowerCase()))
+                .slice(0, 8)
+                .map((mobility) => (
+                  <button
+                    key={mobility.id}
+                    type="button"
+                    onClick={() => {
+                      updateForm("selectedMobilitySessionId", mobility.id);
+                      setMobilitySearchQuery("");
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-zinc-100 border-b last:border-b-0"
+                  >
+                    <div className="font-medium text-zinc-900">{mobility.name}</div>
+                    {mobility.duration_minutes && <div className="text-xs text-zinc-500">{mobility.duration_minutes} min</div>}
+                  </button>
+                ))}
+            </div>
+          ) : null}
+        </div>
+        {form.selectedMobilitySessionId && (
+          <div className="mt-2 flex items-center justify-between rounded-lg bg-emerald-50 p-3 border border-emerald-200">
+            <span className="text-sm font-medium text-emerald-900">
+              {allMobilitySessions.find((m) => m.id === form.selectedMobilitySessionId)?.name || "Unknown"}
+            </span>
+            <button
+              type="button"
+              onClick={() => updateForm("selectedMobilitySessionId", undefined)}
+              className="text-emerald-600 hover:text-emerald-700"
+              aria-label="Remove mobility session"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+      </div>
 
       <div>
         <span className="mb-1 block text-sm font-semibold text-zinc-900">Tags</span>

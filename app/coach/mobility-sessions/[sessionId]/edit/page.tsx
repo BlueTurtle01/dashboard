@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 type StretchOption = {
   id: string;
   name: string;
+  description: string;
   primaryMuscles: string[];
   secondaryMuscles: string[];
   movementTags: string[];
@@ -25,6 +26,7 @@ type SelectedStretch = {
 type StretchRow = {
   id: string;
   name: string;
+  description: string;
   primary_muscles: string[];
   secondary_muscles: string[];
   movement_tags: string[];
@@ -89,7 +91,7 @@ export default function EditMobilitySessionPage() {
           .single(),
         supabase
           .from("stretches")
-          .select("id, name, primary_muscles, secondary_muscles, movement_tags")
+          .select("id, name, description, primary_muscles, secondary_muscles, movement_tags")
           .order("name"),
         supabase
           .from("mobility_session_stretches")
@@ -127,6 +129,7 @@ export default function EditMobilitySessionPage() {
           (stretchesResult.data as StretchRow[]).map((r) => ({
             id: r.id,
             name: r.name,
+            description: r.description ?? "",
             primaryMuscles: r.primary_muscles ?? [],
             secondaryMuscles: r.secondary_muscles ?? [],
             movementTags: r.movement_tags ?? [],
@@ -453,6 +456,7 @@ export default function EditMobilitySessionPage() {
                   filteredStretches.map((stretch) => (
                     <button key={stretch.id} type="button" onClick={() => addStretch(stretch)} style={dropdownItemStyle}>
                       <div style={{ fontWeight: 600 }}>{stretch.name}</div>
+                      {stretch.description && <div style={dropdownMetaStyle}>{stretch.description}</div>}
                       <div style={dropdownMetaStyle}>{stretch.primaryMuscles.join(", ")}</div>
                     </button>
                   ))

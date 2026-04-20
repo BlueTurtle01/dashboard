@@ -9,6 +9,7 @@ import { GeneratedPlan, PlanSession } from "@/lib/planner/types";
 type SessionStretch = {
   id: string;
   name: string;
+  description: string;
   holdDurationSeconds: number | null;
   notes: string;
   sortOrder: number;
@@ -77,7 +78,7 @@ export default function SessionDetailPage() {
         if (mobilitySessionId) {
           const { data: stretchData } = await supabase
             .from("mobility_session_stretches")
-            .select("id, sort_order, hold_duration_seconds, notes, stretches(id, name)")
+            .select("id, sort_order, hold_duration_seconds, notes, stretches(id, name, description)")
             .eq("mobility_session_id", mobilitySessionId)
             .order("sort_order");
 
@@ -85,6 +86,7 @@ export default function SessionDetailPage() {
             setStretches(stretchData.map((row: any) => ({
               id: row.id,
               name: row.stretches?.name ?? "Unknown stretch",
+              description: row.stretches?.description ?? "",
               holdDurationSeconds: row.hold_duration_seconds ?? null,
               notes: row.notes ?? "",
               sortOrder: row.sort_order,
@@ -316,6 +318,9 @@ export default function SessionDetailPage() {
                 <div key={stretch.id} className="flex items-start gap-4 border-l-4 border-emerald-300 pl-4 py-1">
                   <div className="flex-1">
                     <p className="font-semibold text-zinc-900">{idx + 1}. {stretch.name}</p>
+                    {stretch.description && (
+                      <p className="mt-1 text-sm text-zinc-600">{stretch.description}</p>
+                    )}
                     {stretch.holdDurationSeconds && (
                       <p className="mt-0.5 text-xs text-zinc-500">Hold: {stretch.holdDurationSeconds}s</p>
                     )}
