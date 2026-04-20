@@ -542,14 +542,6 @@ function isMobilitySession(session: PlanSession) {
   return nameIsMobility || tagIsMobility;
 }
 
-function isAutoMobilitySession(session: PlanSession) {
-  return (
-    session.type === "Recovery" &&
-    isMobilitySession(session) &&
-    (session.description ?? "").trim() === AUTO_MOBILITY_DESCRIPTION
-  );
-}
-
 function hasMobilitySession(plan: GeneratedPlan, weekId: string, dayLabel: string) {
   return plan.weeks.some((week) =>
     week.sessions.some((session) => {
@@ -562,7 +554,7 @@ function hasMobilitySession(plan: GeneratedPlan, weekId: string, dayLabel: strin
   );
 }
 
-function reconcileMobilitySessionsBeforeGym(plan: GeneratedPlan) {
+function reconcileMobilitySessionsBeforeGym_DEPRECATED(plan: GeneratedPlan) {
   const planWithoutAutoMobility: GeneratedPlan = {
     ...plan,
     weeks: plan.weeks.map((week) => ({
