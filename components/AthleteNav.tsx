@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export default function AthleteNav() {
+interface AthleteNavProps {
+  isSoloPlanHolder?: boolean;
+}
+
+export default function AthleteNav({ isSoloPlanHolder = false }: AthleteNavProps) {
   const pathname = usePathname();
 
   // Hide nav on profile page

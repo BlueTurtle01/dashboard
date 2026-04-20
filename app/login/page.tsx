@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getDefaultRouteForRoles } from "@/lib/auth/get-default-route-for-roles";
 
 type RoleRow = {
-  role: "admin" | "coach" | "athlete";
+  role: "admin" | "coach" | "athlete" | "solo_plan_holder";
 };
 
 export default function LoginPage() {

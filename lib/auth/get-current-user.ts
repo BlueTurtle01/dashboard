@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 
-export type AppRole = "admin" | "coach" | "athlete";
+export type AppRole = "admin" | "coach" | "athlete" | "solo_plan_holder";
 
 export async function getCurrentUser() {
   const supabase = await createClient();
@@ -39,7 +39,7 @@ export async function getCurrentUserRoles(): Promise<AppRole[]> {
     .map((row) => row.role)
     .filter(
       (role): role is AppRole =>
-        role === "admin" || role === "coach" || role === "athlete"
+        role === "admin" || role === "coach" || role === "athlete" || role === "solo_plan_holder"
     );
 }
 

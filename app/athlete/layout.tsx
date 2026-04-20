@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { userHasRole } from "@/lib/auth/get-current-user";
+import { getCurrentUserRoles } from "@/lib/auth/get-current-user";
 import AthleteNav from "@/components/AthleteNav";
 
 export default async function AthleteLayout({
@@ -7,15 +7,18 @@ export default async function AthleteLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const hasAthleteRole = await userHasRole("athlete");
+  const roles = await getCurrentUserRoles();
+  const canAccess = roles.includes("athlete") || roles.includes("solo_plan_holder");
 
-  if (!hasAthleteRole) {
+  if (!canAccess) {
     redirect("/login");
   }
 
+  const isSoloPlanHolder = roles.includes("solo_plan_holder");
+
   return (
     <>
-      <AthleteNav />
+      <AthleteNav isSoloPlanHolder={isSoloPlanHolder} />
       {children}
     </>
   );

@@ -41,6 +41,7 @@ export default function AppNav() {
   const isAthlete = roles.includes("athlete");
   const isCoach = roles.includes("coach");
   const isAdmin = roles.includes("admin");
+  const isSoloPlanHolder = roles.includes("solo_plan_holder");
 
   return (
     <nav className="bg-white border-b border-zinc-200">
@@ -51,7 +52,7 @@ export default function AppNav() {
           </Link>
 
           <div className="flex items-center gap-1 flex-wrap">
-            {isAthlete && (
+            {(isAthlete || isSoloPlanHolder) && (
               <>
                 <Link
                   href="/athlete"

@@ -27,6 +27,7 @@ export default async function Navbar() {
   const isAdmin = roles.includes("admin");
   const isCoach = roles.includes("coach");
   const isAthlete = roles.includes("athlete");
+  const isSoloPlanHolder = roles.includes("solo_plan_holder");
   const canAccessCoachArea = isAdmin || isCoach;
 
   return (
@@ -37,13 +38,13 @@ export default async function Navbar() {
         </Link>
 
         <div className="site-navbar__links">
-          {isAthlete && (
+          {(isAthlete || isSoloPlanHolder) && (
             <Link href="/athlete" className="site-navbar__link">
               My Training
             </Link>
           )}
 
-          {isAthlete && (
+          {(isAthlete || isSoloPlanHolder) && (
             <Link href="/athlete/profile" className="site-navbar__link">
               Profile
             </Link>
@@ -55,9 +56,11 @@ export default async function Navbar() {
             </Link>
           )}
 
-          <Link href="/coaches" className="site-navbar__link">
-            Coaches
-          </Link>
+          {(isAthlete || canAccessCoachArea) && (
+            <Link href="/coaches" className="site-navbar__link">
+              Coaches
+            </Link>
+          )}
 
           {canAccessCoachArea && (
             <div className="site-navbar__dropdown">
@@ -165,6 +168,9 @@ export default async function Navbar() {
                   </Link>
                   <Link href="/athlete/profile" className="site-navbar__dropdown-link">
                     Athlete Profile
+                  </Link>
+                  <Link href="/admin/solo-plans" className="site-navbar__dropdown-link">
+                    Solo Plans
                   </Link>
                 </div>
               </div>
