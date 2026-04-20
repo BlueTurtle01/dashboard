@@ -4,7 +4,6 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { findUserByEmail } from "@/lib/actions/findUserByEmail";
 
 type SoloPlanAssignment = {
   id: string;
@@ -24,10 +23,17 @@ type ProgramTemplate = {
   description: string | null;
 };
 
+type ProgramTemplate = {
+  id: string;
+  name: string;
+  discipline: string;
+  plan_length_weeks: number;
+  description: string | null;
+};
+
 type AssignmentFormData = {
-  userEmail: string;
   templateId: string;
-  searchQuery: string;
+  athleteUserId: string;
 };
 
 export default function AdminSoloPlanPage() {
@@ -42,14 +48,20 @@ export default function AdminSoloPlanPage() {
 
   const [templates, setTemplates] = useState<ProgramTemplate[]>([]);
   const [filteredTemplates, setFilteredTemplates] = useState<ProgramTemplate[]>([]);
-  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
+  const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false);
+  const [templatesSearch, setTemplatesSearch] = useState("");
+
+  const [users, setUsers] = useState<{ id: string; email: string }[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<{ id: string; email: string }[]>([]);
+  const [showUsersDropdown, setShowUsersDropdown] = useState(false);
+  const [usersSearch, setUsersSearch] = useState("");
 
   const [formData, setFormData] = useState<AssignmentFormData>({
-    userEmail: "",
     templateId: "",
-    searchQuery: "",
+    athleteUserId: "",
   });
   const [selectedTemplate, setSelectedTemplate] = useState<ProgramTemplate | null>(null);
+  const [selectedUser, setSelectedUser] = useState<{ id: string; email: string } | null>(null);
   const [assigningPlan, setAssigningPlan] = useState(false);
 
   async function loadAssignments() {
@@ -112,7 +124,8 @@ export default function AdminSoloPlanPage() {
   async function loadTemplates() {
     const { data, error } = await supabase
       .from("program_templates")
-      .select("id, name, slug, discipline, plan_length_weeks, description")
+      .select("id, name, discipline, plan_length_weeks, description")
+      .eq("is_active", true)
       .order("name");
 
     if (!error && data) {
@@ -121,13 +134,47 @@ export default function AdminSoloPlanPage() {
     }
   }
 
+  async function loadUsers() {
+    // Load users with athlete role
+    const { data: roleData, error: roleError } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "athlete");
+
+    if (!roleError && roleData) {
+      const userIds = roleData.map((r) => r.user_id);
+
+      // Get email from athlete_profiles
+      const { data: profiles } = await supabase
+        .from("athlete_profiles")
+        .select("user_id, email")
+        .in("user_id", userIds);
+
+      if (profiles) {
+        setUsers(
+          profiles.map((p) => ({
+            id: p.user_id,
+            email: p.email || `user-${p.user_id.slice(0, 8)}`,
+          }))
+        );
+        setFilteredUsers(
+          profiles.map((p) => ({
+            id: p.user_id,
+            email: p.email || `user-${p.user_id.slice(0, 8)}`,
+          }))
+        );
+      }
+    }
+  }
+
   useEffect(() => {
     void loadAssignments();
     void loadTemplates();
+    void loadUsers();
   }, []);
 
   useEffect(() => {
-    const query = formData.searchQuery.toLowerCase();
+    const query = templatesSearch.toLowerCase();
     if (query.length === 0) {
       setFilteredTemplates(templates);
     } else {
@@ -135,28 +182,46 @@ export default function AdminSoloPlanPage() {
         templates.filter(
           (t) =>
             t.name.toLowerCase().includes(query) ||
-            t.discipline.toLowerCase().includes(query) ||
-            (t.description?.toLowerCase().includes(query) ?? false)
+            t.discipline.toLowerCase().includes(query)
         )
       );
     }
-  }, [formData.searchQuery, templates]);
+  }, [templatesSearch, templates]);
+
+  useEffect(() => {
+    const query = usersSearch.toLowerCase();
+    if (query.length === 0) {
+      setFilteredUsers(users);
+    } else {
+      setFilteredUsers(users.filter((u) => u.email.toLowerCase().includes(query)));
+    }
+  }, [usersSearch, users]);
 
   function selectTemplate(template: ProgramTemplate) {
     setSelectedTemplate(template);
     setFormData((prev) => ({
       ...prev,
       templateId: template.id,
-      searchQuery: template.name,
     }));
-    setShowTemplateDropdown(false);
+    setTemplatesSearch(template.name);
+    setShowTemplatesDropdown(false);
+  }
+
+  function selectUser(user: { id: string; email: string }) {
+    setSelectedUser(user);
+    setFormData((prev) => ({
+      ...prev,
+      athleteUserId: user.id,
+    }));
+    setUsersSearch(user.email);
+    setShowUsersDropdown(false);
   }
 
   async function handleAssignPlan(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!formData.userEmail.trim() || !formData.templateId || !selectedTemplate) {
-      setErrorMessage("Please select an athlete and a plan template.");
+    if (!formData.templateId || !formData.athleteUserId || !selectedTemplate || !selectedUser) {
+      setErrorMessage("Please select both a template and an athlete.");
       return;
     }
 
@@ -165,49 +230,18 @@ export default function AdminSoloPlanPage() {
     setSuccessMessage("");
 
     try {
-      const { user: targetUser, error: userError } = await findUserByEmail(
-        formData.userEmail
-      );
-
-      if (userError || !targetUser) {
-        setErrorMessage(userError || "Could not find user.");
-        setAssigningPlan(false);
-        return;
-      }
-
-      // Ensure athlete profile exists
-      const { data: existingProfile } = await supabase
-        .from("athlete_profiles")
-        .select("id")
-        .eq("user_id", targetUser.id)
-        .maybeSingle();
-
-      if (!existingProfile) {
-        const { error: profileError } = await supabase
-          .from("athlete_profiles")
-          .insert({
-            user_id: targetUser.id,
-            email: targetUser.email,
-          });
-
-        if (profileError) {
-          setErrorMessage(`Could not create athlete profile: ${profileError.message}`);
-          setAssigningPlan(false);
-          return;
-        }
-      }
-
-      const planJson = generateBasicPlan(selectedTemplate.plan_length_weeks, 1);
+      // Create a new athlete_plan from the template
+      const planJson = generatePlanFromTemplate(selectedTemplate);
 
       const { data: planData, error: planError } = await supabase
         .from("athlete_plans")
         .insert({
-          athlete_user_id: targetUser.id,
+          athlete_user_id: formData.athleteUserId,
           plan_json: planJson,
           status: "active",
           name: selectedTemplate.name,
           coach_user_id: null,
-          source_program_template_id: selectedTemplate.id,
+          source_program_template_id: formData.templateId,
         })
         .select("id")
         .single();
@@ -218,8 +252,9 @@ export default function AdminSoloPlanPage() {
         return;
       }
 
+      // Assign solo_plan_holder role
       const { error: roleError } = await supabase.from("user_roles").insert({
-        user_id: targetUser.id,
+        user_id: formData.athleteUserId,
         role: "solo_plan_holder",
       });
 
@@ -230,10 +265,13 @@ export default function AdminSoloPlanPage() {
       }
 
       setSuccessMessage(
-        `Plan "${selectedTemplate.name}" assigned to ${formData.userEmail}. Plan ID: ${planData.id}`
+        `Plan "${selectedTemplate.name}" assigned to ${selectedUser.email}. Plan ID: ${planData.id}`
       );
-      setFormData({ userEmail: "", templateId: "", searchQuery: "" });
+      setFormData({ templateId: "", athleteUserId: "" });
       setSelectedTemplate(null);
+      setSelectedUser(null);
+      setTemplatesSearch("");
+      setUsersSearch("");
       await loadAssignments();
     } catch (err) {
       setErrorMessage(`Unexpected error: ${err instanceof Error ? err.message : "Unknown"}`);
@@ -304,23 +342,8 @@ export default function AdminSoloPlanPage() {
         {successMessage ? <p style={successStyle}>{successMessage}</p> : null}
 
         <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Assign a New Plan</h2>
+          <h2 style={sectionTitleStyle}>Assign a Plan to an Athlete</h2>
           <form onSubmit={handleAssignPlan} style={formStyle}>
-            <div style={formGroupStyle}>
-              <label htmlFor="email" style={labelStyle}>
-                Athlete Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={formData.userEmail}
-                onChange={(e) => setFormData({ ...formData, userEmail: e.target.value })}
-                placeholder="athlete@example.com"
-                style={inputStyle}
-                required
-              />
-            </div>
-
             <div style={formGroupStyle}>
               <label htmlFor="templateSearch" style={labelStyle}>
                 Program Template
@@ -329,33 +352,19 @@ export default function AdminSoloPlanPage() {
                 <input
                   id="templateSearch"
                   type="text"
-                  value={formData.searchQuery}
-                  onChange={(e) =>
-                    setFormData({ ...formData, searchQuery: e.target.value })
-                  }
-                  onFocus={() => setShowTemplateDropdown(true)}
+                  value={templatesSearch}
+                  onChange={(e) => setTemplatesSearch(e.target.value)}
+                  onFocus={() => setShowTemplatesDropdown(true)}
                   placeholder="Search templates..."
                   style={inputStyle}
                 />
-                {showTemplateDropdown && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      right: 0,
-                      background: "#fff",
-                      border: "1px solid #d1d5db",
-                      borderTop: "none",
-                      borderRadius: "0 0 4px 4px",
-                      maxHeight: "300px",
-                      overflowY: "auto",
-                      zIndex: 10,
-                    }}
-                  >
+                {showTemplatesDropdown && (
+                  <div style={dropdownMenuStyle}>
                     {filteredTemplates.length === 0 ? (
                       <div style={{ padding: "0.75rem", color: "#999", fontSize: "0.9rem" }}>
-                        No templates found
+                        {templates.length === 0
+                          ? "No templates available"
+                          : "No matching templates"}
                       </div>
                     ) : (
                       filteredTemplates.map((template) => (
@@ -363,36 +372,12 @@ export default function AdminSoloPlanPage() {
                           key={template.id}
                           type="button"
                           onClick={() => selectTemplate(template)}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            padding: "0.75rem",
-                            textAlign: "left",
-                            background:
-                              selectedTemplate?.id === template.id ? "#e0e7ff" : "#fff",
-                            border: "none",
-                            borderBottom: "1px solid #f3f4f6",
-                            cursor: "pointer",
-                            fontSize: "0.9rem",
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.target as HTMLElement).style.background = "#f3f4f6";
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.target as HTMLElement).style.background =
-                              selectedTemplate?.id === template.id ? "#e0e7ff" : "#fff";
-                          }}
+                          style={dropdownItemStyle(selectedTemplate?.id === template.id)}
                         >
                           <div style={{ fontWeight: "500", color: "#1f2937" }}>
                             {template.name}
                           </div>
-                          <div
-                            style={{
-                              fontSize: "0.8rem",
-                              color: "#666",
-                              marginTop: "0.25rem",
-                            }}
-                          >
+                          <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
                             {template.discipline} • {template.plan_length_weeks}w
                           </div>
                         </button>
@@ -408,12 +393,59 @@ export default function AdminSoloPlanPage() {
               )}
             </div>
 
+            <div style={formGroupStyle}>
+              <label htmlFor="userSearch" style={labelStyle}>
+                Athlete
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  id="userSearch"
+                  type="text"
+                  value={usersSearch}
+                  onChange={(e) => setUsersSearch(e.target.value)}
+                  onFocus={() => setShowUsersDropdown(true)}
+                  placeholder="Search athletes..."
+                  style={inputStyle}
+                />
+                {showUsersDropdown && (
+                  <div style={dropdownMenuStyle}>
+                    {filteredUsers.length === 0 ? (
+                      <div style={{ padding: "0.75rem", color: "#999", fontSize: "0.9rem" }}>
+                        {users.length === 0 ? "No athletes found" : "No matching athletes"}
+                      </div>
+                    ) : (
+                      filteredUsers.map((user) => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => selectUser(user)}
+                          style={dropdownItemStyle(selectedUser?.id === user.id)}
+                        >
+                          <div style={{ fontWeight: "500", color: "#1f2937" }}>
+                            {user.email}
+                          </div>
+                          <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                            ID: {user.id.slice(0, 8)}...
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              {selectedUser && (
+                <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.5rem" }}>
+                  Selected: <strong>{selectedUser.email}</strong>
+                </div>
+              )}
+            </div>
+
             <button
               type="submit"
               disabled={assigningPlan}
               style={primaryButtonStyle}
             >
-              {assigningPlan ? "Creating Plan..." : "Create & Assign Plan"}
+              {assigningPlan ? "Assigning..." : "Assign Plan"}
             </button>
           </form>
         </section>
@@ -467,32 +499,55 @@ export default function AdminSoloPlanPage() {
   );
 }
 
-function generateBasicPlan(weeks: number, cycles: number): Record<string, unknown> {
+function generatePlanFromTemplate(template: ProgramTemplate): Record<string, unknown> {
   const cyclesArray = [];
-  for (let c = 0; c < cycles; c++) {
-    const weeksInCycle: Record<string, unknown>[] = [];
-    for (let w = 0; w < Math.ceil(weeks / cycles); w++) {
-      weeksInCycle.push({
-        weekNumber: w + 1,
-        focus: null,
-        sessions: [],
-      });
-    }
+  const weeksPerCycle = Math.ceil(template.plan_length_weeks / 1);
+
+  for (let w = 0; w < template.plan_length_weeks; w++) {
     cyclesArray.push({
-      cycleNumber: c + 1,
-      weeks: weeksInCycle.slice(0, Math.ceil(weeks / cycles)),
+      weekNumber: w + 1,
+      focus: null,
+      sessions: [],
     });
   }
 
   return {
-    cycles: cyclesArray,
-    totalWeeks: weeks,
+    weeks: cyclesArray,
+    totalWeeks: template.plan_length_weeks,
+    templateId: template.id,
     createdAt: new Date().toISOString(),
-    name: "Generated Plan",
+  };
+}
+
+function dropdownItemStyle(isSelected: boolean): React.CSSProperties {
+  return {
+    display: "block",
+    width: "100%",
+    padding: "0.75rem",
+    textAlign: "left",
+    background: isSelected ? "#e0e7ff" : "#fff",
+    border: "none",
+    borderBottom: "1px solid #f3f4f6",
+    cursor: "pointer",
+    fontSize: "0.9rem",
   };
 }
 
 // Styles
+const dropdownMenuStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "100%",
+  left: 0,
+  right: 0,
+  background: "#fff",
+  border: "1px solid #d1d5db",
+  borderTop: "none",
+  borderRadius: "0 0 4px 4px",
+  maxHeight: "300px",
+  overflowY: "auto",
+  zIndex: 10,
+};
+
 const pageStyle: React.CSSProperties = {
   padding: "2rem",
   background: "#f9fafb",
