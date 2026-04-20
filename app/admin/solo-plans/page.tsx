@@ -14,11 +14,19 @@ type SoloPlanAssignment = {
   created_at: string | null;
 };
 
+type ProgramTemplate = {
+  id: string;
+  name: string;
+  slug: string;
+  discipline: string;
+  plan_length_weeks: number;
+  description: string | null;
+};
+
 type AssignmentFormData = {
   userEmail: string;
-  planName: string;
-  weeksCount: number;
-  cyclesCount: number;
+  templateId: string;
+  searchQuery: string;
 };
 
 export default function AdminSoloPlanPage() {
@@ -31,12 +39,16 @@ export default function AdminSoloPlanPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [revokingIds, setRevokingIds] = useState<Set<string>>(new Set());
 
+  const [templates, setTemplates] = useState<ProgramTemplate[]>([]);
+  const [filteredTemplates, setFilteredTemplates] = useState<ProgramTemplate[]>([]);
+  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
+
   const [formData, setFormData] = useState<AssignmentFormData>({
     userEmail: "",
-    planName: "",
-    weeksCount: 12,
-    cyclesCount: 1,
+    templateId: "",
+    searchQuery: "",
   });
+  const [selectedTemplate, setSelectedTemplate] = useState<ProgramTemplate | null>(null);
   const [assigningPlan, setAssigningPlan] = useState(false);
 
   async function loadAssignments() {
@@ -96,15 +108,54 @@ export default function AdminSoloPlanPage() {
     setLoading(false);
   }
 
+  async function loadTemplates() {
+    const { data, error } = await supabase
+      .from("program_templates")
+      .select("id, name, slug, discipline, plan_length_weeks, description")
+      .order("name");
+
+    if (!error && data) {
+      setTemplates(data as ProgramTemplate[]);
+      setFilteredTemplates(data as ProgramTemplate[]);
+    }
+  }
+
   useEffect(() => {
     void loadAssignments();
+    void loadTemplates();
   }, []);
+
+  useEffect(() => {
+    const query = formData.searchQuery.toLowerCase();
+    if (query.length === 0) {
+      setFilteredTemplates(templates);
+    } else {
+      setFilteredTemplates(
+        templates.filter(
+          (t) =>
+            t.name.toLowerCase().includes(query) ||
+            t.discipline.toLowerCase().includes(query) ||
+            (t.description?.toLowerCase().includes(query) ?? false)
+        )
+      );
+    }
+  }, [formData.searchQuery, templates]);
+
+  function selectTemplate(template: ProgramTemplate) {
+    setSelectedTemplate(template);
+    setFormData((prev) => ({
+      ...prev,
+      templateId: template.id,
+      searchQuery: template.name,
+    }));
+    setShowTemplateDropdown(false);
+  }
 
   async function handleAssignPlan(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!formData.userEmail.trim() || !formData.planName.trim()) {
-      setErrorMessage("Please fill in all fields.");
+    if (!formData.userEmail.trim() || !formData.templateId || !selectedTemplate) {
+      setErrorMessage("Please select an athlete and a plan template.");
       return;
     }
 
@@ -131,7 +182,7 @@ export default function AdminSoloPlanPage() {
         return;
       }
 
-      const planJson = generateBasicPlan(formData.weeksCount, formData.cyclesCount);
+      const planJson = generateBasicPlan(selectedTemplate.plan_length_weeks, 1);
 
       const { data: planData, error: planError } = await supabase
         .from("athlete_plans")
@@ -139,8 +190,9 @@ export default function AdminSoloPlanPage() {
           athlete_user_id: targetUser.id,
           plan_json: planJson,
           status: "active",
-          name: formData.planName,
+          name: selectedTemplate.name,
           coach_user_id: null,
+          source_program_template_id: selectedTemplate.id,
         })
         .select("id")
         .single();
@@ -163,9 +215,10 @@ export default function AdminSoloPlanPage() {
       }
 
       setSuccessMessage(
-        `Plan "${formData.planName}" assigned to ${formData.userEmail}. Plan ID: ${planData.id}`
+        `Plan "${selectedTemplate.name}" assigned to ${formData.userEmail}. Plan ID: ${planData.id}`
       );
-      setFormData({ userEmail: "", planName: "", weeksCount: 12, cyclesCount: 1 });
+      setFormData({ userEmail: "", templateId: "", searchQuery: "" });
+      setSelectedTemplate(null);
       await loadAssignments();
     } catch (err) {
       setErrorMessage(`Unexpected error: ${err instanceof Error ? err.message : "Unknown"}`);
@@ -254,54 +307,90 @@ export default function AdminSoloPlanPage() {
             </div>
 
             <div style={formGroupStyle}>
-              <label htmlFor="planName" style={labelStyle}>
-                Plan Name
+              <label htmlFor="templateSearch" style={labelStyle}>
+                Program Template
               </label>
-              <input
-                id="planName"
-                type="text"
-                value={formData.planName}
-                onChange={(e) => setFormData({ ...formData, planName: e.target.value })}
-                placeholder="e.g., Half Marathon Training"
-                style={inputStyle}
-                required
-              />
-            </div>
-
-            <div style={formRowStyle}>
-              <div style={formGroupStyle}>
-                <label htmlFor="weeks" style={labelStyle}>
-                  Weeks
-                </label>
+              <div style={{ position: "relative" }}>
                 <input
-                  id="weeks"
-                  type="number"
-                  min="1"
-                  max="52"
-                  value={formData.weeksCount}
+                  id="templateSearch"
+                  type="text"
+                  value={formData.searchQuery}
                   onChange={(e) =>
-                    setFormData({ ...formData, weeksCount: parseInt(e.target.value) || 12 })
+                    setFormData({ ...formData, searchQuery: e.target.value })
                   }
+                  onFocus={() => setShowTemplateDropdown(true)}
+                  placeholder="Search templates..."
                   style={inputStyle}
                 />
+                {showTemplateDropdown && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      right: 0,
+                      background: "#fff",
+                      border: "1px solid #d1d5db",
+                      borderTop: "none",
+                      borderRadius: "0 0 4px 4px",
+                      maxHeight: "300px",
+                      overflowY: "auto",
+                      zIndex: 10,
+                    }}
+                  >
+                    {filteredTemplates.length === 0 ? (
+                      <div style={{ padding: "0.75rem", color: "#999", fontSize: "0.9rem" }}>
+                        No templates found
+                      </div>
+                    ) : (
+                      filteredTemplates.map((template) => (
+                        <button
+                          key={template.id}
+                          type="button"
+                          onClick={() => selectTemplate(template)}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            padding: "0.75rem",
+                            textAlign: "left",
+                            background:
+                              selectedTemplate?.id === template.id ? "#e0e7ff" : "#fff",
+                            border: "none",
+                            borderBottom: "1px solid #f3f4f6",
+                            cursor: "pointer",
+                            fontSize: "0.9rem",
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.target as HTMLElement).style.background = "#f3f4f6";
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.target as HTMLElement).style.background =
+                              selectedTemplate?.id === template.id ? "#e0e7ff" : "#fff";
+                          }}
+                        >
+                          <div style={{ fontWeight: "500", color: "#1f2937" }}>
+                            {template.name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              color: "#666",
+                              marginTop: "0.25rem",
+                            }}
+                          >
+                            {template.discipline} • {template.plan_length_weeks}w
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
-
-              <div style={formGroupStyle}>
-                <label htmlFor="cycles" style={labelStyle}>
-                  Training Cycles
-                </label>
-                <input
-                  id="cycles"
-                  type="number"
-                  min="1"
-                  max="12"
-                  value={formData.cyclesCount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, cyclesCount: parseInt(e.target.value) || 1 })
-                  }
-                  style={inputStyle}
-                />
-              </div>
+              {selectedTemplate && (
+                <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.5rem" }}>
+                  Selected: <strong>{selectedTemplate.name}</strong>
+                </div>
+              )}
             </div>
 
             <button
