@@ -288,8 +288,6 @@ type PlanWeekWithTemplateMeta = GeneratedPlan["weeks"][number] & {
   sourceWeekTemplateName?: string | null;
 };
 
-const AUTO_MOBILITY_DESCRIPTION = "Auto-added mobility session before gym work.";
-
 function normalizeDayLabel(dayLabel: string) {
   return dayAliases[dayLabel.trim().toLowerCase()] ?? dayLabel.trim().toLowerCase();
 }
@@ -1746,10 +1744,9 @@ export default function PlanEditorPage() {
   }
 
   async function updatePlan(nextPlan: GeneratedPlan) {
-    const adjustedPlan = reconcileMobilitySessionsBeforeGym(nextPlan);
     const athleteEquipmentAvoid = deriveEquipmentAvoid(athleteContext);
     const athleteEquipmentUnavailable = deriveEquipmentUnavailable(athleteContext);
-    const newWarnings = calculateAllWarnings(adjustedPlan, athleteEquipmentUnavailable, athleteEquipmentAvoid);
+    const newWarnings = calculateAllWarnings(nextPlan, athleteEquipmentUnavailable, athleteEquipmentAvoid);
 
     // Transform warnings to add 'type' field for backward compatibility with warnings page
     const allWarnings = newWarnings.map((w: any) => ({
@@ -1758,7 +1755,7 @@ export default function PlanEditorPage() {
     })) as any[];
 
     const recalculated: GeneratedPlan = {
-      ...adjustedPlan,
+      ...nextPlan,
       warnings: allWarnings as any,
       updatedAt: new Date().toISOString(),
     };
@@ -2343,6 +2340,72 @@ export default function PlanEditorPage() {
     showTemporaryStatus("Alternative dismissed.", 1500);
   }
 
+  function addPairedMobilitySession(sessionId: string) {
+    if (!plan) return;
+
+    let baseSession: EditablePlanSession | null = null;
+    let targetWeekId: string | null = null;
+
+    for (const week of plan.weeks) {
+      const found = week.sessions.find((s) => s.id === sessionId);
+      if (found) {
+        targetWeekId = week.id;
+        baseSession = found as EditablePlanSession;
+        break;
+      }
+    }
+
+    if (!targetWeekId || !baseSession) return;
+
+    // Find the paired mobility session for this gym session template
+    const pairedSession = pairedMobilitySessions.find(
+      (pair) => pair.session_template_id === baseSession?.sourceSessionTemplateId && pair.auto_add_enabled
+    );
+
+    if (!pairedSession?.mobility_sessions) {
+      showTemporaryStatus("No paired mobility session configured for this template.", 3000);
+      return;
+    }
+
+    const mobility = pairedSession.mobility_sessions;
+    const mobilitySession: PlanSession = {
+      id: `session-${Date.now()}-mobility`,
+      weekId: targetWeekId,
+      sortOrder: baseSession.sortOrder + 0.5,
+      dayLabel: baseSession.dayLabel,
+      type: "Recovery",
+      name: mobility.name,
+      description: mobility.description || "",
+      tags: ["mobility", "recovery"],
+      duration: mobility.duration_minutes ? `${mobility.duration_minutes} min` : "15 min",
+      intensity: "low",
+      isKeySession: false,
+      exercises: [],
+      mobilitySessionId: mobility.id,
+    };
+
+    const nextPlan: GeneratedPlan = {
+      ...plan,
+      weeks: plan.weeks.map((week) => {
+        if (week.id !== targetWeekId) return week;
+
+        const sessionIndex = week.sessions.findIndex((session) => session.id === sessionId);
+        if (sessionIndex === -1) return week;
+
+        const nextSessions = [...week.sessions];
+        nextSessions.splice(sessionIndex + 1, 0, mobilitySession);
+
+        return {
+          ...week,
+          sessions: nextSessions.map((s, i) => ({ ...s, sortOrder: i + 1 })),
+        };
+      }),
+    };
+
+    void updatePlan(nextPlan);
+    showTemporaryStatus(`${mobility.name} added.`, 1500);
+  }
+
   const buttonsDisabled = loading || !plan;
 
   return (
@@ -2778,7 +2841,7 @@ export default function PlanEditorPage() {
                                           dayLabel,
                                           type: "Recovery",
                                           name: mobilitySession.name,
-                                          description: mobilitySession.description || AUTO_MOBILITY_DESCRIPTION,
+                                          description: mobilitySession.description || "",
                                           tags: ["mobility", "recovery"],
                                           duration: mobilitySession.duration_minutes ? `${mobilitySession.duration_minutes} min` : "15 min",
                                           intensity: "low",
@@ -2934,6 +2997,34 @@ export default function PlanEditorPage() {
                                     </div>
                                   </div>
                                 ) : null}
+
+                                {isGymSession && editableSession.sourceSessionTemplateId && (() => {
+                                  const pairedMobility = pairedMobilitySessions.find(
+                                    (pair) => pair.session_template_id === editableSession.sourceSessionTemplateId && pair.auto_add_enabled
+                                  );
+                                  const alreadyHasMobility = sortedSessions.some(
+                                    (s) => s.dayLabel === editableSession.dayLabel && s.mobilitySessionId === pairedMobility?.mobility_sessions?.id
+                                  );
+                                  return pairedMobility?.mobility_sessions && !alreadyHasMobility ? (
+                                    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                      <div className="font-semibold text-emerald-900">
+                                        Suggested pairing
+                                      </div>
+                                      <div className="mt-1 text-emerald-800">
+                                        {pairedMobility.mobility_sessions.name}
+                                      </div>
+                                      <div className="mt-3">
+                                        <button
+                                          type="button"
+                                          onClick={() => addPairedMobilitySession(session.id)}
+                                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                                        >
+                                          Add Mobility Session
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : null;
+                                })()}
 
                                 {isGymSession && session.exercises?.length ? (
                                   <div className="pt-1">
