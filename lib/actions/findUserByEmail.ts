@@ -48,5 +48,22 @@ export async function findUserByEmail(email: string) {
     return { user: { id: coachProfile.user_id, email }, error: null };
   }
 
+  // Fallback: try admin.listUsers() for users without profiles yet
+  try {
+    const { data: usersData, error: listError } = await supabase.auth.admin.listUsers();
+
+    if (!listError && usersData) {
+      const user = usersData.users.find(
+        (u) => u.email?.toLowerCase() === email.toLowerCase()
+      );
+
+      if (user) {
+        return { user: { id: user.id, email: user.email || email }, error: null };
+      }
+    }
+  } catch (err) {
+    // Silently fail and return error below
+  }
+
   return { user: null, error: `User with email "${email}" not found.` };
 }
