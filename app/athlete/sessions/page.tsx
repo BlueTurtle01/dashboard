@@ -350,8 +350,6 @@ export default function SessionsPage() {
                   isSubmitting={submitting}
                   perceivedEffort={perceivedEffort}
                   setPerceivedEffort={setPerceivedEffort}
-                  actualDuration={actualDuration}
-                  setActualDuration={setActualDuration}
                   notes={notes}
                   setNotes={setNotes}
                   onLogCompletion={() => handleLogCompletion(mainSession.id, alternativeSession?.id)}
@@ -370,8 +368,6 @@ export default function SessionsPage() {
                     isSubmitting={submitting}
                     perceivedEffort={perceivedEffort}
                     setPerceivedEffort={setPerceivedEffort}
-                    actualDuration={actualDuration}
-                    setActualDuration={setActualDuration}
                     notes={notes}
                     setNotes={setNotes}
                     onLogCompletion={() => handleLogCompletion(alternativeSession.id, mainSession.id)}
@@ -398,8 +394,6 @@ interface SessionCardProps {
   isSubmitting: boolean;
   perceivedEffort: number | null;
   setPerceivedEffort: (value: number) => void;
-  actualDuration: number | null;
-  setActualDuration: (value: number | null) => void;
   notes: string;
   setNotes: (value: string) => void;
   onLogCompletion: () => void;
@@ -417,8 +411,6 @@ function SessionCard({
   isSubmitting,
   perceivedEffort,
   setPerceivedEffort,
-  actualDuration,
-  setActualDuration,
   notes,
   setNotes,
   onLogCompletion,
