@@ -86,6 +86,9 @@ const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
   show_rest_seconds: false,
 };
 
+// Subtypes that are superseded by the intensity dropdown
+const HIDDEN_SUBTYPES = new Set(["easy", "recovery"]);
+
 const SUGGESTED_TAGS = [
   "bodyweight", "core", "fallback", "fartlek", "hinge", "home",
   "intervals", "legs", "low-impact", "lower-body", "mobility",
@@ -119,6 +122,15 @@ function formatLabel(value: string | null | undefined) {
   return value
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function buildSessionName(subtype: string, intensity: string, durationMinutes: string, distanceKm: string): string {
+  const parts: string[] = [];
+  if (intensity) parts.push(formatLabel(intensity));
+  if (subtype) parts.push(formatLabel(subtype));
+  if (distanceKm) parts.push(`${distanceKm}km`);
+  else if (durationMinutes) parts.push(`${durationMinutes}min`);
+  return parts.join(" ");
 }
 
 function createEmptyForm(): UnifiedSessionFormData {
@@ -249,6 +261,7 @@ export function UnifiedSessionForm({
         const subtype = subtypeById.get(link.subtype_id);
 
         if (!activitySlug || !subtype) continue;
+        if (HIDDEN_SUBTYPES.has(subtype.slug)) continue;
 
         if (!subtypeMap[activitySlug]) {
           subtypeMap[activitySlug] = [];
@@ -324,10 +337,12 @@ export function UnifiedSessionForm({
         nextActivity = activityOptions[0]?.slug ?? "";
       }
 
-      const allowedSubtypes = subtypeOptionsByActivitySlug[nextActivity] ?? [];
+      const allowedSubtypes = (subtypeOptionsByActivitySlug[nextActivity] ?? []).filter(
+        (o) => !HIDDEN_SUBTYPES.has(o.slug)
+      );
       let nextSubtype = current.subtype;
 
-      if (!nextSubtype || !allowedSubtypes.some((option) => option.slug === nextSubtype)) {
+      if (!nextSubtype || HIDDEN_SUBTYPES.has(nextSubtype) || !allowedSubtypes.some((option) => option.slug === nextSubtype)) {
         nextSubtype = allowedSubtypes[0]?.slug ?? "";
       }
 
@@ -347,10 +362,12 @@ export function UnifiedSessionForm({
     if (loadingOptionData) return;
     if (!form.activity) return;
 
-    const allowedSubtypes = subtypeOptionsByActivitySlug[form.activity] ?? [];
+    const allowedSubtypes = (subtypeOptionsByActivitySlug[form.activity] ?? []).filter(
+      (o) => !HIDDEN_SUBTYPES.has(o.slug)
+    );
     if (allowedSubtypes.length === 0) return;
 
-    if (!allowedSubtypes.some((option) => option.slug === form.subtype)) {
+    if (HIDDEN_SUBTYPES.has(form.subtype) || !allowedSubtypes.some((option) => option.slug === form.subtype)) {
       setForm((current) => ({
         ...current,
         subtype: allowedSubtypes[0]?.slug ?? "",
@@ -367,6 +384,11 @@ export function UnifiedSessionForm({
       FIELD_VISIBILITY_DEFAULTS
     );
   }, [form.activity, form.subtype, fieldConfigMap]);
+
+  const autoName = useMemo(
+    () => buildSessionName(form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm),
+    [form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm],
+  );
 
   function updateForm<K extends keyof UnifiedSessionFormData>(
     field: K,
@@ -386,31 +408,19 @@ export function UnifiedSessionForm({
     <div className="space-y-4">
       {loadingOptionData ? (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-          Loading activity and subtype options...
+          Loading options...
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-sm font-semibold text-zinc-900">Activity</span>
-          <select
-            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-            value={form.activity}
-            onChange={(e) => updateForm("activity", e.target.value)}
-            disabled={loadingOptionData}
-          >
-            {activityOptions.length === 0 ? (
-              <option value="">No activities available</option>
-            ) : (
-              activityOptions.map((option) => (
-                <option key={option.id} value={option.slug}>
-                  {option.label}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
+      {/* Auto-generated session name preview */}
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Session name (auto-generated)</p>
+        <p className="mt-0.5 text-sm font-semibold text-zinc-900">
+          {autoName || <span className="font-normal italic text-zinc-400">Select subtype and intensity below</span>}
+        </p>
+      </div>
 
+      <div className="grid gap-4 md:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-sm font-semibold text-zinc-900">Subtype</span>
           <select
@@ -430,6 +440,24 @@ export function UnifiedSessionForm({
             )}
           </select>
         </label>
+
+        {fieldVis.show_target_intensity ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">Intensity</span>
+            <select
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.targetIntensity}
+              onChange={(e) => updateForm("targetIntensity", e.target.value)}
+            >
+              <option value="">— select —</option>
+              {intensityOptions.map((option) => (
+                <option key={option.id} value={option.label}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
 
       {generatedNamePreview && (
@@ -456,26 +484,6 @@ export function UnifiedSessionForm({
       </label>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {fieldVis.show_target_intensity ? (
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-zinc-900">
-              Target Intensity
-            </span>
-            <select
-              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-              value={form.targetIntensity}
-              onChange={(e) => updateForm("targetIntensity", e.target.value)}
-            >
-              <option value="">Select an intensity...</option>
-              {intensityOptions.map((option) => (
-                <option key={option.id} value={option.label}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
         {fieldVis.show_duration ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
@@ -775,7 +783,6 @@ export function UnifiedSessionForm({
       <div>
         <span className="mb-1 block text-sm font-semibold text-zinc-900">Tags</span>
 
-        {/* Selected tags */}
         {form.tags.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-1">
             {form.tags.map((tag) => (
@@ -797,7 +804,6 @@ export function UnifiedSessionForm({
           </div>
         )}
 
-        {/* Search input */}
         <input
           className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
           value={tagSearch}
@@ -815,7 +821,6 @@ export function UnifiedSessionForm({
           placeholder="Search or type a tag, press Enter to add"
         />
 
-        {/* Suggestions */}
         {(() => {
           const q = tagSearch.trim().toLowerCase();
           const suggestions = SUGGESTED_TAGS.filter(

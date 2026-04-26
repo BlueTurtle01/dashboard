@@ -1067,10 +1067,15 @@ export default function EditProgramTemplatePage() {
             dbId: null,
             dayLabel: "",
             sortOrder: nextSortOrder,
-            type: formData?.activity ?? "Easy",
-            name: formData?.activity && formData?.subtype
-              ? `${formData.activity} - ${formData.subtype}`
-              : `Session ${nextSortOrder}`,
+            type: formData?.subtype ? formatOptionLabel(formData.subtype) : "Easy",
+            name: (() => {
+              const parts: string[] = [];
+              if (formData?.targetIntensity) parts.push(formData.targetIntensity);
+              if (formData?.subtype) parts.push(formatOptionLabel(formData.subtype));
+              if (formData?.distanceKm) parts.push(`${formData.distanceKm}km`);
+              else if (formData?.durationMinutes) parts.push(`${formData.durationMinutes}min`);
+              return parts.join(" ") || `Session ${nextSortOrder}`;
+            })(),
             description: formData?.description ?? "",
             duration: formData?.durationMinutes ? `${formData.durationMinutes} min` : "",
             intensity: formData?.targetIntensity ?? "",
@@ -2090,22 +2095,6 @@ export default function EditProgramTemplatePage() {
                               </label>
 
                               {/* Extended session fields */}
-                              {session.activity && (
-                                <label className="text-sm font-medium text-zinc-700">
-                                  Activity
-                                  <input
-                                    value={session.activity}
-                                    onChange={(e) =>
-                                      updateSession(week.localId, session.localId, (current) => ({
-                                        ...current,
-                                        activity: e.target.value,
-                                      }))
-                                    }
-                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                  />
-                                </label>
-                              )}
-
                               {session.subtype && (
                                 <label className="text-sm font-medium text-zinc-700">
                                   Subtype
@@ -2298,21 +2287,6 @@ export default function EditProgramTemplatePage() {
                             </div>
 
                             <div className="mt-4 grid gap-3 md:grid-cols-2">
-                              <label className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-                                <input
-                                  type="checkbox"
-                                  checked={session.isKeySession}
-                                  onChange={(e) =>
-                                    updateSession(week.localId, session.localId, (current) => ({
-                                      ...current,
-                                      isKeySession: e.target.checked,
-                                    }))
-                                  }
-                                  className="h-4 w-4"
-                                />
-                                <span>Key session</span>
-                              </label>
-
                               <label className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
                                 <input
                                   type="checkbox"

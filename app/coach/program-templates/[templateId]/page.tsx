@@ -188,7 +188,7 @@ function getSingleSessionTemplateRelation(value: SessionTemplateRelation) {
 }
 
 function getSessionDistanceKm(session: ProgramTemplateSessionRow): number | null {
-  return getSingleSessionTemplateRelation(session.session_templates)?.distance_km ?? null;
+  return getSingleSessionTemplateRelation(session.session_templates)?.distance_km ?? session.distance_km ?? null;
 }
 
 function getSessionTemplateType(session: ProgramTemplateSessionRow): string {
@@ -1931,224 +1931,129 @@ export default function ViewProgramTemplatePage() {
                             key={session.id}
                             className="rounded-2xl border border-zinc-200 bg-white p-4"
                           >
+                            {/* Header: name + type badge */}
                             <div className="mb-3 flex flex-wrap items-center gap-2">
                               <h4 className="text-base font-semibold text-zinc-900">
                                 {session.name}
                               </h4>
-
-                              <span className="rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1 text-xs text-zinc-700">
-                                {session.type}
-                              </span>
-
-                              {session.is_key_session ? (
-                                <span className="rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-semibold text-white">
-                                  Key Session
+                              {session.subtype ? (
+                                <span className="rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1 text-xs text-zinc-700">
+                                  {titleCase(session.subtype)}
+                                </span>
+                              ) : session.type ? (
+                                <span className="rounded-full border border-zinc-300 bg-zinc-50 px-2.5 py-1 text-xs text-zinc-700">
+                                  {session.type}
                                 </span>
                               ) : null}
-
                               {athleteProfile ? (
                                 <span className="rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-xs text-sky-800">
                                   {mode === "intensity"
                                     ? `Intensity ${formatScalar(scalar)}×`
                                     : mode === "endurance"
                                       ? `Endurance ${formatScalar(scalar)}×`
-                                      : "Gym session"}
+                                      : "Gym"}
                                 </span>
                               ) : null}
                             </div>
 
-                            <div className="mb-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-zinc-500">
-                              <span>{session.day_label}</span>
-                              {session.intensity ? <span>{session.intensity}</span> : null}
-                              {session.run_time_type ? <span>{session.run_time_type}</span> : null}
-                              {session.run_start_time ? <span>{session.run_start_time}</span> : null}
+                            {/* Compact stat strip */}
+                            <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-zinc-700">
+                              {session.duration ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Duration</span>
+                                  {isGymSession || !athleteProfile
+                                    ? session.duration
+                                    : scaledDuration.scaledDisplay || session.duration}
+                                  {!isGymSession && athleteProfile && scaledDuration.scaledDisplay && scaledDuration.scaledDisplay !== session.duration
+                                    ? <span className="ml-1 text-xs text-zinc-400">(was {session.duration})</span>
+                                    : null}
+                                </span>
+                              ) : null}
+                              {distanceKm != null ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Distance</span>
+                                  {isGymSession || !athleteProfile
+                                    ? formatKm(distanceKm)
+                                    : scaledDistance.scaledDisplay || formatKm(distanceKm)}
+                                  {!isGymSession && athleteProfile && scaledDistance.scaledDisplay && scaledDistance.scaledDisplay !== formatKm(distanceKm)
+                                    ? <span className="ml-1 text-xs text-zinc-400">(was {formatKm(distanceKm)})</span>
+                                    : null}
+                                </span>
+                              ) : null}
+                              {session.intensity ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Intensity</span>
+                                  {session.intensity}
+                                </span>
+                              ) : null}
+                              {session.terrain && session.terrain !== "any" ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Terrain</span>
+                                  {titleCase(session.terrain)}
+                                </span>
+                              ) : null}
+                              {session.elevation_gain_meters ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Elevation</span>
+                                  {session.elevation_gain_meters}m
+                                </span>
+                              ) : null}
+                              {session.pack_weight_kg ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Pack</span>
+                                  {session.pack_weight_kg}kg
+                                </span>
+                              ) : null}
+                              {session.warmup_minutes ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Warm-up</span>
+                                  {session.warmup_minutes}min
+                                </span>
+                              ) : null}
+                              {session.cooldown_minutes ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Cool-down</span>
+                                  {session.cooldown_minutes}min
+                                </span>
+                              ) : null}
+                              {session.interval_reps ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Intervals</span>
+                                  {session.interval_reps}×{session.interval_duration ? ` ${session.interval_duration}` : ""}
+                                </span>
+                              ) : null}
+                              {session.strides ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Strides</span>
+                                  {session.strides}
+                                </span>
+                              ) : null}
+                              {session.run_time_type && session.run_time_type !== "any" ? (
+                                <span>
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Time</span>
+                                  {titleCase(session.run_time_type)}
+                                </span>
+                              ) : null}
                             </div>
 
-                            {session.duration ? (
-                              <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                {isGymSession ? (
-                                  <div>
-                                    <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                      Duration
-                                    </div>
-                                    <div className="mt-1 font-medium text-zinc-900">
-                                      {session.duration}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="grid gap-2 md:grid-cols-2">
-                                    <div>
-                                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                        Original Duration
-                                      </div>
-                                      <div className="mt-1 font-medium text-zinc-900">
-                                        {session.duration}
-                                      </div>
-                                    </div>
-
-                                    <div>
-                                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                        Scaled Duration
-                                      </div>
-                                      <div className="mt-1 font-medium text-sky-900">
-                                        {scaledDuration.scaledDisplay || session.duration}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ) : null}
-
-                            {distanceKm != null ? (
-                              <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                {isGymSession ? (
-                                  <div>
-                                    <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                      Distance
-                                    </div>
-                                    <div className="mt-1 font-medium text-zinc-900">
-                                      {formatKm(distanceKm)}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="grid gap-2 md:grid-cols-2">
-                                    <div>
-                                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                        Original Distance
-                                      </div>
-                                      <div className="mt-1 font-medium text-zinc-900">
-                                        {formatKm(distanceKm)}
-                                      </div>
-                                    </div>
-
-                                    <div>
-                                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                        Scaled Distance
-                                      </div>
-                                      <div className="mt-1 font-medium text-sky-900">
-                                        {scaledDistance.scaledDisplay || "—"}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ) : null}
-
                             {session.description ? (
-                              <div className="mb-4 whitespace-pre-wrap text-sm text-zinc-700">
+                              <div className="mb-3 whitespace-pre-wrap text-sm text-zinc-600">
                                 {session.description}
                               </div>
                             ) : null}
 
-                            {/* Extended session details */}
-                            <div className="mb-4 space-y-3">
-                              {session.activity ? (
-                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                    Activity
-                                  </div>
-                                  <div className="mt-1 font-medium text-zinc-900">
-                                    {session.activity}
-                                    {session.subtype ? ` - ${session.subtype}` : ""}
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {session.terrain ? (
-                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                    Terrain
-                                  </div>
-                                  <div className="mt-1 font-medium text-zinc-900">
-                                    {session.terrain}
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {session.elevation_gain_meters ? (
-                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                    Elevation Gain
-                                  </div>
-                                  <div className="mt-1 font-medium text-zinc-900">
-                                    {session.elevation_gain_meters}m
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {session.pack_weight_kg ? (
-                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                    Pack Weight
-                                  </div>
-                                  <div className="mt-1 font-medium text-zinc-900">
-                                    {session.pack_weight_kg}kg
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {session.strides ? (
-                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                    Strides
-                                  </div>
-                                  <div className="mt-1 font-medium text-zinc-900">
-                                    {session.strides}
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {session.warmup_minutes ? (
-                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                    Warm-up
-                                  </div>
-                                  <div className="mt-1 font-medium text-zinc-900">
-                                    {session.warmup_minutes} min
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {session.cooldown_minutes ? (
-                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                    Cool-down
-                                  </div>
-                                  <div className="mt-1 font-medium text-zinc-900">
-                                    {session.cooldown_minutes} min
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {session.interval_reps ? (
-                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                    Interval Details
-                                  </div>
-                                  <div className="mt-1 font-medium text-zinc-900">
-                                    {session.interval_reps} x {session.interval_duration}
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {session.tags && session.tags.length > 0 ? (
-                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
-                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                                    Tags
-                                  </div>
-                                  <div className="mt-2 flex flex-wrap gap-1">
-                                    {session.tags.map((tag) => (
-                                      <span
-                                        key={tag}
-                                        className="rounded-full border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-700"
-                                      >
-                                        {tag}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : null}
-                            </div>
+                            {session.tags && session.tags.length > 0 ? (
+                              <div className="mb-3 flex flex-wrap gap-1">
+                                {session.tags.map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="rounded-full border border-zinc-300 bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
 
                             {(session.program_template_session_exercises ?? []).length > 0 ? (
                               <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
