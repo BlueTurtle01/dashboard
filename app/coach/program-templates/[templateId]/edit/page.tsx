@@ -195,7 +195,6 @@ type TemplateForm = {
   minTrainingConsistencyWeeks: string;
   minBackToBackDays: string;
   requiresHills: boolean;
-  requiresGym: boolean;
   requiresLoadCarriage: boolean;
   requiresHeatAcclimation: boolean;
   suitableRaceGoals: string;
@@ -591,7 +590,6 @@ function mapToForm(
     minTrainingConsistencyWeeks: template.min_training_consistency_weeks?.toString() ?? "",
     minBackToBackDays: template.min_back_to_back_days?.toString() ?? "",
     requiresHills: template.requires_hills,
-    requiresGym: template.requires_gym,
     requiresLoadCarriage: template.requires_load_carriage,
     requiresHeatAcclimation: template.requires_heat_acclimation,
     suitableRaceGoals: (template.suitable_race_goals ?? []).join(", "),
@@ -1281,7 +1279,7 @@ export default function EditProgramTemplatePage() {
       min_training_consistency_weeks: form.minTrainingConsistencyWeeks.trim() ? Number(form.minTrainingConsistencyWeeks) : null,
       min_back_to_back_days: form.minBackToBackDays.trim() ? Number(form.minBackToBackDays) : null,
       requires_hills: form.requiresHills,
-      requires_gym: form.requiresGym,
+      requires_gym: form.weeks.some((w) => w.sessions.some((s) => s.type === "Gym")),
       requires_load_carriage: form.requiresLoadCarriage,
       requires_heat_acclimation: form.requiresHeatAcclimation,
       suitable_race_goals: form.suitableRaceGoals
@@ -1694,7 +1692,6 @@ export default function EditProgramTemplatePage() {
               ["Featured", form.isFeatured, (value: boolean) => updateForm("isFeatured", value)],
               ["Active", form.isActive, (value: boolean) => updateForm("isActive", value)],
               ["Requires hills", form.requiresHills, (value: boolean) => updateForm("requiresHills", value)],
-              ["Requires gym", form.requiresGym, (value: boolean) => updateForm("requiresGym", value)],
               ["Requires load carriage", form.requiresLoadCarriage, (value: boolean) => updateForm("requiresLoadCarriage", value)],
               ["Requires heat acclimation", form.requiresHeatAcclimation, (value: boolean) => updateForm("requiresHeatAcclimation", value)],
             ].map(([label, checked, onChange]) => (
