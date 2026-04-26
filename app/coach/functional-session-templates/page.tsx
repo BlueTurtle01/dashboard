@@ -425,20 +425,16 @@ export default function FunctionalSessionTemplatesPage() {
 
   useEffect(() => {
     async function checkAdminStatus() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from("coaches")
+      const { data } = await supabase
+        .from("user_roles")
         .select("role")
         .eq("user_id", user.id)
-        .maybeSingle();
+        .eq("role", "admin");
 
-      if (!error && data?.role === "admin") {
-        setIsAdmin(true);
-      }
+      setIsAdmin(data != null && data.length > 0);
     }
 
     void checkAdminStatus();
@@ -617,13 +613,6 @@ export default function FunctionalSessionTemplatesPage() {
     showTemporaryStatus("Functional template deleted.");
   }
 
-  async function deleteTemplate(templateId: string) {
-    const template = templates.find((t) => t.id === templateId);
-    if (template) {
-      await handleDeleteTemplate(template);
-    }
-  }
-
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto max-w-7xl px-6 py-12">
@@ -711,47 +700,42 @@ export default function FunctionalSessionTemplatesPage() {
                         : "border-zinc-200 bg-zinc-50"
                     }`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => toggleTemplate(template.id)}
-                      className="w-full text-left"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-zinc-900">{template.name}</div>
-                          <div className="mt-1 text-sm text-zinc-600">
-                            {template.description || "—"}
+                    <div className="flex items-start gap-4">
+                      <button
+                        type="button"
+                        onClick={() => toggleTemplate(template.id)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-zinc-900">{template.name}</div>
+                            <div className="mt-1 text-sm text-zinc-600">
+                              {template.description || "—"}
+                            </div>
+                            <div className="mt-2 text-xs text-zinc-500">
+                              {formatLabel(template.activity)} · {formatLabel(template.subtype)}
+                              {template.duration_minutes != null ? ` · ${template.duration_minutes} min` : ""}
+                              {template.target_intensity ? ` · ${template.target_intensity}` : ""}
+                            </div>
                           </div>
-                          <div className="mt-2 text-xs text-zinc-500">
-                            {formatLabel(template.activity)} · {formatLabel(template.subtype)}
-                            {template.duration_minutes != null ? ` · ${template.duration_minutes} min` : ""}
-                            {template.target_intensity ? ` · ${template.target_intensity}` : ""}
-                          </div>
-                        </div>
 
-                        <div className="shrink-0 flex items-center gap-2">
-                          {isAdmin && (
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirm(`Delete "${template.name}"?`)) {
-                                    setDeletingTemplateId(template.id);
-                                    void deleteTemplate(template.id);
-                                  }
-                                }}
-                                disabled={deletingTemplateId === template.id}
-                                className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                              >
-                                {deletingTemplateId === template.id ? "Deleting…" : "Delete"}
-                              </button>
-                          )}
-                          <span className="text-xs font-semibold text-zinc-500">
+                          <div className="shrink-0 text-xs font-semibold text-zinc-500">
                             {isExpanded ? "Hide" : "View"}
-                          </span>
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteTemplate(template)}
+                          disabled={deletingTemplateId === template.id}
+                          className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {deletingTemplateId === template.id ? "Deleting…" : "Delete"}
+                        </button>
+                      ) : null}
+                    </div>
 
                     {isExpanded ? (
                       <div
@@ -1057,7 +1041,7 @@ export default function FunctionalSessionTemplatesPage() {
                           </label>
                         </div>
 
-                        <div className="mt-4 flex flex-wrap gap-3">
+                        <div className="mt-4">
                           <button
                             type="button"
                             disabled={!isDirty(template) || savingTemplateId === template.id}
@@ -1069,19 +1053,6 @@ export default function FunctionalSessionTemplatesPage() {
                             }`}
                           >
                             {savingTemplateId === template.id ? "Saving..." : "Save Changes"}
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={deletingTemplateId === template.id}
-                            onClick={() => void handleDeleteTemplate(template)}
-                            className={`rounded-xl px-5 py-3 text-sm font-semibold transition ${
-                              deletingTemplateId === template.id
-                                ? "cursor-not-allowed border border-zinc-200 bg-zinc-200 text-zinc-500"
-                                : "border border-rose-300 bg-white text-rose-700 hover:bg-rose-50"
-                            }`}
-                          >
-                            {deletingTemplateId === template.id ? "Deleting..." : "Delete"}
                           </button>
                         </div>
                       </div>
