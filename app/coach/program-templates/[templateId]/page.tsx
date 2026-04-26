@@ -908,6 +908,8 @@ export default function ViewProgramTemplatePage() {
   const [loadError, setLoadError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [isSavingCopy, setIsSavingCopy] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -923,6 +925,15 @@ export default function ViewProgramTemplatePage() {
       setIsLoading(true);
       setLoadError("");
       setStatusMessage("");
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: roles } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id);
+        setIsAdmin(roles?.some((r) => r.role === "admin") ?? false);
+      }
 
       const { data: templateData, error: templateError } = await supabase
         .from("program_templates")
@@ -1339,6 +1350,71 @@ export default function ViewProgramTemplatePage() {
     };
   }
 
+  async function handleDeleteTemplate() {
+    if (!template) return;
+    if (!window.confirm(`Delete "${template.name}"? This cannot be undone.`)) return;
+
+    setIsDeletingTemplate(true);
+    try {
+      const supabase = createClient();
+
+      // Delete child records first (sessions → weeks → template)
+      const { data: weekRows } = await supabase
+        .from("program_template_weeks")
+        .select("id")
+        .eq("program_template_id", template.id);
+
+      const weekIds = (weekRows ?? []).map((w) => w.id);
+
+      if (weekIds.length > 0) {
+        const { data: sessionRows } = await supabase
+          .from("program_template_sessions")
+          .select("id")
+          .in("program_template_week_id", weekIds);
+
+        const sessionIds = (sessionRows ?? []).map((s) => s.id);
+
+        if (sessionIds.length > 0) {
+          const { error: exErr } = await supabase
+            .from("program_template_session_exercises")
+            .delete()
+            .in("program_template_session_id", sessionIds);
+          if (exErr) throw new Error(exErr.message);
+        }
+
+        const { error: sessErr } = await supabase
+          .from("program_template_sessions")
+          .delete()
+          .in("program_template_week_id", weekIds);
+        if (sessErr) throw new Error(sessErr.message);
+
+        const { error: weekErr } = await supabase
+          .from("program_template_weeks")
+          .delete()
+          .in("id", weekIds);
+        if (weekErr) throw new Error(weekErr.message);
+      }
+
+      const { error: tagErr } = await supabase
+        .from("program_template_tag_links")
+        .delete()
+        .eq("program_template_id", template.id);
+      if (tagErr) throw new Error(tagErr.message);
+
+      const { error: tmplErr } = await supabase
+        .from("program_templates")
+        .delete()
+        .eq("id", template.id);
+      if (tmplErr) throw new Error(tmplErr.message);
+
+      router.push("/coach/program-templates");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatusMessage(`Failed to delete template: ${message}`);
+      setIsDeletingTemplate(false);
+    }
+  }
+
   async function handleSaveCopyToAthlete() {
     const supabase = createClient();
 
@@ -1608,6 +1684,17 @@ export default function ViewProgramTemplatePage() {
             >
               Edit Template
             </Link>
+
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => void handleDeleteTemplate()}
+                disabled={isDeletingTemplate}
+                className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                {isDeletingTemplate ? "Deleting…" : "Delete Template"}
+              </button>
+            ) : null}
           </div>
         </div>
 
