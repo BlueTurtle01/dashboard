@@ -1070,11 +1070,12 @@ export default function EditProgramTemplatePage() {
             type: formData?.subtype ? formatOptionLabel(formData.subtype) : "Easy",
             name: (() => {
               const parts: string[] = [];
+              if (formData?.activity) parts.push(formatOptionLabel(formData.activity));
               if (formData?.targetIntensity) parts.push(formData.targetIntensity);
               if (formData?.subtype) parts.push(formatOptionLabel(formData.subtype));
               if (formData?.distanceKm) parts.push(`${formData.distanceKm}km`);
               else if (formData?.durationMinutes) parts.push(`${formData.durationMinutes}min`);
-              return parts.join(" ") || `Session ${nextSortOrder}`;
+              return parts.join(" · ") || `Session ${nextSortOrder}`;
             })(),
             description: formData?.description ?? "",
             duration: formData?.durationMinutes ? `${formData.durationMinutes} min` : "",
@@ -1994,20 +1995,6 @@ export default function EditProgramTemplatePage() {
                                     <option value={session.type}>{session.type}</option>
                                   ) : null}
                                 </select>
-                              </label>
-
-                              <label className="text-sm font-medium text-zinc-700 md:col-span-2">
-                                Session name
-                                <input
-                                  value={session.name}
-                                  onChange={(e) =>
-                                    updateSession(week.localId, session.localId, (current) => ({
-                                      ...current,
-                                      name: e.target.value,
-                                    }))
-                                  }
-                                  className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                />
                               </label>
 
                               {session.type !== "Intervals" && (

@@ -124,13 +124,14 @@ function formatLabel(value: string | null | undefined) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function buildSessionName(subtype: string, intensity: string, durationMinutes: string, distanceKm: string): string {
+function buildSessionName(activity: string, subtype: string, intensity: string, durationMinutes: string, distanceKm: string): string {
   const parts: string[] = [];
+  if (activity) parts.push(formatLabel(activity));
   if (intensity) parts.push(formatLabel(intensity));
   if (subtype) parts.push(formatLabel(subtype));
   if (distanceKm) parts.push(`${distanceKm}km`);
   else if (durationMinutes) parts.push(`${durationMinutes}min`);
-  return parts.join(" ");
+  return parts.join(" · ");
 }
 
 function createEmptyForm(): UnifiedSessionFormData {
@@ -386,8 +387,8 @@ export function UnifiedSessionForm({
   }, [form.activity, form.subtype, fieldConfigMap]);
 
   const autoName = useMemo(
-    () => buildSessionName(form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm),
-    [form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm],
+    () => buildSessionName(form.activity, form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm),
+    [form.activity, form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm],
   );
 
   function updateForm<K extends keyof UnifiedSessionFormData>(
@@ -421,6 +422,26 @@ export function UnifiedSessionForm({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold text-zinc-900">Activity</span>
+          <select
+            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+            value={form.activity}
+            onChange={(e) => updateForm("activity", e.target.value)}
+            disabled={loadingOptionData}
+          >
+            {activityOptions.length === 0 ? (
+              <option value="">No activities available</option>
+            ) : (
+              activityOptions.map((option) => (
+                <option key={option.id} value={option.slug}>
+                  {option.label}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+
         <label className="block">
           <span className="mb-1 block text-sm font-semibold text-zinc-900">Subtype</span>
           <select
