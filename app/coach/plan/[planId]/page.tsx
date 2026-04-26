@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import WarningList from "@/components/WarningList";
-import WeekTemplatePicker from "@/components/WeekTemplatePicker";
 import AdHocSessionForm from "@/components/AdHocSessionForm";
 import { UnifiedSessionForm, type UnifiedSessionFormData } from "@/app/coach/components/UnifiedSessionForm";
 import { calculateAllWarnings } from "@/lib/planner/warningRules";

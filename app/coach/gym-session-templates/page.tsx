@@ -296,6 +296,7 @@ export default function SessionTemplateDashboardPage() {
 
   const [customTemplateNames, setCustomTemplateNames] = useState<Record<string, string>>({});
   const [savingNameTemplateId, setSavingNameTemplateId] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -551,6 +552,30 @@ export default function SessionTemplateDashboardPage() {
     }
   }
 
+  async function handleDeleteSessionTemplate(template: GymSessionTemplate) {
+    if (!window.confirm(`Delete "${template.name}"? This cannot be undone.`)) return;
+
+    setDeletingTemplateId(template.id);
+    try {
+      // session_template_exercises, session_template_alternatives, mobility_session_pairs
+      // all CASCADE on delete, so just delete the template row itself
+      const { error: tmplErr } = await supabase
+        .from("session_templates")
+        .delete()
+        .eq("id", template.id);
+      if (tmplErr) throw new Error(tmplErr.message);
+
+      await refreshTemplates();
+      setStatusMessage(`"${template.name}" deleted.`);
+      window.setTimeout(() => setStatusMessage(""), 3000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatusMessage(`Failed to delete template: ${message}`);
+    } finally {
+      setDeletingTemplateId(null);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto max-w-7xl px-6 py-12">
@@ -628,35 +653,48 @@ export default function SessionTemplateDashboardPage() {
                           : "border-zinc-200 bg-zinc-50"
                       }`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => toggleTemplate(template.id)}
-                        className="w-full text-left"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold text-zinc-900">
-                              {template.name}
+                      <div className="flex items-start gap-4">
+                        <button
+                          type="button"
+                          onClick={() => toggleTemplate(template.id)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-zinc-900">
+                                {template.name}
+                              </div>
+                              <div className="mt-1 text-sm text-zinc-600">
+                                {template.description || "—"}
+                              </div>
+                              <div className="mt-2 text-xs text-zinc-500">
+                                {template.duration || "—"} · {template.intensity || "—"}
+                              </div>
+                              <div className="mt-1 text-xs text-zinc-500">
+                                {(template.tags ?? []).join(", ") || "—"}
+                              </div>
+                              <div className="mt-1 text-xs text-zinc-500">
+                                {(template.exercises ?? []).length} exercises
+                              </div>
                             </div>
-                            <div className="mt-1 text-sm text-zinc-600">
-                              {template.description || "—"}
-                            </div>
-                            <div className="mt-2 text-xs text-zinc-500">
-                              {template.duration || "—"} · {template.intensity || "—"}
-                            </div>
-                            <div className="mt-1 text-xs text-zinc-500">
-                              {(template.tags ?? []).join(", ") || "—"}
-                            </div>
-                            <div className="mt-1 text-xs text-zinc-500">
-                              {(template.exercises ?? []).length} exercises
-                            </div>
-                          </div>
 
-                          <div className="shrink-0 text-xs font-semibold text-zinc-500">
-                            {isExpanded ? "Hide" : "View"}
+                            <div className="shrink-0 text-xs font-semibold text-zinc-500">
+                              {isExpanded ? "Hide" : "View"}
+                            </div>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+
+                        {isAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteSessionTemplate(template)}
+                            disabled={deletingTemplateId === template.id}
+                            className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            {deletingTemplateId === template.id ? "Deleting…" : "Delete"}
+                          </button>
+                        ) : null}
+                      </div>
 
                       {isExpanded ? (
                         <div
@@ -807,35 +845,48 @@ export default function SessionTemplateDashboardPage() {
                           : "border-zinc-200 bg-zinc-50"
                       }`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => toggleCustomTemplate(template.id)}
-                        className="w-full text-left"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold text-zinc-900">
-                              {template.name}
+                      <div className="flex items-start gap-4">
+                        <button
+                          type="button"
+                          onClick={() => toggleCustomTemplate(template.id)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-zinc-900">
+                                {template.name}
+                              </div>
+                              <div className="mt-1 text-sm text-zinc-600">
+                                {template.description || "—"}
+                              </div>
+                              <div className="mt-2 text-xs text-zinc-500">
+                                {template.duration || "—"} · {template.intensity || "—"}
+                              </div>
+                              <div className="mt-1 text-xs text-zinc-500">
+                                {(template.tags ?? []).join(", ") || "—"}
+                              </div>
+                              <div className="mt-1 text-xs text-zinc-500">
+                                {(template.exercises ?? []).length} exercises
+                              </div>
                             </div>
-                            <div className="mt-1 text-sm text-zinc-600">
-                              {template.description || "—"}
-                            </div>
-                            <div className="mt-2 text-xs text-zinc-500">
-                              {template.duration || "—"} · {template.intensity || "—"}
-                            </div>
-                            <div className="mt-1 text-xs text-zinc-500">
-                              {(template.tags ?? []).join(", ") || "—"}
-                            </div>
-                            <div className="mt-1 text-xs text-zinc-500">
-                              {(template.exercises ?? []).length} exercises
-                            </div>
-                          </div>
 
-                          <div className="shrink-0 text-xs font-semibold text-zinc-500">
-                            {isExpanded ? "Hide" : "View"}
+                            <div className="shrink-0 text-xs font-semibold text-zinc-500">
+                              {isExpanded ? "Hide" : "View"}
+                            </div>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+
+                        {isAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteSessionTemplate(template)}
+                            disabled={deletingTemplateId === template.id}
+                            className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            {deletingTemplateId === template.id ? "Deleting…" : "Delete"}
+                          </button>
+                        ) : null}
+                      </div>
 
                       {isExpanded ? (
                         <div className="mt-4 border-t border-zinc-200 pt-4">
