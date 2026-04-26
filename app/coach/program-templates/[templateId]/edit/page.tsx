@@ -1251,12 +1251,12 @@ export default function EditProgramTemplatePage() {
     const derivedName = buildAutoName(form.startingFitness, form.distance, form.eventGoal, form.weeks);
     const finalName = derivedName || form.name.trim() || "Untitled Template";
 
-    // Derive plan length from actual week count
-    const derivedPlanLength = form.weeks.length;
+    // Derive plan length from actual week count (min 1 to satisfy check constraint)
+    const derivedPlanLength = Math.max(1, form.weeks.length);
 
-    // Derive training days per week as a representative value (max non-rest sessions across weeks)
+    // Derive training days per week as max non-rest sessions across weeks (min 1 to satisfy check constraint)
     const dayCounts = form.weeks.map((w) => w.sessions.filter((s) => s.type !== "Rest").length);
-    const derivedTrainingDays = dayCounts.length > 0 ? Math.max(...dayCounts) : 0;
+    const derivedTrainingDays = dayCounts.length > 0 ? Math.max(1, Math.max(...dayCounts)) : 1;
 
     const templatePayload = {
       name: finalName,

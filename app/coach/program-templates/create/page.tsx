@@ -149,9 +149,9 @@ export default function NewProgramTemplatePage() {
       slug,
       description: form.description.trim() || null,
       discipline: "general",
-      // These start at 0; the edit page derives them from actual weeks on save
-      plan_length_weeks: 0,
-      training_days_per_week: 0,
+      // Placeholder values — the edit page derives these from actual weeks on every save
+      plan_length_weeks: 1,
+      training_days_per_week: 1,
       starting_fitness: form.startingFitness.trim() || "novice",
       event_goal: form.eventGoal || null,
       distance: form.distance || null,
