@@ -1997,7 +1997,7 @@ export default function EditProgramTemplatePage() {
                                 </select>
                               </label>
 
-                              {session.type !== "Intervals" && (
+                              {session.type !== "Intervals" && session.type !== "Gym" && (
                                 <label className="text-sm font-medium text-zinc-700">
                                   Duration
                                   <input
@@ -2252,7 +2252,7 @@ export default function EditProgramTemplatePage() {
                               )}
 
                               <label className="text-sm font-medium text-zinc-700">
-                                Run time type
+                                Time of day
                                 <select
                                   value={session.runTimeType}
                                   onChange={(e) =>
@@ -2273,22 +2273,24 @@ export default function EditProgramTemplatePage() {
 
                             </div>
 
-                            <div className="mt-4 grid gap-3 md:grid-cols-2">
-                              <label className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-                                <input
-                                  type="checkbox"
-                                  checked={session.isTimeStrict}
-                                  onChange={(e) =>
-                                    updateSession(week.localId, session.localId, (current) => ({
-                                      ...current,
-                                      isTimeStrict: e.target.checked,
-                                    }))
-                                  }
-                                  className="h-4 w-4"
-                                />
-                                <span>Time strict</span>
-                              </label>
-                            </div>
+                            {session.type !== "Gym" ? (
+                              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                <label className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={session.isTimeStrict}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        isTimeStrict: e.target.checked,
+                                      }))
+                                    }
+                                    className="h-4 w-4"
+                                  />
+                                  <span>Time strict</span>
+                                </label>
+                              </div>
+                            ) : null}
 
                             {!session.sessionTemplateId && !session.activity ? (
                               <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
