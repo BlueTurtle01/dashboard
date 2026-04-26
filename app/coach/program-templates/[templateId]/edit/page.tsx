@@ -16,6 +16,7 @@ type ProgramTemplateRow = {
   training_days_per_week: number;
   starting_fitness: string;
   event_goal: string | null;
+  distance: string | null;
   is_featured: boolean;
   is_active: boolean;
   min_weekly_training_hours: number | null;
@@ -186,6 +187,7 @@ type TemplateForm = {
   trainingDaysPerWeek: string;
   startingFitness: string;
   eventGoal: string;
+  distance: string;
   isFeatured: boolean;
   isActive: boolean;
   minWeeklyTrainingHours: string;
@@ -299,6 +301,69 @@ function parseSlotNotes(notes: string): { duration?: string; intensity?: string;
 
 function makeLocalId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+}
+
+const RACE_GOAL_OPTIONS = [
+  { value: "finish", label: "Finish" },
+  { value: "finish_strong", label: "Finish Strong" },
+  { value: "complete_comfortably", label: "Complete Comfortably" },
+  { value: "experience", label: "Experience" },
+  { value: "pb", label: "Personal Best" },
+  { value: "place_highly", label: "Place Highly" },
+  { value: "win_age_category", label: "Win Age Category" },
+  { value: "win_overall", label: "Win Overall" },
+];
+
+const DISTANCE_OPTIONS = [
+  { value: "", label: "— select distance —" },
+  { value: "5K", label: "5K" },
+  { value: "10K", label: "10K" },
+  { value: "Half Marathon", label: "Half Marathon" },
+  { value: "Marathon", label: "Marathon" },
+  { value: "50K", label: "50K" },
+  { value: "50 Miles", label: "50 Miles" },
+  { value: "100K", label: "100K" },
+  { value: "100 Miles", label: "100 Miles" },
+  { value: "Multi-Day", label: "Multi-Day" },
+  { value: "Sprint Triathlon", label: "Sprint Triathlon" },
+  { value: "Olympic Triathlon", label: "Olympic Triathlon" },
+  { value: "Half Ironman", label: "Half Ironman" },
+  { value: "Ironman", label: "Ironman" },
+  { value: "Other", label: "Other" },
+];
+
+const FITNESS_LABELS: Record<string, string> = {
+  beginner: "Beginner",
+  novice: "Novice",
+  intermediate: "Intermediate",
+  advanced: "Advanced",
+};
+
+function buildAutoName(
+  startingFitness: string,
+  distance: string,
+  eventGoal: string,
+  weeks: EditableWeek[],
+): string {
+  const parts: string[] = [];
+  if (startingFitness) parts.push(FITNESS_LABELS[startingFitness] ?? startingFitness);
+  if (distance) parts.push(distance);
+  if (eventGoal) {
+    const goal = RACE_GOAL_OPTIONS.find((o) => o.value === eventGoal);
+    if (goal) parts.push(goal.label);
+  }
+  if (weeks.length > 0) {
+    parts.push(`${weeks.length}wk`);
+  }
+  // Compute training days range across weeks
+  if (weeks.length > 0) {
+    const dayCounts = weeks.map((w) => w.sessions.filter((s) => s.type !== "Rest").length);
+    const minDays = Math.min(...dayCounts);
+    const maxDays = Math.max(...dayCounts);
+    const daysLabel = minDays === maxDays ? `${minDays}d/wk` : `${minDays}-${maxDays}d/wk`;
+    parts.push(daysLabel);
+  }
+  return parts.join(" · ");
 }
 
 function slugify(value: string) {
@@ -518,6 +583,7 @@ function mapToForm(
     trainingDaysPerWeek: String(template.training_days_per_week ?? ""),
     startingFitness: template.starting_fitness,
     eventGoal: template.event_goal ?? "",
+    distance: template.distance ?? "",
     isFeatured: template.is_featured,
     isActive: template.is_active,
     minWeeklyTrainingHours: template.min_weekly_training_hours?.toString() ?? "",
@@ -696,6 +762,7 @@ export default function EditProgramTemplatePage() {
               training_days_per_week,
               starting_fitness,
               event_goal,
+              distance,
               is_featured,
               is_active,
               min_weekly_training_hours,
@@ -1181,15 +1248,26 @@ export default function EditProgramTemplatePage() {
     setIsSaving(true);
     setStatusMessage("");
 
+    const derivedName = buildAutoName(form.startingFitness, form.distance, form.eventGoal, form.weeks);
+    const finalName = derivedName || form.name.trim() || "Untitled Template";
+
+    // Derive plan length from actual week count
+    const derivedPlanLength = form.weeks.length;
+
+    // Derive training days per week as a representative value (max non-rest sessions across weeks)
+    const dayCounts = form.weeks.map((w) => w.sessions.filter((s) => s.type !== "Rest").length);
+    const derivedTrainingDays = dayCounts.length > 0 ? Math.max(...dayCounts) : 0;
+
     const templatePayload = {
-      name: form.name.trim() || "Untitled Template",
-      slug: slugify(form.slug || form.name || "untitled-template"),
+      name: finalName,
+      slug: slugify(finalName),
       description: form.description || null,
       discipline: form.discipline.trim() || "general",
-      plan_length_weeks: Number.parseInt(form.planLengthWeeks || "0", 10) || form.weeks.length,
-      training_days_per_week: Number.parseInt(form.trainingDaysPerWeek || "0", 10) || 0,
+      plan_length_weeks: derivedPlanLength,
+      training_days_per_week: derivedTrainingDays,
       starting_fitness: form.startingFitness.trim() || "",
       event_goal: form.eventGoal.trim() || null,
+      distance: form.distance || null,
       is_featured: form.isFeatured,
       is_active: form.isActive,
       min_weekly_training_hours: form.minWeeklyTrainingHours.trim() ? Number(form.minWeeklyTrainingHours) : null,
@@ -1542,16 +1620,17 @@ export default function EditProgramTemplatePage() {
         ) : null}
 
         <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="text-sm font-medium text-zinc-700">
-              Template name
-              <input
-                value={form.name}
-                onChange={(e) => updateForm("name", e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-              />
-            </label>
+          {/* Auto-generated name preview */}
+          <div className="mb-5 rounded-2xl border border-zinc-200 bg-zinc-50 px-5 py-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Template name (auto-generated)</p>
+            <p className="mt-1 text-lg font-semibold text-zinc-900">
+              {buildAutoName(form.startingFitness, form.distance, form.eventGoal, form.weeks) ||
+                <span className="font-normal italic text-zinc-400">Will be generated from settings and weeks</span>}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">Updates automatically when you change settings or add/remove weeks. Saved on each Save.</p>
+          </div>
 
+          <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm font-medium text-zinc-700 md:col-span-2">
               Description
               <textarea
@@ -1563,48 +1642,44 @@ export default function EditProgramTemplatePage() {
             </label>
 
             <label className="text-sm font-medium text-zinc-700">
-              Discipline
-              <input
-                value={form.discipline}
-                onChange={(e) => updateForm("discipline", e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-              />
-            </label>
-
-            <label className="text-sm font-medium text-zinc-700">
               Starting fitness
-              <input
+              <select
                 value={form.startingFitness}
                 onChange={(e) => updateForm("startingFitness", e.target.value)}
                 className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-              />
+              >
+                <option value="beginner">Beginner</option>
+                <option value="novice">Novice</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
             </label>
 
             <label className="text-sm font-medium text-zinc-700">
-              Plan length (weeks)
-              <input
-                value={form.planLengthWeeks}
-                onChange={(e) => updateForm("planLengthWeeks", e.target.value)}
+              Distance
+              <select
+                value={form.distance}
+                onChange={(e) => updateForm("distance", e.target.value)}
                 className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-              />
-            </label>
-
-            <label className="text-sm font-medium text-zinc-700">
-              Training days per week
-              <input
-                value={form.trainingDaysPerWeek}
-                onChange={(e) => updateForm("trainingDaysPerWeek", e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-              />
+              >
+                {DISTANCE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             </label>
 
             <label className="text-sm font-medium text-zinc-700">
               Event goal
-              <input
+              <select
                 value={form.eventGoal}
                 onChange={(e) => updateForm("eventGoal", e.target.value)}
                 className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-              />
+              >
+                <option value="">— select —</option>
+                {RACE_GOAL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             </label>
           </div>
 
