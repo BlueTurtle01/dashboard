@@ -1733,7 +1733,7 @@ export default function EditProgramTemplatePage() {
           <div className="space-y-6">
             {sortedWeeks.map((week) => {
               const theme = getWeekFocusTheme(week.focus);
-              const isCollapsed = Boolean(collapsedWeekLocalIds[week.localId]);
+              const isCollapsed = collapsedWeekLocalIds[week.localId] !== false;
               const sortedSessions = week.sessions
                 .slice()
                 .sort((a, b) => {

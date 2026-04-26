@@ -910,6 +910,8 @@ export default function ViewProgramTemplatePage() {
   const [isSavingCopy, setIsSavingCopy] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
+  const [activeTab, setActiveTab] = useState<"structure" | "summary">("structure");
+  const [collapsedWeekIds, setCollapsedWeekIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -1625,6 +1627,10 @@ export default function ViewProgramTemplatePage() {
     }
   }
 
+  function toggleWeekCollapsed(weekId: string) {
+    setCollapsedWeekIds((current) => ({ ...current, [weekId]: current[weekId] !== false }));
+  }
+
   if (isLoading) {
     return (
       <main className="min-h-screen bg-zinc-50 text-zinc-900">
@@ -1881,6 +1887,127 @@ export default function ViewProgramTemplatePage() {
           </section>
         ) : null}
 
+        {/* Tabs */}
+        <div className="mb-4 flex gap-1 rounded-2xl border border-zinc-200 bg-white p-1 shadow-sm">
+          {(["structure", "summary"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === tab
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-600 hover:bg-zinc-100"
+              }`}
+            >
+              {tab === "structure" ? "Template Structure" : "Plan Summary"}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "summary" ? (
+          <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-6 text-xl font-semibold">Plan Summary</h2>
+
+            {/* Weekly mileage chart */}
+            {(() => {
+              const sortedWeeks = weeks.slice().sort((a, b) => a.week_number - b.week_number);
+              const weekMiles = sortedWeeks.map((week) => {
+                const weekSessions = sessionsByWeek.get(week.id) ?? [];
+                const totalKm = weekSessions.reduce((sum, s) => sum + (getSessionDistanceKm(s) ?? 0), 0);
+                return { weekNumber: week.week_number, focus: week.focus ?? "", miles: totalKm * 0.621371 };
+              });
+              const maxMiles = Math.max(...weekMiles.map((w) => w.miles), 1);
+              const chartH = 160;
+              const barW = 28;
+              const gap = 6;
+              const totalW = weekMiles.length * (barW + gap);
+              const yAxisW = 36;
+
+              const yTicks = (() => {
+                const niceMax = Math.ceil(maxMiles / 5) * 5;
+                const step = niceMax <= 20 ? 5 : niceMax <= 50 ? 10 : 20;
+                const ticks: number[] = [];
+                for (let v = 0; v <= niceMax; v += step) ticks.push(v);
+                return { ticks, niceMax };
+              })();
+
+              return (
+                <div className="mb-8">
+                  <h3 className="mb-3 text-sm font-semibold text-zinc-700">Weekly mileage (miles)</h3>
+                  <div className="overflow-x-auto">
+                    <svg
+                      width={yAxisW + totalW}
+                      height={chartH + 36}
+                      className="block"
+                    >
+                      {/* Y-axis grid lines + labels */}
+                      {yTicks.ticks.map((tick) => {
+                        const y = chartH - (tick / yTicks.niceMax) * chartH;
+                        return (
+                          <g key={tick}>
+                            <line
+                              x1={yAxisW}
+                              x2={yAxisW + totalW}
+                              y1={y}
+                              y2={y}
+                              stroke="#e4e4e7"
+                              strokeWidth={1}
+                            />
+                            <text
+                              x={yAxisW - 4}
+                              y={y + 4}
+                              fontSize={9}
+                              textAnchor="end"
+                              fill="#71717a"
+                            >
+                              {tick}
+                            </text>
+                          </g>
+                        );
+                      })}
+
+                      {/* Bars */}
+                      {weekMiles.map((w, i) => {
+                        const barH = Math.max(2, (w.miles / yTicks.niceMax) * chartH);
+                        const x = yAxisW + i * (barW + gap);
+                        const y = chartH - barH;
+                        const focus = w.focus.toLowerCase();
+                        const fill =
+                          focus.includes("recovery") || focus.includes("deload")
+                            ? "#10b981"
+                            : focus.includes("build") || focus.includes("specific")
+                              ? "#3b82f6"
+                              : focus.includes("taper") || focus.includes("peak")
+                                ? "#8b5cf6"
+                                : "#71717a";
+
+                        return (
+                          <g key={w.weekNumber}>
+                            <rect x={x} y={y} width={barW} height={barH} fill={fill} rx={3} />
+                            {w.miles > 0 && (
+                              <text x={x + barW / 2} y={y - 4} fontSize={8} textAnchor="middle" fill="#52525b">
+                                {w.miles.toFixed(1)}
+                              </text>
+                            )}
+                            <text x={x + barW / 2} y={chartH + 14} fontSize={8} textAnchor="middle" fill="#71717a">
+                              W{w.weekNumber}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                  {weekMiles.every((w) => w.miles === 0) && (
+                    <p className="mt-2 text-sm text-zinc-400 italic">No distance data on sessions yet — add distance (km) to sessions to see the chart.</p>
+                  )}
+                </div>
+              );
+            })()}
+          </section>
+        ) : null}
+
+        {activeTab === "structure" ? (
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="mb-6">
             <h2 className="text-xl font-semibold">Template Structure</h2>
@@ -1897,10 +2024,15 @@ export default function ViewProgramTemplatePage() {
               .map((week) => {
                 const theme = getWeekFocusTheme(week.focus ?? "");
                 const weekSessions = sessionsByWeek.get(week.id) ?? [];
+                const isCollapsed = collapsedWeekIds[week.id] !== false;
 
                 return (
                   <div key={week.id} className={`rounded-2xl border p-4 ${theme.card}`}>
-                    <div className="mb-4 flex items-center justify-between gap-4">
+                    <button
+                      type="button"
+                      onClick={() => toggleWeekCollapsed(week.id)}
+                      className="mb-2 flex w-full items-center justify-between gap-4 text-left"
+                    >
                       <div className="flex items-center gap-3">
                         <h3 className={`text-lg font-semibold ${theme.accent}`}>
                           Week {week.week_number}
@@ -1908,16 +2040,20 @@ export default function ViewProgramTemplatePage() {
                         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${theme.badge}`}>
                           {week.focus || "Unspecified"}
                         </span>
+                        <span className="text-xs font-medium text-zinc-500">
+                          {weekSessions.length} session{weekSessions.length !== 1 ? "s" : ""}
+                        </span>
                       </div>
-                    </div>
+                      <span className={`text-lg font-semibold ${theme.accent}`}>{isCollapsed ? "+" : "−"}</span>
+                    </button>
 
-                    {week.notes ? (
+                    {!isCollapsed && week.notes ? (
                       <div className="mb-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700">
                         {week.notes}
                       </div>
                     ) : null}
 
-                    <div className="space-y-4">
+                    {!isCollapsed && <div className="space-y-4">
                       {weekSessions.map((session) => {
                         const { scalar, mode } = getScalarForSession(session, athleteProfile);
                         const scaledDuration = scaleMinutes(session.duration, scalar);
@@ -2171,12 +2307,13 @@ export default function ViewProgramTemplatePage() {
                           No sessions in this week.
                         </div>
                       ) : null}
-                    </div>
+                    </div>}
                   </div>
                 );
               })}
           </div>
         </section>
+        ) : null}
       </div>
     </main>
   );
