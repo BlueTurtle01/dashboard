@@ -182,7 +182,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto flex min-h-screen max-w-5xl items-center px-6 py-16">
         <div className="grid w-full gap-10 rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm md:grid-cols-[1.2fr_0.8fr] md:p-12">
           <section>

@@ -17,9 +17,9 @@ export default async function AthleteLayout({
   const isSoloPlanHolder = roles.includes("solo_plan_holder");
 
   return (
-    <>
+    <main className="app-content">
       <AthleteNav isSoloPlanHolder={isSoloPlanHolder} />
       {children}
-    </>
+    </main>
   );
 }

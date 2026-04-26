@@ -1566,7 +1566,7 @@ export default function EditProgramTemplatePage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-zinc-50 text-zinc-900">
+      <main className="min-h-screen">
         <div className="mx-auto max-w-6xl px-6 py-12">
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             Loading template…
@@ -1578,7 +1578,7 @@ export default function EditProgramTemplatePage() {
 
   if (loadError || !form) {
     return (
-      <main className="min-h-screen bg-zinc-50 text-zinc-900">
+      <main className="min-h-screen">
         <div className="mx-auto max-w-6xl px-6 py-12">
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
             Could not load template: {loadError || "Unknown error"}
@@ -1589,7 +1589,7 @@ export default function EditProgramTemplatePage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
@@ -1610,7 +1610,7 @@ export default function EditProgramTemplatePage() {
               type="button"
               onClick={() => void saveTemplate()}
               disabled={isSaving}
-              className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
             >
               {isSaving ? "Saving…" : "Save Template"}
             </button>
@@ -1780,7 +1780,7 @@ export default function EditProgramTemplatePage() {
                                 onClick={() => openTemplateSessionPicker(week.localId, "gym")}
                                 className={`rounded-lg border px-3 py-2 text-sm font-medium ${
                                   pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "gym"
-                                    ? "border-zinc-900 bg-zinc-900 text-white"
+                                    ? "border-zinc-900 bg-indigo-600 text-white"
                                     : "border-zinc-300 bg-white hover:bg-zinc-100"
                                 }`}
                               >
@@ -1792,7 +1792,7 @@ export default function EditProgramTemplatePage() {
                                 onClick={() => openTemplateSessionPicker(week.localId, "functional")}
                                 className={`rounded-lg border px-3 py-2 text-sm font-medium ${
                                   pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "functional"
-                                    ? "border-zinc-900 bg-zinc-900 text-white"
+                                    ? "border-zinc-900 bg-indigo-600 text-white"
                                     : "border-zinc-300 bg-white hover:bg-zinc-100"
                                 }`}
                               >
@@ -1804,7 +1804,7 @@ export default function EditProgramTemplatePage() {
                                 onClick={() => openTemplateSessionPicker(week.localId, "mobility")}
                                 className={`rounded-lg border px-3 py-2 text-sm font-medium ${
                                   pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "mobility"
-                                    ? "border-zinc-900 bg-zinc-900 text-white"
+                                    ? "border-zinc-900 bg-indigo-600 text-white"
                                     : "border-zinc-300 bg-white hover:bg-zinc-100"
                                 }`}
                               >

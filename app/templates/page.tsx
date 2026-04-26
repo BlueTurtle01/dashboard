@@ -24,7 +24,7 @@ export default function TemplatesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-4xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-3xl font-bold">Templates</h1>

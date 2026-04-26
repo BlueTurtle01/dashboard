@@ -577,7 +577,7 @@ export default function SessionTemplateDashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-7xl px-6 py-12">
         {checkingAuth ? (
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -802,7 +802,7 @@ export default function SessionTemplateDashboardPage() {
                               className={`rounded-xl px-5 py-3 text-sm font-semibold transition ${
                                 !isDirty || isSavingThisTemplate
                                   ? "cursor-not-allowed border border-zinc-200 bg-zinc-200 text-zinc-500"
-                                  : "border border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-700"
+                                  : "border border-zinc-900 bg-indigo-600 text-white hover:bg-zinc-700"
                               }`}
                             >
                               {isSavingThisTemplate ? "Saving..." : "Save as Custom Session"}
@@ -911,7 +911,7 @@ export default function SessionTemplateDashboardPage() {
                               className={`rounded-xl px-5 py-3 text-sm font-semibold transition ${
                                 !isDirty || !nameValue.trim() || isSavingThisName
                                   ? "cursor-not-allowed border border-zinc-200 bg-zinc-200 text-zinc-500"
-                                  : "border border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-700"
+                                  : "border border-zinc-900 bg-indigo-600 text-white hover:bg-zinc-700"
                               }`}
                             >
                               {isSavingThisName ? "Saving..." : "Save Name"}

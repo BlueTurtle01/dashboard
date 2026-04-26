@@ -12,5 +12,9 @@ export default function FunnelLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <div style={{ marginLeft: 0, marginTop: 0, padding: 0 }}>
+      {children}
+    </div>
+  );
 }

@@ -12,5 +12,5 @@ export default async function CoachLayout({
     redirect("/login");
   }
 
-  return <>{children}</>;
+  return <main className="app-content">{children}</main>;
 }

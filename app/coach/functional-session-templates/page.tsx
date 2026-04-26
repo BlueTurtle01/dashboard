@@ -614,7 +614,7 @@ export default function FunctionalSessionTemplatesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-7xl px-6 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight">Functional Session Templates</h1>
@@ -1049,7 +1049,7 @@ export default function FunctionalSessionTemplatesPage() {
                             className={`rounded-xl px-5 py-3 text-sm font-semibold transition ${
                               !isDirty(template) || savingTemplateId === template.id
                                 ? "cursor-not-allowed border border-zinc-200 bg-zinc-200 text-zinc-500"
-                                : "border border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-700"
+                                : "border border-zinc-900 bg-indigo-600 text-white hover:bg-zinc-700"
                             }`}
                           >
                             {savingTemplateId === template.id ? "Saving..." : "Save Changes"}

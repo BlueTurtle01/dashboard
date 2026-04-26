@@ -192,7 +192,7 @@ export default function NewProgramTemplatePage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-3xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
@@ -212,7 +212,7 @@ export default function NewProgramTemplatePage() {
               type="button"
               onClick={() => void handleCreateTemplate()}
               disabled={isSaving}
-              className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
             >
               {isSaving ? "Creating…" : "Create Template"}
             </button>

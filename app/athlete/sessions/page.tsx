@@ -529,7 +529,7 @@ function SessionCard({
                       onClick={() => setPerceivedEffort(num)}
                       className={`w-8 h-8 rounded text-xs font-semibold transition-colors ${
                         perceivedEffort === num
-                          ? "bg-zinc-900 text-white"
+                          ? "bg-indigo-600 text-white"
                           : "border border-zinc-300 hover:border-zinc-400"
                       }`}
                     >
@@ -553,7 +553,7 @@ function SessionCard({
               <button
                 onClick={onLogCompletion}
                 disabled={isSubmitting}
-                className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+                className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
                 {isSubmitting ? "Saving…" : "Log Session"}
               </button>

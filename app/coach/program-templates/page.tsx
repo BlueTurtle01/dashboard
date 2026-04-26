@@ -973,7 +973,7 @@ export default function TemplatesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
@@ -988,7 +988,7 @@ export default function TemplatesPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/coach/program-templates/create"
-              className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
             >
               Create Public Template
             </Link>

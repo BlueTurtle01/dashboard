@@ -961,7 +961,7 @@ export default function IntakePage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-zinc-50 text-zinc-900">
+      <main className="min-h-screen">
         <div className="mx-auto max-w-5xl space-y-8 px-6 py-12">
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h1 className="text-3xl font-bold tracking-tight">Athlete Intake</h1>
@@ -973,7 +973,7 @@ export default function IntakePage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-5xl space-y-8 px-6 py-12">
         <div className="flex items-end justify-between">
           <div>
@@ -1461,7 +1461,7 @@ export default function IntakePage() {
                       onClick={() => toggleDaySelection("availableGymDays", day.value)}
                       className={`min-w-[52px] rounded-xl px-4 py-2 text-sm font-medium ${
                         selected
-                          ? "bg-zinc-900 text-white"
+                          ? "bg-indigo-600 text-white"
                           : "border border-zinc-300 bg-white hover:bg-zinc-100"
                       }`}
                     >

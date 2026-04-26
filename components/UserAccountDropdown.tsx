@@ -12,11 +12,10 @@ export default function UserAccountDropdown() {
 
   useEffect(() => {
     const supabase = createClient();
-    const subscription = supabase.auth.onAuthStateChange((event, session) => {
+    const subscription = supabase.auth.onAuthStateChange((_event, session) => {
       setEmail(session?.user?.email ?? null);
     });
 
-    // Also get current user on mount
     supabase.auth.getUser().then((result) => {
       setEmail(result.data?.user?.email ?? null);
     });
@@ -33,70 +32,118 @@ export default function UserAccountDropdown() {
     router.push("/login");
   };
 
-  if (!email) {
-    return null;
-  }
+  if (!email) return null;
+
+  const displayName = email.split("@")[0];
 
   return (
     <div style={{ position: "relative" }}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        type="button"
+        onClick={() => setIsOpen((o) => !o)}
         style={{
-          background: "none",
-          border: "1px solid #ddd",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          width: "100%",
           padding: "8px 12px",
-          borderRadius: "6px",
+          borderRadius: "8px",
+          border: "1px solid var(--slate-200)",
+          background: "transparent",
           cursor: "pointer",
-          fontSize: "14px",
-          color: "#333",
+          fontSize: "13px",
+          fontWeight: 500,
+          color: "var(--slate-700)",
+          fontFamily: "inherit",
+          textAlign: "left",
+          transition: "background 0.12s",
         }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--slate-100)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       >
-        {email.split("@")[0]}
+        <span
+          style={{
+            width: "24px",
+            height: "24px",
+            borderRadius: "50%",
+            background: "var(--brand-100)",
+            color: "var(--brand-700)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "11px",
+            fontWeight: 700,
+            flexShrink: 0,
+          }}
+        >
+          {displayName[0]?.toUpperCase()}
+        </span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {displayName}
+        </span>
       </button>
 
       {isOpen && (
-        <div
-          style={{
-            position: "absolute",
-            top: "100%",
-            right: 0,
-            background: "#fff",
-            border: "1px solid #ddd",
-            borderRadius: "6px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            zIndex: 1000,
-            minWidth: "200px",
-            marginTop: "4px",
-          }}
-        >
-          <div style={{ padding: "12px", borderBottom: "1px solid #eee" }}>
-            <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>
-              Logged in as:
-            </div>
-            <div style={{ fontSize: "13px", fontWeight: "600", color: "#333" }}>
-              {email}
-            </div>
-          </div>
-
-          <button
-            onClick={handleLogout}
-            disabled={isLoggingOut}
+        <>
+          <div
             style={{
-              width: "100%",
-              padding: "10px 12px",
-              border: "none",
-              background: "none",
-              textAlign: "left",
-              cursor: "pointer",
-              fontSize: "14px",
-              color: "#d32f2f",
+              position: "fixed",
+              inset: 0,
+              zIndex: 98,
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f5f5")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+            onClick={() => setIsOpen(false)}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: "calc(100% + 6px)",
+              left: 0,
+              right: 0,
+              background: "#ffffff",
+              border: "1px solid var(--slate-200)",
+              borderRadius: "10px",
+              boxShadow: "0 4px 6px rgba(0,0,0,.07)",
+              zIndex: 99,
+              overflow: "hidden",
+            }}
           >
-            {isLoggingOut ? "Logging out..." : "Logout"}
-          </button>
-        </div>
+            <div
+              style={{
+                padding: "10px 12px",
+                borderBottom: "1px solid var(--slate-100)",
+              }}
+            >
+              <div style={{ fontSize: "10px", color: "var(--slate-400)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>
+                Signed in as
+              </div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--slate-700)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {email}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "none",
+                background: "none",
+                textAlign: "left",
+                cursor: "pointer",
+                fontSize: "13px",
+                fontWeight: 500,
+                color: "#dc2626",
+                fontFamily: "inherit",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#fff1f2")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+            >
+              {isLoggingOut ? "Signing out…" : "Sign out"}
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

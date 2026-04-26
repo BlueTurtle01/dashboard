@@ -3,8 +3,8 @@ import Navbar from "@/components/Navbar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "My App",
-  description: "My Next.js app",
+  title: "Endurance Planner",
+  description: "Coach dashboard for endurance training plans",
 };
 
 export default function RootLayout({
@@ -16,7 +16,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Navbar />
-        <main>{children}</main>
+        {children}
       </body>
     </html>
   );

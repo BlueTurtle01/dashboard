@@ -319,7 +319,7 @@ export default function NotificationsPage() {
                               className={`whitespace-nowrap rounded px-2 py-1 text-xs font-semibold transition ${
                                 notification.read
                                   ? "border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
-                                  : "border border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-700"
+                                  : "border border-zinc-900 bg-indigo-600 text-white hover:bg-zinc-700"
                               }`}
                             >
                               {notification.read ? "Mark unread" : "Mark read"}

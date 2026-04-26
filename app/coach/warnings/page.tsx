@@ -136,7 +136,7 @@ export default function WarningsPage() {
   })).filter((plan) => plan.warnings.length > 0);
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-4xl px-6 py-12">
         <div className="mb-8">
           <div className="flex items-start justify-between gap-4">

@@ -420,7 +420,7 @@ export default function LogPage() {
               onClick={() => setEventType("injury")}
               className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
                 eventType === "injury"
-                  ? "bg-zinc-900 text-white"
+                  ? "bg-indigo-600 text-white"
                   : "border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50"
               }`}
             >
@@ -430,7 +430,7 @@ export default function LogPage() {
               onClick={() => setEventType("holiday")}
               className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
                 eventType === "holiday"
-                  ? "bg-zinc-900 text-white"
+                  ? "bg-indigo-600 text-white"
                   : "border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50"
               }`}
             >
@@ -679,7 +679,7 @@ export default function LogPage() {
               className={`w-full rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
                 eventType === "training_camp"
                   ? "bg-violet-600 hover:bg-violet-700"
-                  : "bg-zinc-900 hover:bg-zinc-800"
+                  : "bg-zinc-900 hover:bg-indigo-700"
               }`}
             >
               {submitting ? "Submitting…" : eventType === "training_camp" ? "Log Training Camp" : "Submit Report"}

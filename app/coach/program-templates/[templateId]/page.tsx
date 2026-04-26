@@ -1633,7 +1633,7 @@ export default function ViewProgramTemplatePage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-zinc-50 text-zinc-900">
+      <main className="min-h-screen">
         <div className="mx-auto max-w-6xl px-6 py-12">
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             Loading template…
@@ -1645,7 +1645,7 @@ export default function ViewProgramTemplatePage() {
 
   if (loadError || !template) {
     return (
-      <main className="min-h-screen bg-zinc-50 text-zinc-900">
+      <main className="min-h-screen">
         <div className="mx-auto max-w-6xl px-6 py-12">
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
             Could not load template: {loadError || "Unknown error"}
@@ -1656,7 +1656,7 @@ export default function ViewProgramTemplatePage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
@@ -1759,7 +1759,7 @@ export default function ViewProgramTemplatePage() {
                   type="button"
                   onClick={() => void handleSaveCopyToAthlete()}
                   disabled={isSavingCopy}
-                  className="rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+                  className="rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {isSavingCopy ? "Saving…" : "Save Copy To Current Athlete"}
                 </button>
@@ -1896,7 +1896,7 @@ export default function ViewProgramTemplatePage() {
               onClick={() => setActiveTab(tab)}
               className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
                 activeTab === tab
-                  ? "bg-zinc-900 text-white"
+                  ? "bg-indigo-600 text-white"
                   : "text-zinc-600 hover:bg-zinc-100"
               }`}
             >

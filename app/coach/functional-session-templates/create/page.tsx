@@ -830,7 +830,7 @@ const generatedNamePreview = useMemo(() => {
   }, [templates, searchQuery, activityFilter, subtypeFilter]);
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="px-6 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight">Functional Session Templates</h1>

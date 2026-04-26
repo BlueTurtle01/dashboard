@@ -2317,7 +2317,7 @@ export default function PlanEditorPage() {
   const buttonsDisabled = loading || !plan;
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-[1600px] px-6 py-12">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
@@ -2621,7 +2621,7 @@ export default function PlanEditorPage() {
                                   onClick={() => openTemplateSessionPicker(typedWeek.id, "gym")}
                                   className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                                     pendingSessionSlot?.weekId === typedWeek.id && pendingSessionType === "gym"
-                                      ? "border-zinc-900 bg-zinc-900 text-white"
+                                      ? "border-zinc-900 bg-indigo-600 text-white"
                                       : "border-zinc-300 bg-white hover:bg-zinc-100"
                                   }`}
                                 >
@@ -2633,7 +2633,7 @@ export default function PlanEditorPage() {
                                   onClick={() => openTemplateSessionPicker(typedWeek.id, "functional")}
                                   className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                                     pendingSessionSlot?.weekId === typedWeek.id && pendingSessionType === "functional"
-                                      ? "border-zinc-900 bg-zinc-900 text-white"
+                                      ? "border-zinc-900 bg-indigo-600 text-white"
                                       : "border-zinc-300 bg-white hover:bg-zinc-100"
                                   }`}
                                 >
@@ -2645,7 +2645,7 @@ export default function PlanEditorPage() {
                                   onClick={() => openTemplateSessionPicker(typedWeek.id, "mobility")}
                                   className={`rounded-lg border px-3 py-2 text-xs font-medium ${
                                     pendingSessionSlot?.weekId === typedWeek.id && pendingSessionType === "mobility"
-                                      ? "border-zinc-900 bg-zinc-900 text-white"
+                                      ? "border-zinc-900 bg-indigo-600 text-white"
                                       : "border-zinc-300 bg-white hover:bg-zinc-100"
                                   }`}
                                 >

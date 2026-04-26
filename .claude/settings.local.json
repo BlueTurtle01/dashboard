@@ -28,7 +28,8 @@
       "WebFetch(domain:lcwvxpdqscuumpgniaqh.supabase.co)",
       "Bash(npx tsc:*)",
       "Bash(curl -s http://localhost:3001/)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(xargs sed *)"
     ]
   }
 }

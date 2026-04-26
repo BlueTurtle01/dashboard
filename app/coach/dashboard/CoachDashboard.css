@@ -1,12 +1,9 @@
 .coach-dashboard-page {
   min-height: 100vh;
-  background: #f5f7fb;
-  padding: 32px 20px;
 }
 
 .coach-dashboard-page__inner {
   max-width: 1200px;
-  margin: 0 auto;
 }
 
 .coach-dashboard-page__header {
@@ -14,17 +11,21 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .coach-dashboard-page__header h1 {
-  margin: 0 0 8px;
-  font-size: 32px;
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--slate-900);
+  letter-spacing: -0.02em;
 }
 
 .coach-dashboard-page__header p {
   margin: 0;
-  color: #555;
+  color: var(--slate-500);
+  font-size: 14px;
 }
 
 .coach-dashboard-page__stats {
@@ -35,56 +36,64 @@
 
 .coach-dashboard-stat {
   background: #ffffff;
-  border: 1px solid #d9e1ec;
+  border: 1px solid var(--slate-200);
   border-radius: 12px;
-  padding: 14px 18px;
+  padding: 16px 20px;
   min-width: 120px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .coach-dashboard-stat__label {
   display: block;
-  font-size: 12px;
-  color: #666;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--slate-400);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   margin-bottom: 6px;
 }
 
 .coach-dashboard-stat strong {
-  font-size: 24px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--slate-900);
 }
 
 .coach-dashboard-page__coach-id {
   margin-bottom: 18px;
-  color: #555;
+  color: var(--slate-500);
   font-size: 14px;
 }
 
 .coach-dashboard-page__coach-id code {
-  background: #eef2f7;
+  font-family: "JetBrains Mono", monospace;
+  background: var(--slate-100);
+  color: var(--slate-700);
   padding: 2px 6px;
   border-radius: 6px;
+  font-size: 12px;
 }
 
 .coach-dashboard-message {
   background: #ffffff;
-  border: 1px solid #d9e1ec;
-  border-radius: 14px;
+  border: 1px solid var(--slate-200);
+  border-radius: 12px;
   padding: 18px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .coach-dashboard-message--error {
-  color: #a12626;
-  border-color: #efcaca;
-  background: #fff7f7;
+  color: #991b1b;
+  border-color: #fecaca;
+  background: #fef2f2;
 }
 
 .coach-dashboard-table-wrap {
   background: #ffffff;
-  border: 1px solid #d9e1ec;
-  border-radius: 14px;
+  border: 1px solid var(--slate-200);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .coach-dashboard-table {
@@ -95,66 +104,81 @@
 .coach-dashboard-table th,
 .coach-dashboard-table td {
   text-align: left;
-  padding: 14px 16px;
-  border-bottom: 1px solid #e8edf4;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--slate-100);
   vertical-align: middle;
 }
 
 .coach-dashboard-table th {
-  background: #f8fafc;
-  font-size: 14px;
-  font-weight: 700;
+  background: var(--slate-50);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.coach-dashboard-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .coach-dashboard-table tbody tr:hover {
-  background: #fafcff;
+  background: var(--slate-50);
+}
+
+.coach-dashboard-table td {
+  font-size: 14px;
+  color: var(--slate-700);
 }
 
 .coach-dashboard-athlete-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .coach-dashboard-athlete-subtext {
   font-size: 12px;
-  color: #666;
+  color: var(--slate-400);
   word-break: break-all;
 }
 
 .coach-dashboard-status {
-  display: inline-block;
-  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: capitalize;
 }
 
 .coach-dashboard-status--active {
-  background: #e8f7eb;
-  color: #1d6b2f;
+  background: #dcfce7;
+  color: #15803d;
 }
 
 .coach-dashboard-status--pending {
-  background: #fff4dd;
-  color: #8a5a00;
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .coach-dashboard-status--inactive {
-  background: #f1f1f1;
-  color: #555;
+  background: var(--slate-100);
+  color: var(--slate-500);
 }
 
 .coach-dashboard-view-link {
-  display: inline-block;
+  display: inline-flex;
   text-decoration: none;
-  font-weight: 700;
-  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-600);
+  transition: color 0.12s;
 }
 
 .coach-dashboard-view-link:hover {
-  text-decoration: underline;
+  color: var(--brand-700);
 }
 
 @media (max-width: 900px) {

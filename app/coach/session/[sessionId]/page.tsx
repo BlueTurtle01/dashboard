@@ -525,7 +525,7 @@ export default function SessionEditPage() {
 
   if (!session) {
     return (
-      <main className="min-h-screen bg-zinc-50 text-zinc-900">
+      <main className="min-h-screen">
         <div className="mx-auto max-w-4xl px-6 py-12">
           <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
             <h1 className="text-2xl font-bold">Session not found</h1>
@@ -545,7 +545,7 @@ export default function SessionEditPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>

@@ -23,8 +23,8 @@ export default function AthleteNav({ isSoloPlanHolder = false }: AthleteNavProps
   ];
 
   return (
-    <nav className="bg-white border-b border-zinc-200">
-      <div className="max-w-6xl mx-auto px-6 flex gap-1">
+    <nav className="bg-white border-b border-slate-200 -mx-6 px-6 mb-6">
+      <div className="flex gap-1">
         {tabs.map((tab) => {
           const isActive = pathname === tab.href;
           return (
@@ -33,8 +33,8 @@ export default function AthleteNav({ isSoloPlanHolder = false }: AthleteNavProps
               href={tab.href}
               className={`text-sm font-semibold px-4 py-3 transition-colors ${
                 isActive
-                  ? "border-b-2 border-zinc-900 text-zinc-900"
-                  : "text-zinc-500 hover:text-zinc-700"
+                  ? "border-b-2 border-indigo-600 text-indigo-700"
+                  : "text-slate-500 hover:text-slate-800"
               }`}
             >
               {tab.label}

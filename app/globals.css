@@ -1,40 +1,204 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #000000;
-}
+  /* Brand — indigo */
+  --brand-50: #eef2ff;
+  --brand-100: #e0e7ff;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;
+  --brand-900: #312e81;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Neutrals — slate */
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+
+  --background: var(--slate-50);
+  --foreground: var(--slate-900);
+
+  --sidebar-width: 240px;
+  --topbar-height: 64px;
 }
 
 html,
 body {
   min-height: 100vh;
-  background-color: #ffffff;
-  color: #000000;
+  background-color: var(--slate-50);
+  color: var(--slate-900);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
+code,
+pre,
+.mono {
+  font-family: "JetBrains Mono", monospace;
 }
 
 input,
 textarea,
 select {
-  color: #000000;
+  color: var(--slate-900);
 }
 
 ::placeholder {
-  color: #666666;
+  color: var(--slate-400);
   opacity: 1;
 }
 
-/* Light color palette for plan highlighting and calendar elements */
+/* ── App shell ────────────────────────────────────────────────────── */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.app-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid var(--slate-200);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  overflow-y: auto;
+}
+
+.app-sidebar__logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--topbar-height);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--slate-200);
+  flex-shrink: 0;
+}
+
+.app-sidebar__logo-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--brand-600);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.app-sidebar__logo-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-sidebar__logo-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--slate-900);
+  line-height: 1.2;
+}
+
+.app-sidebar__logo-sub {
+  font-size: 11px;
+  color: var(--slate-400);
+  line-height: 1.2;
+}
+
+.app-sidebar__nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-sidebar__group-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--slate-400);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 12px 12px 4px;
+}
+
+.app-sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--slate-600);
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.app-sidebar__link:hover {
+  background: var(--slate-100);
+  color: var(--slate-900);
+}
+
+.app-sidebar__link--active {
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+.app-sidebar__link--active:hover {
+  background: var(--brand-100);
+  color: var(--brand-700);
+}
+
+.app-sidebar__bottom {
+  padding: 12px 8px;
+  border-top: 1px solid var(--slate-200);
+  flex-shrink: 0;
+}
+
+/* Topbar */
+.app-topbar {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  height: var(--topbar-height);
+  background: #ffffff;
+  border-bottom: 1px solid var(--slate-200);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 24px;
+  gap: 8px;
+  z-index: 40;
+}
+
+/* Main content area */
+.app-content {
+  margin-left: var(--sidebar-width);
+  margin-top: var(--topbar-height);
+  flex: 1;
+  min-width: 0;
+  padding: 32px 24px;
+  max-width: calc(1280px + var(--sidebar-width));
+}
+
+/* ── Light color palette (legacy calendar/plan highlighting) ─────── */
 .light-card-bg {
   background-color: #f9fafb;
 }

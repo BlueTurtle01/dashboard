@@ -972,7 +972,7 @@ export default function CoachAthleteOverviewPage() {
   const blockedDates = normaliseStringArray(profile?.blocked_dates);
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+    <main className="min-h-screen">
       <div className="mx-auto max-w-6xl px-6 py-10">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>

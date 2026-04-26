@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import LogoutButton from "./LogoutButton";
 import NotificationsIcon from "./NotificationsIcon";
 import WarningsIcon from "./WarningsIcon";
 import UserAccountDropdown from "./UserAccountDropdown";
+import SidebarDropdown from "./SidebarDropdown";
 import "./Navbar.css";
 
 export default async function Navbar() {
@@ -30,172 +30,122 @@ export default async function Navbar() {
   const isSoloPlanHolder = roles.includes("solo_plan_holder");
   const canAccessCoachArea = isAdmin || isCoach;
 
+  if (!user) return null;
+
   return (
-    <nav className="site-navbar">
-      <div className="site-navbar__inner">
-        <Link href="/" className="site-navbar__brand">
-          My App
-        </Link>
-
-        <div className="site-navbar__links">
-          {(isAthlete || isSoloPlanHolder) && (
-            <Link href="/athlete" className="site-navbar__link">
-              My Training
-            </Link>
-          )}
-
-          {(isAthlete || isSoloPlanHolder) && (
-            <Link href="/athlete/profile" className="site-navbar__link">
-              Profile
-            </Link>
-          )}
-
-          {canAccessCoachArea && (
-            <Link href="/coach/dashboard" className="site-navbar__link">
-              Dashboard
-            </Link>
-          )}
-
-          {(isAthlete || canAccessCoachArea) && (
-            <Link href="/coaches" className="site-navbar__link">
-              Coaches
-            </Link>
-          )}
-
-          {canAccessCoachArea && (
-            <div className="site-navbar__dropdown">
-              <button className="site-navbar__dropdown-trigger" type="button">
-                Programs
-              </button>
-              <div className="site-navbar__dropdown-menu">
-                <Link
-                  href="/coach/program-templates/"
-                  className="site-navbar__dropdown-link"
-                >
-                  View Programs
-                </Link>
-                <Link
-                  href="/coach/program-templates/create"
-                  className="site-navbar__dropdown-link"
-                >
-                  Create Program
-                </Link>
-              </div>
-            </div>
-          )}
-
-          {canAccessCoachArea && (
-            <div className="site-navbar__dropdown">
-              <button className="site-navbar__dropdown-trigger" type="button">
-                Mobility
-              </button>
-              <div className="site-navbar__dropdown-menu">
-                <Link
-                  href="/coach/mobility-sessions"
-                  className="site-navbar__dropdown-link"
-                >
-                  View Mobility Sessions
-                </Link>
-                <Link
-                  href="/coach/mobility-sessions/create"
-                  className="site-navbar__dropdown-link"
-                >
-                  Create Mobility Session
-                </Link>
-              </div>
-            </div>
-          )}
-
-
-          {isAdmin && (
-            <div style={{ display: "flex", gap: "8px" }}>
-              <div className="site-navbar__dropdown">
-                <button className="site-navbar__dropdown-trigger" type="button">
-                  Admin
-                </button>
-                <div className="site-navbar__dropdown-menu">
-                  <Link href="/admin/coach-performance" className="site-navbar__dropdown-link">
-                    Coach Performance
-                  </Link>
-                </div>
-              </div>
-
-              <div className="site-navbar__dropdown">
-                <button className="site-navbar__dropdown-trigger" type="button">
-                  Library
-                </button>
-                <div className="site-navbar__dropdown-menu">
-                  <Link href="/admin/exercises" className="site-navbar__dropdown-link">
-                    Exercises
-                  </Link>
-                  <Link href="/admin/exercises/create" className="site-navbar__dropdown-link">
-                    Create Exercise
-                  </Link>
-                  <Link href="/admin/stretches" className="site-navbar__dropdown-link">
-                    Stretches
-                  </Link>
-                  <Link href="/admin/stretches/create" className="site-navbar__dropdown-link">
-                    Create Stretch
-                  </Link>
-                </div>
-              </div>
-
-              <div className="site-navbar__dropdown">
-                <button className="site-navbar__dropdown-trigger" type="button">
-                  Templates
-                </button>
-                <div className="site-navbar__dropdown-menu">
-                  <Link href="/coach/gym-session-templates" className="site-navbar__dropdown-link">
-                    Gym Sessions
-                  </Link>
-                  <Link href="/coach/gym-session-templates/create" className="site-navbar__dropdown-link">
-                    Create Gym Session
-                  </Link>
-                  <Link href="/coach/functional-session-templates" className="site-navbar__dropdown-link">
-                    Functional Sessions
-                  </Link>
-                  <Link href="/coach/functional-session-templates/create" className="site-navbar__dropdown-link">
-                    Create Functional Session
-                  </Link>
-                  <Link href="/admin/functional/types/create" className="site-navbar__dropdown-link">
-                    Functional Types
-                  </Link>
-                </div>
-              </div>
-
-              <div className="site-navbar__dropdown">
-                <button className="site-navbar__dropdown-trigger" type="button">
-                  Config
-                </button>
-                <div className="site-navbar__dropdown-menu">
-                  <Link href="/admin/session-template-field-config/" className="site-navbar__dropdown-link">
-                    Session Template Tags
-                  </Link>
-                  <Link href="/athlete/profile" className="site-navbar__dropdown-link">
-                    Athlete Profile
-                  </Link>
-                  <Link href="/admin/solo-plans" className="site-navbar__dropdown-link">
-                    Solo Plans
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )}
+    <>
+      {/* ── Fixed left sidebar ────────────────────────────────── */}
+      <aside className="app-sidebar">
+        {/* Logo */}
+        <div className="app-sidebar__logo">
+          <div className="app-sidebar__logo-icon">EP</div>
+          <div className="app-sidebar__logo-text">
+            <span className="app-sidebar__logo-name">Endurance</span>
+            <span className="app-sidebar__logo-sub">Coach Platform</span>
+          </div>
         </div>
 
-        <div className="site-navbar__actions">
-          <NotificationsIcon />
-          <WarningsIcon />
-
-          {canAccessCoachArea && (
-            <Link href="/coach/profile" className="site-navbar__dropdown-link">
-              My Profile
-            </Link>
+        {/* Navigation */}
+        <nav className="app-sidebar__nav">
+          {/* Athlete section */}
+          {(isAthlete || isSoloPlanHolder) && (
+            <>
+              <span className="app-sidebar__group-label">Training</span>
+              <Link href="/athlete" className="app-sidebar__link">
+                My Plan
+              </Link>
+              <Link href="/athlete/profile" className="app-sidebar__link">
+                Profile
+              </Link>
+            </>
           )}
 
+          {/* Coach section */}
+          {canAccessCoachArea && (
+            <>
+              <span className="app-sidebar__group-label">Coach</span>
+              <Link href="/coach/dashboard" className="app-sidebar__link">
+                Dashboard
+              </Link>
+              {(isAthlete || canAccessCoachArea) && (
+                <Link href="/coaches" className="app-sidebar__link">
+                  Coaches
+                </Link>
+              )}
+              <SidebarDropdown
+                label="Programs"
+                items={[
+                  { href: "/coach/program-templates", label: "View Programs" },
+                  { href: "/coach/program-templates/create", label: "Create Program" },
+                ]}
+              />
+              <SidebarDropdown
+                label="Mobility"
+                items={[
+                  { href: "/coach/mobility-sessions", label: "View Mobility Sessions" },
+                  { href: "/coach/mobility-sessions/create", label: "Create Mobility Session" },
+                ]}
+              />
+              {canAccessCoachArea && (
+                <Link href="/coach/profile" className="app-sidebar__link">
+                  My Profile
+                </Link>
+              )}
+            </>
+          )}
+
+          {/* Admin section */}
+          {isAdmin && (
+            <>
+              <span className="app-sidebar__group-label">Admin</span>
+              <SidebarDropdown
+                label="Admin"
+                items={[
+                  { href: "/admin/coach-performance", label: "Coach Performance" },
+                ]}
+              />
+              <SidebarDropdown
+                label="Library"
+                items={[
+                  { href: "/admin/exercises", label: "Exercises" },
+                  { href: "/admin/exercises/create", label: "Create Exercise" },
+                  { href: "/admin/stretches", label: "Stretches" },
+                  { href: "/admin/stretches/create", label: "Create Stretch" },
+                ]}
+              />
+              <SidebarDropdown
+                label="Templates"
+                items={[
+                  { href: "/coach/gym-session-templates", label: "Gym Sessions" },
+                  { href: "/coach/gym-session-templates/create", label: "Create Gym Session" },
+                  { href: "/coach/functional-session-templates", label: "Functional Sessions" },
+                  { href: "/coach/functional-session-templates/create", label: "Create Functional Session" },
+                  { href: "/admin/functional/types/create", label: "Functional Types" },
+                ]}
+              />
+              <SidebarDropdown
+                label="Config"
+                items={[
+                  { href: "/admin/session-template-field-config", label: "Session Template Tags" },
+                  { href: "/athlete/profile", label: "Athlete Profile" },
+                  { href: "/admin/solo-plans", label: "Solo Plans" },
+                ]}
+              />
+            </>
+          )}
+        </nav>
+
+        {/* Bottom user area */}
+        <div className="app-sidebar__bottom">
           <UserAccountDropdown />
         </div>
-      </div>
-    </nav>
+      </aside>
+
+      {/* ── Fixed topbar ──────────────────────────────────────── */}
+      <header className="app-topbar">
+        <NotificationsIcon />
+        <WarningsIcon />
+      </header>
+    </>
   );
 }

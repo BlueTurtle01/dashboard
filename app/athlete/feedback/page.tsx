@@ -260,7 +260,7 @@ export default function FeedbackPage() {
                     onClick={() => setOverallFeeling(num)}
                     className={`w-10 h-10 rounded font-semibold text-sm transition-colors ${
                       overallFeeling === num
-                        ? "bg-zinc-900 text-white"
+                        ? "bg-indigo-600 text-white"
                         : "border border-zinc-300 text-zinc-700 hover:border-zinc-400"
                     }`}
                   >
@@ -284,7 +284,7 @@ export default function FeedbackPage() {
                     onClick={() => setPlanClarity(num)}
                     className={`w-10 h-10 rounded font-semibold text-sm transition-colors ${
                       planClarity === num
-                        ? "bg-zinc-900 text-white"
+                        ? "bg-indigo-600 text-white"
                         : "border border-zinc-300 text-zinc-700 hover:border-zinc-400"
                     }`}
                   >
@@ -304,7 +304,7 @@ export default function FeedbackPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+              className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
               {submitting ? "Submitting…" : "Submit Check-in"}
             </button>
