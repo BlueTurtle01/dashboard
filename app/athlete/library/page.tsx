@@ -301,19 +301,9 @@ export default function AthleteProgramLibrary() {
 
     const VALID_DAYS = new Set(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 
-    const DAY_PATTERNS: Record<number, string[]> = {
-      1: ["Sun"],
-      2: ["Mon", "Thu"],
-      3: ["Mon", "Wed", "Sun"],
-      4: ["Mon", "Tue", "Thu", "Sun"],
-      5: ["Mon", "Tue", "Wed", "Fri", "Sun"],
-      6: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sun"],
-      7: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    };
-    function spreadDayLabel(index: number, total: number): string {
-      const pattern = DAY_PATTERNS[Math.min(total, 7)] ?? DAY_PATTERNS[7];
-      return pattern[index % pattern.length];
-    }
+    // Sun is reserved for the longest run; Wed is reserved for gym.
+    // Spread pool uses only Mon/Tue/Thu/Fri/Sat.
+    const SPREAD_DAYS = ["Mon", "Tue", "Thu", "Fri", "Sat"];
 
     // Build GeneratedPlan weeks
     const planWeeks = (templateWeeks ?? []).map((week) => {
@@ -321,14 +311,17 @@ export default function AthleteProgramLibrary() {
         .slice()
         .sort((a, b) => ((a.sort_order as number) ?? 0) - ((b.sort_order as number) ?? 0));
 
-      // Find the longest unlabelled run to pin to Sunday
       const unlabelled = rawSessions.filter((s) => !VALID_DAYS.has((s.day_label as string) ?? ""));
+
+      // Longest unlabelled run → Sunday
       const longestRunId = unlabelled
         .filter((s) => (s.type as string) !== "Gym")
         .sort((a, b) => ((b.distance_km as number) ?? 0) - ((a.distance_km as number) ?? 0))[0]?.id ?? null;
 
-      // Spread the remaining unlabelled sessions (excluding the long run) across the week
-      const spreadPool = unlabelled.filter((s) => s.id !== longestRunId);
+      // Remaining non-gym, non-long-run sessions get spread across Mon/Tue/Thu/Fri/Sat
+      const spreadPool = unlabelled.filter(
+        (s) => s.id !== longestRunId && (s.type as string) !== "Gym"
+      );
       let spreadIdx = 0;
 
       const weekSessions = rawSessions.map((s) => {
@@ -338,11 +331,10 @@ export default function AthleteProgramLibrary() {
           dayLabel = fixedDay;
         } else if (s.id === longestRunId) {
           dayLabel = "Sun";
+        } else if ((s.type as string) === "Gym") {
+          dayLabel = "Wed";
         } else {
-          // Use spread pattern sized to non-Sunday sessions, leaving Sunday free
-          const patternPool = spreadPool.length;
-          const pattern = DAY_PATTERNS[Math.min(Math.max(patternPool, 1), 6)] ?? DAY_PATTERNS[6];
-          dayLabel = pattern[spreadIdx++ % pattern.length];
+          dayLabel = SPREAD_DAYS[spreadIdx++ % SPREAD_DAYS.length];
         }
 
         const stId = s.session_template_id as string | null;
