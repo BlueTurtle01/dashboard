@@ -71,12 +71,14 @@ type SessionTemplateRelation =
       type: string | null;
       activity: string | null;
       subtype: string | null;
+      description: string | null;
     }
   | {
       distance_km: number | null;
       type: string | null;
       activity: string | null;
       subtype: string | null;
+      description: string | null;
     }[]
   | null;
 
@@ -1073,7 +1075,8 @@ export default function ViewProgramTemplatePage() {
               distance_km,
               type,
               activity,
-              subtype
+              subtype,
+              description
             ),
             program_template_session_exercises (
               id,
@@ -1099,7 +1102,85 @@ export default function ViewProgramTemplatePage() {
           return;
         }
 
-        setSessions((sessionData ?? []) as ProgramTemplateSessionRow[]);
+        const loadedSessions = (sessionData ?? []) as ProgramTemplateSessionRow[];
+
+        // For sessions linked to a gym session template, replace exercises with
+        // live data from session_template_exercises so changes to the template
+        // are reflected here automatically.
+        const gymTemplateIds = Array.from(
+          new Set(
+            loadedSessions
+              .map((s) => s.session_template_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        );
+
+        if (gymTemplateIds.length > 0) {
+          const { data: gymExerciseRows, error: gymExerciseError } = await supabase
+            .from("session_template_exercises")
+            .select("id, session_template_id, exercise_id, exercise_order, sets, reps, duration, notes")
+            .in("session_template_id", gymTemplateIds)
+            .order("exercise_order", { ascending: true });
+
+          if (!gymExerciseError && gymExerciseRows) {
+            type GymExerciseRow = {
+              id: string;
+              session_template_id: string;
+              exercise_id: string;
+              exercise_order: number;
+              sets: string | null;
+              reps: string | null;
+              duration: string | null;
+              notes: string | null;
+            };
+
+            const typedRows = gymExerciseRows as GymExerciseRow[];
+            const allExerciseIds = Array.from(new Set(typedRows.map((r) => r.exercise_id)));
+
+            let exerciseNameMap = new Map<string, string>();
+            if (allExerciseIds.length > 0) {
+              const { data: exerciseLookup } = await supabase
+                .from("exercises")
+                .select("id, name")
+                .in("id", allExerciseIds);
+              if (exerciseLookup) {
+                exerciseNameMap = new Map(
+                  (exerciseLookup as { id: string; name: string }[]).map((e) => [e.id, e.name]),
+                );
+              }
+            }
+
+            const exercisesByTemplateId = new Map<string, ProgramTemplateSessionExerciseRow[]>();
+            for (const row of typedRows) {
+              const existing = exercisesByTemplateId.get(row.session_template_id) ?? [];
+              existing.push({
+                id: row.id,
+                program_template_session_id: "",
+                exercise_id: row.exercise_id,
+                sort_order: row.exercise_order,
+                sets: row.sets != null ? Number(row.sets) : null,
+                reps: row.reps != null ? Number(row.reps) : null,
+                duration_seconds: row.duration != null ? Number(row.duration) : null,
+                notes: row.notes,
+                exercise: { id: row.exercise_id, name: exerciseNameMap.get(row.exercise_id) ?? row.exercise_id },
+              });
+              exercisesByTemplateId.set(row.session_template_id, existing);
+            }
+
+            for (const session of loadedSessions) {
+              if (session.session_template_id && exercisesByTemplateId.has(session.session_template_id)) {
+                session.program_template_session_exercises =
+                  exercisesByTemplateId.get(session.session_template_id) ?? [];
+                const liveDescription = getSingleSessionTemplateRelation(session.session_templates)?.description;
+                if (liveDescription != null) {
+                  session.description = liveDescription;
+                }
+              }
+            }
+          }
+        }
+
+        setSessions(loadedSessions);
       } else {
         setSessions([]);
       }
