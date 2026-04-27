@@ -89,18 +89,16 @@ export default function AdminSoloPlanPage() {
       return;
     }
 
-    const { data: profilesData, error: usersError } = await supabase
-      .from("athlete_profiles")
-      .select("user_id, email")
-      .in("user_id", soloPlanUserIds);
-
-    if (usersError) {
-      setErrorMessage(`Could not load users: ${usersError.message}`);
+    const usersRes = await fetch("/api/admin/list-users");
+    if (!usersRes.ok) {
+      const { error } = await usersRes.json() as { error?: string };
+      setErrorMessage(`Could not load users: ${error ?? usersRes.statusText}`);
       setLoading(false);
       return;
     }
+    const { users: allUsers } = await usersRes.json() as { users: { id: string; email: string | null }[] };
 
-    const emailMap = new Map((profilesData || []).map((p) => [p.user_id, p.email]));
+    const emailMap = new Map(allUsers.map((u) => [u.id, u.email]));
 
     const assignmentList = (plansData || []).map((plan: Record<string, unknown>) => ({
       id: `${plan.id}`,
@@ -129,36 +127,25 @@ export default function AdminSoloPlanPage() {
   }
 
   async function loadUsers() {
-    // Load users with athlete role
     const { data: roleData, error: roleError } = await supabase
       .from("user_roles")
       .select("user_id")
       .eq("role", "athlete");
 
-    if (!roleError && roleData) {
-      const userIds = roleData.map((r) => r.user_id);
+    if (roleError || !roleData) return;
 
-      // Get email from athlete_profiles
-      const { data: profiles } = await supabase
-        .from("athlete_profiles")
-        .select("user_id, email")
-        .in("user_id", userIds);
+    const athleteIds = new Set(roleData.map((r) => r.user_id));
 
-      if (profiles) {
-        setUsers(
-          profiles.map((p) => ({
-            id: p.user_id,
-            email: p.email || `user-${p.user_id.slice(0, 8)}`,
-          }))
-        );
-        setFilteredUsers(
-          profiles.map((p) => ({
-            id: p.user_id,
-            email: p.email || `user-${p.user_id.slice(0, 8)}`,
-          }))
-        );
-      }
-    }
+    const res = await fetch("/api/admin/list-users");
+    if (!res.ok) return;
+    const { users: allUsers } = await res.json() as { users: { id: string; email: string | null }[] };
+
+    const athleteUsers = allUsers
+      .filter((u) => athleteIds.has(u.id))
+      .map((u) => ({ id: u.id, email: u.email ?? `user-${u.id.slice(0, 8)}` }));
+
+    setUsers(athleteUsers);
+    setFilteredUsers(athleteUsers);
   }
 
   useEffect(() => {
