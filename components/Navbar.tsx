@@ -54,6 +54,9 @@ export default async function Navbar() {
               <Link href="/athlete" className="app-sidebar__link">
                 My Plan
               </Link>
+              <Link href="/athlete/library" className="app-sidebar__link">
+                Library
+              </Link>
               <Link href="/athlete/profile" className="app-sidebar__link">
                 Profile
               </Link>

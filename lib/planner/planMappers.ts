@@ -21,8 +21,8 @@ function byDomainSortOrder<T extends { sortOrder: number }>(a: T, b: T) {
 export function dehydratePlan(plan: GeneratedPlan): DehydratedPlan {
   const planRecord: PlanRecord = {
     id: plan.id,
-    event_name: plan.eventName,
-    event_date: plan.eventDate,
+    event_name: plan.eventName ?? "",
+    event_date: plan.eventDate ?? "",
     weeks_available: plan.weeksAvailable,
     training_days_per_week: plan.trainingDaysPerWeek,
     created_at: plan.createdAt,
