@@ -72,6 +72,7 @@ interface UnifiedSessionFormProps {
   onCancel: () => void;
   isSaving?: boolean;
   submitButtonLabel?: string;
+  progressiveReveal?: boolean;
 }
 
 const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
@@ -188,6 +189,7 @@ export function UnifiedSessionForm({
   onCancel,
   isSaving = false,
   submitButtonLabel = "Save",
+  progressiveReveal = false,
 }: UnifiedSessionFormProps) {
   const [form, setForm] = useState<UnifiedSessionFormData>(
     initialData ? { ...createEmptyForm(), ...initialData } : createEmptyForm()
@@ -353,13 +355,19 @@ export function UnifiedSessionForm({
         nextActivity = activityOptions[0]?.slug ?? "";
       }
 
+      // In progressive mode, leave subtype blank until user picks one
+      if (progressiveReveal && !current.subtype) {
+        if (nextActivity === current.activity) return current;
+        return { ...current, activity: nextActivity };
+      }
+
       const allowedSubtypes = (subtypeOptionsByActivitySlug[nextActivity] ?? []).filter(
         (o) => !HIDDEN_SUBTYPES.has(o.slug)
       );
       let nextSubtype = current.subtype;
 
       if (!nextSubtype || HIDDEN_SUBTYPES.has(nextSubtype) || !allowedSubtypes.some((option) => option.slug === nextSubtype)) {
-        nextSubtype = allowedSubtypes[0]?.slug ?? "";
+        nextSubtype = progressiveReveal ? "" : (allowedSubtypes[0]?.slug ?? "");
       }
 
       if (nextActivity === current.activity && nextSubtype === current.subtype) {
@@ -377,6 +385,7 @@ export function UnifiedSessionForm({
   useEffect(() => {
     if (loadingOptionData) return;
     if (!form.activity) return;
+    if (progressiveReveal && !form.subtype) return;
 
     const allowedSubtypes = (subtypeOptionsByActivitySlug[form.activity] ?? []).filter(
       (o) => !HIDDEN_SUBTYPES.has(o.slug)
@@ -386,10 +395,12 @@ export function UnifiedSessionForm({
     if (HIDDEN_SUBTYPES.has(form.subtype) || !allowedSubtypes.some((option) => option.slug === form.subtype)) {
       setForm((current) => ({
         ...current,
-        subtype: allowedSubtypes[0]?.slug ?? "",
+        subtype: progressiveReveal ? "" : (allowedSubtypes[0]?.slug ?? ""),
       }));
     }
   }, [form.activity, form.subtype, loadingOptionData, subtypeOptionsByActivitySlug]);
+
+  const subtypeChosen = progressiveReveal ? !!form.subtype : true;
 
   const fieldVis = useMemo((): FieldVisibility => {
     if (!form.activity || !form.subtype) return FIELD_VISIBILITY_DEFAULTS;
@@ -465,8 +476,9 @@ export function UnifiedSessionForm({
             onChange={(e) => updateForm("subtype", e.target.value)}
             disabled={loadingOptionData || allowedSubtypeOptionsForSelectedActivity.length === 0}
           >
+            {progressiveReveal && <option value="">— select subtype —</option>}
             {allowedSubtypeOptionsForSelectedActivity.length === 0 ? (
-              <option value="">No subtypes available</option>
+              !progressiveReveal && <option value="">No subtypes available</option>
             ) : (
               allowedSubtypeOptionsForSelectedActivity.map((option) => (
                 <option key={option.id} value={option.slug}>
@@ -496,7 +508,7 @@ export function UnifiedSessionForm({
         ) : null}
       </div>
 
-      {generatedNamePreview && (
+      {subtypeChosen && generatedNamePreview && (
         <div>
           <span className="mb-1 block text-sm font-semibold text-zinc-900">Template name</span>
           <div className="w-full rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm text-zinc-900">
@@ -509,6 +521,7 @@ export function UnifiedSessionForm({
         </div>
       )}
 
+      {subtypeChosen ? (<>
       <label className="block">
         <span className="mb-1 block text-sm font-semibold text-zinc-900">Description</span>
         <textarea
@@ -882,12 +895,13 @@ export function UnifiedSessionForm({
           );
         })()}
       </div>
+      </>) : null}
 
       <div className="flex flex-wrap gap-3">
         <button
           type="button"
           onClick={handleSave}
-          disabled={isSaving || loadingOptionData || loadingGeneratedNumber}
+          disabled={isSaving || loadingOptionData || loadingGeneratedNumber || (progressiveReveal && !subtypeChosen)}
           className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 transition disabled:opacity-50 hover:bg-emerald-100"
         >
           {isSaving ? "Saving..." : submitButtonLabel}

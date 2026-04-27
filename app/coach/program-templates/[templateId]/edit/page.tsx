@@ -1842,6 +1842,7 @@ export default function EditProgramTemplatePage() {
                               }
                               onCancel={() => setCreatingBlankSessionWeekId(null)}
                               submitButtonLabel="Create Session"
+                              progressiveReveal
                             />
                           </div>
                         ) : null}
