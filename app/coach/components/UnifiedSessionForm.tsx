@@ -691,28 +691,36 @@ export function UnifiedSessionForm({
 
         {fieldVis.show_time_up ? (
           <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-zinc-900">Time Up (seconds)</span>
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">Time Up (minutes)</span>
             <input
               type="number"
               min="0"
+              step="0.5"
               className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-              value={form.timeUpSeconds}
-              onChange={(e) => updateForm("timeUpSeconds", e.target.value)}
-              placeholder="60"
+              value={form.timeUpSeconds ? String(Math.round((parseInt(form.timeUpSeconds) / 60) * 10) / 10) : ""}
+              onChange={(e) => {
+                const mins = parseFloat(e.target.value);
+                updateForm("timeUpSeconds", isNaN(mins) ? "" : String(Math.round(mins * 60)));
+              }}
+              placeholder="3"
             />
           </label>
         ) : null}
 
         {fieldVis.show_time_down ? (
           <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-zinc-900">Time Down (seconds)</span>
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">Time Down (minutes)</span>
             <input
               type="number"
               min="0"
+              step="0.5"
               className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-              value={form.timeDownSeconds}
-              onChange={(e) => updateForm("timeDownSeconds", e.target.value)}
-              placeholder="45"
+              value={form.timeDownSeconds ? String(Math.round((parseInt(form.timeDownSeconds) / 60) * 10) / 10) : ""}
+              onChange={(e) => {
+                const mins = parseFloat(e.target.value);
+                updateForm("timeDownSeconds", isNaN(mins) ? "" : String(Math.round(mins * 60)));
+              }}
+              placeholder="2"
             />
           </label>
         ) : null}
