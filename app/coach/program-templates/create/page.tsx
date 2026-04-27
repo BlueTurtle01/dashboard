@@ -11,6 +11,7 @@ type TemplateForm = {
   eventGoal: string;
   distance: string;
   isFeatured: boolean;
+  isPersonalised: boolean;
   isActive: boolean;
   minWeeklyTrainingHours: string;
   minLongestRecentSessionMinutes: string;
@@ -85,6 +86,7 @@ function buildInitialForm(): TemplateForm {
     eventGoal: "",
     distance: "",
     isFeatured: false,
+    isPersonalised: false,
     isActive: true,
     minWeeklyTrainingHours: "",
     minLongestRecentSessionMinutes: "",
@@ -156,6 +158,7 @@ export default function NewProgramTemplatePage() {
       event_goal: form.eventGoal || null,
       distance: form.distance || null,
       is_featured: form.isFeatured,
+      is_personalised: form.isPersonalised,
       is_active: form.isActive,
       min_weekly_training_hours: form.minWeeklyTrainingHours ? Number(form.minWeeklyTrainingHours) : null,
       min_longest_recent_session_minutes: form.minLongestRecentSessionMinutes
@@ -355,6 +358,7 @@ export default function NewProgramTemplatePage() {
               {(
                 [
                   ["Featured", "isFeatured"],
+                  ["Personalised", "isPersonalised"],
                   ["Active", "isActive"],
                   ["Requires hills", "requiresHills"],
                   ["Requires gym", "requiresGym"],

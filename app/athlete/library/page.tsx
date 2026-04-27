@@ -216,6 +216,32 @@ export default function AthleteProgramLibrary() {
     setSaving(true);
     const supabase = createClient();
 
+    // Fetch template metadata (need is_personalised)
+    const { data: templateMeta } = await supabase
+      .from("program_templates")
+      .select("is_personalised")
+      .eq("id", modal.templateId)
+      .single();
+    const isPersonalised = (templateMeta as { is_personalised: boolean } | null)?.is_personalised ?? false;
+
+    // If personalised, fetch athlete profile prefs
+    let preferredLongDay: string | null = null;
+    let availableRunDays: string[] | null = null;
+    let availableGymDays: string[] | null = null;
+    if (isPersonalised) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("athlete_profiles")
+          .select("preferred_long_session_day, available_run_days, available_gym_days")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        preferredLongDay = (profile as { preferred_long_session_day: string | null } | null)?.preferred_long_session_day ?? null;
+        availableRunDays = (profile as { available_run_days: string[] | null } | null)?.available_run_days ?? null;
+        availableGymDays = (profile as { available_gym_days: string[] | null } | null)?.available_gym_days ?? null;
+      }
+    }
+
     // Fetch template weeks
     const { data: templateWeeks } = await supabase
       .from("program_template_weeks")
@@ -301,9 +327,17 @@ export default function AthleteProgramLibrary() {
 
     const VALID_DAYS = new Set(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 
-    // Sun is reserved for the longest run; Wed is reserved for gym.
-    // Spread pool uses only Mon/Tue/Thu/Fri/Sat.
-    const SPREAD_DAYS = ["Mon", "Tue", "Thu", "Fri", "Sat"];
+    // Day assignment pools — branched by personalised vs generic
+    const longRunDay = isPersonalised && preferredLongDay && VALID_DAYS.has(preferredLongDay)
+      ? preferredLongDay
+      : "Sun";
+    const gymDay = isPersonalised && availableGymDays && availableGymDays.length > 0
+      ? availableGymDays[0]
+      : "Wed";
+    const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const SPREAD_DAYS = isPersonalised && availableRunDays && availableRunDays.length > 0
+      ? availableRunDays.filter((d) => VALID_DAYS.has(d) && d !== longRunDay && d !== gymDay)
+      : ALL_DAYS.filter((d) => d !== longRunDay && d !== gymDay);
 
     // Build GeneratedPlan weeks
     const planWeeks = (templateWeeks ?? []).map((week) => {
@@ -330,9 +364,9 @@ export default function AthleteProgramLibrary() {
         if (VALID_DAYS.has(fixedDay)) {
           dayLabel = fixedDay;
         } else if (s.id === longestRunId) {
-          dayLabel = "Sun";
+          dayLabel = longRunDay;
         } else if ((s.type as string) === "Gym") {
-          dayLabel = "Wed";
+          dayLabel = gymDay;
         } else {
           dayLabel = SPREAD_DAYS[spreadIdx++ % SPREAD_DAYS.length];
         }

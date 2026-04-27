@@ -20,7 +20,7 @@ export default function AthleteNav({ isSoloPlanHolder = false }: AthleteNavProps
     { href: "/athlete/sessions", label: "Sessions" },
     ...(isSoloPlanHolder ? [] : [{ href: "/athlete/log", label: "Log" }]),
     { href: "/athlete/progress", label: "Progress" },
-    { href: "/athlete/library", label: "Library" },
+    ...(isSoloPlanHolder ? [{ href: "/athlete/library", label: "Library" }] : []),
   ];
 
   return (

@@ -18,6 +18,7 @@ type ProgramTemplateRow = {
   event_goal: string | null;
   distance: string | null;
   is_featured: boolean;
+  is_personalised: boolean;
   is_active: boolean;
   min_weekly_training_hours: number | null;
   min_longest_recent_session_minutes: number | null;
@@ -189,6 +190,7 @@ type TemplateForm = {
   eventGoal: string;
   distance: string;
   isFeatured: boolean;
+  isPersonalised: boolean;
   isActive: boolean;
   minWeeklyTrainingHours: string;
   minLongestRecentSessionMinutes: string;
@@ -584,6 +586,7 @@ function mapToForm(
     eventGoal: template.event_goal ?? "",
     distance: template.distance ?? "",
     isFeatured: template.is_featured,
+    isPersonalised: template.is_personalised,
     isActive: template.is_active,
     minWeeklyTrainingHours: template.min_weekly_training_hours?.toString() ?? "",
     minLongestRecentSessionMinutes: template.min_longest_recent_session_minutes?.toString() ?? "",
@@ -1273,6 +1276,7 @@ export default function EditProgramTemplatePage() {
       event_goal: form.eventGoal.trim() || null,
       distance: form.distance || null,
       is_featured: form.isFeatured,
+      is_personalised: form.isPersonalised,
       is_active: form.isActive,
       min_weekly_training_hours: form.minWeeklyTrainingHours.trim() ? Number(form.minWeeklyTrainingHours) : null,
       min_longest_recent_session_minutes: form.minLongestRecentSessionMinutes.trim() ? Number(form.minLongestRecentSessionMinutes) : null,
@@ -1696,6 +1700,7 @@ export default function EditProgramTemplatePage() {
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             {[
               ["Featured", form.isFeatured, (value: boolean) => updateForm("isFeatured", value)],
+              ["Personalised", form.isPersonalised, (value: boolean) => updateForm("isPersonalised", value)],
               ["Active", form.isActive, (value: boolean) => updateForm("isActive", value)],
               ["Requires hills", form.requiresHills, (value: boolean) => updateForm("requiresHills", value)],
               ["Requires load carriage", form.requiresLoadCarriage, (value: boolean) => updateForm("requiresLoadCarriage", value)],
@@ -1999,24 +2004,26 @@ export default function EditProgramTemplatePage() {
                                 </select>
                               </label>
 
-                              <label className="text-sm font-medium text-zinc-700">
-                                Day of week
-                                <select
-                                  value={session.dayLabel}
-                                  onChange={(e) =>
-                                    updateSession(week.localId, session.localId, (current) => ({
-                                      ...current,
-                                      dayLabel: e.target.value,
-                                    }))
-                                  }
-                                  className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                >
-                                  <option value="">— Any day (profile-based) —</option>
-                                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                                    <option key={d} value={d}>{d}</option>
-                                  ))}
-                                </select>
-                              </label>
+                              {!form.isPersonalised && (
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Day of week
+                                  <select
+                                    value={session.dayLabel}
+                                    onChange={(e) =>
+                                      updateSession(week.localId, session.localId, (current) => ({
+                                        ...current,
+                                        dayLabel: e.target.value,
+                                      }))
+                                    }
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                  >
+                                    <option value="">— Any day (auto-spread) —</option>
+                                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                                      <option key={d} value={d}>{d}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                              )}
 
                               {session.type !== "Intervals" && session.type !== "Gym" && (
                                 <label className="text-sm font-medium text-zinc-700">
