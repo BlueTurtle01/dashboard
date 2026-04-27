@@ -183,6 +183,7 @@ export default function AthleteProgramLibrary() {
 
       result.push({
         planId: plan.id as string,
+        templateId,
         planName: plan.name as string,
         description: t.description as string | null,
         discipline: t.discipline as string,
