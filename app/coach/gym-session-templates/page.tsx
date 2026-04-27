@@ -685,14 +685,22 @@ export default function SessionTemplateDashboardPage() {
                         </button>
 
                         {isAdmin ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteSessionTemplate(template)}
-                            disabled={deletingTemplateId === template.id}
-                            className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
-                          >
-                            {deletingTemplateId === template.id ? "Deleting…" : "Delete"}
-                          </button>
+                          <div className="flex shrink-0 gap-2">
+                            <Link
+                              href={`/coach/gym-session-templates/edit/${template.id}`}
+                              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                            >
+                              Edit
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteSessionTemplate(template)}
+                              disabled={deletingTemplateId === template.id}
+                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {deletingTemplateId === template.id ? "Deleting…" : "Delete"}
+                            </button>
+                          </div>
                         ) : null}
                       </div>
 
@@ -877,14 +885,22 @@ export default function SessionTemplateDashboardPage() {
                         </button>
 
                         {isAdmin ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteSessionTemplate(template)}
-                            disabled={deletingTemplateId === template.id}
-                            className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
-                          >
-                            {deletingTemplateId === template.id ? "Deleting…" : "Delete"}
-                          </button>
+                          <div className="flex shrink-0 gap-2">
+                            <Link
+                              href={`/coach/gym-session-templates/edit/${template.id}`}
+                              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                            >
+                              Edit
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteSessionTemplate(template)}
+                              disabled={deletingTemplateId === template.id}
+                              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {deletingTemplateId === template.id ? "Deleting…" : "Delete"}
+                            </button>
+                          </div>
                         ) : null}
                       </div>
 
