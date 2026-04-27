@@ -94,6 +94,12 @@ export default async function Navbar() {
             </>
           )}
 
+          {/* Support — visible to all signed-in users */}
+          <span className="app-sidebar__group-label">Help</span>
+          <Link href="/support" className="app-sidebar__link">
+            Support
+          </Link>
+
           {/* Admin section */}
           {isAdmin && (
             <>
@@ -102,6 +108,7 @@ export default async function Navbar() {
                 label="Admin"
                 items={[
                   { href: "/admin/coach-performance", label: "Coach Performance" },
+                  { href: "/admin/support", label: "Support Tickets" },
                 ]}
               />
               <SidebarDropdown
