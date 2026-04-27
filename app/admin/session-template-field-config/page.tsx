@@ -26,6 +26,7 @@ type FieldConfigRow = {
   show_cool_down: boolean | null;
   show_interval_reps: boolean | null;
   show_interval_duration: boolean | null;
+  show_interval_distance: boolean | null;
   show_time_of_day: boolean | null;
   show_tags: boolean | null;
   notes: string | null;
@@ -55,6 +56,7 @@ type EditableRow = {
   show_cool_down: boolean;
   show_interval_reps: boolean;
   show_interval_duration: boolean;
+  show_interval_distance: boolean;
   show_time_of_day: boolean;
   show_tags: boolean;
   notes: string;
@@ -81,8 +83,9 @@ const checkboxFields: Array<{ key: CheckboxKey; label: string; group: string }> 
   { key: "show_time_up",              label: "Time Up (mins)",           group: "Intervals" },
   { key: "show_time_down",            label: "Time Down (mins)",         group: "Intervals" },
   { key: "show_interval_reps",     label: "Interval Reps",      group: "Intervals" },
-  { key: "show_interval_duration", label: "Interval Duration",  group: "Intervals" },
-  { key: "show_time_of_day",       label: "Time of Day",        group: "Display" },
+  { key: "show_interval_duration",  label: "Interval Duration",  group: "Intervals" },
+  { key: "show_interval_distance",  label: "Interval Distance (m)", group: "Intervals" },
+  { key: "show_time_of_day",        label: "Time of Day",        group: "Display" },
   { key: "show_tags",              label: "Tags",               group: "Display" },
 ];
 
@@ -111,6 +114,7 @@ function toEditableRow(row: FieldConfigRow): EditableRow {
     show_cool_down: !!row.show_cool_down,
     show_interval_reps: !!row.show_interval_reps,
     show_interval_duration: !!row.show_interval_duration,
+    show_interval_distance: !!row.show_interval_distance,
     show_time_of_day: !!row.show_time_of_day,
     show_tags: !!row.show_tags,
     notes: row.notes ?? "",
@@ -141,6 +145,7 @@ function createBlankRow(): EditableRow {
     show_cool_down: false,
     show_interval_reps: false,
     show_interval_duration: false,
+    show_interval_distance: false,
     show_time_of_day: false,
     show_tags: true,
     notes: "",
@@ -232,6 +237,7 @@ export default function SessionTemplateFieldConfigPage() {
       show_cool_down: selected.show_cool_down,
       show_interval_reps: selected.show_interval_reps,
       show_interval_duration: selected.show_interval_duration,
+      show_interval_distance: selected.show_interval_distance,
       show_time_of_day: selected.show_time_of_day,
       show_tags: selected.show_tags,
       notes: selected.notes.trim() || null,

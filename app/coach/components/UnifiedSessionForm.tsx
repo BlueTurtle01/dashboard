@@ -18,6 +18,7 @@ export type UnifiedSessionFormData = {
   coolDownMinutes: string;
   intervalReps: string;
   intervalDuration: string;
+  intervalDistanceMeters: string;
   timeOfDay: string;
   sets: string;
   setDurationSeconds: string;
@@ -68,6 +69,7 @@ type FieldVisibility = {
   show_cool_down: boolean;
   show_interval_reps: boolean;
   show_interval_duration: boolean;
+  show_interval_distance: boolean;
   show_time_of_day: boolean;
   show_tags: boolean;
 };
@@ -107,6 +109,7 @@ const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
   show_cool_down: false,
   show_interval_reps: false,
   show_interval_duration: false,
+  show_interval_distance: false,
   show_time_of_day: false,
   show_tags: true,
 };
@@ -175,6 +178,7 @@ function createEmptyForm(): UnifiedSessionFormData {
     coolDownMinutes: "",
     intervalReps: "",
     intervalDuration: "",
+    intervalDistanceMeters: "",
     timeOfDay: "any",
     sets: "",
     setDurationSeconds: "",
@@ -190,14 +194,14 @@ function getRepLabels(subtype: string): { sets: string; setDuration: string; res
   if (subtype === "tempo") {
     return {
       sets: "Number of Reps",
-      setDuration: "Rep Time (seconds)",
-      rest: "Time Between Reps (seconds)",
+      setDuration: "Rep Time",
+      rest: "Time Between Reps",
     };
   }
   return {
     sets: "Sets",
-    setDuration: "Set Duration (seconds)",
-    rest: "Rest Between Sets (seconds)",
+    setDuration: "Set Duration",
+    rest: "Rest Between Sets",
   };
 }
 
@@ -256,7 +260,7 @@ export function UnifiedSessionForm({
       supabase
         .from("session_template_field_config_resolved")
         .select(
-          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_set_duration_minutes, show_rest_seconds, show_rest_minutes, show_time_up, show_time_down, show_strides, show_warm_up, show_cool_down, show_interval_reps, show_interval_duration, show_time_of_day, show_tags",
+          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_set_duration_minutes, show_rest_seconds, show_rest_minutes, show_time_up, show_time_down, show_strides, show_warm_up, show_cool_down, show_interval_reps, show_interval_duration, show_interval_distance, show_time_of_day, show_tags",
         ),
       supabase
         .from("training_intensities")
@@ -355,6 +359,7 @@ export function UnifiedSessionForm({
           show_cool_down: (row as any).show_cool_down,
           show_interval_reps: (row as any).show_interval_reps,
           show_interval_duration: (row as any).show_interval_duration,
+          show_interval_distance: (row as any).show_interval_distance,
           show_time_of_day: (row as any).show_time_of_day,
           show_tags: (row as any).show_tags,
         };
@@ -864,6 +869,23 @@ export function UnifiedSessionForm({
             <p className="mt-1 text-xs text-zinc-500">
               Recovery period between intervals
             </p>
+          </label>
+        ) : null}
+
+        {fieldVis.show_interval_distance ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Interval Distance (m)
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.intervalDistanceMeters}
+              onChange={(e) => updateForm("intervalDistanceMeters", e.target.value)}
+              placeholder="400"
+            />
           </label>
         ) : null}
 
