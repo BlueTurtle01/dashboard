@@ -28,7 +28,7 @@ export default async function SupportPage() {
           </div>
         </div>
 
-        <SupportPageClient initialTickets={tickets} />
+        <SupportPageClient initialTickets={tickets} currentUserId={user.id} />
       </div>
     </main>
   );

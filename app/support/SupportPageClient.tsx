@@ -9,8 +9,10 @@ type Tab = "new" | "mine";
 
 export default function SupportPageClient({
   initialTickets,
+  currentUserId,
 }: {
   initialTickets: SupportTicket[];
+  currentUserId: string;
 }) {
   const [tab, setTab] = useState<Tab>("new");
   const [tickets, setTickets] = useState<SupportTicket[]>(initialTickets);
@@ -66,7 +68,7 @@ export default function SupportPageClient({
       {tab === "new" ? (
         <SupportTicketForm onSuccess={handleTicketCreated} />
       ) : (
-        <MyTickets tickets={tickets} />
+        <MyTickets tickets={tickets} currentUserId={currentUserId} />
       )}
     </div>
   );

@@ -6,6 +6,7 @@ import {
   TicketStatus,
   updateTicketStatus,
 } from "@/lib/actions/support";
+import TicketThread from "@/components/TicketThread";
 
 const CATEGORY_LABELS: Record<string, string> = {
   technical: "Technical",
@@ -52,7 +53,13 @@ type DetailModal = {
   error: string | null;
 };
 
-export default function AdminSupportTable({ tickets: initial }: { tickets: SupportTicket[] }) {
+export default function AdminSupportTable({
+  tickets: initial,
+  currentUserId,
+}: {
+  tickets: SupportTicket[];
+  currentUserId: string;
+}) {
   const [tickets, setTickets] = useState<SupportTicket[]>(initial);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<TicketStatus | "all">("all");
@@ -276,6 +283,12 @@ export default function AdminSupportTable({ tickets: initial }: { tickets: Suppo
                 {modal.saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
+
+            <TicketThread
+              ticketId={modal.ticket.id}
+              currentUserId={currentUserId}
+              isAdmin={true}
+            />
           </div>
         </div>
       )}

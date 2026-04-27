@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { userHasRole } from "@/lib/auth/get-current-user";
+import { getCurrentUser, userHasRole } from "@/lib/auth/get-current-user";
 import { getAllTickets, SupportTicket } from "@/lib/actions/support";
 import AdminSupportTable from "./AdminSupportTable";
 
@@ -8,6 +8,9 @@ export const dynamic = "force-dynamic";
 export default async function AdminSupportPage() {
   const isAdmin = await userHasRole("admin");
   if (!isAdmin) redirect("/login");
+
+  const currentUser = await getCurrentUser();
+  if (!currentUser) redirect("/login");
 
   let tickets: SupportTicket[] = [];
   let loadError: string | null = null;
@@ -43,7 +46,7 @@ export default async function AdminSupportPage() {
         {loadError ? (
           <p style={errorStyle}>{loadError}</p>
         ) : (
-          <AdminSupportTable tickets={tickets} />
+          <AdminSupportTable tickets={tickets} currentUserId={currentUser.id} />
         )}
       </div>
     </main>

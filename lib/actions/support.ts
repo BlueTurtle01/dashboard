@@ -113,3 +113,71 @@ export async function updateTicketStatus(
   if (error) return { error: error.message };
   return {};
 }
+
+// ── Messages ──────────────────────────────────────────────────────────────────
+
+export type TicketMessage = {
+  id: string;
+  ticket_id: string;
+  user_id: string;
+  user_email: string;
+  is_admin: boolean;
+  message: string;
+  attachment_path: string | null;
+  attachment_name: string | null;
+  created_at: string;
+};
+
+export async function getTicketMessages(ticketId: string): Promise<TicketMessage[]> {
+  const { supabase } = await requireAuth();
+
+  const { data, error } = await supabase
+    .from("ticket_messages")
+    .select("*")
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function addTicketMessage(input: {
+  ticketId: string;
+  message: string;
+  attachmentPath?: string;
+  attachmentName?: string;
+}): Promise<{ error?: string }> {
+  const { supabase, user } = await requireAuth();
+
+  const isAdminRow = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("role", "admin")
+    .maybeSingle();
+
+  const isAdmin = !!isAdminRow.data;
+
+  const { error } = await supabase.from("ticket_messages").insert({
+    ticket_id: input.ticketId,
+    user_id: user.id,
+    user_email: user.email ?? "(no email)",
+    is_admin: isAdmin,
+    message: input.message.trim(),
+    attachment_path: input.attachmentPath ?? null,
+    attachment_name: input.attachmentName ?? null,
+  });
+
+  if (error) return { error: error.message };
+
+  // Mark ticket as in_progress when admin first replies (if still open)
+  if (isAdmin) {
+    await supabase
+      .from("support_tickets")
+      .update({ status: "in_progress", updated_at: new Date().toISOString() })
+      .eq("id", input.ticketId)
+      .eq("status", "open");
+  }
+
+  return {};
+}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SupportTicket, TicketStatus } from "@/lib/actions/support";
+import TicketThread from "@/components/TicketThread";
 
 const CATEGORY_LABELS: Record<string, string> = {
   technical: "Technical Issue",
@@ -40,7 +41,13 @@ const URGENCY_COLORS: Record<string, string> = {
   urgent: "#7c3aed",
 };
 
-export default function MyTickets({ tickets: initial }: { tickets: SupportTicket[] }) {
+export default function MyTickets({
+  tickets: initial,
+  currentUserId,
+}: {
+  tickets: SupportTicket[];
+  currentUserId: string;
+}) {
   const [tickets] = useState<SupportTicket[]>(initial);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -64,13 +71,7 @@ export default function MyTickets({ tickets: initial }: { tickets: SupportTicket
               onClick={() => setExpanded(isOpen ? null : ticket.id)}
             >
               <div style={cardHeaderLeft}>
-                <span
-                  style={{
-                    ...statusBadge,
-                    background: colors.bg,
-                    color: colors.text,
-                  }}
-                >
+                <span style={{ ...statusBadge, background: colors.bg, color: colors.text }}>
                   {STATUS_LABELS[ticket.status]}
                 </span>
                 <span style={subjectTextStyle}>{ticket.subject}</span>
@@ -92,13 +93,7 @@ export default function MyTickets({ tickets: initial }: { tickets: SupportTicket
                   </div>
                   <div style={metaItemStyle}>
                     <span style={metaKeyStyle}>Urgency</span>
-                    <span
-                      style={{
-                        ...metaValStyle,
-                        color: URGENCY_COLORS[ticket.urgency],
-                        fontWeight: 600,
-                      }}
-                    >
+                    <span style={{ ...metaValStyle, color: URGENCY_COLORS[ticket.urgency], fontWeight: 600 }}>
                       {URGENCY_LABELS[ticket.urgency]}
                     </span>
                   </div>
@@ -129,6 +124,13 @@ export default function MyTickets({ tickets: initial }: { tickets: SupportTicket
                     </div>
                   </>
                 )}
+
+                <TicketThread
+                  ticketId={ticket.id}
+                  currentUserId={currentUserId}
+                  isAdmin={false}
+                  ticketClosed={ticket.status === "closed"}
+                />
               </div>
             )}
           </div>
@@ -138,11 +140,7 @@ export default function MyTickets({ tickets: initial }: { tickets: SupportTicket
   );
 }
 
-const listStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "10px",
-};
+const listStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
 
 const emptyStyle: React.CSSProperties = {
   padding: "32px",
@@ -151,11 +149,7 @@ const emptyStyle: React.CSSProperties = {
   borderRadius: "10px",
 };
 
-const emptyTextStyle: React.CSSProperties = {
-  color: "#888",
-  margin: 0,
-  fontSize: "14px",
-};
+const emptyTextStyle: React.CSSProperties = { color: "#888", margin: 0, fontSize: "14px" };
 
 const cardStyle: React.CSSProperties = {
   border: "1px solid #e5e5e5",
@@ -209,15 +203,8 @@ const subjectTextStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const dateStyle: React.CSSProperties = {
-  fontSize: "12px",
-  color: "#888",
-};
-
-const chevronStyle: React.CSSProperties = {
-  fontSize: "10px",
-  color: "#aaa",
-};
+const dateStyle: React.CSSProperties = { fontSize: "12px", color: "#888" };
+const chevronStyle: React.CSSProperties = { fontSize: "10px", color: "#aaa" };
 
 const cardBodyStyle: React.CSSProperties = {
   padding: "0 18px 18px",
@@ -232,11 +219,7 @@ const metaGridStyle: React.CSSProperties = {
   marginBottom: "16px",
 };
 
-const metaItemStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "2px",
-};
+const metaItemStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "2px" };
 
 const metaKeyStyle: React.CSSProperties = {
   fontSize: "11px",
@@ -246,10 +229,7 @@ const metaKeyStyle: React.CSSProperties = {
   letterSpacing: "0.05em",
 };
 
-const metaValStyle: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#333",
-};
+const metaValStyle: React.CSSProperties = { fontSize: "13px", color: "#333" };
 
 const sectionLabel: React.CSSProperties = {
   fontSize: "11px",
