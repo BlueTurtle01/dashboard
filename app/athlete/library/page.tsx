@@ -214,25 +214,96 @@ export default function AthleteProgramLibrary() {
     setSaving(true);
     const supabase = createClient();
 
-    // Fetch the existing plan_json so we can merge into it
-    const { data: planRow } = await supabase
-      .from("athlete_plans")
-      .select("plan_json")
-      .eq("id", modal.planId)
-      .single();
+    // Fetch template weeks
+    const { data: templateWeeks } = await supabase
+      .from("program_template_weeks")
+      .select("id, week_number, focus, notes")
+      .eq("program_template_id", modal.templateId)
+      .order("week_number");
 
-    const existing = (planRow?.plan_json ?? {}) as Record<string, unknown>;
+    const weekIds = (templateWeeks ?? []).map((w) => w.id as string);
 
-    const updatedJson = {
-      ...existing,
-      eventDate,
+    // Fetch template sessions
+    const { data: templateSessions } = weekIds.length > 0
+      ? await supabase
+          .from("program_template_sessions")
+          .select("id, program_template_week_id, day_label, sort_order, type, name, description, duration, intensity, is_key_session, activity, subtype, distance_km, terrain, elevation_gain_meters, pack_weight_kg, strides, warmup_minutes, cooldown_minutes, interval_reps, interval_duration")
+          .in("program_template_week_id", weekIds)
+          .order("sort_order")
+      : { data: [] };
+
+    // Group sessions by week id
+    const sessionsByWeekId = new Map<string, typeof templateSessions>();
+    for (const s of templateSessions ?? []) {
+      const weekId = s.program_template_week_id as string;
+      const arr = sessionsByWeekId.get(weekId) ?? [];
+      arr.push(s);
+      sessionsByWeekId.set(weekId, arr);
+    }
+
+    function mapPhase(focus: string | null): "Base" | "Build" | "Peak" | "Taper" {
+      const f = (focus ?? "").toLowerCase();
+      if (f.includes("build") || f.includes("specific")) return "Build";
+      if (f.includes("peak")) return "Peak";
+      if (f.includes("taper") || f.includes("deload") || f.includes("recovery")) return "Taper";
+      return "Base";
+    }
+
+    // Build GeneratedPlan weeks
+    const planWeeks = (templateWeeks ?? []).map((week) => {
+      const weekSessions = (sessionsByWeekId.get(week.id as string) ?? []).map((s) => ({
+        id: s.id as string,
+        weekId: week.id as string,
+        sortOrder: (s.sort_order as number) ?? 0,
+        dayLabel: (s.day_label as string) ?? "Mon",
+        type: (s.type as string) ?? "Easy",
+        name: (s.name as string) ?? "",
+        description: (s.description as string) ?? "",
+        tags: [],
+        duration: (s.duration as string) ?? "",
+        intensity: (s.intensity as string) ?? "",
+        isKeySession: (s.is_key_session as boolean) ?? false,
+        exercises: [],
+        activity: (s.activity as string | null) ?? undefined,
+        subtype: (s.subtype as string | null) ?? undefined,
+        terrain: (s.terrain as string | null) ?? undefined,
+        elevationGainMeters: (s.elevation_gain_meters as number | null) ?? undefined,
+        packWeightKg: (s.pack_weight_kg as number | null) ?? undefined,
+        strides: (s.strides as string | null) ?? undefined,
+        warmupMinutes: (s.warmup_minutes as number | null) ?? undefined,
+        cooldownMinutes: (s.cooldown_minutes as number | null) ?? undefined,
+        intervalReps: (s.interval_reps as number | null) ?? undefined,
+        intervalDuration: (s.interval_duration as string | null) ?? undefined,
+      }));
+
+      return {
+        id: week.id as string,
+        planId: modal.planId,
+        weekNumber: week.week_number as number,
+        sortOrder: week.week_number as number,
+        phase: mapPhase(week.focus as string | null),
+        focus: (week.focus as string) ?? "",
+        notes: (week.notes as string) ?? "",
+        sessions: weekSessions,
+        isHolidayWeek: false,
+      };
+    });
+
+    const planJson = {
+      id: modal.planId,
       eventName: eventName.trim() || modal.planName,
+      eventDate,
       weeksAvailable: modal.planLengthWeeks,
+      trainingDaysPerWeek: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      weeks: planWeeks,
+      warnings: [],
     };
 
     await supabase
       .from("athlete_plans")
-      .update({ plan_json: updatedJson, updated_at: new Date().toISOString() })
+      .update({ plan_json: planJson, updated_at: new Date().toISOString() })
       .eq("id", modal.planId);
 
     setSaving(false);
@@ -301,7 +372,7 @@ export default function AthleteProgramLibrary() {
             <ProgramCard
               key={card.planId}
               card={card}
-              onAddToCalendar={() => handleAddToCalendar(card.planId, card.planLengthWeeks, card.planName)}
+              onAddToCalendar={() => handleAddToCalendar(card.planId, card.templateId, card.planLengthWeeks, card.planName)}
             />
           ))}
         </div>
