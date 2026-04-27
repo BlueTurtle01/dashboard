@@ -234,6 +234,17 @@ export default function AdminSoloPlanPage() {
         return;
       }
 
+      // Ensure an athlete_profiles row exists so other features work
+      const { error: profileError } = await supabase
+        .from("athlete_profiles")
+        .upsert({ user_id: formData.athleteUserId }, { onConflict: "user_id" });
+
+      if (profileError) {
+        setErrorMessage(`Could not create athlete profile: ${profileError.message}`);
+        setAssigningPlan(false);
+        return;
+      }
+
       setSuccessMessage(
         `Plan "${selectedTemplate.name}" assigned to ${selectedUser.email}. Plan ID: ${planData.id}`
       );
