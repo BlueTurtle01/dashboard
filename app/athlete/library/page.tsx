@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+type CalendarModal = {
+  planId: string;
+  planLengthWeeks: number;
+  planName: string;
+};
+
 type PlanCard = {
   planId: string;
   planName: string;
@@ -25,6 +31,10 @@ export default function AthleteProgramLibrary() {
   const [error, setError] = useState<string | null>(null);
   const [isSoloPlanHolder, setIsSoloPlanHolder] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [modal, setModal] = useState<CalendarModal | null>(null);
+  const [eventDate, setEventDate] = useState("");
+  const [eventName, setEventName] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void load();
@@ -192,12 +202,40 @@ export default function AthleteProgramLibrary() {
     setLoading(false);
   }
 
-  async function handleAddToCalendar(planId: string) {
+  function handleAddToCalendar(planId: string, planLengthWeeks: number, planName: string) {
+    setEventDate("");
+    setEventName(planName);
+    setModal({ planId, planLengthWeeks, planName });
+  }
+
+  async function handleConfirmCalendar() {
+    if (!modal || !eventDate) return;
+    setSaving(true);
     const supabase = createClient();
+
+    // Fetch the existing plan_json so we can merge into it
+    const { data: planRow } = await supabase
+      .from("athlete_plans")
+      .select("plan_json")
+      .eq("id", modal.planId)
+      .single();
+
+    const existing = (planRow?.plan_json ?? {}) as Record<string, unknown>;
+
+    const updatedJson = {
+      ...existing,
+      eventDate,
+      eventName: eventName.trim() || modal.planName,
+      weeksAvailable: modal.planLengthWeeks,
+    };
+
     await supabase
       .from("athlete_plans")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", planId);
+      .update({ plan_json: updatedJson, updated_at: new Date().toISOString() })
+      .eq("id", modal.planId);
+
+    setSaving(false);
+    setModal(null);
     router.push("/athlete");
   }
 
@@ -262,9 +300,64 @@ export default function AthleteProgramLibrary() {
             <ProgramCard
               key={card.planId}
               card={card}
-              onAddToCalendar={() => void handleAddToCalendar(card.planId)}
+              onAddToCalendar={() => handleAddToCalendar(card.planId, card.planLengthWeeks, card.planName)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Event date modal */}
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="mb-1 text-lg font-semibold text-zinc-900">Set your race date</h2>
+            <p className="mb-5 text-sm text-zinc-500">
+              The calendar will be built backwards from this date so your training peaks on race day.
+            </p>
+
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="eventName">
+                Race / event name
+              </label>
+              <input
+                id="eventName"
+                type="text"
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                placeholder="e.g. London Marathon"
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="eventDate">
+                Race date <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="eventDate"
+                type="date"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setModal(null)}
+                className="flex-1 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleConfirmCalendar()}
+                disabled={!eventDate || saving}
+                className="flex-1 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Add to Calendar"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
