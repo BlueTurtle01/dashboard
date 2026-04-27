@@ -22,6 +22,8 @@ type FieldConfigRow = {
   show_cool_down: boolean | null;
   show_interval_reps: boolean | null;
   show_interval_duration: boolean | null;
+  show_time_of_day: boolean | null;
+  show_tags: boolean | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -45,6 +47,8 @@ type EditableRow = {
   show_cool_down: boolean;
   show_interval_reps: boolean;
   show_interval_duration: boolean;
+  show_time_of_day: boolean;
+  show_tags: boolean;
   notes: string;
   isNew?: boolean;
 };
@@ -66,9 +70,11 @@ const checkboxFields: Array<{ key: CheckboxKey; label: string; group: string }> 
   { key: "show_rest_seconds",      label: "Rest Seconds",       group: "Intervals" },
   { key: "show_interval_reps",     label: "Interval Reps",      group: "Intervals" },
   { key: "show_interval_duration", label: "Interval Duration",  group: "Intervals" },
+  { key: "show_time_of_day",       label: "Time of Day",        group: "Display" },
+  { key: "show_tags",              label: "Tags",               group: "Display" },
 ];
 
-const groups = ["Core", "Environment", "Structure", "Intervals"];
+const groups = ["Core", "Environment", "Structure", "Intervals", "Display"];
 
 function toEditableRow(row: FieldConfigRow): EditableRow {
   return {
@@ -89,6 +95,8 @@ function toEditableRow(row: FieldConfigRow): EditableRow {
     show_cool_down: !!row.show_cool_down,
     show_interval_reps: !!row.show_interval_reps,
     show_interval_duration: !!row.show_interval_duration,
+    show_time_of_day: !!row.show_time_of_day,
+    show_tags: !!row.show_tags,
     notes: row.notes ?? "",
     isNew: false,
   };
@@ -113,6 +121,8 @@ function createBlankRow(): EditableRow {
     show_cool_down: false,
     show_interval_reps: false,
     show_interval_duration: false,
+    show_time_of_day: false,
+    show_tags: true,
     notes: "",
     isNew: true,
   };
@@ -198,6 +208,8 @@ export default function SessionTemplateFieldConfigPage() {
       show_cool_down: selected.show_cool_down,
       show_interval_reps: selected.show_interval_reps,
       show_interval_duration: selected.show_interval_duration,
+      show_time_of_day: selected.show_time_of_day,
+      show_tags: selected.show_tags,
       notes: selected.notes.trim() || null,
     };
 

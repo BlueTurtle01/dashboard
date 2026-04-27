@@ -62,6 +62,8 @@ type FieldVisibility = {
   show_cool_down: boolean;
   show_interval_reps: boolean;
   show_interval_duration: boolean;
+  show_time_of_day: boolean;
+  show_tags: boolean;
 };
 
 type FieldConfigRow = FieldVisibility & {
@@ -95,6 +97,8 @@ const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
   show_cool_down: false,
   show_interval_reps: false,
   show_interval_duration: false,
+  show_time_of_day: false,
+  show_tags: true,
 };
 
 // Subtypes that are superseded by the intensity dropdown
@@ -240,7 +244,7 @@ export function UnifiedSessionForm({
       supabase
         .from("session_template_field_config_resolved")
         .select(
-          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_rest_seconds, show_strides, show_warm_up, show_cool_down, show_interval_reps, show_interval_duration",
+          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_rest_seconds, show_strides, show_warm_up, show_cool_down, show_interval_reps, show_interval_duration, show_time_of_day, show_tags",
         ),
       supabase
         .from("training_intensities")
@@ -335,6 +339,8 @@ export function UnifiedSessionForm({
           show_cool_down: (row as any).show_cool_down,
           show_interval_reps: (row as any).show_interval_reps,
           show_interval_duration: (row as any).show_interval_duration,
+          show_time_of_day: (row as any).show_time_of_day,
+          show_tags: (row as any).show_tags,
         };
       }
       setFieldConfigMap(configMap);
@@ -769,34 +775,26 @@ export function UnifiedSessionForm({
           </label>
         ) : null}
 
-        <label className="block">
-          <span className="mb-1 block text-sm font-semibold text-zinc-900">
-            Time of Day
-          </span>
-          <select
-            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-            value={form.timeOfDay}
-            onChange={(e) => updateForm("timeOfDay", e.target.value)}
-          >
-            {timeOfDayOptions.map((option) => (
-              <option key={option} value={option}>
-                {formatLabel(option)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {fieldVis.show_time_of_day ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Time of Day
+            </span>
+            <select
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.timeOfDay}
+              onChange={(e) => updateForm("timeOfDay", e.target.value)}
+            >
+              {timeOfDayOptions.map((option) => (
+                <option key={option} value={option}>
+                  {formatLabel(option)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
       </div>
-
-      <label className="block">
-        <span className="mb-1 block text-sm font-semibold text-zinc-900">Notes</span>
-        <textarea
-          className="min-h-[90px] w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-          value={form.notes}
-          onChange={(e) => updateForm("notes", e.target.value)}
-          placeholder="Extra guidance for the coach or athlete"
-        />
-      </label>
 
       <div>
         <span className="mb-1 block text-sm font-semibold text-zinc-900">Add Paired Mobility Session (Optional)</span>
@@ -846,7 +844,7 @@ export function UnifiedSessionForm({
         )}
       </div>
 
-      <div>
+      {fieldVis.show_tags ? <div>
         <span className="mb-1 block text-sm font-semibold text-zinc-900">Tags</span>
 
         {form.tags.length > 0 && (
@@ -911,7 +909,7 @@ export function UnifiedSessionForm({
             </div>
           );
         })()}
-      </div>
+      </div> : null}
       </>) : null}
 
       <div className="flex flex-wrap gap-3">
