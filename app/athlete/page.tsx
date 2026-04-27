@@ -71,13 +71,11 @@ export default function AthletePage() {
           const planData = data.plan_json as GeneratedPlan;
           const fetchedPlanId = data.id;
 
-          // Validate the plan has required fields
-          if (!planData.eventDate || !planData.eventName || !Array.isArray(planData.weeks)) {
-            setError("Plan is missing required fields (eventDate, eventName, or weeks)");
+          if (!Array.isArray(planData.weeks)) {
+            setError("Plan is missing required fields");
             setPlan(null);
             setPlanId(null);
-          } else {
-            // Validate eventDate is parseable
+          } else if (planData.eventDate) {
             const testDate = new Date(planData.eventDate);
             if (isNaN(testDate.getTime())) {
               setError(`Invalid event date format: ${planData.eventDate}`);
@@ -87,6 +85,9 @@ export default function AthletePage() {
               setPlan(planData);
               setPlanId(fetchedPlanId);
             }
+          } else {
+            setPlan(planData);
+            setPlanId(fetchedPlanId);
           }
         } else {
           setError(null);
@@ -249,8 +250,8 @@ export default function AthletePage() {
     <main className="min-h-screen bg-gradient-to-b from-zinc-50 to-white">
       <div className="px-4 py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl mb-8">
-          <h1 className="text-2xl font-bold">{plan.eventName}</h1>
-          <p className="mt-1 text-zinc-600">{plan.eventDate}</p>
+          <h1 className="text-2xl font-bold">{plan.eventName ?? "Training Program"}</h1>
+          {plan.eventDate && <p className="mt-1 text-zinc-600">{plan.eventDate}</p>}
         </div>
 
         <div className="mx-auto max-w-6xl">

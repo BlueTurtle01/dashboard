@@ -146,8 +146,8 @@ export interface PlanWeek {
 
 export interface GeneratedPlan {
   id: string;
-  eventName: string;
-  eventDate: string;
+  eventName?: string;
+  eventDate?: string;
   weeksAvailable: number;
   trainingDaysPerWeek: number;
   createdAt: string;
