@@ -200,6 +200,18 @@ export default function AdminSoloPlanPage() {
     setSuccessMessage("");
 
     try {
+      // athlete_plans.athlete_user_id FK references athlete_profiles(user_id),
+      // so the profile row must exist before the plan is inserted.
+      const { error: profileError } = await supabase
+        .from("athlete_profiles")
+        .upsert({ user_id: formData.athleteUserId }, { onConflict: "user_id" });
+
+      if (profileError) {
+        setErrorMessage(`Could not create athlete profile: ${profileError.message}`);
+        setAssigningPlan(false);
+        return;
+      }
+
       // Create a new athlete_plan from the template
       const planJson = generatePlanFromTemplate(selectedTemplate);
 
@@ -230,17 +242,6 @@ export default function AdminSoloPlanPage() {
 
       if (roleError && !roleError.message.includes("duplicate")) {
         setErrorMessage(`Could not assign role: ${roleError.message}`);
-        setAssigningPlan(false);
-        return;
-      }
-
-      // Ensure an athlete_profiles row exists so other features work
-      const { error: profileError } = await supabase
-        .from("athlete_profiles")
-        .upsert({ user_id: formData.athleteUserId }, { onConflict: "user_id" });
-
-      if (profileError) {
-        setErrorMessage(`Could not create athlete profile: ${profileError.message}`);
         setAssigningPlan(false);
         return;
       }
