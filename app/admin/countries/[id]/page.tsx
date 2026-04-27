@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 
 export const dynamic = "force-dynamic";
 
+type Tab = "vaccinations" | "climate";
+
 type VaccinationStatus = "Unnecessary" | "Recommended" | "Mandatory";
 
 type CountryDetail = {
@@ -85,6 +87,7 @@ export default function CountryDetailPage() {
   const [climate, setClimate] = useState<ClimateRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [tab, setTab] = useState<Tab>("vaccinations");
 
   useEffect(() => {
     async function load() {
@@ -127,6 +130,7 @@ export default function CountryDetailPage() {
   return (
     <main style={pageStyle}>
       <div style={containerStyle}>
+        {/* Header */}
         <div style={headerRowStyle}>
           <div>
             {loading ? (
@@ -151,21 +155,16 @@ export default function CountryDetailPage() {
 
         {!loading && country ? (
           <>
-            {/* Vaccination summary strip */}
+            {/* Summary strip */}
             <div style={summaryStripStyle}>
               <div style={summaryItemStyle}>
                 <span style={summaryNumberStyle({ color: "#b00020" })}>{mandatory.length}</span>
-                <span style={summaryLabelStyle}>Mandatory</span>
+                <span style={summaryLabelStyle}>Mandatory vax</span>
               </div>
               <div style={summaryDividerStyle} />
               <div style={summaryItemStyle}>
                 <span style={summaryNumberStyle({ color: "#b45309" })}>{recommended.length}</span>
-                <span style={summaryLabelStyle}>Recommended</span>
-              </div>
-              <div style={summaryDividerStyle} />
-              <div style={summaryItemStyle}>
-                <span style={summaryNumberStyle({ color: "#999" })}>{unnecessary.length}</span>
-                <span style={summaryLabelStyle}>Unnecessary</span>
+                <span style={summaryLabelStyle}>Recommended vax</span>
               </div>
               <div style={summaryDividerStyle} />
               <div style={summaryItemStyle}>
@@ -174,131 +173,156 @@ export default function CountryDetailPage() {
               </div>
             </div>
 
-            {/* Vaccination table */}
-            <section style={cardStyle}>
-              <h2 style={sectionTitleStyle}>Vaccinations</h2>
-              <div style={tableWrapStyle}>
-                <table style={tableStyle}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>Vaccine</th>
-                      <th style={thStyle}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {VACCINE_LABELS.map(({ field, label }) => (
-                      <tr key={field}>
-                        <td style={tdStyle}>{label}</td>
-                        <td style={tdStyle}>
-                          <StatusBadge status={country[field] as VaccinationStatus} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+            {/* Tab bar */}
+            <div style={tabBarStyle}>
+              <button
+                type="button"
+                style={tab === "vaccinations" ? activeTabStyle : tabStyle}
+                onClick={() => setTab("vaccinations")}
+              >
+                Vaccinations
+              </button>
+              <button
+                type="button"
+                style={tab === "climate" ? activeTabStyle : tabStyle}
+                onClick={() => setTab("climate")}
+              >
+                Climate
+                {climate.length > 0 && (
+                  <span style={tabCountStyle}>{climate.length}</span>
+                )}
+              </button>
+            </div>
 
-            {/* Vaccination notes */}
-            {country.notes ? (
-              <section style={cardStyle}>
-                <h2 style={sectionTitleStyle}>Vaccination Notes</h2>
-                <p style={notesStyle}>{country.notes}</p>
-              </section>
-            ) : null}
-
-            {/* Climate section */}
-            <section style={cardStyle}>
-              <h2 style={sectionTitleStyle}>Race Climate</h2>
-              {climate.length === 0 ? (
-                <p style={helperStyle}>No climate data added yet.</p>
-              ) : (
-                climate.map((row) => (
-                  <div key={row.id} style={climateCardStyle}>
-                    <div style={climateHeaderStyle}>
-                      <span style={climateRegionStyle}>{row.race_region}</span>
-                      <span style={climateMonthStyle}>{row.race_month}</span>
-                    </div>
-
-                    <div style={climateGridStyle}>
-                      <div style={climateStatStyle}>
-                        <span style={climateStatLabelStyle}>Day temp</span>
-                        <span style={climateStatValueStyle}>
-                          {tempRange(row.avg_day_temp_c_min, row.avg_day_temp_c_max)}
-                        </span>
-                      </div>
-                      <div style={climateStatStyle}>
-                        <span style={climateStatLabelStyle}>Night temp</span>
-                        <span style={climateStatValueStyle}>
-                          {tempRange(row.avg_night_temp_c_min, row.avg_night_temp_c_max)}
-                        </span>
-                      </div>
-                      {row.humidity_expectation ? (
-                        <div style={climateStatStyle}>
-                          <span style={climateStatLabelStyle}>Humidity</span>
-                          <span style={climateStatValueStyle}>{row.humidity_expectation}</span>
-                        </div>
-                      ) : null}
-                      {row.rainfall_expectation ? (
-                        <div style={climateStatStyle}>
-                          <span style={climateStatLabelStyle}>Rainfall</span>
-                          <span style={climateStatValueStyle}>{row.rainfall_expectation}</span>
-                        </div>
-                      ) : null}
-                      {row.wind_expectation ? (
-                        <div style={climateStatStyle}>
-                          <span style={climateStatLabelStyle}>Wind</span>
-                          <span style={climateStatValueStyle}>{row.wind_expectation}</span>
-                        </div>
-                      ) : null}
-                      {row.uv_expectation ? (
-                        <div style={climateStatStyle}>
-                          <span style={climateStatLabelStyle}>UV</span>
-                          <span style={climateStatValueStyle}>{row.uv_expectation}</span>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div style={climateImplicationStyle}>
-                      <span style={climateImplicationLabelStyle}>Training implication</span>
-                      <p style={climateImplicationTextStyle}>{row.training_implication}</p>
-                    </div>
-
-                    {row.race_week_warning ? (
-                      <div style={climateWarningStyle}>
-                        <span style={climateWarningLabelStyle}>Race week warning</span>
-                        <p style={climateWarningTextStyle}>{row.race_week_warning}</p>
-                      </div>
-                    ) : null}
-
-                    <div style={climateSourceStyle}>
-                      Source:{" "}
-                      <a href={row.source_url} target="_blank" rel="noopener noreferrer" style={linkStyle}>
-                        {row.source_name}
-                      </a>
-                      {" · "}checked {row.checked_at}
-                    </div>
+            {/* Vaccinations tab */}
+            {tab === "vaccinations" && (
+              <>
+                <section style={cardStyle}>
+                  <h2 style={sectionTitleStyle}>Vaccinations</h2>
+                  <div style={tableWrapStyle}>
+                    <table style={tableStyle}>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>Vaccine</th>
+                          <th style={thStyle}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {VACCINE_LABELS.map(({ field, label }) => (
+                          <tr key={field}>
+                            <td style={tdStyle}>{label}</td>
+                            <td style={tdStyle}>
+                              <StatusBadge status={country[field] as VaccinationStatus} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))
-              )}
-            </section>
+                </section>
 
-            {/* Vaccination source */}
-            <section style={cardStyle}>
-              <h2 style={sectionTitleStyle}>Vaccination Source</h2>
-              <p style={sourceLineStyle}>
-                <span style={sourceLabelStyle}>Provider:</span> {country.source_name}
-              </p>
-              <p style={sourceLineStyle}>
-                <span style={sourceLabelStyle}>URL:</span>{" "}
-                <a href={country.source_url} target="_blank" rel="noopener noreferrer" style={linkStyle}>
-                  {country.source_url}
-                </a>
-              </p>
-              <p style={sourceLineStyle}>
-                <span style={sourceLabelStyle}>Data checked:</span> {country.checked_at}
-              </p>
-            </section>
+                {country.notes ? (
+                  <section style={cardStyle}>
+                    <h2 style={sectionTitleStyle}>Notes</h2>
+                    <p style={notesStyle}>{country.notes}</p>
+                  </section>
+                ) : null}
+
+                <section style={cardStyle}>
+                  <h2 style={sectionTitleStyle}>Source</h2>
+                  <p style={sourceLineStyle}>
+                    <span style={sourceLabelStyle}>Provider:</span> {country.source_name}
+                  </p>
+                  <p style={sourceLineStyle}>
+                    <span style={sourceLabelStyle}>URL:</span>{" "}
+                    <a href={country.source_url} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+                      {country.source_url}
+                    </a>
+                  </p>
+                  <p style={sourceLineStyle}>
+                    <span style={sourceLabelStyle}>Data checked:</span> {country.checked_at}
+                  </p>
+                </section>
+              </>
+            )}
+
+            {/* Climate tab */}
+            {tab === "climate" && (
+              <section style={cardStyle}>
+                <h2 style={sectionTitleStyle}>Race Climate</h2>
+                {climate.length === 0 ? (
+                  <p style={helperStyle}>No climate data added yet.</p>
+                ) : (
+                  climate.map((row) => (
+                    <div key={row.id} style={climateCardStyle}>
+                      <div style={climateHeaderStyle}>
+                        <span style={climateRegionStyle}>{row.race_region}</span>
+                        <span style={climateMonthStyle}>{row.race_month}</span>
+                      </div>
+
+                      <div style={climateGridStyle}>
+                        <div style={climateStatStyle}>
+                          <span style={climateStatLabelStyle}>Day temp</span>
+                          <span style={climateStatValueStyle}>
+                            {tempRange(row.avg_day_temp_c_min, row.avg_day_temp_c_max)}
+                          </span>
+                        </div>
+                        <div style={climateStatStyle}>
+                          <span style={climateStatLabelStyle}>Night temp</span>
+                          <span style={climateStatValueStyle}>
+                            {tempRange(row.avg_night_temp_c_min, row.avg_night_temp_c_max)}
+                          </span>
+                        </div>
+                        {row.humidity_expectation ? (
+                          <div style={climateStatStyle}>
+                            <span style={climateStatLabelStyle}>Humidity</span>
+                            <span style={climateStatValueStyle}>{row.humidity_expectation}</span>
+                          </div>
+                        ) : null}
+                        {row.rainfall_expectation ? (
+                          <div style={climateStatStyle}>
+                            <span style={climateStatLabelStyle}>Rainfall</span>
+                            <span style={climateStatValueStyle}>{row.rainfall_expectation}</span>
+                          </div>
+                        ) : null}
+                        {row.wind_expectation ? (
+                          <div style={climateStatStyle}>
+                            <span style={climateStatLabelStyle}>Wind</span>
+                            <span style={climateStatValueStyle}>{row.wind_expectation}</span>
+                          </div>
+                        ) : null}
+                        {row.uv_expectation ? (
+                          <div style={climateStatStyle}>
+                            <span style={climateStatLabelStyle}>UV</span>
+                            <span style={climateStatValueStyle}>{row.uv_expectation}</span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div style={climateImplicationStyle}>
+                        <span style={climateImplicationLabelStyle}>Training implication</span>
+                        <p style={climateImplicationTextStyle}>{row.training_implication}</p>
+                      </div>
+
+                      {row.race_week_warning ? (
+                        <div style={climateWarningStyle}>
+                          <span style={climateWarningLabelStyle}>Race week warning</span>
+                          <p style={climateWarningTextStyle}>{row.race_week_warning}</p>
+                        </div>
+                      ) : null}
+
+                      <div style={climateSourceStyle}>
+                        Source:{" "}
+                        <a href={row.source_url} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+                          {row.source_name}
+                        </a>
+                        {" · "}checked {row.checked_at}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </section>
+            )}
           </>
         ) : null}
       </div>
@@ -329,11 +353,16 @@ const mandatoryBadgeStyle: React.CSSProperties = { display: "inline-block", padd
 const recommendedBadgeStyle: React.CSSProperties = { display: "inline-block", padding: "3px 12px", borderRadius: "12px", background: "#fff8e1", color: "#b45309", fontSize: "13px", fontWeight: 600 };
 const unnecessaryBadgeStyle: React.CSSProperties = { display: "inline-block", padding: "3px 12px", borderRadius: "12px", background: "#f5f5f5", color: "#999", fontSize: "13px", fontWeight: 600 };
 
-const summaryStripStyle: React.CSSProperties = { display: "flex", gap: 0, background: "#fff", borderRadius: "12px", border: "1px solid #e5e5e5", marginBottom: "20px", overflow: "hidden" };
+const summaryStripStyle: React.CSSProperties = { display: "flex", background: "#fff", borderRadius: "12px", border: "1px solid #e5e5e5", marginBottom: "8px", overflow: "hidden" };
 const summaryItemStyle: React.CSSProperties = { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 16px", gap: "4px" };
 const summaryDividerStyle: React.CSSProperties = { width: "1px", background: "#e5e5e5", alignSelf: "stretch" };
 const summaryNumberStyle = (extra: React.CSSProperties): React.CSSProperties => ({ fontSize: "28px", fontWeight: 700, ...extra });
 const summaryLabelStyle: React.CSSProperties = { fontSize: "13px", color: "#666" };
+
+const tabBarStyle: React.CSSProperties = { display: "flex", gap: 0, borderBottom: "2px solid #e5e5e5", marginBottom: "24px", marginTop: "16px" };
+const tabStyle: React.CSSProperties = { padding: "10px 20px", background: "none", border: "none", borderBottom: "2px solid transparent", marginBottom: "-2px", cursor: "pointer", fontSize: "14px", fontWeight: 500, color: "#666", display: "flex", alignItems: "center", gap: "6px" };
+const activeTabStyle: React.CSSProperties = { ...tabStyle, borderBottomColor: "#111", color: "#111", fontWeight: 700 };
+const tabCountStyle: React.CSSProperties = { background: "#e5e5e5", color: "#555", borderRadius: "10px", padding: "1px 7px", fontSize: "12px", fontWeight: 600 };
 
 const climateCardStyle: React.CSSProperties = { border: "1px solid #e5e5e5", borderRadius: "10px", padding: "16px", marginBottom: "16px" };
 const climateHeaderStyle: React.CSSProperties = { display: "flex", alignItems: "baseline", gap: "10px", marginBottom: "12px" };
