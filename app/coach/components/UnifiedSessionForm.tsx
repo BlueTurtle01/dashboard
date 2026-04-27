@@ -159,6 +159,21 @@ function createEmptyForm(): UnifiedSessionFormData {
   };
 }
 
+function getRepLabels(subtype: string): { sets: string; setDuration: string; rest: string } {
+  if (subtype === "tempo") {
+    return {
+      sets: "Number of Reps",
+      setDuration: "Rep Time (seconds)",
+      rest: "Time Between Reps (seconds)",
+    };
+  }
+  return {
+    sets: "Sets",
+    setDuration: "Set Duration (seconds)",
+    rest: "Rest Between Sets (seconds)",
+  };
+}
+
 function shouldShowTerrainForActivity(activity: string): boolean {
   const activityLower = (activity || "").toLowerCase();
   const noTerrainActivities = ["swimming", "swim", "stairs", "stair", "strength", "core"];
@@ -540,7 +555,7 @@ export function UnifiedSessionForm({
 
         {fieldVis.show_sets ? (
           <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-zinc-900">Sets</span>
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">{getRepLabels(form.subtype).sets}</span>
             <input
               type="number"
               min="1"
@@ -555,7 +570,7 @@ export function UnifiedSessionForm({
         {fieldVis.show_set_duration ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
-              Set Duration (seconds)
+              {getRepLabels(form.subtype).setDuration}
             </span>
             <input
               type="number"
@@ -571,7 +586,7 @@ export function UnifiedSessionForm({
         {fieldVis.show_rest_seconds ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
-              Rest Between Sets (seconds)
+              {getRepLabels(form.subtype).rest}
             </span>
             <input
               type="number"

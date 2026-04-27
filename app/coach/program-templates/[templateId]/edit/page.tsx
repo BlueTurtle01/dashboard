@@ -1606,6 +1606,12 @@ export default function EditProgramTemplatePage() {
             >
               Back to Templates
             </Link>
+            <Link
+              href={`/coach/program-templates/${templateId}`}
+              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-100"
+            >
+              View Template
+            </Link>
             <button
               type="button"
               onClick={() => void saveTemplate()}

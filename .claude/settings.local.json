@@ -32,7 +32,10 @@
       "Bash(xargs sed *)",
       "Bash(git merge *)",
       "Bash(git stash *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)"
     ]
   }
 }
