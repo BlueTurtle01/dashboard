@@ -29,7 +29,10 @@
       "Bash(npx tsc:*)",
       "Bash(curl -s http://localhost:3001/)",
       "Bash(git checkout *)",
-      "Bash(xargs sed *)"
+      "Bash(xargs sed *)",
+      "Bash(git merge *)",
+      "Bash(git stash *)",
+      "Bash(git push *)"
     ]
   }
 }
