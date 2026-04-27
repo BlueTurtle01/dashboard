@@ -16,6 +16,7 @@ type FieldConfigRow = {
   show_pack_weight: boolean | null;
   show_sets: boolean | null;
   show_set_duration: boolean | null;
+  show_set_duration_minutes: boolean | null;
   show_rest_seconds: boolean | null;
   show_strides: boolean | null;
   show_warm_up: boolean | null;
@@ -41,6 +42,7 @@ type EditableRow = {
   show_pack_weight: boolean;
   show_sets: boolean;
   show_set_duration: boolean;
+  show_set_duration_minutes: boolean;
   show_rest_seconds: boolean;
   show_strides: boolean;
   show_warm_up: boolean;
@@ -65,9 +67,10 @@ const checkboxFields: Array<{ key: CheckboxKey; label: string; group: string }> 
   { key: "show_warm_up",           label: "Warm Up",            group: "Structure" },
   { key: "show_cool_down",         label: "Cool Down",          group: "Structure" },
   { key: "show_strides",           label: "Strides",            group: "Structure" },
-  { key: "show_sets",              label: "Sets",               group: "Intervals" },
-  { key: "show_set_duration",      label: "Set Duration",       group: "Intervals" },
-  { key: "show_rest_seconds",      label: "Rest Seconds",       group: "Intervals" },
+  { key: "show_sets",                  label: "Sets",                    group: "Intervals" },
+  { key: "show_set_duration",          label: "Set Duration (secs)",     group: "Intervals" },
+  { key: "show_set_duration_minutes",  label: "Set Duration (mins)",     group: "Intervals" },
+  { key: "show_rest_seconds",          label: "Rest Seconds",            group: "Intervals" },
   { key: "show_interval_reps",     label: "Interval Reps",      group: "Intervals" },
   { key: "show_interval_duration", label: "Interval Duration",  group: "Intervals" },
   { key: "show_time_of_day",       label: "Time of Day",        group: "Display" },
@@ -89,6 +92,7 @@ function toEditableRow(row: FieldConfigRow): EditableRow {
     show_pack_weight: !!row.show_pack_weight,
     show_sets: !!row.show_sets,
     show_set_duration: !!row.show_set_duration,
+    show_set_duration_minutes: !!row.show_set_duration_minutes,
     show_rest_seconds: !!row.show_rest_seconds,
     show_strides: !!row.show_strides,
     show_warm_up: !!row.show_warm_up,
@@ -115,6 +119,7 @@ function createBlankRow(): EditableRow {
     show_pack_weight: false,
     show_sets: false,
     show_set_duration: false,
+    show_set_duration_minutes: false,
     show_rest_seconds: false,
     show_strides: false,
     show_warm_up: false,
@@ -202,6 +207,7 @@ export default function SessionTemplateFieldConfigPage() {
       show_pack_weight: selected.show_pack_weight,
       show_sets: selected.show_sets,
       show_set_duration: selected.show_set_duration,
+      show_set_duration_minutes: selected.show_set_duration_minutes,
       show_rest_seconds: selected.show_rest_seconds,
       show_strides: selected.show_strides,
       show_warm_up: selected.show_warm_up,

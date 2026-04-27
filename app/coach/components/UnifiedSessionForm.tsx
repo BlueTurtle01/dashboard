@@ -56,6 +56,7 @@ type FieldVisibility = {
   show_pack_weight: boolean;
   show_sets: boolean;
   show_set_duration: boolean;
+  show_set_duration_minutes: boolean;
   show_rest_seconds: boolean;
   show_strides: boolean;
   show_warm_up: boolean;
@@ -91,6 +92,7 @@ const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
   show_pack_weight: true,
   show_sets: false,
   show_set_duration: false,
+  show_set_duration_minutes: false,
   show_rest_seconds: false,
   show_strides: false,
   show_warm_up: false,
@@ -244,7 +246,7 @@ export function UnifiedSessionForm({
       supabase
         .from("session_template_field_config_resolved")
         .select(
-          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_rest_seconds, show_strides, show_warm_up, show_cool_down, show_interval_reps, show_interval_duration, show_time_of_day, show_tags",
+          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_set_duration_minutes, show_rest_seconds, show_strides, show_warm_up, show_cool_down, show_interval_reps, show_interval_duration, show_time_of_day, show_tags",
         ),
       supabase
         .from("training_intensities")
@@ -333,6 +335,7 @@ export function UnifiedSessionForm({
           show_pack_weight: row.show_pack_weight,
           show_sets: row.show_sets,
           show_set_duration: row.show_set_duration,
+          show_set_duration_minutes: (row as any).show_set_duration_minutes,
           show_rest_seconds: row.show_rest_seconds,
           show_strides: (row as any).show_strides,
           show_warm_up: (row as any).show_warm_up,
@@ -604,7 +607,7 @@ export function UnifiedSessionForm({
         {fieldVis.show_set_duration ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
-              {getRepLabels(form.subtype).setDuration}
+              {getRepLabels(form.subtype).setDuration} (seconds)
             </span>
             <input
               type="number"
@@ -613,6 +616,26 @@ export function UnifiedSessionForm({
               value={form.setDurationSeconds}
               onChange={(e) => updateForm("setDurationSeconds", e.target.value)}
               placeholder="60"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_set_duration_minutes ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              {getRepLabels(form.subtype).setDuration} (minutes)
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.setDurationSeconds ? String(Math.round((parseInt(form.setDurationSeconds) / 60) * 10) / 10) : ""}
+              onChange={(e) => {
+                const mins = parseFloat(e.target.value);
+                updateForm("setDurationSeconds", isNaN(mins) ? "" : String(Math.round(mins * 60)));
+              }}
+              placeholder="5"
             />
           </label>
         ) : null}
