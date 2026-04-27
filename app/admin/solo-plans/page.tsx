@@ -127,25 +127,14 @@ export default function AdminSoloPlanPage() {
   }
 
   async function loadUsers() {
-    const { data: roleData, error: roleError } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "athlete");
-
-    if (roleError || !roleData) return;
-
-    const athleteIds = new Set(roleData.map((r) => r.user_id));
-
     const res = await fetch("/api/admin/list-users");
     if (!res.ok) return;
     const { users: allUsers } = await res.json() as { users: { id: string; email: string | null }[] };
 
-    const athleteUsers = allUsers
-      .filter((u) => athleteIds.has(u.id))
-      .map((u) => ({ id: u.id, email: u.email ?? `user-${u.id.slice(0, 8)}` }));
+    const mappedUsers = allUsers.map((u) => ({ id: u.id, email: u.email ?? `user-${u.id.slice(0, 8)}` }));
 
-    setUsers(athleteUsers);
-    setFilteredUsers(athleteUsers);
+    setUsers(mappedUsers);
+    setFilteredUsers(mappedUsers);
   }
 
   useEffect(() => {
