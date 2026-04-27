@@ -49,39 +49,26 @@ type EditableRow = {
   isNew?: boolean;
 };
 
-const checkboxColumns: Array<{
-  key:
-    | "show_distance"
-    | "show_duration"
-    | "show_target_intensity"
-    | "show_terrain"
-    | "show_elevation"
-    | "show_pack_weight"
-    | "show_sets"
-    | "show_set_duration"
-    | "show_rest_seconds"
-    | "show_strides"
-    | "show_warm_up"
-    | "show_cool_down"
-    | "show_interval_reps"
-    | "show_interval_duration";
-  label: string;
-}> = [
-  { key: "show_distance", label: "Distance" },
-  { key: "show_duration", label: "Duration" },
-  { key: "show_target_intensity", label: "Target Intensity" },
-  { key: "show_terrain", label: "Terrain" },
-  { key: "show_elevation", label: "Elevation" },
-  { key: "show_pack_weight", label: "Pack Weight" },
-  { key: "show_sets", label: "Sets" },
-  { key: "show_set_duration", label: "Set Duration" },
-  { key: "show_rest_seconds", label: "Rest Seconds" },
-  { key: "show_strides", label: "Strides" },
-  { key: "show_warm_up", label: "Warm Up" },
-  { key: "show_cool_down", label: "Cool Down" },
-  { key: "show_interval_reps", label: "Interval Reps" },
-  { key: "show_interval_duration", label: "Interval Duration" },
+type CheckboxKey = keyof Omit<EditableRow, "id" | "activity" | "subtype" | "notes" | "isNew">;
+
+const checkboxFields: Array<{ key: CheckboxKey; label: string; group: string }> = [
+  { key: "show_duration",          label: "Duration",           group: "Core" },
+  { key: "show_distance",          label: "Distance",           group: "Core" },
+  { key: "show_target_intensity",  label: "Target Intensity",   group: "Core" },
+  { key: "show_terrain",           label: "Terrain",            group: "Environment" },
+  { key: "show_elevation",         label: "Elevation",          group: "Environment" },
+  { key: "show_pack_weight",       label: "Pack Weight",        group: "Environment" },
+  { key: "show_warm_up",           label: "Warm Up",            group: "Structure" },
+  { key: "show_cool_down",         label: "Cool Down",          group: "Structure" },
+  { key: "show_strides",           label: "Strides",            group: "Structure" },
+  { key: "show_sets",              label: "Sets",               group: "Intervals" },
+  { key: "show_set_duration",      label: "Set Duration",       group: "Intervals" },
+  { key: "show_rest_seconds",      label: "Rest Seconds",       group: "Intervals" },
+  { key: "show_interval_reps",     label: "Interval Reps",      group: "Intervals" },
+  { key: "show_interval_duration", label: "Interval Duration",  group: "Intervals" },
 ];
+
+const groups = ["Core", "Environment", "Structure", "Intervals"];
 
 function toEditableRow(row: FieldConfigRow): EditableRow {
   return {
@@ -131,17 +118,26 @@ function createBlankRow(): EditableRow {
   };
 }
 
+function sidebarLabel(row: EditableRow) {
+  const activity = row.activity || "—";
+  const subtype = row.subtype || "(all)";
+  return { activity, subtype };
+}
+
 export default function SessionTemplateFieldConfigPage() {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string>("");
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const selected = rows.find((r) => r.id === selectedId) ?? null;
 
   async function loadRows() {
     setLoading(true);
-    setMessage("");
+    setMessage(null);
 
     const { data, error } = await supabase
       .from("session_template_field_config")
@@ -150,7 +146,7 @@ export default function SessionTemplateFieldConfigPage() {
       .order("subtype", { ascending: true, nullsFirst: true });
 
     if (error) {
-      setMessage(`Could not load rows: ${error.message}`);
+      setMessage({ text: `Could not load: ${error.message}`, ok: false });
       setRows([]);
       setLoading(false);
       return;
@@ -164,50 +160,48 @@ export default function SessionTemplateFieldConfigPage() {
     loadRows();
   }, []);
 
-  function updateRow<K extends keyof EditableRow>(
-    rowId: string,
-    key: K,
-    value: EditableRow[K]
-  ) {
+  function updateSelected<K extends keyof EditableRow>(key: K, value: EditableRow[K]) {
+    if (!selectedId) return;
     setRows((current) =>
-      current.map((row) => (row.id === rowId ? { ...row, [key]: value } : row))
+      current.map((row) => (row.id === selectedId ? { ...row, [key]: value } : row))
     );
   }
 
-  async function saveRow(row: EditableRow) {
-    setMessage("");
+  async function saveSelected() {
+    if (!selected) return;
+    setMessage(null);
 
-    const trimmedActivity = row.activity.trim();
-    const trimmedSubtype = row.subtype.trim();
+    const trimmedActivity = selected.activity.trim();
+    const trimmedSubtype = selected.subtype.trim();
 
     if (!trimmedActivity) {
-      setMessage("Activity is required.");
+      setMessage({ text: "Activity is required.", ok: false });
       return;
     }
 
-    setSavingRowId(row.id);
+    setSavingRowId(selected.id);
 
     const payload = {
       activity: trimmedActivity,
       subtype: trimmedSubtype || null,
-      show_distance: row.show_distance,
-      show_duration: row.show_duration,
-      show_target_intensity: row.show_target_intensity,
-      show_terrain: row.show_terrain,
-      show_elevation: row.show_elevation,
-      show_pack_weight: row.show_pack_weight,
-      show_sets: row.show_sets,
-      show_set_duration: row.show_set_duration,
-      show_rest_seconds: row.show_rest_seconds,
-      show_strides: row.show_strides,
-      show_warm_up: row.show_warm_up,
-      show_cool_down: row.show_cool_down,
-      show_interval_reps: row.show_interval_reps,
-      show_interval_duration: row.show_interval_duration,
-      notes: row.notes.trim() || null,
+      show_distance: selected.show_distance,
+      show_duration: selected.show_duration,
+      show_target_intensity: selected.show_target_intensity,
+      show_terrain: selected.show_terrain,
+      show_elevation: selected.show_elevation,
+      show_pack_weight: selected.show_pack_weight,
+      show_sets: selected.show_sets,
+      show_set_duration: selected.show_set_duration,
+      show_rest_seconds: selected.show_rest_seconds,
+      show_strides: selected.show_strides,
+      show_warm_up: selected.show_warm_up,
+      show_cool_down: selected.show_cool_down,
+      show_interval_reps: selected.show_interval_reps,
+      show_interval_duration: selected.show_interval_duration,
+      notes: selected.notes.trim() || null,
     };
 
-    if (row.isNew) {
+    if (selected.isNew) {
       const { data, error } = await supabase
         .from("session_template_field_config")
         .insert(payload)
@@ -215,15 +209,17 @@ export default function SessionTemplateFieldConfigPage() {
         .single();
 
       if (error) {
-        setMessage(`Could not create row: ${error.message}`);
+        setMessage({ text: `Could not create: ${error.message}`, ok: false });
         setSavingRowId(null);
         return;
       }
 
+      const saved = toEditableRow(data);
       setRows((current) =>
-        current.map((r) => (r.id === row.id ? toEditableRow(data) : r))
+        current.map((r) => (r.id === selected.id ? saved : r))
       );
-      setMessage("Row created.");
+      setSelectedId(saved.id);
+      setMessage({ text: "Config created.", ok: true });
       setSavingRowId(null);
       return;
     }
@@ -231,296 +227,307 @@ export default function SessionTemplateFieldConfigPage() {
     const { data, error } = await supabase
       .from("session_template_field_config")
       .update(payload)
-      .eq("id", row.id)
+      .eq("id", selected.id)
       .select("*")
       .single();
 
     if (error) {
-      setMessage(`Could not save row: ${error.message}`);
+      setMessage({ text: `Could not save: ${error.message}`, ok: false });
       setSavingRowId(null);
       return;
     }
 
     setRows((current) =>
-      current.map((r) => (r.id === row.id ? toEditableRow(data) : r))
+      current.map((r) => (r.id === selected.id ? toEditableRow(data) : r))
     );
-    setMessage("Row updated.");
+    setMessage({ text: "Saved.", ok: true });
     setSavingRowId(null);
   }
 
-  async function deleteRow(row: EditableRow) {
-    setMessage("");
+  async function deleteSelected() {
+    if (!selected) return;
+    setMessage(null);
 
-    if (row.isNew) {
-      setRows((current) => current.filter((r) => r.id !== row.id));
+    if (selected.isNew) {
+      setRows((current) => current.filter((r) => r.id !== selected.id));
+      setSelectedId(null);
       return;
     }
 
-    setDeletingRowId(row.id);
+    setDeletingRowId(selected.id);
 
     const { error } = await supabase
       .from("session_template_field_config")
       .delete()
-      .eq("id", row.id);
+      .eq("id", selected.id);
 
     if (error) {
-      setMessage(`Could not delete row: ${error.message}`);
+      setMessage({ text: `Could not delete: ${error.message}`, ok: false });
       setDeletingRowId(null);
       return;
     }
 
-    setRows((current) => current.filter((r) => r.id !== row.id));
-    setMessage("Row deleted.");
+    setRows((current) => current.filter((r) => r.id !== selected.id));
+    setSelectedId(null);
+    setMessage({ text: "Deleted.", ok: true });
     setDeletingRowId(null);
   }
 
+  function addNew() {
+    const blank = createBlankRow();
+    setRows((current) => [blank, ...current]);
+    setSelectedId(blank.id);
+    setMessage(null);
+  }
+
+  // Group sidebar items by activity
+  const grouped = useMemo(() => {
+    const map = new Map<string, EditableRow[]>();
+    for (const row of rows) {
+      const act = row.activity || "—";
+      if (!map.has(act)) map.set(act, []);
+      map.get(act)!.push(row);
+    }
+    return map;
+  }, [rows]);
+
   return (
-    <div
-      style={{
-        padding: "24px",
-        maxWidth: "100%",
-      }}
-    >
-      <div
-        style={{
-          background: "#fff",
-          border: "1px solid #ddd",
-          borderRadius: "12px",
-          boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-          padding: "20px",
-          overflowX: "auto",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
-            marginBottom: "16px",
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <h1
-              style={{
-                margin: "0 0 6px 0",
-                textAlign: "center",
-              }}
-            >
-              Session Template Field Config
-            </h1>
-            <p style={{ margin: 0, color: "#555" }}>
-              Control which fields show for each activity and subtype.
-            </p>
+    <div style={{ display: "flex", height: "100vh", fontFamily: "system-ui, sans-serif", fontSize: "14px" }}>
+
+      {/* Sidebar */}
+      <div style={{
+        width: "220px",
+        flexShrink: 0,
+        borderRight: "1px solid #e5e7eb",
+        background: "#f9fafb",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}>
+        <div style={{ padding: "16px", borderBottom: "1px solid #e5e7eb" }}>
+          <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "10px" }}>
+            Field Config
           </div>
-
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => setRows((current) => [createBlankRow(), ...current])}
-              style={buttonStyle}
-            >
-              Add Row
-            </button>
-
-            <button
-              type="button"
-              onClick={loadRows}
-              style={secondaryButtonStyle}
-            >
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {message ? (
-          <div
-            style={{
-              marginBottom: "16px",
-              padding: "10px 12px",
-              borderRadius: "8px",
-              background: "#f6f6f6",
-              border: "1px solid #ddd",
-            }}
-          >
-            {message}
-          </div>
-        ) : null}
-
-        {loading ? (
-          <p>Loading...</p>
-        ) : rows.length === 0 ? (
-          <p>No rows found.</p>
-        ) : (
-          <table
+          <button
+            type="button"
+            onClick={addNew}
             style={{
               width: "100%",
-              borderCollapse: "collapse",
-              minWidth: "1550px",
+              padding: "8px 12px",
+              background: "#1f6feb",
+              color: "#fff",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: 600,
+              fontSize: "13px",
+              cursor: "pointer",
             }}
           >
-            <thead>
-              <tr>
-                <th style={thStyle}>Activity</th>
-                <th style={thStyle}>Subtype</th>
-                {checkboxColumns.map((column) => (
-                  <th key={column.key} style={thStyleCentered}>
-                    {column.label}
-                  </th>
-                ))}
-                <th style={thStyle}>Notes</th>
-                <th style={thStyle}>Actions</th>
-              </tr>
-            </thead>
+            + Add Config
+          </button>
+        </div>
 
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td style={tdStyle}>
-                    <input
-                      type="text"
-                      value={row.activity}
-                      onChange={(e) =>
-                        updateRow(row.id, "activity", e.target.value)
-                      }
-                      placeholder="e.g. run"
-                      style={inputStyle}
-                    />
-                  </td>
-
-                  <td style={tdStyle}>
-                    <input
-                      type="text"
-                      value={row.subtype}
-                      onChange={(e) =>
-                        updateRow(row.id, "subtype", e.target.value)
-                      }
-                      placeholder="e.g. interval"
-                      style={inputStyle}
-                    />
-                  </td>
-
-                  {checkboxColumns.map((column) => (
-                    <td key={column.key} style={tdStyleCentered}>
-                      <input
-                        type="checkbox"
-                        checked={row[column.key]}
-                        onChange={(e) =>
-                          updateRow(row.id, column.key, e.target.checked)
-                        }
-                        style={{ width: "18px", height: "18px" }}
-                      />
-                    </td>
-                  ))}
-
-                  <td style={tdStyle}>
-                    <input
-                      type="text"
-                      value={row.notes}
-                      onChange={(e) => updateRow(row.id, "notes", e.target.value)}
-                      placeholder="Optional notes"
-                      style={inputStyle}
-                    />
-                  </td>
-
-                  <td style={tdStyle}>
-                    <div
+        <div style={{ overflowY: "auto", flex: 1, padding: "8px 0" }}>
+          {loading ? (
+            <p style={{ padding: "12px 16px", color: "#6b7280", margin: 0 }}>Loading…</p>
+          ) : rows.length === 0 ? (
+            <p style={{ padding: "12px 16px", color: "#6b7280", margin: 0 }}>No configs yet.</p>
+          ) : (
+            Array.from(grouped.entries()).map(([activity, actRows]) => (
+              <div key={activity}>
+                <div style={{
+                  padding: "6px 16px 4px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#9ca3af",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}>
+                  {activity}
+                </div>
+                {actRows.map((row) => {
+                  const { subtype } = sidebarLabel(row);
+                  const isActive = row.id === selectedId;
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      onClick={() => { setSelectedId(row.id); setMessage(null); }}
                       style={{
-                        display: "flex",
-                        gap: "8px",
-                        flexWrap: "wrap",
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "8px 16px",
+                        background: isActive ? "#eff6ff" : "transparent",
+                        border: "none",
+                        borderLeft: isActive ? "3px solid #1f6feb" : "3px solid transparent",
+                        color: isActive ? "#1d4ed8" : "#374151",
+                        fontWeight: isActive ? 600 : 400,
+                        cursor: "pointer",
+                        fontSize: "13px",
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => saveRow(row)}
-                        disabled={savingRowId === row.id}
-                        style={buttonStyle}
-                      >
-                        {savingRowId === row.id ? "Saving..." : "Save"}
-                      </button>
+                      {row.isNew ? <em>New config</em> : subtype}
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
 
-                      <button
-                        type="button"
-                        onClick={() => deleteRow(row)}
-                        disabled={deletingRowId === row.id}
-                        style={dangerButtonStyle}
-                      >
-                        {deletingRowId === row.id ? "Deleting..." : "Delete"}
-                      </button>
+      {/* Detail panel */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px" }}>
+        {!selected ? (
+          <div style={{ color: "#6b7280", marginTop: "60px", textAlign: "center" }}>
+            <p style={{ fontSize: "16px", marginBottom: "8px" }}>Select a config from the sidebar</p>
+            <p style={{ fontSize: "13px" }}>or click <strong>+ Add Config</strong> to create a new one.</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", gap: "16px", flexWrap: "wrap" }}>
+              <div>
+                <h1 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700 }}>
+                  {selected.isNew ? "New Config" : `${selected.activity} · ${selected.subtype || "all subtypes"}`}
+                </h1>
+                <p style={{ margin: 0, color: "#6b7280", fontSize: "13px" }}>
+                  Fields shown in the session form for this activity / subtype combination.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={saveSelected}
+                  disabled={savingRowId === selected.id}
+                  style={{
+                    padding: "9px 18px",
+                    background: "#1f6feb",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    opacity: savingRowId === selected.id ? 0.6 : 1,
+                  }}
+                >
+                  {savingRowId === selected.id ? "Saving…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteSelected}
+                  disabled={deletingRowId === selected.id}
+                  style={{
+                    padding: "9px 18px",
+                    background: "#fee2e2",
+                    color: "#b91c1c",
+                    border: "1px solid #fca5a5",
+                    borderRadius: "8px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    opacity: deletingRowId === selected.id ? 0.6 : 1,
+                  }}
+                >
+                  {deletingRowId === selected.id ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            </div>
+
+            {message ? (
+              <div style={{
+                marginBottom: "20px",
+                padding: "10px 14px",
+                borderRadius: "8px",
+                background: message.ok ? "#f0fdf4" : "#fef2f2",
+                border: `1px solid ${message.ok ? "#86efac" : "#fca5a5"}`,
+                color: message.ok ? "#166534" : "#b91c1c",
+                fontSize: "13px",
+                fontWeight: 500,
+              }}>
+                {message.text}
+              </div>
+            ) : null}
+
+            {/* Activity + Subtype */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "28px" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <span style={{ fontWeight: 600, fontSize: "13px", color: "#374151" }}>Activity</span>
+                <input
+                  type="text"
+                  value={selected.activity}
+                  onChange={(e) => updateSelected("activity", e.target.value)}
+                  placeholder="e.g. run"
+                  style={inputStyle}
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <span style={{ fontWeight: 600, fontSize: "13px", color: "#374151" }}>Subtype</span>
+                <input
+                  type="text"
+                  value={selected.subtype}
+                  onChange={(e) => updateSelected("subtype", e.target.value)}
+                  placeholder="e.g. interval (blank = all)"
+                  style={inputStyle}
+                />
+              </label>
+            </div>
+
+            {/* Field checkboxes grouped */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px", marginBottom: "28px" }}>
+              {groups.map((group) => {
+                const fields = checkboxFields.filter((f) => f.group === group);
+                return (
+                  <div key={group} style={{
+                    background: "#f9fafb",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "10px",
+                    padding: "16px",
+                  }}>
+                    <div style={{ fontWeight: 700, fontSize: "12px", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "12px" }}>
+                      {group}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      {fields.map((field) => (
+                        <label key={field.key} style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={selected[field.key] as boolean}
+                            onChange={(e) => updateSelected(field.key, e.target.checked)}
+                            style={{ width: "17px", height: "17px", cursor: "pointer", accentColor: "#1f6feb" }}
+                          />
+                          <span style={{ fontSize: "14px", color: "#111827" }}>{field.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Notes */}
+            <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <span style={{ fontWeight: 600, fontSize: "13px", color: "#374151" }}>Notes (optional)</span>
+              <textarea
+                value={selected.notes}
+                onChange={(e) => updateSelected("notes", e.target.value)}
+                placeholder="e.g. Hill reps — elevation relevant, no distance"
+                rows={3}
+                style={{ ...inputStyle, resize: "vertical" }}
+              />
+            </label>
+          </>
         )}
       </div>
     </div>
   );
 }
 
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "12px",
-  borderBottom: "1px solid #ddd",
-  background: "#f8f8f8",
-  fontWeight: 700,
-  whiteSpace: "nowrap",
-};
-
-const thStyleCentered: React.CSSProperties = {
-  ...thStyle,
-  textAlign: "center",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "12px",
-  borderBottom: "1px solid #eee",
-  verticalAlign: "top",
-};
-
-const tdStyleCentered: React.CSSProperties = {
-  ...tdStyle,
-  textAlign: "center",
-};
-
 const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  border: "1px solid #ccc",
+  padding: "9px 12px",
+  border: "1px solid #d1d5db",
   borderRadius: "8px",
   fontSize: "14px",
   boxSizing: "border-box",
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  border: "none",
-  borderRadius: "8px",
-  background: "#1f6feb",
-  color: "#fff",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  border: "1px solid #ccc",
-  borderRadius: "8px",
+  width: "100%",
   background: "#fff",
-  color: "#111",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  border: "none",
-  borderRadius: "8px",
-  background: "#c62828",
-  color: "#fff",
-  fontWeight: 700,
-  cursor: "pointer",
 };
