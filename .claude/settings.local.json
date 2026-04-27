@@ -35,7 +35,9 @@
       "Bash(git push *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash(git fetch *)",
+      "Bash(npx vercel *)"
     ]
   }
 }

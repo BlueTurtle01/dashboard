@@ -89,7 +89,10 @@ export default function AdminSoloPlanPage() {
       return;
     }
 
-    const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers();
+    const { data: profilesData, error: usersError } = await supabase
+      .from("athlete_profiles")
+      .select("user_id, email")
+      .in("user_id", soloPlanUserIds);
 
     if (usersError) {
       setErrorMessage(`Could not load users: ${usersError.message}`);
@@ -97,7 +100,7 @@ export default function AdminSoloPlanPage() {
       return;
     }
 
-    const emailMap = new Map(usersData.users.map((u) => [u.id, u.email]));
+    const emailMap = new Map((profilesData || []).map((p) => [p.user_id, p.email]));
 
     const assignmentList = (plansData || []).map((plan: Record<string, unknown>) => ({
       id: `${plan.id}`,
