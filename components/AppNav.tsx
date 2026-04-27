@@ -106,6 +106,12 @@ export default function AppNav() {
                 >
                   Users
                 </Link>
+                <Link
+                  href="/admin/countries"
+                  className="px-3 py-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900 rounded hover:bg-zinc-50"
+                >
+                  Countries
+                </Link>
               </>
             )}
 

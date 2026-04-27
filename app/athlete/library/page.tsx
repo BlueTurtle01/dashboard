@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type CalendarModal = {
   planId: string;
+  templateId: string;
   planLengthWeeks: number;
   planName: string;
 };
@@ -202,10 +203,10 @@ export default function AthleteProgramLibrary() {
     setLoading(false);
   }
 
-  function handleAddToCalendar(planId: string, planLengthWeeks: number, planName: string) {
+  function handleAddToCalendar(planId: string, templateId: string, planLengthWeeks: number, planName: string) {
     setEventDate("");
     setEventName(planName);
-    setModal({ planId, planLengthWeeks, planName });
+    setModal({ planId, templateId, planLengthWeeks, planName });
   }
 
   async function handleConfirmCalendar() {
