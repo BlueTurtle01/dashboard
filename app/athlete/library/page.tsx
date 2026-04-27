@@ -106,13 +106,14 @@ export default function AthleteProgramLibrary() {
 
       // Collect equipment from exercises
       const exercises = s.program_template_session_exercises ?? [];
-      for (const ex of exercises as { exercises: { equipment: string[] | null } | null }[]) {
-        if (!ex.exercises?.equipment) continue;
+      for (const ex of exercises as unknown as { exercises: { equipment: string[] | null }[] | null }[]) {
+        const exEquipment = Array.isArray(ex.exercises) ? ex.exercises[0]?.equipment : ex.exercises?.equipment;
+        if (!exEquipment) continue;
         // Find which template this week belongs to
         for (const [templateId, weeks] of weeksByTemplate.entries()) {
           if (weeks.some((w) => w.id === weekId)) {
             const set = equipmentByTemplate.get(templateId) ?? new Set<string>();
-            for (const item of ex.exercises.equipment) set.add(item);
+            for (const item of exEquipment) set.add(item);
             equipmentByTemplate.set(templateId, set);
           }
         }
