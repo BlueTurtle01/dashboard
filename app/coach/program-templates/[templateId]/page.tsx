@@ -1628,7 +1628,7 @@ export default function ViewProgramTemplatePage() {
   }
 
   function toggleWeekCollapsed(weekId: string) {
-    setCollapsedWeekIds((current) => ({ ...current, [weekId]: current[weekId] !== false }));
+    setCollapsedWeekIds((current) => ({ ...current, [weekId]: current[weekId] === false }));
   }
 
   if (isLoading) {
