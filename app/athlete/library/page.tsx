@@ -251,13 +251,42 @@ export default function AthleteProgramLibrary() {
       return "Base";
     }
 
+    const VALID_DAYS = new Set(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+
+    // If a session has no fixed day_label, spread sessions evenly across the
+    // week. When day labels are set on the template, respect them exactly.
+    const DAY_PATTERNS: Record<number, string[]> = {
+      1: ["Sat"],
+      2: ["Mon", "Thu"],
+      3: ["Mon", "Wed", "Sat"],
+      4: ["Mon", "Tue", "Thu", "Sat"],
+      5: ["Mon", "Tue", "Wed", "Fri", "Sat"],
+      6: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      7: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    };
+    function spreadDayLabel(index: number, total: number): string {
+      const pattern = DAY_PATTERNS[Math.min(total, 7)] ?? DAY_PATTERNS[7];
+      return pattern[index % pattern.length];
+    }
+
     // Build GeneratedPlan weeks
     const planWeeks = (templateWeeks ?? []).map((week) => {
-      const weekSessions = (sessionsByWeekId.get(week.id as string) ?? []).map((s) => ({
+      const rawSessions = (sessionsByWeekId.get(week.id as string) ?? [])
+        .slice()
+        .sort((a, b) => ((a.sort_order as number) ?? 0) - ((b.sort_order as number) ?? 0));
+      // Sessions without a fixed day label need spread assignment
+      const unlabelled = rawSessions.filter((s) => !VALID_DAYS.has((s.day_label as string) ?? ""));
+      let spreadIdx = 0;
+      const weekSessions = rawSessions.map((s) => {
+        const fixedDay = (s.day_label as string) ?? "";
+        const dayLabel = VALID_DAYS.has(fixedDay)
+          ? fixedDay
+          : spreadDayLabel(spreadIdx++, unlabelled.length);
+        return {
         id: s.id as string,
         weekId: week.id as string,
         sortOrder: (s.sort_order as number) ?? 0,
-        dayLabel: (s.day_label as string) ?? "Mon",
+        dayLabel,
         type: (s.type as string) ?? "Easy",
         name: (s.name as string) ?? "",
         description: (s.description as string) ?? "",
@@ -276,7 +305,8 @@ export default function AthleteProgramLibrary() {
         cooldownMinutes: (s.cooldown_minutes as number | null) ?? undefined,
         intervalReps: (s.interval_reps as number | null) ?? undefined,
         intervalDuration: (s.interval_duration as string | null) ?? undefined,
-      }));
+        };
+      });
 
       return {
         id: week.id as string,
@@ -314,17 +344,37 @@ export default function AthleteProgramLibrary() {
   }
 
   async function handleClearCalendar() {
-    if (!window.confirm("This will remove all programs from your calendar. Are you sure?")) return;
+    if (!window.confirm("This will clear your calendar. Your programs will remain in the Library. Are you sure?")) return;
     setClearing(true);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setClearing(false); return; }
 
-    await supabase
+    // Fetch active plans to get their current plan_json (to preserve templateId etc.)
+    const { data: activePlans } = await supabase
       .from("athlete_plans")
-      .update({ status: "archived" })
+      .select("id, plan_json")
       .eq("athlete_user_id", user.id)
-      .eq("status", "active");
+      .eq("status", "active")
+      .not("source_program_template_id", "is", null);
+
+    for (const plan of activePlans ?? []) {
+      const existing = (plan.plan_json ?? {}) as Record<string, unknown>;
+      const reset: Record<string, unknown> = {
+        templateId: existing.templateId,
+        totalWeeks: existing.totalWeeks,
+        createdAt: existing.createdAt,
+        weeks: (existing.weeks as { weekNumber: number; focus: unknown }[] | undefined)?.map((w) => ({
+          weekNumber: w.weekNumber,
+          focus: w.focus,
+          sessions: [],
+        })) ?? [],
+      };
+      await supabase
+        .from("athlete_plans")
+        .update({ plan_json: reset, updated_at: new Date().toISOString() })
+        .eq("id", plan.id as string);
+    }
 
     setClearing(false);
     void load();

@@ -1999,6 +1999,25 @@ export default function EditProgramTemplatePage() {
                                 </select>
                               </label>
 
+                              <label className="text-sm font-medium text-zinc-700">
+                                Day of week
+                                <select
+                                  value={session.dayLabel}
+                                  onChange={(e) =>
+                                    updateSession(week.localId, session.localId, (current) => ({
+                                      ...current,
+                                      dayLabel: e.target.value,
+                                    }))
+                                  }
+                                  className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                                >
+                                  <option value="">— Any day (profile-based) —</option>
+                                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                                    <option key={d} value={d}>{d}</option>
+                                  ))}
+                                </select>
+                              </label>
+
                               {session.type !== "Intervals" && session.type !== "Gym" && (
                                 <label className="text-sm font-medium text-zinc-700">
                                   Duration
