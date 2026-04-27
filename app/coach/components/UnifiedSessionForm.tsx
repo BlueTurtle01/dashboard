@@ -489,7 +489,7 @@ export function UnifiedSessionForm({
           </select>
         </label>
 
-        {fieldVis.show_target_intensity ? (
+        {subtypeChosen && fieldVis.show_target_intensity ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">Intensity</span>
             <select

@@ -1770,83 +1770,81 @@ export default function EditProgramTemplatePage() {
 
                   {!isCollapsed ? (
                     <Fragment>
-                      <div className="mb-4 flex items-center justify-end gap-2">
-                          {creatingBlankSessionWeekId !== week.localId ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setCreatingBlankSessionWeekId(week.localId)}
-                                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
-                              >
-                                Add Blank Session
-                              </button>
+                      {creatingBlankSessionWeekId !== week.localId ? (
+                        <div className="mb-4 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCreatingBlankSessionWeekId(week.localId)}
+                            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
+                          >
+                            Add Blank Session
+                          </button>
 
-                              <button
-                                type="button"
-                                onClick={() => openTemplateSessionPicker(week.localId, "gym")}
-                                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                                  pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "gym"
-                                    ? "border-zinc-900 bg-indigo-600 text-white"
-                                    : "border-zinc-300 bg-white hover:bg-zinc-100"
-                                }`}
-                              >
-                                Add Gym Session
-                              </button>
+                          <button
+                            type="button"
+                            onClick={() => openTemplateSessionPicker(week.localId, "gym")}
+                            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                              pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "gym"
+                                ? "border-zinc-900 bg-indigo-600 text-white"
+                                : "border-zinc-300 bg-white hover:bg-zinc-100"
+                            }`}
+                          >
+                            Add Gym Session
+                          </button>
 
-                              <button
-                                type="button"
-                                onClick={() => openTemplateSessionPicker(week.localId, "functional")}
-                                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                                  pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "functional"
-                                    ? "border-zinc-900 bg-indigo-600 text-white"
-                                    : "border-zinc-300 bg-white hover:bg-zinc-100"
-                                }`}
-                              >
-                                Add Functional Session
-                              </button>
+                          <button
+                            type="button"
+                            onClick={() => openTemplateSessionPicker(week.localId, "functional")}
+                            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                              pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "functional"
+                                ? "border-zinc-900 bg-indigo-600 text-white"
+                                : "border-zinc-300 bg-white hover:bg-zinc-100"
+                            }`}
+                          >
+                            Add Functional Session
+                          </button>
 
-                              <button
-                                type="button"
-                                onClick={() => openTemplateSessionPicker(week.localId, "mobility")}
-                                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                                  pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "mobility"
-                                    ? "border-zinc-900 bg-indigo-600 text-white"
-                                    : "border-zinc-300 bg-white hover:bg-zinc-100"
-                                }`}
-                              >
-                                Add Mobility Session
-                              </button>
+                          <button
+                            type="button"
+                            onClick={() => openTemplateSessionPicker(week.localId, "mobility")}
+                            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                              pendingSessionSlot?.weekLocalId === week.localId && pendingSessionType === "mobility"
+                                ? "border-zinc-900 bg-indigo-600 text-white"
+                                : "border-zinc-300 bg-white hover:bg-zinc-100"
+                            }`}
+                          >
+                            Add Mobility Session
+                          </button>
 
-                              <button
-                                type="button"
-                                onClick={() => removeWeek(week.localId)}
-                                className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
-                              >
-                                Remove Week
-                              </button>
-                            </>
-                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => removeWeek(week.localId)}
+                            className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
+                          >
+                            Remove Week
+                          </button>
+                        </div>
+                      ) : null}
 
-                        {creatingBlankSessionWeekId === week.localId ? (
-                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                            <div className="mb-4">
-                              <h4 className="text-base font-semibold text-zinc-900">Create Blank Session</h4>
-                              <p className="mt-1 text-sm text-zinc-600">
-                                Fill in the session details below to create a new blank session.
-                              </p>
-                            </div>
-
-                            <UnifiedSessionForm
-                              onSave={(formData) =>
-                                handleCreateBlankSessionFromForm(week.localId, formData)
-                              }
-                              onCancel={() => setCreatingBlankSessionWeekId(null)}
-                              submitButtonLabel="Create Session"
-                              progressiveReveal
-                            />
+                      {creatingBlankSessionWeekId === week.localId ? (
+                        <div className="mb-4 w-full rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                          <div className="mb-4">
+                            <h4 className="text-base font-semibold text-zinc-900">Create Blank Session</h4>
+                            <p className="mt-1 text-sm text-zinc-600">
+                              Fill in the session details below to create a new blank session.
+                            </p>
                           </div>
-                        ) : null}
-                      </div>
+
+                          <UnifiedSessionForm
+                            onSave={(formData) =>
+                              handleCreateBlankSessionFromForm(week.localId, formData)
+                            }
+                            onCancel={() => setCreatingBlankSessionWeekId(null)}
+                            submitButtonLabel="Create Session"
+                            progressiveReveal
+                          />
+                        </div>
+                      ) : null}
 
                       <div className="mb-4 grid gap-4 md:grid-cols-2">
                         <label className="text-sm font-medium text-zinc-700">
