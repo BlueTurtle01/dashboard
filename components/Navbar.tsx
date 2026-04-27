@@ -136,6 +136,12 @@ export default async function Navbar() {
                 ]}
               />
               <SidebarDropdown
+                label="Destinations"
+                items={[
+                  { href: "/admin/countries", label: "Countries" },
+                ]}
+              />
+              <SidebarDropdown
                 label="Config"
                 items={[
                   { href: "/admin/session-template-field-config", label: "Session Template Tags" },
