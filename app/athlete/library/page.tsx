@@ -13,6 +13,7 @@ type CalendarModal = {
 
 type PlanCard = {
   planId: string;
+  templateId: string;
   planName: string;
   description: string | null;
   discipline: string;
