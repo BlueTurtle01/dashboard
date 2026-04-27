@@ -320,7 +320,16 @@ export default function CoachSessionGrid({
                   {summary.totalSessions} sessions
                 </div>
                 <div style={{ fontSize: "12px", color: "#374151", marginTop: "2px" }}>
-                  {summary.totalMinutes} min
+                  {(() => {
+                    const totalKm = week.sessions.reduce((sum, s) => {
+                      const raw = (s as Record<string, unknown>).distance_km;
+                      if (typeof raw === "number") return sum + raw;
+                      const str = (s as Record<string, unknown>).distance as string | undefined;
+                      if (str) { const m = str.match(/(\d+(?:\.\d+)?)/); if (m) return sum + parseFloat(m[1]); }
+                      return sum;
+                    }, 0);
+                    return totalKm > 0 ? `${totalKm.toFixed(1)} km` : `${summary.totalMinutes} min`;
+                  })()}
                 </div>
                 <div style={{ fontSize: "12px", color: "#374151", marginTop: "2px" }}>
                   {summary.loadLabel} load

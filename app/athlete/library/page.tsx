@@ -225,14 +225,62 @@ export default function AthleteProgramLibrary() {
 
     const weekIds = (templateWeeks ?? []).map((w) => w.id as string);
 
-    // Fetch template sessions
+    // Fetch template sessions (include session_template_id for exercise lookup)
     const { data: templateSessions } = weekIds.length > 0
       ? await supabase
           .from("program_template_sessions")
-          .select("id, program_template_week_id, day_label, sort_order, type, name, description, duration, intensity, is_key_session, activity, subtype, distance_km, terrain, elevation_gain_meters, pack_weight_kg, strides, warmup_minutes, cooldown_minutes, interval_reps, interval_duration")
+          .select("id, program_template_week_id, day_label, sort_order, type, name, description, duration, intensity, is_key_session, activity, subtype, distance_km, terrain, elevation_gain_meters, pack_weight_kg, strides, warmup_minutes, cooldown_minutes, interval_reps, interval_duration, session_template_id")
           .in("program_template_week_id", weekIds)
           .order("sort_order")
       : { data: [] };
+
+    // Fetch gym exercises via session_template_exercises → exercises
+    const allSessionTemplateIds = [
+      ...new Set(
+        (templateSessions ?? [])
+          .map((s) => s.session_template_id as string | null)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    type ExerciseRow = { id: string; name: string; description: string | null; equipment: string[] | null };
+    const exercisesBySessionTemplateId = new Map<string, { exerciseId: string; name: string; description: string; equipment: string[]; sets: number | null; reps: number | null; durationSeconds: number | null; sortOrder: number }[]>();
+
+    if (allSessionTemplateIds.length > 0) {
+      const { data: gymExRows } = await supabase
+        .from("session_template_exercises")
+        .select("session_template_id, exercise_id, exercise_order, sets, reps, duration, notes")
+        .in("session_template_id", allSessionTemplateIds)
+        .order("exercise_order");
+
+      if (gymExRows && gymExRows.length > 0) {
+        const exIds = [...new Set(gymExRows.map((r) => r.exercise_id as string))];
+        const { data: exRows } = await supabase
+          .from("exercises")
+          .select("id, name, description, equipment")
+          .in("id", exIds);
+
+        const exMap = new Map<string, ExerciseRow>(
+          (exRows ?? []).map((e) => [e.id as string, e as ExerciseRow])
+        );
+
+        for (const row of gymExRows) {
+          const stId = row.session_template_id as string;
+          const ex = exMap.get(row.exercise_id as string);
+          const arr = exercisesBySessionTemplateId.get(stId) ?? [];
+          arr.push({
+            exerciseId: row.exercise_id as string,
+            name: ex?.name ?? "",
+            description: ex?.description ?? "",
+            equipment: ex?.equipment ?? [],
+            sets: row.sets != null ? Number(row.sets) : null,
+            reps: row.reps != null ? Number(row.reps) : null,
+            durationSeconds: row.duration != null ? Number(row.duration) : null,
+            sortOrder: (row.exercise_order as number) ?? 0,
+          });
+          exercisesBySessionTemplateId.set(stId, arr);
+        }
+      }
+    }
 
     // Group sessions by week id
     const sessionsByWeekId = new Map<string, typeof templateSessions>();
@@ -253,15 +301,13 @@ export default function AthleteProgramLibrary() {
 
     const VALID_DAYS = new Set(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 
-    // If a session has no fixed day_label, spread sessions evenly across the
-    // week. When day labels are set on the template, respect them exactly.
     const DAY_PATTERNS: Record<number, string[]> = {
-      1: ["Sat"],
+      1: ["Sun"],
       2: ["Mon", "Thu"],
-      3: ["Mon", "Wed", "Sat"],
-      4: ["Mon", "Tue", "Thu", "Sat"],
-      5: ["Mon", "Tue", "Wed", "Fri", "Sat"],
-      6: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      3: ["Mon", "Wed", "Sun"],
+      4: ["Mon", "Tue", "Thu", "Sun"],
+      5: ["Mon", "Tue", "Wed", "Fri", "Sun"],
+      6: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sun"],
       7: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     };
     function spreadDayLabel(index: number, total: number): string {
@@ -274,14 +320,46 @@ export default function AthleteProgramLibrary() {
       const rawSessions = (sessionsByWeekId.get(week.id as string) ?? [])
         .slice()
         .sort((a, b) => ((a.sort_order as number) ?? 0) - ((b.sort_order as number) ?? 0));
-      // Sessions without a fixed day label need spread assignment
+
+      // Find the longest unlabelled run to pin to Sunday
       const unlabelled = rawSessions.filter((s) => !VALID_DAYS.has((s.day_label as string) ?? ""));
+      const longestRunId = unlabelled
+        .filter((s) => (s.type as string) !== "Gym")
+        .sort((a, b) => ((b.distance_km as number) ?? 0) - ((a.distance_km as number) ?? 0))[0]?.id ?? null;
+
+      // Spread the remaining unlabelled sessions (excluding the long run) across the week
+      const spreadPool = unlabelled.filter((s) => s.id !== longestRunId);
       let spreadIdx = 0;
+
       const weekSessions = rawSessions.map((s) => {
         const fixedDay = (s.day_label as string) ?? "";
-        const dayLabel = VALID_DAYS.has(fixedDay)
-          ? fixedDay
-          : spreadDayLabel(spreadIdx++, unlabelled.length);
+        let dayLabel: string;
+        if (VALID_DAYS.has(fixedDay)) {
+          dayLabel = fixedDay;
+        } else if (s.id === longestRunId) {
+          dayLabel = "Sun";
+        } else {
+          // Use spread pattern sized to non-Sunday sessions, leaving Sunday free
+          const patternPool = spreadPool.length;
+          const pattern = DAY_PATTERNS[Math.min(Math.max(patternPool, 1), 6)] ?? DAY_PATTERNS[6];
+          dayLabel = pattern[spreadIdx++ % pattern.length];
+        }
+
+        const stId = s.session_template_id as string | null;
+        const exercises = stId ? (exercisesBySessionTemplateId.get(stId) ?? []).map((ex, i) => ({
+          id: `${s.id}-ex-${i}`,
+          sessionId: s.id as string,
+          sortOrder: ex.sortOrder,
+          name: ex.name,
+          description: ex.description,
+          tags: [],
+          sets: ex.sets,
+          reps: ex.reps,
+          durationSeconds: ex.durationSeconds,
+          equipment: ex.equipment,
+          exerciseId: ex.exerciseId,
+        })) : [];
+
         return {
         id: s.id as string,
         weekId: week.id as string,
@@ -294,7 +372,8 @@ export default function AthleteProgramLibrary() {
         duration: (s.duration as string) ?? "",
         intensity: (s.intensity as string) ?? "",
         isKeySession: (s.is_key_session as boolean) ?? false,
-        exercises: [],
+        exercises,
+        distance_km: (s.distance_km as number | null) ?? undefined,
         activity: (s.activity as string | null) ?? undefined,
         subtype: (s.subtype as string | null) ?? undefined,
         terrain: (s.terrain as string | null) ?? undefined,
