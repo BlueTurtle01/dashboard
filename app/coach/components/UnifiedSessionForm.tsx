@@ -22,6 +22,8 @@ export type UnifiedSessionFormData = {
   sets: string;
   setDurationSeconds: string;
   restSeconds: string;
+  timeUpSeconds: string;
+  timeDownSeconds: string;
   notes: string;
   tags: string[];
   sourceSessionTemplateId?: string;
@@ -58,6 +60,9 @@ type FieldVisibility = {
   show_set_duration: boolean;
   show_set_duration_minutes: boolean;
   show_rest_seconds: boolean;
+  show_rest_minutes: boolean;
+  show_time_up: boolean;
+  show_time_down: boolean;
   show_strides: boolean;
   show_warm_up: boolean;
   show_cool_down: boolean;
@@ -94,6 +99,9 @@ const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
   show_set_duration: false,
   show_set_duration_minutes: false,
   show_rest_seconds: false,
+  show_rest_minutes: false,
+  show_time_up: false,
+  show_time_down: false,
   show_strides: false,
   show_warm_up: false,
   show_cool_down: false,
@@ -171,6 +179,8 @@ function createEmptyForm(): UnifiedSessionFormData {
     sets: "",
     setDurationSeconds: "",
     restSeconds: "",
+    timeUpSeconds: "",
+    timeDownSeconds: "",
     notes: "",
     tags: [],
   };
@@ -246,7 +256,7 @@ export function UnifiedSessionForm({
       supabase
         .from("session_template_field_config_resolved")
         .select(
-          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_set_duration_minutes, show_rest_seconds, show_strides, show_warm_up, show_cool_down, show_interval_reps, show_interval_duration, show_time_of_day, show_tags",
+          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_set_duration_minutes, show_rest_seconds, show_rest_minutes, show_time_up, show_time_down, show_strides, show_warm_up, show_cool_down, show_interval_reps, show_interval_duration, show_time_of_day, show_tags",
         ),
       supabase
         .from("training_intensities")
@@ -337,6 +347,9 @@ export function UnifiedSessionForm({
           show_set_duration: row.show_set_duration,
           show_set_duration_minutes: (row as any).show_set_duration_minutes,
           show_rest_seconds: row.show_rest_seconds,
+          show_rest_minutes: (row as any).show_rest_minutes,
+          show_time_up: (row as any).show_time_up,
+          show_time_down: (row as any).show_time_down,
           show_strides: (row as any).show_strides,
           show_warm_up: (row as any).show_warm_up,
           show_cool_down: (row as any).show_cool_down,
@@ -643,7 +656,7 @@ export function UnifiedSessionForm({
         {fieldVis.show_rest_seconds ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
-              {getRepLabels(form.subtype).rest}
+              {getRepLabels(form.subtype).rest} (seconds)
             </span>
             <input
               type="number"
@@ -652,6 +665,54 @@ export function UnifiedSessionForm({
               value={form.restSeconds}
               onChange={(e) => updateForm("restSeconds", e.target.value)}
               placeholder="90"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_rest_minutes ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              {getRepLabels(form.subtype).rest} (minutes)
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.restSeconds ? String(Math.round((parseInt(form.restSeconds) / 60) * 10) / 10) : ""}
+              onChange={(e) => {
+                const mins = parseFloat(e.target.value);
+                updateForm("restSeconds", isNaN(mins) ? "" : String(Math.round(mins * 60)));
+              }}
+              placeholder="2"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_time_up ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">Time Up (seconds)</span>
+            <input
+              type="number"
+              min="0"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.timeUpSeconds}
+              onChange={(e) => updateForm("timeUpSeconds", e.target.value)}
+              placeholder="60"
+            />
+          </label>
+        ) : null}
+
+        {fieldVis.show_time_down ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">Time Down (seconds)</span>
+            <input
+              type="number"
+              min="0"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.timeDownSeconds}
+              onChange={(e) => updateForm("timeDownSeconds", e.target.value)}
+              placeholder="45"
             />
           </label>
         ) : null}
