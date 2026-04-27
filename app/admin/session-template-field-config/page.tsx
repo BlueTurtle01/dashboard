@@ -17,6 +17,11 @@ type FieldConfigRow = {
   show_sets: boolean | null;
   show_set_duration: boolean | null;
   show_rest_seconds: boolean | null;
+  show_strides: boolean | null;
+  show_warm_up: boolean | null;
+  show_cool_down: boolean | null;
+  show_interval_reps: boolean | null;
+  show_interval_duration: boolean | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -35,6 +40,11 @@ type EditableRow = {
   show_sets: boolean;
   show_set_duration: boolean;
   show_rest_seconds: boolean;
+  show_strides: boolean;
+  show_warm_up: boolean;
+  show_cool_down: boolean;
+  show_interval_reps: boolean;
+  show_interval_duration: boolean;
   notes: string;
   isNew?: boolean;
 };
@@ -49,7 +59,12 @@ const checkboxColumns: Array<{
     | "show_pack_weight"
     | "show_sets"
     | "show_set_duration"
-    | "show_rest_seconds";
+    | "show_rest_seconds"
+    | "show_strides"
+    | "show_warm_up"
+    | "show_cool_down"
+    | "show_interval_reps"
+    | "show_interval_duration";
   label: string;
 }> = [
   { key: "show_distance", label: "Distance" },
@@ -61,6 +76,11 @@ const checkboxColumns: Array<{
   { key: "show_sets", label: "Sets" },
   { key: "show_set_duration", label: "Set Duration" },
   { key: "show_rest_seconds", label: "Rest Seconds" },
+  { key: "show_strides", label: "Strides" },
+  { key: "show_warm_up", label: "Warm Up" },
+  { key: "show_cool_down", label: "Cool Down" },
+  { key: "show_interval_reps", label: "Interval Reps" },
+  { key: "show_interval_duration", label: "Interval Duration" },
 ];
 
 function toEditableRow(row: FieldConfigRow): EditableRow {
@@ -77,6 +97,11 @@ function toEditableRow(row: FieldConfigRow): EditableRow {
     show_sets: !!row.show_sets,
     show_set_duration: !!row.show_set_duration,
     show_rest_seconds: !!row.show_rest_seconds,
+    show_strides: !!row.show_strides,
+    show_warm_up: !!row.show_warm_up,
+    show_cool_down: !!row.show_cool_down,
+    show_interval_reps: !!row.show_interval_reps,
+    show_interval_duration: !!row.show_interval_duration,
     notes: row.notes ?? "",
     isNew: false,
   };
@@ -96,6 +121,11 @@ function createBlankRow(): EditableRow {
     show_sets: false,
     show_set_duration: false,
     show_rest_seconds: false,
+    show_strides: false,
+    show_warm_up: false,
+    show_cool_down: false,
+    show_interval_reps: false,
+    show_interval_duration: false,
     notes: "",
     isNew: true,
   };
@@ -169,6 +199,11 @@ export default function SessionTemplateFieldConfigPage() {
       show_sets: row.show_sets,
       show_set_duration: row.show_set_duration,
       show_rest_seconds: row.show_rest_seconds,
+      show_strides: row.show_strides,
+      show_warm_up: row.show_warm_up,
+      show_cool_down: row.show_cool_down,
+      show_interval_reps: row.show_interval_reps,
+      show_interval_duration: row.show_interval_duration,
       notes: row.notes.trim() || null,
     };
 

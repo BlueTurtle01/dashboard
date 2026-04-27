@@ -57,6 +57,11 @@ type FieldVisibility = {
   show_sets: boolean;
   show_set_duration: boolean;
   show_rest_seconds: boolean;
+  show_strides: boolean;
+  show_warm_up: boolean;
+  show_cool_down: boolean;
+  show_interval_reps: boolean;
+  show_interval_duration: boolean;
 };
 
 type FieldConfigRow = FieldVisibility & {
@@ -85,6 +90,11 @@ const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
   show_sets: false,
   show_set_duration: false,
   show_rest_seconds: false,
+  show_strides: false,
+  show_warm_up: false,
+  show_cool_down: false,
+  show_interval_reps: false,
+  show_interval_duration: false,
 };
 
 // Subtypes that are superseded by the intensity dropdown
@@ -230,7 +240,7 @@ export function UnifiedSessionForm({
       supabase
         .from("session_template_field_config_resolved")
         .select(
-          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_rest_seconds",
+          "target_activity, target_subtype, show_distance, show_duration, show_target_intensity, show_terrain, show_elevation, show_pack_weight, show_sets, show_set_duration, show_rest_seconds, show_strides, show_warm_up, show_cool_down, show_interval_reps, show_interval_duration",
         ),
       supabase
         .from("training_intensities")
@@ -320,6 +330,11 @@ export function UnifiedSessionForm({
           show_sets: row.show_sets,
           show_set_duration: row.show_set_duration,
           show_rest_seconds: row.show_rest_seconds,
+          show_strides: (row as any).show_strides,
+          show_warm_up: (row as any).show_warm_up,
+          show_cool_down: (row as any).show_cool_down,
+          show_interval_reps: (row as any).show_interval_reps,
+          show_interval_duration: (row as any).show_interval_duration,
         };
       }
       setFieldConfigMap(configMap);
@@ -660,96 +675,98 @@ export function UnifiedSessionForm({
           </label>
         ) : null}
 
-        {form.activity.toLowerCase() === "run" ? (
-          <>
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-zinc-900">
-                Strides
-              </span>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-                value={form.strides}
-                onChange={(e) => updateForm("strides", e.target.value)}
-                placeholder="20"
-              />
-              <p className="mt-1 text-xs text-zinc-500">
-                Optional: Number of strides at the end of the run
-              </p>
-            </label>
+        {fieldVis.show_strides ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Strides
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.strides}
+              onChange={(e) => updateForm("strides", e.target.value)}
+              placeholder="20"
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Optional: Number of strides at the end of the run
+            </p>
+          </label>
+        ) : null}
 
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-zinc-900">
-                Warm Up
-              </span>
-              <select
-                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-                value={form.warmUpMinutes}
-                onChange={(e) => updateForm("warmUpMinutes", e.target.value)}
-              >
-                <option value="">— None —</option>
-                <option value="5">5 minutes</option>
-                <option value="10">10 minutes</option>
-                <option value="15">15 minutes</option>
-                <option value="20">20 minutes</option>
-              </select>
-            </label>
+        {fieldVis.show_warm_up ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Warm Up
+            </span>
+            <select
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.warmUpMinutes}
+              onChange={(e) => updateForm("warmUpMinutes", e.target.value)}
+            >
+              <option value="">— None —</option>
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="20">20 minutes</option>
+            </select>
+          </label>
+        ) : null}
 
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-zinc-900">
-                Cool Down
-              </span>
-              <select
-                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-                value={form.coolDownMinutes}
-                onChange={(e) => updateForm("coolDownMinutes", e.target.value)}
-              >
-                <option value="">— None —</option>
-                <option value="5">5 minutes</option>
-                <option value="10">10 minutes</option>
-                <option value="15">15 minutes</option>
-                <option value="20">20 minutes</option>
-              </select>
-            </label>
+        {fieldVis.show_cool_down ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Cool Down
+            </span>
+            <select
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.coolDownMinutes}
+              onChange={(e) => updateForm("coolDownMinutes", e.target.value)}
+            >
+              <option value="">— None —</option>
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="20">20 minutes</option>
+            </select>
+          </label>
+        ) : null}
 
-            {form.subtype.toLowerCase().includes("interval") ? (
-              <>
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-zinc-900">
-                    Interval Reps
-                  </span>
-                  <input
-                    type="text"
-                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-                    value={form.intervalReps}
-                    onChange={(e) => updateForm("intervalReps", e.target.value)}
-                    placeholder="e.g. 10x1min or 6x3min"
-                  />
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Repetition format and duration
-                  </p>
-                </label>
+        {fieldVis.show_interval_reps ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Interval Reps
+            </span>
+            <input
+              type="text"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.intervalReps}
+              onChange={(e) => updateForm("intervalReps", e.target.value)}
+              placeholder="e.g. 10x1min or 6x3min"
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Repetition format and duration
+            </p>
+          </label>
+        ) : null}
 
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-zinc-900">
-                    Recovery / Interval Duration
-                  </span>
-                  <input
-                    type="text"
-                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-                    value={form.intervalDuration}
-                    onChange={(e) => updateForm("intervalDuration", e.target.value)}
-                    placeholder="e.g. 1min jog or 2min walk"
-                  />
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Recovery period between intervals
-                  </p>
-                </label>
-              </>
-            ) : null}
-          </>
+        {fieldVis.show_interval_duration ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Recovery / Interval Duration
+            </span>
+            <input
+              type="text"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.intervalDuration}
+              onChange={(e) => updateForm("intervalDuration", e.target.value)}
+              placeholder="e.g. 1min jog or 2min walk"
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Recovery period between intervals
+            </p>
+          </label>
         ) : null}
 
         <label className="block">
