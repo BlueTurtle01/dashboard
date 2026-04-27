@@ -105,16 +105,16 @@ export default function AthleteProgramLibrary() {
       sessionsByWeek.set(weekId, arr);
 
       // Collect equipment from exercises
-      const exercises = s.program_template_session_exercises ?? [];
-      for (const ex of exercises as unknown as { exercises: { equipment: string[] | null }[] | null }[]) {
-        const exEquipment = Array.isArray(ex.exercises) ? ex.exercises[0]?.equipment : ex.exercises?.equipment;
-        if (!exEquipment) continue;
-        // Find which template this week belongs to
-        for (const [templateId, weeks] of weeksByTemplate.entries()) {
-          if (weeks.some((w) => w.id === weekId)) {
-            const set = equipmentByTemplate.get(templateId) ?? new Set<string>();
-            for (const item of exEquipment) set.add(item);
-            equipmentByTemplate.set(templateId, set);
+      const exercises = (s.program_template_session_exercises ?? []) as unknown as { exercises: { equipment: string[] | null }[] }[];
+      for (const ex of exercises) {
+        for (const exerciseRow of ex.exercises ?? []) {
+          if (!exerciseRow?.equipment) continue;
+          for (const [templateId, tWeeks] of weeksByTemplate.entries()) {
+            if (tWeeks.some((w) => w.id === weekId)) {
+              const set = equipmentByTemplate.get(templateId) ?? new Set<string>();
+              for (const item of exerciseRow.equipment) set.add(item);
+              equipmentByTemplate.set(templateId, set);
+            }
           }
         }
       }
