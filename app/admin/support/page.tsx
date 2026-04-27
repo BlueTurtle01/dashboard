@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getCurrentUser, userHasRole } from "@/lib/auth/get-current-user";
 import { getAllTickets, SupportTicket } from "@/lib/actions/support";
 import AdminSupportTable from "./AdminSupportTable";
@@ -27,7 +28,12 @@ export default async function AdminSupportPage() {
   return (
     <main style={pageStyle}>
       <div style={cardStyle}>
-        <h1 style={titleStyle}>Support Tickets</h1>
+        <div style={pageHeaderRow}>
+          <h1 style={titleStyle}>Support Tickets</h1>
+          <Link href="/admin/support/stats" style={analyticsLinkStyle}>
+            Analytics →
+          </Link>
+        </div>
         <div style={statsRow}>
           <div style={statChip}>
             <span style={statNum}>{tickets.length}</span>
@@ -68,10 +74,29 @@ const cardStyle: React.CSSProperties = {
   boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
 };
 
+const pageHeaderRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "16px",
+  gap: "16px",
+  flexWrap: "wrap",
+};
+
 const titleStyle: React.CSSProperties = {
   fontSize: "24px",
   fontWeight: 700,
-  marginBottom: "16px",
+  margin: 0,
+};
+
+const analyticsLinkStyle: React.CSSProperties = {
+  fontSize: "14px",
+  fontWeight: 600,
+  color: "#111",
+  textDecoration: "none",
+  padding: "8px 16px",
+  border: "1px solid #ddd",
+  borderRadius: "8px",
 };
 
 const statsRow: React.CSSProperties = {

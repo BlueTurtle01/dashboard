@@ -31,6 +31,13 @@ export type UserWithRoles = {
   roles: AppRole[];
 };
 
+export type UserDetail = UserWithRoles & {
+  phone: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  email_confirmed_at: string | null;
+};
+
 export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
   await requireAdmin();
 
@@ -56,6 +63,35 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
     email: u.email ?? "(no email)",
     roles: rolesByUser[u.id] ?? [],
   }));
+}
+
+export async function getUserById(userId: string): Promise<UserDetail> {
+  await requireAdmin();
+
+  const adminClient = createAdminClient();
+  const { data, error } = await adminClient.auth.admin.getUserById(userId);
+  if (error) throw new Error(error.message);
+
+  const { user } = data;
+
+  const supabase = await createClient();
+  const { data: roleRows, error: rolesError } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  if (rolesError) throw new Error(rolesError.message);
+
+  return {
+    id: user.id,
+    email: user.email ?? "(no email)",
+    phone: user.phone ?? null,
+    created_at: user.created_at,
+    last_sign_in_at: user.last_sign_in_at ?? null,
+    email_confirmed_at: user.email_confirmed_at ?? null,
+    roles: (roleRows ?? [])
+      .map((r) => r.role as AppRole)
+      .filter((r) => ALL_ROLES.includes(r)),
+  };
 }
 
 export async function saveUserRoles(userId: string, roles: AppRole[]) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AppRole } from "@/lib/auth/get-current-user";
 import { UserWithRoles, saveUserRoles } from "@/lib/actions/userRoles";
 
@@ -73,6 +74,7 @@ export default function UserRolesTable({ users }: { users: UserWithRoles[] }) {
                 </th>
               ))}
               <th style={thStyle}>Save</th>
+              <th style={thStyle}></th>
             </tr>
           </thead>
           <tbody>
@@ -111,6 +113,11 @@ export default function UserRolesTable({ users }: { users: UserWithRoles[] }) {
                         ? "Error"
                         : "Save"}
                     </button>
+                  </td>
+                  <td style={tdCenterStyle}>
+                    <Link href={`/admin/users/${user.id}`} style={viewLinkStyle}>
+                      View →
+                    </Link>
                   </td>
                 </tr>
               );
@@ -211,4 +218,12 @@ const emptyStyle: React.CSSProperties = {
   padding: "24px",
   textAlign: "center",
   color: "#888",
+};
+
+const viewLinkStyle: React.CSSProperties = {
+  fontSize: "13px",
+  fontWeight: 600,
+  color: "#555",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
 };

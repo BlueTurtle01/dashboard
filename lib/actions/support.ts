@@ -16,6 +16,7 @@ export type SupportTicket = {
   description: string;
   status: TicketStatus;
   resolution: string | null;
+  resolution_minutes: number | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
@@ -95,14 +96,32 @@ export async function updateTicketStatus(
 ): Promise<{ error?: string }> {
   const { supabase } = await requireAdmin();
 
+  // Fetch current ticket so we can protect the first resolved_at
+  const { data: current, error: fetchError } = await supabase
+    .from("support_tickets")
+    .select("created_at, resolved_at")
+    .eq("id", ticketId)
+    .single();
+
+  if (fetchError) return { error: fetchError.message };
+
+  const now = new Date();
   const updates: Record<string, unknown> = {
     status,
-    updated_at: new Date().toISOString(),
+    updated_at: now.toISOString(),
   };
 
   if (resolution !== undefined) updates.resolution = resolution;
-  if (status === "resolved" || status === "closed") {
-    updates.resolved_at = new Date().toISOString();
+
+  // Only record resolution time on the FIRST resolution — never overwrite
+  const isFirstResolution =
+    (status === "resolved" || status === "closed") && !current.resolved_at;
+
+  if (isFirstResolution) {
+    updates.resolved_at = now.toISOString();
+    updates.resolution_minutes = Math.round(
+      (now.getTime() - new Date(current.created_at).getTime()) / 60_000
+    );
   }
 
   const { error } = await supabase
@@ -112,6 +131,80 @@ export async function updateTicketStatus(
 
   if (error) return { error: error.message };
   return {};
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export type TicketStats = {
+  total: number;
+  byStatus: Record<TicketStatus, number>;
+  byCategory: Record<TicketCategory, number>;
+  byUrgency: Record<TicketUrgency, number>;
+  resolvedCount: number;
+  avgResolutionMinutes: number | null;
+  medianResolutionMinutes: number | null;
+  fastestMinutes: number | null;
+  slowestMinutes: number | null;
+  recentResolved: Pick<
+    SupportTicket,
+    "id" | "subject" | "user_email" | "category" | "urgency" | "resolved_at" | "resolution_minutes" | "created_at"
+  >[];
+};
+
+export async function getTicketStats(): Promise<TicketStats> {
+  const { supabase } = await requireAdmin();
+
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .select("id, subject, user_email, category, urgency, status, resolved_at, resolution_minutes, created_at");
+
+  if (error) throw new Error(error.message);
+
+  const tickets = data ?? [];
+
+  const byStatus = { open: 0, in_progress: 0, resolved: 0, closed: 0 } as Record<TicketStatus, number>;
+  const byCategory = { technical: 0, billing: 0, coaching: 0, account: 0, feedback: 0, other: 0 } as Record<TicketCategory, number>;
+  const byUrgency = { low: 0, medium: 0, high: 0, urgent: 0 } as Record<TicketUrgency, number>;
+
+  for (const t of tickets) {
+    byStatus[t.status as TicketStatus]++;
+    byCategory[t.category as TicketCategory]++;
+    byUrgency[t.urgency as TicketUrgency]++;
+  }
+
+  const resolvedMinutes = tickets
+    .filter((t) => t.resolution_minutes != null)
+    .map((t) => t.resolution_minutes as number)
+    .sort((a, b) => a - b);
+
+  const resolvedCount = resolvedMinutes.length;
+  const avgResolutionMinutes =
+    resolvedCount > 0
+      ? Math.round(resolvedMinutes.reduce((s, v) => s + v, 0) / resolvedCount)
+      : null;
+
+  const medianResolutionMinutes =
+    resolvedCount > 0
+      ? resolvedMinutes[Math.floor(resolvedCount / 2)]
+      : null;
+
+  const recentResolved = tickets
+    .filter((t) => t.resolved_at != null)
+    .sort((a, b) => new Date(b.resolved_at!).getTime() - new Date(a.resolved_at!).getTime())
+    .slice(0, 20);
+
+  return {
+    total: tickets.length,
+    byStatus,
+    byCategory,
+    byUrgency,
+    resolvedCount,
+    avgResolutionMinutes,
+    medianResolutionMinutes,
+    fastestMinutes: resolvedCount > 0 ? resolvedMinutes[0] : null,
+    slowestMinutes: resolvedCount > 0 ? resolvedMinutes[resolvedCount - 1] : null,
+    recentResolved,
+  };
 }
 
 // ── Messages ──────────────────────────────────────────────────────────────────
