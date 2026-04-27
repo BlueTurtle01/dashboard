@@ -239,12 +239,6 @@ export default function AthletePage() {
           <div className="rounded-xl border border-red-200 bg-red-50 p-6">
             <h1 className="text-lg font-semibold text-red-900">Unable to load plan</h1>
             <p className="mt-2 text-red-800">{error || "No plan found"}</p>
-            <Link
-              href="/create-plan"
-              className="mt-4 inline-block rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700"
-            >
-              Create Plan
-            </Link>
           </div>
         </div>
       </main>

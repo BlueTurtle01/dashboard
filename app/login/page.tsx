@@ -54,12 +54,6 @@ export default function LoginPage() {
       return;
     }
 
-    if (roles.length > 1) {
-      router.push("/select-role");
-      router.refresh();
-      return;
-    }
-
     router.push(getDefaultRouteForRoles(roles));
     router.refresh();
   }
