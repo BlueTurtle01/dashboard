@@ -113,6 +113,7 @@ export default async function Navbar() {
               <SidebarDropdown
                 label="Admin"
                 items={[
+                  { href: "/admin/users/create-user", label: "Create Users" },
                   { href: "/admin/users", label: "Users" },
                   { href: "/admin/coach-performance", label: "Coach Performance" },
                   { href: "/admin/support", label: "Support Tickets" },
