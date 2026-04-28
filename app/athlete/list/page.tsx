@@ -90,12 +90,18 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+function isDateInHolidayRange(date: Date, ranges: Array<{ start: string; end: string }>): boolean {
+  const dateStr = date.toISOString().split("T")[0];
+  return ranges.some((range) => dateStr >= range.start && dateStr <= range.end);
+}
+
 export default function AthleteListPage() {
   const [plan, setPlan] = useState<GeneratedPlan | null>(null);
   const [displayWeekIndex, setDisplayWeekIndex] = useState(0);
   const [completedSessionIds, setCompletedSessionIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [holidayDateRanges, setHolidayDateRanges] = useState<Array<{ start: string; end: string }>>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -164,6 +170,20 @@ export default function AthleteListPage() {
 
         if (completionsData) {
           setCompletedSessionIds(new Set(completionsData.map((c: any) => c.session_id)));
+        }
+
+        // Fetch holidays
+        const { data: eventsData } = await supabase
+          .from("athlete_events")
+          .select("id, start_date, end_date, title")
+          .eq("athlete_user_id", user.id)
+          .eq("event_type", "holiday");
+
+        if (eventsData) {
+          const ranges = eventsData
+            .filter((e) => e.start_date && e.end_date)
+            .map((e) => ({ start: e.start_date, end: e.end_date }));
+          setHolidayDateRanges(ranges);
         }
 
         setLoading(false);
@@ -260,15 +280,21 @@ export default function AthleteListPage() {
             }
 
             const dateLabel = dayDate ? formatDate(dayDate) : "";
+            const isHoliday = dayDate && isDateInHolidayRange(dayDate, holidayDateRanges);
 
             return (
               <div key={dayLabel}>
                 {/* Day header */}
                 <div className="flex items-center gap-3 mb-3">
                   <div className="min-w-0">
-                    <span className="font-semibold text-zinc-900">{DAY_FULL_NAMES[dayLabel]}</span>
+                    <span className={`font-semibold ${isHoliday ? "text-orange-600" : "text-zinc-900"}`}>
+                      {DAY_FULL_NAMES[dayLabel]}
+                    </span>
                     {dateLabel && (
-                      <span className="ml-2 text-sm text-zinc-500">{dateLabel}</span>
+                      <span className={`ml-2 text-sm ${isHoliday ? "text-orange-500" : "text-zinc-500"}`}>
+                        {dateLabel}
+                        {isHoliday && <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold rounded bg-orange-100 text-orange-900">Holiday</span>}
+                      </span>
                     )}
                   </div>
                   <div className="flex-1 border-t border-zinc-200" />
