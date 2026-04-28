@@ -153,6 +153,7 @@ export default async function Navbar() {
                   { href: "/admin/solo-plans", label: "Solo Plans" },
                   { href: "/admin/coach-athlete-links", label: "Coach-Athlete Links" },
                   { href: "/admin/chat/phrases", label: "Chat Moderation" },
+                  { href: "/admin/chat/moderation", label: "Review Flagged Messages" },
                 ]}
               />
             </>
