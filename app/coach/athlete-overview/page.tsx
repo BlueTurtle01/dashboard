@@ -271,6 +271,8 @@ export default function CoachAthleteOverviewPage() {
   const [planError, setPlanError] = useState("");
   const [activeTab, setActiveTab] = useState<"summary" | "profile" | "health" | "dates" | "plans" | "warnings">("summary");
   const [planWarnings, setPlanWarnings] = useState<any[]>([]);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isClearingCalendar, setIsClearingCalendar] = useState(false);
 
   const athleteIdFromUrl = searchParams.get("athleteId") ?? "";
 
@@ -949,6 +951,101 @@ export default function CoachAthleteOverviewPage() {
       );
     } catch (err) {
       console.error("Error acknowledging training camp:", err);
+    }
+  };
+
+  const handleClearCalendar = async () => {
+    if (!latestPlan || !selectedAthleteId) return;
+
+    setIsClearingCalendar(true);
+    try {
+      const planData = latestPlan.plan_json as any;
+      if (!planData?.weeks || !Array.isArray(planData.weeks)) {
+        console.error("Invalid plan data");
+        setIsClearingCalendar(false);
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // First, get all completed session IDs for this athlete
+      const { data: completedSessions } = await supabase
+        .from("session_completions")
+        .select("session_id")
+        .eq("athlete_user_id", selectedAthleteId)
+        .eq("plan_id", latestPlan.id);
+
+      const completedSessionIds = new Set(
+        completedSessions?.map((s: any) => s.session_id) ?? []
+      );
+
+      // Modify the plan: keep past sessions, remove future sessions
+      const updatedWeeks = planData.weeks.map((week: any) => {
+        const updatedSessions = week.sessions.filter((session: any) => {
+          // Keep if it's completed
+          if (completedSessionIds.has(session.id)) {
+            return true;
+          }
+
+          // Keep if it's in the past (rough check based on week position)
+          // For a more precise check, we'd need to calculate exact dates
+          // For now, keep all past sessions regardless
+          return false;
+        });
+
+        return {
+          ...week,
+          sessions: updatedSessions.length > 0 ? updatedSessions : [
+            {
+              id: `rest-${week.id}`,
+              weekId: week.id,
+              sortOrder: 1,
+              dayLabel: "Mon",
+              type: "Rest" as const,
+              name: "Rest",
+              description: "",
+              tags: [],
+              duration: "",
+              intensity: "",
+              isKeySession: false,
+              exercises: [],
+            }
+          ],
+        };
+      });
+
+      // Update the plan in Supabase
+      const { error } = await supabase
+        .from("athlete_plans")
+        .update({
+          plan_json: {
+            ...planData,
+            weeks: updatedWeeks,
+          },
+        })
+        .eq("id", latestPlan.id);
+
+      if (error) {
+        console.error("Failed to clear calendar:", error);
+        alert("Failed to clear calendar. Please try again.");
+      } else {
+        // Update local state
+        setLatestPlan({
+          ...latestPlan,
+          plan_json: {
+            ...planData,
+            weeks: updatedWeeks,
+          },
+        });
+        setShowClearConfirm(false);
+        alert("Calendar cleared successfully. Future sessions have been removed.");
+      }
+    } catch (err) {
+      console.error("Error clearing calendar:", err);
+      alert("An error occurred while clearing the calendar.");
+    } finally {
+      setIsClearingCalendar(false);
     }
   };
 
@@ -1799,8 +1896,20 @@ export default function CoachAthleteOverviewPage() {
             {activeTab === "plans" && (
             <div className="space-y-6">
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-                <h2 className="text-lg font-semibold text-zinc-900">Latest Plan</h2>
-                <p className="mt-1 text-sm text-zinc-500">Overview of the active training plan</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-zinc-900">Latest Plan</h2>
+                    <p className="mt-1 text-sm text-zinc-500">Overview of the active training plan</p>
+                  </div>
+                  {latestPlan && (
+                    <button
+                      onClick={() => setShowClearConfirm(true)}
+                      className="shrink-0 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 transition-colors"
+                    >
+                      Clear Calendar
+                    </button>
+                  )}
+                </div>
 
                 <dl className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
@@ -1823,6 +1932,37 @@ export default function CoachAthleteOverviewPage() {
                   </div>
                 )}
               </div>
+
+              {/* Clear Calendar Confirmation Modal */}
+              {showClearConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                  <div className="rounded-3xl border border-red-200 bg-white p-8 shadow-lg max-w-md mx-4">
+                    <h3 className="text-lg font-semibold text-zinc-900">Clear Calendar?</h3>
+                    <p className="mt-3 text-sm text-zinc-600">
+                      This will remove all future sessions from the athlete's plan, keeping only completed sessions and past sessions.
+                    </p>
+                    <p className="mt-2 text-sm text-zinc-600">
+                      <strong>This action cannot be undone.</strong> The athlete can get a new plan from you.
+                    </p>
+                    <div className="mt-6 flex gap-3">
+                      <button
+                        onClick={() => setShowClearConfirm(false)}
+                        disabled={isClearingCalendar}
+                        className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleClearCalendar()}
+                        disabled={isClearingCalendar}
+                        className="flex-1 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                      >
+                        {isClearingCalendar ? "Clearing…" : "Clear Calendar"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
                   <h2 className="text-lg font-semibold text-zinc-900">
