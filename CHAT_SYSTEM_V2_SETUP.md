@@ -32,7 +32,20 @@ This **replaces** the old chat tables with the new multi-thread schema.
 - Creates new `chat_messages` (now reference thread_id)
 - Enables realtime on both `chat_threads` and `chat_messages`
 
-### 2. Restart the Dev Server
+### 2. Apply Row-Level Security Policies (Critical!)
+
+1. Still in Supabase **SQL Editor**
+2. Create a **new query**
+3. Copy/paste the entire contents of `CHAT_SYSTEM_V2_RLS_POLICIES.sql`
+4. Click **Run**
+
+**What this does:**
+- Enables RLS on all chat tables
+- Sets up policies so coaches/athletes can only see their own conversations and threads
+- Restricts banned phrase management to admins only
+- Without these policies, the system will reject all database access!
+
+### 3. Restart the Dev Server
 
 ```bash
 npm run dev

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -9,8 +10,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Check admin role
-  const { data: role } = await supabase
+  // Check admin role using admin client (bypasses RLS)
+  const adminClient = await createAdminClient();
+  const { data: role } = await adminClient
     .from('user_roles')
     .select('role')
     .eq('user_id', user.id)
