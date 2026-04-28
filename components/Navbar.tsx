@@ -79,8 +79,8 @@ export default async function Navbar() {
               <SidebarDropdown
                 label="Information"
                 items={[
-                  { href: "/athlete/information/destination", label: "Destination" },
-                  { href: "/athlete/information/kit-list", label: "Kit List" },
+                  { href: "/athlete/information/destination", label: "Destination", requiresUpgrade: !hasRaceInfo },
+                  { href: "/athlete/information/kit-list", label: "Kit List", requiresUpgrade: !hasKitList },
                 ]}
               />
               <Link href="/athlete/profile" className="app-sidebar__link">

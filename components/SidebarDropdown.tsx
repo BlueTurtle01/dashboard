@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
-type Item = { href: string; label: string };
+type Item = { href: string; label: string; requiresUpgrade?: boolean };
 
 export default function SidebarDropdown({
   label,
@@ -26,9 +26,28 @@ export default function SidebarDropdown({
       </button>
       <div className="sidebar-dropdown__menu">
         {items.map((item) => (
-          <Link key={item.href} href={item.href} className="sidebar-dropdown__link">
-            {item.label}
-          </Link>
+          <div key={item.href} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Link href={item.href} className="sidebar-dropdown__link" style={{ flex: 1 }}>
+              {item.label}
+            </Link>
+            {item.requiresUpgrade && (
+              <span
+                style={{
+                  display: "inline-block",
+                  background: "#b45309",
+                  color: "#fff",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  whiteSpace: "nowrap",
+                  marginRight: "8px",
+                }}
+              >
+                Upgrade
+              </span>
+            )}
+          </div>
         ))}
       </div>
     </div>
