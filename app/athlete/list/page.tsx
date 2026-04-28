@@ -378,6 +378,36 @@ function SessionCard({ session, isCompleted }: { session: PlanSession; isComplet
             </p>
           )}
 
+          {/* Session Details */}
+          {(() => {
+            const s = session as any;
+            const details = [
+              { label: "Session Type", value: s.subtype },
+              { label: "Terrain", value: s.terrain },
+              { label: "Elevation Gain", value: s.elevationGainMeters, format: (v: any) => `${v}m` },
+              { label: "Pack Weight", value: s.packWeightKg, format: (v: any) => `${v}kg` },
+              { label: "Strides", value: s.strides },
+              { label: "Warm-up", value: s.warmupMinutes, format: (v: any) => `${v} min` },
+              { label: "Cool-down", value: s.cooldownMinutes, format: (v: any) => `${v} min` },
+              { label: "Intervals", value: s.intervalReps, format: (v: any) => `${v} sets` },
+              { label: "Interval Duration", value: s.intervalDuration },
+              { label: "Rest Between Sets", value: s.intervalRestSeconds, format: (v: any) => `${v}s` },
+            ].filter(({ value }) => value);
+
+            if (details.length === 0) return null;
+
+            return (
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-zinc-100 pt-3">
+                {details.map(({ label, value, format }) => (
+                  <div key={label} className="text-xs">
+                    <p className="font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+                    <p className="text-zinc-700 capitalize">{format ? format(value) : value}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
           {/* Reason */}
           {(session as any).reason && (
             <p className="mt-2 text-sm text-zinc-600 italic border-l-2 border-emerald-200 pl-3 leading-relaxed">
