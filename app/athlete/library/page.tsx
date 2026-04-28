@@ -216,19 +216,12 @@ export default function AthleteProgramLibrary() {
     setSaving(true);
     const supabase = createClient();
 
-    // Fetch template metadata (need is_personalised)
-    const { data: templateMeta } = await supabase
-      .from("program_templates")
-      .select("is_personalised")
-      .eq("id", modal.templateId)
-      .single();
-    const isPersonalised = (templateMeta as { is_personalised: boolean } | null)?.is_personalised ?? false;
-
-    // If personalised, fetch athlete profile prefs
+    // Athletes (non-solo) get day assignment driven by their profile prefs.
+    // Solo plan holders use the template's fixed day_label values instead.
     let preferredLongDay: string | null = null;
     let availableRunDays: string[] | null = null;
     let availableGymDays: string[] | null = null;
-    if (isPersonalised) {
+    if (!isSoloPlanHolder) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
@@ -327,15 +320,15 @@ export default function AthleteProgramLibrary() {
 
     const VALID_DAYS = new Set(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 
-    // Day assignment pools — branched by personalised vs generic
-    const longRunDay = isPersonalised && preferredLongDay && VALID_DAYS.has(preferredLongDay)
+    // Day assignment pools — athletes use profile prefs; solo plan holders use template defaults
+    const longRunDay = !isSoloPlanHolder && preferredLongDay && VALID_DAYS.has(preferredLongDay)
       ? preferredLongDay
       : "Sun";
-    const gymDay = isPersonalised && availableGymDays && availableGymDays.length > 0
+    const gymDay = !isSoloPlanHolder && availableGymDays && availableGymDays.length > 0
       ? availableGymDays[0]
       : "Wed";
     const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const SPREAD_DAYS = isPersonalised && availableRunDays && availableRunDays.length > 0
+    const SPREAD_DAYS = !isSoloPlanHolder && availableRunDays && availableRunDays.length > 0
       ? availableRunDays.filter((d) => VALID_DAYS.has(d) && d !== longRunDay && d !== gymDay)
       : ALL_DAYS.filter((d) => d !== longRunDay && d !== gymDay);
 
@@ -345,23 +338,22 @@ export default function AthleteProgramLibrary() {
         .slice()
         .sort((a, b) => ((a.sort_order as number) ?? 0) - ((b.sort_order as number) ?? 0));
 
-      const unlabelled = rawSessions.filter((s) => !VALID_DAYS.has((s.day_label as string) ?? ""));
+      // Athletes ignore template day labels entirely; solo plan holders only spread unlabelled sessions
+      const unlabelled = isSoloPlanHolder
+        ? rawSessions.filter((s) => !VALID_DAYS.has((s.day_label as string) ?? ""))
+        : rawSessions;
 
-      // Longest unlabelled run → Sunday
+      // Longest run (from unlabelled pool) → longRunDay
       const longestRunId = unlabelled
         .filter((s) => (s.type as string) !== "Gym")
         .sort((a, b) => ((b.distance_km as number) ?? 0) - ((a.distance_km as number) ?? 0))[0]?.id ?? null;
 
-      // Remaining non-gym, non-long-run sessions get spread across Mon/Tue/Thu/Fri/Sat
-      const spreadPool = unlabelled.filter(
-        (s) => s.id !== longestRunId && (s.type as string) !== "Gym"
-      );
       let spreadIdx = 0;
 
       const weekSessions = rawSessions.map((s) => {
         const fixedDay = (s.day_label as string) ?? "";
         let dayLabel: string;
-        if (VALID_DAYS.has(fixedDay)) {
+        if (isSoloPlanHolder && VALID_DAYS.has(fixedDay)) {
           dayLabel = fixedDay;
         } else if (s.id === longestRunId) {
           dayLabel = longRunDay;
