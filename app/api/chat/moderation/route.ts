@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Check admin role using admin client (bypasses RLS)
-  const adminClient = await createAdminClient();
+  const adminClient = createAdminClient();
   const { data: role, error: roleError } = await adminClient
     .from('user_roles')
     .select('role')
