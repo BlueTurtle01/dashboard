@@ -72,7 +72,10 @@ export async function POST(req: Request) {
     // Grant default features based on roles
     const featuresToGrant = [];
     if (roles.includes('coach') || roles.includes('athlete')) {
-      featuresToGrant.push({ user_id: newUserId, feature: 'race_info' });
+      featuresToGrant.push(
+        { user_id: newUserId, feature: 'race_info' },
+        { user_id: newUserId, feature: 'kit_list' }
+      );
     }
 
     if (featuresToGrant.length > 0) {

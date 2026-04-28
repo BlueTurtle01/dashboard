@@ -18,9 +18,8 @@ export default function FeatureGatedLink({
 }: FeatureGatedLinkProps) {
   if (!hasAccess) {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <span
-          className={className}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", position: "relative" }}>
+        <div
           style={{
             opacity: 0.5,
             cursor: "not-allowed",
@@ -30,20 +29,19 @@ export default function FeatureGatedLink({
           }}
         >
           {children}
-          <span
-            style={{
-              display: "inline-block",
-              background: "#b45309",
-              color: "#fff",
-              fontSize: "11px",
-              fontWeight: 700,
-              padding: "2px 8px",
-              borderRadius: "6px",
-              marginLeft: "4px",
-            }}
-          >
-            Upgrade
-          </span>
+        </div>
+        <span
+          style={{
+            display: "inline-block",
+            background: "#b45309",
+            color: "#fff",
+            fontSize: "11px",
+            fontWeight: 700,
+            padding: "2px 8px",
+            borderRadius: "6px",
+          }}
+        >
+          Upgrade
         </span>
       </div>
     );

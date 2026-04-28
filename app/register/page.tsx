@@ -74,11 +74,17 @@ export default function RegisterPage() {
       return;
     }
 
-    // Grant default features (coaches and athletes get race_info by default)
-    const { error: featureError } = await supabase.from("user_features").insert({
-      user_id: data.user.id,
-      feature: "race_info",
-    });
+    // Grant default features (coaches and athletes get race_info and kit_list by default)
+    const { error: featureError } = await supabase.from("user_features").insert([
+      {
+        user_id: data.user.id,
+        feature: "race_info",
+      },
+      {
+        user_id: data.user.id,
+        feature: "kit_list",
+      },
+    ]);
 
     if (featureError) {
       console.error("Feature grant error:", featureError);

@@ -72,13 +72,9 @@ export default async function Navbar() {
               <Link href="/athlete/library" className="app-sidebar__link">
                 Library
               </Link>
-              <FeatureGatedLink
-                href="/athlete/information"
-                hasAccess={hasRaceInfo || hasKitList}
-                className="app-sidebar__link"
-              >
+              <Link href="/athlete/information" className="app-sidebar__link">
                 Information
-              </FeatureGatedLink>
+              </Link>
               <Link href="/athlete/profile" className="app-sidebar__link">
                 Profile
               </Link>

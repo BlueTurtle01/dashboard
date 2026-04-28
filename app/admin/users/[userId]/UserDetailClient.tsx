@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppRole } from "@/lib/auth/get-current-user";
 import { UserDetail, saveUserRoles } from "@/lib/actions/userRoles";
-import { createClient } from "@/lib/supabase/client";
+import { grantFeature, revokeFeature } from "@/lib/actions/userFeatures";
 
 const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder"];
 const ALL_FEATURES = ["race_info", "video_analysis", "vaccinations", "kit_list"] as const;
@@ -37,7 +37,6 @@ function formatDate(iso: string | null): string {
 
 export default function UserDetailClient({ user, features: initialFeatures }: { user: UserDetail; features: string[] }) {
   const router = useRouter();
-  const supabase = createClient();
   const [roles, setRoles] = useState<Set<AppRole>>(new Set(user.roles));
   const [features, setFeatures] = useState<Set<UserFeature>>(new Set(initialFeatures as UserFeature[]));
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -78,25 +77,12 @@ export default function UserDetailClient({ user, features: initialFeatures }: { 
       const toAdd = [...features].filter((f) => !currentFeatures.has(f));
       const toRemove = [...currentFeatures].filter((f) => !features.has(f));
 
-      if (toAdd.length > 0) {
-        const { error } = await supabase.from("user_features").insert(
-          toAdd.map((feature) => ({
-            user_id: user.id,
-            feature,
-          }))
-        );
-        if (error) throw error;
+      for (const feature of toAdd) {
+        await grantFeature(user.id, feature);
       }
 
-      if (toRemove.length > 0) {
-        for (const feature of toRemove) {
-          const { error } = await supabase
-            .from("user_features")
-            .delete()
-            .eq("user_id", user.id)
-            .eq("feature", feature);
-          if (error) throw error;
-        }
+      for (const feature of toRemove) {
+        await revokeFeature(user.id, feature);
       }
 
       setFeatureStatus("saved");
