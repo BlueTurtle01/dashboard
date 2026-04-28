@@ -12,14 +12,22 @@ export async function GET(request: NextRequest) {
 
   // Check admin role using admin client (bypasses RLS)
   const adminClient = await createAdminClient();
-  const { data: role } = await adminClient
+  const { data: role, error: roleError } = await adminClient
     .from('user_roles')
     .select('role')
     .eq('user_id', user.id)
     .maybeSingle();
 
+  console.log('[Moderation API] User:', user.id, 'Role query result:', { role, roleError });
+
+  if (roleError) {
+    console.error('[Moderation API] Error checking role:', roleError);
+    return NextResponse.json({ error: 'Error checking permissions', details: roleError.message }, { status: 500 });
+  }
+
   if (role?.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    console.error('[Moderation API] User is not admin. Role:', role?.role);
+    return NextResponse.json({ error: 'Forbidden - user is not admin', userRole: role?.role }, { status: 403 });
   }
 
   const searchParams = request.nextUrl.searchParams;
