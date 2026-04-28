@@ -392,6 +392,8 @@ function SessionCard({ session, isCompleted }: { session: PlanSession; isComplet
               { label: "Intervals", value: s.intervalReps, format: (v: any) => `${v} sets` },
               { label: "Interval Duration", value: s.intervalDuration },
               { label: "Rest Between Sets", value: s.intervalRestSeconds, format: (v: any) => `${v}s` },
+              { label: "Time Up", value: s.timeUpSeconds, format: (v: any) => `${v}s` },
+              { label: "Time Down", value: s.timeDownSeconds, format: (v: any) => `${v}s` },
             ].filter(({ value }) => value);
 
             if (details.length === 0) return null;

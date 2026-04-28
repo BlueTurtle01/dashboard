@@ -2714,6 +2714,8 @@ export default function PlanEditorPage() {
                                       cooldownMinutes: formData.coolDownMinutes ? parseInt(formData.coolDownMinutes) : undefined,
                                       intervalReps: formData.intervalReps ? parseInt(formData.intervalReps) : undefined,
                                       intervalDuration: formData.intervalDuration,
+                                      timeUpSeconds: formData.timeUpSeconds ? parseInt(formData.timeUpSeconds) : undefined,
+                                      timeDownSeconds: formData.timeDownSeconds ? parseInt(formData.timeDownSeconds) : undefined,
                                     };
                                     const isRunSession = ["Easy", "Long", "Recovery", "Steady"].includes(
                                       mapActivityToType(formData.activity),

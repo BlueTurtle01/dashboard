@@ -126,6 +126,8 @@ export interface PlanSession {
   intervalReps?: string | number;
   intervalDuration?: string;
   intervalRestSeconds?: number;
+  timeUpSeconds?: number;
+  timeDownSeconds?: number;
   isInsertedAlternative?: boolean;
   mobilitySessionId?: string;
   reason?: string;
