@@ -996,22 +996,7 @@ export default function CoachAthleteOverviewPage() {
 
         return {
           ...week,
-          sessions: updatedSessions.length > 0 ? updatedSessions : [
-            {
-              id: `rest-${week.id}`,
-              weekId: week.id,
-              sortOrder: 1,
-              dayLabel: "Mon",
-              type: "Rest" as const,
-              name: "Rest",
-              description: "",
-              tags: [],
-              duration: "",
-              intensity: "",
-              isKeySession: false,
-              exercises: [],
-            }
-          ],
+          sessions: updatedSessions,
         };
       });
 
