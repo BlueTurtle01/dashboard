@@ -4,7 +4,6 @@ import NotificationsIcon from "./NotificationsIcon";
 import WarningsIcon from "./WarningsIcon";
 import UserAccountDropdown from "./UserAccountDropdown";
 import SidebarDropdown from "./SidebarDropdown";
-import FeatureGatedLink from "./FeatureGatedLink";
 import "./Navbar.css";
 
 export default async function Navbar() {
@@ -72,9 +71,13 @@ export default async function Navbar() {
               <Link href="/athlete/library" className="app-sidebar__link">
                 Library
               </Link>
-              <Link href="/athlete/information" className="app-sidebar__link">
-                Information
-              </Link>
+              <SidebarDropdown
+                label="Information"
+                items={[
+                  { href: "/athlete/information/destination", label: "Destination" },
+                  { href: "/athlete/information/kit-list", label: "Kit List" },
+                ]}
+              />
               <Link href="/athlete/profile" className="app-sidebar__link">
                 Profile
               </Link>
