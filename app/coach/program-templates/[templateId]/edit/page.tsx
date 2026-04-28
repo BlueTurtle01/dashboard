@@ -732,6 +732,7 @@ export default function EditProgramTemplatePage() {
   const [pendingSessionType, setPendingSessionType] = useState<"gym" | "functional" | "mobility" | null>(null);
   const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
   const [sessionTemplateResults, setSessionTemplateResults] = useState<SessionTemplateRow[]>([]);
+  const [pendingSessionReason, setPendingSessionReason] = useState("");
   const [searchingTemplates, setSearchingTemplates] = useState(false);
 
   const [collapsedWeekLocalIds, setCollapsedWeekLocalIds] = useState<Record<string, boolean>>({});
@@ -1173,10 +1174,11 @@ export default function EditProgramTemplatePage() {
     setSessionTemplateSearch("");
     setSessionTemplateResults([]);
     setSearchingTemplates(false);
+    setPendingSessionReason("");
   }
 
 
-  function createSessionFromTemplateRow(template: SessionTemplateRow) {
+  function createSessionFromTemplateRow(template: SessionTemplateRow, reason?: string) {
     if (!pendingSessionSlot) return;
 
     updateWeek(pendingSessionSlot.weekLocalId, (week) => {
@@ -1194,11 +1196,12 @@ export default function EditProgramTemplatePage() {
 
       return {
         ...week,
-        sessions: [...week.sessions, builtSession],
+        sessions: [...week.sessions, { ...builtSession, reason: reason || "" }],
       };
     });
 
     cancelPendingTemplateSession();
+    setPendingSessionReason("");
     showTemporaryStatus(`${template.name || "Template session"} added.`, 1500);
   }
 
@@ -1906,13 +1909,23 @@ export default function EditProgramTemplatePage() {
                             </button>
                           </div>
 
-                          <div className="mt-4">
+                          <div className="mt-4 space-y-4">
                             <input
                               value={sessionTemplateSearch}
                               onChange={(e) => setSessionTemplateSearch(e.target.value)}
                               placeholder={`Filter templates (type to search)…`}
                               className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
                             />
+
+                            <label className="block">
+                              <span className="mb-1 block text-sm font-medium text-zinc-700">Reason (optional)</span>
+                              <textarea
+                                value={pendingSessionReason}
+                                onChange={(e) => setPendingSessionReason(e.target.value)}
+                                placeholder="Why you've inserted this session (for the athlete)"
+                                className="min-h-15 w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                              />
+                            </label>
                           </div>
 
                           <div className="mt-4 space-y-3">
@@ -1938,7 +1951,7 @@ export default function EditProgramTemplatePage() {
                                   <button
                                     key={template.id}
                                     type="button"
-                                    onClick={() => createSessionFromTemplateRow(template)}
+                                    onClick={() => createSessionFromTemplateRow(template, pendingSessionReason)}
                                     className="block w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-left transition hover:bg-zinc-100"
                                   >
                                     <div className="font-medium text-zinc-900">
