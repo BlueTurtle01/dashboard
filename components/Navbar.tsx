@@ -4,6 +4,7 @@ import NotificationsIcon from "./NotificationsIcon";
 import WarningsIcon from "./WarningsIcon";
 import UserAccountDropdown from "./UserAccountDropdown";
 import SidebarDropdown from "./SidebarDropdown";
+import FeatureGatedLink from "./FeatureGatedLink";
 import "./Navbar.css";
 
 export default async function Navbar() {
@@ -14,6 +15,7 @@ export default async function Navbar() {
   } = await supabase.auth.getUser();
 
   let roles: string[] = [];
+  let features: string[] = [];
 
   if (user) {
     const { data } = await supabase
@@ -22,6 +24,13 @@ export default async function Navbar() {
       .eq("user_id", user.id);
 
     roles = data?.map((row) => row.role) ?? [];
+
+    const { data: featureData } = await supabase
+      .from("user_features")
+      .select("feature")
+      .eq("user_id", user.id);
+
+    features = featureData?.map((row) => row.feature) ?? [];
   }
 
   const isAdmin = roles.includes("admin");
@@ -29,6 +38,9 @@ export default async function Navbar() {
   const isAthlete = roles.includes("athlete");
   const isSoloPlanHolder = roles.includes("solo_plan_holder");
   const canAccessCoachArea = isAdmin || isCoach;
+
+  const hasRaceInfo = features.includes("race_info");
+  const hasKitList = features.includes("kit_list");
 
   if (!user) return null;
 
@@ -60,6 +72,13 @@ export default async function Navbar() {
               <Link href="/athlete/library" className="app-sidebar__link">
                 Library
               </Link>
+              <FeatureGatedLink
+                href="/athlete/information"
+                hasAccess={hasRaceInfo || hasKitList}
+                className="app-sidebar__link"
+              >
+                Information
+              </FeatureGatedLink>
               <Link href="/athlete/profile" className="app-sidebar__link">
                 Profile
               </Link>

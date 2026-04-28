@@ -1,7 +1,7 @@
 import { getCurrentUser } from "./get-current-user";
 import { createClient } from "@/lib/supabase/server";
 
-export type UserFeature = "race_info" | "video_analysis";
+export type UserFeature = "race_info" | "video_analysis" | "vaccinations" | "kit_list";
 
 export async function userHasFeature(feature: UserFeature): Promise<boolean> {
   const user = await getCurrentUser();

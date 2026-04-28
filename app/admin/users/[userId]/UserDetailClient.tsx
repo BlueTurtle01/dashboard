@@ -7,7 +7,7 @@ import { UserDetail, saveUserRoles } from "@/lib/actions/userRoles";
 import { createClient } from "@/lib/supabase/client";
 
 const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder"];
-const ALL_FEATURES = ["race_info", "video_analysis"] as const;
+const ALL_FEATURES = ["race_info", "video_analysis", "vaccinations", "kit_list"] as const;
 type UserFeature = (typeof ALL_FEATURES)[number];
 
 const ROLE_LABELS: Record<AppRole, string> = {
@@ -20,6 +20,8 @@ const ROLE_LABELS: Record<AppRole, string> = {
 const FEATURE_LABELS: Record<UserFeature, string> = {
   race_info: "Race Info",
   video_analysis: "Video Analysis",
+  vaccinations: "Vaccinations",
+  kit_list: "Kit List",
 };
 
 function formatDate(iso: string | null): string {

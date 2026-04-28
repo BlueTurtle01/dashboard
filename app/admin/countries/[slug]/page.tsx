@@ -80,7 +80,7 @@ function tempRange(min: number | null, max: number | null): string {
 
 export default function CountryDetailPage() {
   const router = useRouter();
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const supabase = createClient();
 
   const [country, setCountry] = useState<CountryDetail | null>(null);
@@ -94,11 +94,23 @@ export default function CountryDetailPage() {
       setLoading(true);
       setError("");
 
-      const { data: countryData, error: countryErr } = await supabase
+      // Try to load by slug first, then fallback to UUID for backward compatibility
+      let { data: countryData, error: countryErr } = await supabase
         .from("travel_vaccination_cheatsheets")
         .select("*")
-        .eq("id", id)
+        .eq("slug", slug)
         .single();
+
+      // If not found by slug, try UUID (backward compatibility)
+      if (countryErr && countryErr.code === 'PGRST116') {
+        const { data: uuidData, error: uuidErr } = await supabase
+          .from("travel_vaccination_cheatsheets")
+          .select("*")
+          .eq("id", slug)
+          .single();
+        countryData = uuidData;
+        countryErr = uuidErr;
+      }
 
       if (countryErr) {
         setError(`Could not load country: ${countryErr.message}`);
@@ -120,8 +132,8 @@ export default function CountryDetailPage() {
       setLoading(false);
     }
 
-    if (id) load();
-  }, [supabase, id]);
+    if (slug) load();
+  }, [supabase, slug]);
 
   const mandatory = VACCINE_LABELS.filter((v) => country && country[v.field] === "Mandatory");
   const recommended = VACCINE_LABELS.filter((v) => country && country[v.field] === "Recommended");
