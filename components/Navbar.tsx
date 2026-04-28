@@ -75,6 +75,9 @@ export default async function Navbar() {
                   Coaches
                 </Link>
               )}
+              <Link href="/coach/chat" className="app-sidebar__link">
+                Chat
+              </Link>
               <SidebarDropdown
                 label="Programs"
                 items={[
@@ -147,6 +150,7 @@ export default async function Navbar() {
                   { href: "/admin/session-template-field-config", label: "Session Template Tags" },
                   { href: "/athlete/profile", label: "Athlete Profile" },
                   { href: "/admin/solo-plans", label: "Solo Plans" },
+                  { href: "/admin/chat/phrases", label: "Chat Moderation" },
                 ]}
               />
             </>
