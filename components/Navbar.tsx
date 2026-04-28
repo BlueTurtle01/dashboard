@@ -150,6 +150,7 @@ export default async function Navbar() {
                   { href: "/admin/session-template-field-config", label: "Session Template Tags" },
                   { href: "/athlete/profile", label: "Athlete Profile" },
                   { href: "/admin/solo-plans", label: "Solo Plans" },
+                  { href: "/admin/coach-athlete-links", label: "Coach-Athlete Links" },
                   { href: "/admin/chat/phrases", label: "Chat Moderation" },
                 ]}
               />
