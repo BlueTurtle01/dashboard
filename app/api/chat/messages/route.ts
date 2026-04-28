@@ -85,16 +85,15 @@ export async function POST(req: Request) {
     const bannedPhrases = await getBannedPhrases(supabase);
     const checkResult = checkPhrase(content, bannedPhrases);
 
+    // Determine message status based on phrase check
+    let messageStatus = 'sent';
     if (!checkResult.allowed) {
-      return NextResponse.json(
-        { error: 'Message blocked', reason: 'Restricted phrase detected' },
-        { status: 400 }
-      );
+      messageStatus = 'blocked';
+    } else if (checkResult.severity === 'flag') {
+      messageStatus = 'flagged';
     }
 
-    const messageStatus = checkResult.severity === 'flag' ? 'flagged' : 'sent';
-
-    // Insert message
+    // Insert message (all statuses: sent, flagged, and blocked)
     const { data: message, error: messageError } = await supabase
       .from('chat_messages')
       .insert({
@@ -110,6 +109,14 @@ export async function POST(req: Request) {
     if (messageError) {
       console.error('Message insert error:', messageError);
       return NextResponse.json({ error: messageError.message }, { status: 500 });
+    }
+
+    // Return 400 error for blocked messages (so user sees error)
+    if (!checkResult.allowed) {
+      return NextResponse.json(
+        { error: 'Message blocked', reason: 'Restricted phrase detected' },
+        { status: 400 }
+      );
     }
 
     // Update thread's last_message_at
