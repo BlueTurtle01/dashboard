@@ -69,6 +69,23 @@ export async function POST(req: Request) {
       });
     }
 
+    // Grant default features based on roles
+    const featuresToGrant = [];
+    if (roles.includes('coach') || roles.includes('athlete')) {
+      featuresToGrant.push({ user_id: newUserId, feature: 'race_info' });
+    }
+
+    if (featuresToGrant.length > 0) {
+      const { error: featuresError } = await supabase
+        .from('user_features')
+        .insert(featuresToGrant);
+
+      if (featuresError) {
+        console.error('Features creation error:', featuresError);
+        // Don't fail the whole request if features fail, but log it
+      }
+    }
+
     return NextResponse.json({
       user: {
         id: newUserId,

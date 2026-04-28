@@ -74,6 +74,17 @@ export default function RegisterPage() {
       return;
     }
 
+    // Grant default features (coaches and athletes get race_info by default)
+    const { error: featureError } = await supabase.from("user_features").insert({
+      user_id: data.user.id,
+      feature: "race_info",
+    });
+
+    if (featureError) {
+      console.error("Feature grant error:", featureError);
+      // Don't fail registration if feature grant fails
+    }
+
     setSuccessMessage(
       "Account created successfully. You can now log in."
     );

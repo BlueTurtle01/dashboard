@@ -4,14 +4,22 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppRole } from "@/lib/auth/get-current-user";
 import { UserDetail, saveUserRoles } from "@/lib/actions/userRoles";
+import { createClient } from "@/lib/supabase/client";
 
 const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder"];
+const ALL_FEATURES = ["race_info", "video_analysis"] as const;
+type UserFeature = (typeof ALL_FEATURES)[number];
 
 const ROLE_LABELS: Record<AppRole, string> = {
   admin: "Admin",
   coach: "Coach",
   athlete: "Athlete",
   solo_plan_holder: "Solo Plan",
+};
+
+const FEATURE_LABELS: Record<UserFeature, string> = {
+  race_info: "Race Info",
+  video_analysis: "Video Analysis",
 };
 
 function formatDate(iso: string | null): string {
@@ -25,10 +33,13 @@ function formatDate(iso: string | null): string {
   });
 }
 
-export default function UserDetailClient({ user }: { user: UserDetail }) {
+export default function UserDetailClient({ user, features: initialFeatures }: { user: UserDetail; features: string[] }) {
   const router = useRouter();
+  const supabase = createClient();
   const [roles, setRoles] = useState<Set<AppRole>>(new Set(user.roles));
+  const [features, setFeatures] = useState<Set<UserFeature>>(new Set(initialFeatures as UserFeature[]));
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [featureStatus, setFeatureStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   function toggleRole(role: AppRole) {
     setRoles((prev) => {
@@ -39,6 +50,15 @@ export default function UserDetailClient({ user }: { user: UserDetail }) {
     setStatus("idle");
   }
 
+  function toggleFeature(feature: UserFeature) {
+    setFeatures((prev) => {
+      const next = new Set(prev);
+      next.has(feature) ? next.delete(feature) : next.add(feature);
+      return next;
+    });
+    setFeatureStatus("idle");
+  }
+
   async function handleSave() {
     setStatus("saving");
     try {
@@ -46,6 +66,40 @@ export default function UserDetailClient({ user }: { user: UserDetail }) {
       setStatus("saved");
     } catch {
       setStatus("error");
+    }
+  }
+
+  async function handleSaveFeatures() {
+    setFeatureStatus("saving");
+    try {
+      const currentFeatures = new Set(initialFeatures as UserFeature[]);
+      const toAdd = [...features].filter((f) => !currentFeatures.has(f));
+      const toRemove = [...currentFeatures].filter((f) => !features.has(f));
+
+      if (toAdd.length > 0) {
+        const { error } = await supabase.from("user_features").insert(
+          toAdd.map((feature) => ({
+            user_id: user.id,
+            feature,
+          }))
+        );
+        if (error) throw error;
+      }
+
+      if (toRemove.length > 0) {
+        for (const feature of toRemove) {
+          const { error } = await supabase
+            .from("user_features")
+            .delete()
+            .eq("user_id", user.id)
+            .eq("feature", feature);
+          if (error) throw error;
+        }
+      }
+
+      setFeatureStatus("saved");
+    } catch {
+      setFeatureStatus("error");
     }
   }
 
@@ -115,6 +169,48 @@ export default function UserDetailClient({ user }: { user: UserDetail }) {
                 : status === "error"
                 ? "Error — retry"
                 : "Save roles"}
+            </button>
+          </div>
+        </section>
+
+        <section style={cardStyle}>
+          <h2 style={sectionTitleStyle}>Features</h2>
+          <p style={sectionSubtitleStyle}>
+            Manage which features this user has access to.
+          </p>
+          <div style={rolesGridStyle}>
+            {ALL_FEATURES.map((feature) => (
+              <label key={feature} style={roleLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={features.has(feature)}
+                  onChange={() => toggleFeature(feature)}
+                  style={checkboxStyle}
+                />
+                {FEATURE_LABELS[feature]}
+              </label>
+            ))}
+          </div>
+          <div style={saveRowStyle}>
+            <button
+              type="button"
+              onClick={handleSaveFeatures}
+              disabled={featureStatus === "saving"}
+              style={
+                featureStatus === "saved"
+                  ? savedButtonStyle
+                  : featureStatus === "error"
+                  ? errorButtonStyle
+                  : primaryButtonStyle
+              }
+            >
+              {featureStatus === "saving"
+                ? "Saving..."
+                : featureStatus === "saved"
+                ? "Saved"
+                : featureStatus === "error"
+                ? "Error — retry"
+                : "Save features"}
             </button>
           </div>
         </section>

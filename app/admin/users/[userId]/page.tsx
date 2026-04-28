@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { userHasRole } from "@/lib/auth/get-current-user";
 import { getUserById } from "@/lib/actions/userRoles";
+import { createClient } from "@/lib/supabase/server";
 import UserDetailClient from "./UserDetailClient";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +17,18 @@ export default async function AdminUserDetailPage({
   const { userId } = await params;
 
   let user;
+  let features: string[] = [];
+
   try {
     user = await getUserById(userId);
+
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("user_features")
+      .select("feature")
+      .eq("user_id", userId);
+
+    features = data?.map((row) => row.feature) ?? [];
   } catch (err) {
     return (
       <main style={{ padding: "40px 24px" }}>
@@ -28,5 +39,5 @@ export default async function AdminUserDetailPage({
     );
   }
 
-  return <UserDetailClient user={user} />;
+  return <UserDetailClient user={user} features={features} />;
 }

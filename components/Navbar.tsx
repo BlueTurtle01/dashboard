@@ -73,11 +73,6 @@ export default async function Navbar() {
               <Link href="/coach/dashboard" className="app-sidebar__link">
                 Dashboard
               </Link>
-              {(isAthlete || canAccessCoachArea) && (
-                <Link href="/coaches" className="app-sidebar__link">
-                  Coaches
-                </Link>
-              )}
               <Link href="/coach/chat" className="app-sidebar__link">
                 Chat
               </Link>
@@ -93,6 +88,13 @@ export default async function Navbar() {
                 items={[
                   { href: "/coach/mobility-sessions", label: "View Mobility Sessions" },
                   { href: "/coach/mobility-sessions/create", label: "Create Mobility Session" },
+                ]}
+              />
+              <SidebarDropdown
+                label="Gym Sessions"
+                items={[
+                  { href: "/coach/gym-session-templates", label: "View Gym Sessions" },
+                  { href: "/coach/gym-session-templates/create", label: "Create Gym Session" },
                 ]}
               />
               {canAccessCoachArea && (
@@ -135,8 +137,6 @@ export default async function Navbar() {
               <SidebarDropdown
                 label="Templates"
                 items={[
-                  { href: "/coach/gym-session-templates", label: "Gym Sessions" },
-                  { href: "/coach/gym-session-templates/create", label: "Create Gym Session" },
                   { href: "/coach/functional-session-templates", label: "Functional Sessions" },
                   { href: "/coach/functional-session-templates/create", label: "Create Functional Session" },
                   { href: "/admin/functional/types/create", label: "Functional Types" },
