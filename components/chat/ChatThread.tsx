@@ -72,8 +72,8 @@ export default function ChatThreadComponent({
           const newMessage = payload.new as ChatMessage;
           console.log('[ChatThread] Realtime message received:', newMessage.id);
 
-          // Only add if status is 'sent' and not already in list (deduplication)
-          if (newMessage.status === 'sent') {
+          // Add if not blocked and not already in list (deduplication)
+          if (newMessage.status !== 'blocked') {
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMessage.id)) {
                 console.log('[ChatThread] Message already exists, skipping duplicate');

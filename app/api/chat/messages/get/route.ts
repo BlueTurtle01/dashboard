@@ -57,12 +57,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Fetch messages
+    // Fetch messages (show sent and flagged, not blocked)
     const { data: messages, error: messagesError } = await supabase
       .from('chat_messages')
       .select('*')
       .eq('thread_id', threadId)
-      .eq('status', 'sent')
+      .neq('status', 'blocked')
       .order('created_at', { ascending: true })
       .range(offset, offset + limit - 1);
 
