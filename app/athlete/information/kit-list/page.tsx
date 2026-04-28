@@ -1,6 +1,7 @@
-import { userHasFeature } from "@/lib/auth/user-features";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type KitItem = {
   id: number;
@@ -12,29 +13,109 @@ type KitItem = {
   notes: string | null;
 };
 
-export default async function KitListPage() {
-  const hasAccess = await userHasFeature("kit_list");
+export default function KitListPage() {
+  const [hasAccess, setHasAccess] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<KitItem[]>([]);
+  const [error, setError] = useState("");
 
-  if (!hasAccess) {
-    redirect("/athlete");
-  }
+  useEffect(() => {
+    async function loadData() {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-  const supabase = await createClient();
-  const { data: kitItems, error } = await supabase
-    .from("kit_list")
-    .select("*")
-    .order("category")
-    .order("is_essential", { ascending: false });
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-  if (error) {
+      // Check feature access
+      const { data: featureData } = await supabase
+        .from("user_features")
+        .select("feature")
+        .eq("user_id", user.id)
+        .eq("feature", "kit_list")
+        .maybeSingle();
+
+      setHasAccess(!!featureData);
+
+      // Load kit items
+      const { data: kitItems, error: kitError } = await supabase
+        .from("kit_list")
+        .select("*")
+        .order("category")
+        .order("is_essential", { ascending: false });
+
+      if (kitError) {
+        setError(kitError.message);
+      } else {
+        setItems((kitItems || []) as KitItem[]);
+      }
+
+      setLoading(false);
+    }
+
+    loadData();
+  }, []);
+
+  if (loading) {
     return (
-      <div style={{ maxWidth: "700px", margin: "0 auto", padding: "24px" }}>
-        <p style={{ color: "#b00020" }}>Failed to load kit list: {error.message}</p>
+      <div style={{ maxWidth: "800px", margin: "0 auto", padding: "24px" }}>
+        <p>Loading...</p>
       </div>
     );
   }
 
-  const items = (kitItems || []) as KitItem[];
+  if (!hasAccess) {
+    return (
+      <div style={{ maxWidth: "800px", margin: "0 auto", padding: "24px" }}>
+        <h1 style={{ fontSize: "28px", fontWeight: 700, marginBottom: "32px" }}>
+          Kit List
+        </h1>
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: "12px",
+            border: "1px solid #e5e5e5",
+            padding: "24px",
+            marginBottom: "24px",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ fontSize: "16px", fontWeight: 600, marginBottom: "16px" }}>
+            This feature requires an upgrade
+          </p>
+          <p style={{ color: "#666", fontSize: "14px", marginBottom: "24px" }}>
+            Upgrade your plan to access the Kit List and prepare for your race with a
+            comprehensive packing checklist.
+          </p>
+          <span
+            style={{
+              display: "inline-block",
+              background: "#b45309",
+              color: "#fff",
+              fontSize: "12px",
+              fontWeight: 700,
+              padding: "4px 12px",
+              borderRadius: "6px",
+            }}
+          >
+            Upgrade
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ maxWidth: "800px", margin: "0 auto", padding: "24px" }}>
+        <p style={{ color: "#b00020" }}>Failed to load kit list: {error}</p>
+      </div>
+    );
+  }
 
   // Group items by category
   const groupedItems = items.reduce(
