@@ -247,6 +247,20 @@ export default function SessionsPage() {
     weekStartDate = `${day} ${month}`;
   }
 
+  // Helper to extract day number from dayLabel (e.g., "Monday" -> 1, "Tuesday" -> 2, etc.)
+  const getDayOrder = (dayLabel: string): number => {
+    const dayMap: Record<string, number> = {
+      Monday: 1,
+      Tuesday: 2,
+      Wednesday: 3,
+      Thursday: 4,
+      Friday: 5,
+      Saturday: 6,
+      Sunday: 7,
+    };
+    return dayMap[dayLabel] || 0;
+  };
+
   // Group sessions: find main sessions and their alternatives
   const sessionGroups: Array<{ mainSession: PlanSession; alternativeSession: PlanSession | null }> = [];
   const processedSessionIds = new Set<string>();
@@ -279,6 +293,13 @@ export default function SessionsPage() {
       mainSession: session,
       alternativeSession: alternativeSession as PlanSession | null,
     });
+  });
+
+  // Sort session groups by day order
+  sessionGroups.sort((a, b) => {
+    const dayA = getDayOrder(a.mainSession.dayLabel);
+    const dayB = getDayOrder(b.mainSession.dayLabel);
+    return dayA - dayB;
   });
 
   const getSessionColor = (type: string) => {
