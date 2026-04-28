@@ -6,9 +6,17 @@ export async function GET(req: Request) {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (userError || !user) {
+    if (userError) {
+      console.error('[chat/conversations] Auth error:', userError);
+      return NextResponse.json({ error: `Auth error: ${userError.message}` }, { status: 401 });
+    }
+
+    if (!user) {
+      console.error('[chat/conversations] No user found');
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+
+    console.log('[chat/conversations] User:', user.id);
 
     const { searchParams } = new URL(req.url);
     const athleteId = searchParams.get('athleteId');
@@ -41,19 +49,37 @@ export async function GET(req: Request) {
       return NextResponse.json(newConversation);
     }
 
+    console.log('[chat/conversations] Querying conversations as coach...');
     const { data: conversationsAsCoach, error: coachError } = await supabase
       .from('chat_conversations')
-      .select('*, athlete:athlete_user_id(full_name)')
+      .select('*')
       .eq('coach_user_id', user.id)
       .order('last_message_at', { ascending: false, nullsFirst: false });
 
     if (coachError) {
-      return NextResponse.json({ error: coachError.message }, { status: 500 });
+      console.error('[chat/conversations] Coach query error:', coachError);
+      return NextResponse.json({ error: `Database error: ${coachError.message}` }, { status: 500 });
+    }
+
+    console.log('[chat/conversations] Found conversations:', conversationsAsCoach?.length || 0);
+
+    let conversationsAsCoachWithProfiles = [];
+    if (conversationsAsCoach && conversationsAsCoach.length > 0) {
+      const athleteIds = conversationsAsCoach.map(c => c.athlete_user_id);
+      const { data: athletes } = await supabase
+        .from('athlete_profiles')
+        .select('user_id, full_name')
+        .in('user_id', athleteIds);
+
+      conversationsAsCoachWithProfiles = conversationsAsCoach.map(conv => ({
+        ...conv,
+        athlete: athletes?.find(a => a.user_id === conv.athlete_user_id) || { full_name: null }
+      }));
     }
 
     const { data: conversationsAsAthlete, error: athleteError } = await supabase
       .from('chat_conversations')
-      .select('*, coach:coach_user_id(full_name)')
+      .select('*')
       .eq('athlete_user_id', user.id)
       .order('last_message_at', { ascending: false, nullsFirst: false });
 
@@ -61,9 +87,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: athleteError.message }, { status: 500 });
     }
 
+    let conversationsAsAthleteWithProfiles = [];
+    if (conversationsAsAthlete && conversationsAsAthlete.length > 0) {
+      conversationsAsAthleteWithProfiles = conversationsAsAthlete.map(conv => ({
+        ...conv,
+        coach: { full_name: null }
+      }));
+    }
+
     return NextResponse.json({
-      asCoach: conversationsAsCoach || [],
-      asAthlete: conversationsAsAthlete || [],
+      asCoach: conversationsAsCoachWithProfiles || [],
+      asAthlete: conversationsAsAthleteWithProfiles || [],
     });
   } catch (error) {
     console.error('Error fetching conversations:', error);

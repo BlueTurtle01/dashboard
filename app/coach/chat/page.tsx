@@ -23,14 +23,31 @@ export default function CoachChatPage() {
   useEffect(() => {
     const fetchConversations = async () => {
       try {
+        console.log('Fetching conversations...');
         const response = await fetch('/api/chat/conversations');
-        if (!response.ok) throw new Error('Failed to fetch conversations');
+        console.log('Response status:', response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Response error body:', errorText);
+          let errorMessage = 'Failed to fetch conversations';
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = `HTTP ${response.status}: ${errorText}`;
+          }
+          throw new Error(errorMessage);
+        }
+
         const data = await response.json();
+        console.log('Conversations data:', data);
         setConversations(data.asCoach || []);
         setError(null);
       } catch (err) {
         console.error('Error fetching conversations:', err);
-        setError('Failed to load conversations');
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load conversations';
+        setError(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -49,9 +66,16 @@ export default function CoachChatPage() {
 
   if (error) {
     return (
-      <div className="p-4">
+      <div className="p-6">
         <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-          <p className="text-red-900">{error}</p>
+          <h2 className="font-semibold text-red-900 mb-2">Error Loading Chat</h2>
+          <p className="text-red-900 text-sm mb-3">{error}</p>
+          <details className="text-xs text-red-800">
+            <summary className="cursor-pointer underline">Debug info</summary>
+            <pre className="mt-2 bg-red-100 p-2 rounded overflow-auto text-xs">
+              Check browser console (F12) for full error details
+            </pre>
+          </details>
         </div>
       </div>
     );
