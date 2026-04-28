@@ -377,6 +377,13 @@ function SessionCard({ session, isCompleted }: { session: PlanSession; isComplet
               {session.description}
             </p>
           )}
+
+          {/* Reason */}
+          {(session as any).reason && (
+            <p className="mt-2 text-sm text-zinc-600 italic border-l-2 border-emerald-200 pl-3 leading-relaxed">
+              {(session as any).reason}
+            </p>
+          )}
         </div>
       </div>
     </Link>

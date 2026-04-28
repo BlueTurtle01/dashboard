@@ -80,6 +80,7 @@ type ProgramTemplateSessionRow = {
   cooldown_minutes: number | null;
   interval_reps: number | null;
   interval_duration: string | null;
+  reason: string | null;
   tags: string[] | null;
   program_template_session_exercises: ProgramTemplateSessionExerciseRow[] | null;
 };
@@ -167,6 +168,7 @@ type EditableSession = {
   coolDownMinutes?: string;
   intervalReps?: string;
   intervalDuration?: string;
+  reason?: string;
   tags?: string[];
 };
 
@@ -643,6 +645,7 @@ function mapToForm(
             coolDownMinutes: session.cooldown_minutes?.toString() ?? "",
             intervalReps: session.interval_reps?.toString() ?? "",
             intervalDuration: session.interval_duration ?? "",
+            reason: session.reason ?? "",
             tags: session.tags ?? [],
             exercises: (session.program_template_session_exercises ?? [])
               .slice()
@@ -857,6 +860,7 @@ export default function EditProgramTemplatePage() {
             cooldown_minutes,
             interval_reps,
             interval_duration,
+            reason,
             tags,
             program_template_session_exercises (
               id,
@@ -1102,6 +1106,7 @@ export default function EditProgramTemplatePage() {
             coolDownMinutes: formData?.coolDownMinutes ?? "",
             intervalReps: formData?.intervalReps ?? "",
             intervalDuration: formData?.intervalDuration ?? "",
+            reason: formData?.reason ?? "",
             tags: formData?.tags ?? [],
           },
         ],
@@ -1449,6 +1454,7 @@ export default function EditProgramTemplatePage() {
           cooldown_minutes: session.coolDownMinutes ? parseInt(session.coolDownMinutes, 10) || null : null,
           interval_reps: session.intervalReps ? parseInt(session.intervalReps, 10) || null : null,
           interval_duration: session.intervalDuration || null,
+          reason: session.reason || null,
           tags: (session.tags && session.tags.length > 0) ? session.tags : null,
         };
 

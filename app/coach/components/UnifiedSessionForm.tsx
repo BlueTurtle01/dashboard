@@ -27,6 +27,7 @@ export type UnifiedSessionFormData = {
   timeDownSeconds: string;
   notes: string;
   tags: string[];
+  reason: string;
   sourceSessionTemplateId?: string;
   selectedMobilitySessionId?: string;
 };
@@ -186,6 +187,7 @@ function createEmptyForm(): UnifiedSessionFormData {
     timeUpSeconds: "",
     timeDownSeconds: "",
     notes: "",
+    reason: "",
     tags: [],
   };
 }
@@ -571,6 +573,16 @@ export function UnifiedSessionForm({
           value={form.description}
           onChange={(e) => updateForm("description", e.target.value)}
           placeholder="Short description of the session"
+        />
+      </label>
+
+      <label className="block">
+        <span className="mb-1 block text-sm font-semibold text-zinc-900">Reason</span>
+        <textarea
+          className="min-h-15 w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+          value={form.reason}
+          onChange={(e) => updateForm("reason", e.target.value)}
+          placeholder="Why you've inserted this session (for the athlete)"
         />
       </label>
 

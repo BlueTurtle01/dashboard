@@ -128,6 +128,7 @@ export interface PlanSession {
   intervalRestSeconds?: number;
   isInsertedAlternative?: boolean;
   mobilitySessionId?: string;
+  reason?: string;
 }
 
 export interface PlanWeek {
