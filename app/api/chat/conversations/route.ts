@@ -1,106 +1,133 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getUserDisplayName } from '@/lib/chat/getUserName';
 
 export async function GET(req: Request) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (userError) {
-      console.error('[chat/conversations] Auth error:', userError);
-      return NextResponse.json({ error: `Auth error: ${userError.message}` }, { status: 401 });
-    }
-
-    if (!user) {
-      console.error('[chat/conversations] No user found');
+    if (userError || !user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    console.log('[chat/conversations] User:', user.id);
-
-    const { searchParams } = new URL(req.url);
-    const athleteId = searchParams.get('athleteId');
-
-    if (athleteId) {
-      const coachConversation = await supabase
-        .from('chat_conversations')
-        .select('*')
-        .eq('coach_user_id', user.id)
-        .eq('athlete_user_id', athleteId)
-        .maybeSingle();
-
-      if (coachConversation.data) {
-        return NextResponse.json(coachConversation.data);
-      }
-
-      const { data: newConversation, error: insertError } = await supabase
-        .from('chat_conversations')
-        .insert({
-          coach_user_id: user.id,
-          athlete_user_id: athleteId,
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        return NextResponse.json({ error: insertError.message }, { status: 500 });
-      }
-
-      return NextResponse.json(newConversation);
-    }
-
-    console.log('[chat/conversations] Querying conversations as coach...');
-    const { data: conversationsAsCoach, error: coachError } = await supabase
+    // Fetch all conversations where user is coach or athlete
+    const { data: asCoach, error: coachError } = await supabase
       .from('chat_conversations')
       .select('*')
       .eq('coach_user_id', user.id)
-      .order('last_message_at', { ascending: false, nullsFirst: false });
+      .order('created_at', { ascending: false });
 
     if (coachError) {
-      console.error('[chat/conversations] Coach query error:', coachError);
-      return NextResponse.json({ error: `Database error: ${coachError.message}` }, { status: 500 });
+      console.error('Coach conversations error:', coachError);
+      return NextResponse.json({ error: coachError.message }, { status: 500 });
     }
 
-    console.log('[chat/conversations] Found conversations:', conversationsAsCoach?.length || 0);
-
-    let conversationsAsCoachWithProfiles = [];
-    if (conversationsAsCoach && conversationsAsCoach.length > 0) {
-      const athleteIds = conversationsAsCoach.map(c => c.athlete_user_id);
-      const { data: athletes } = await supabase
-        .from('athlete_profiles')
-        .select('user_id, full_name')
-        .in('user_id', athleteIds);
-
-      conversationsAsCoachWithProfiles = conversationsAsCoach.map(conv => ({
-        ...conv,
-        athlete: athletes?.find(a => a.user_id === conv.athlete_user_id) || { full_name: null }
-      }));
-    }
-
-    const { data: conversationsAsAthlete, error: athleteError } = await supabase
+    const { data: asAthlete, error: athleteError } = await supabase
       .from('chat_conversations')
       .select('*')
       .eq('athlete_user_id', user.id)
-      .order('last_message_at', { ascending: false, nullsFirst: false });
+      .order('created_at', { ascending: false });
 
     if (athleteError) {
+      console.error('Athlete conversations error:', athleteError);
       return NextResponse.json({ error: athleteError.message }, { status: 500 });
     }
 
-    let conversationsAsAthleteWithProfiles = [];
-    if (conversationsAsAthlete && conversationsAsAthlete.length > 0) {
-      conversationsAsAthleteWithProfiles = conversationsAsAthlete.map(conv => ({
+    // Enrich with participant names
+    const enrichedCoach = await Promise.all(
+      (asCoach || []).map(async (conv) => ({
         ...conv,
-        coach: { full_name: null }
-      }));
-    }
+        athleteName: await getUserDisplayName(supabase, conv.athlete_user_id),
+      }))
+    );
+
+    const enrichedAthlete = await Promise.all(
+      (asAthlete || []).map(async (conv) => ({
+        ...conv,
+        coachName: await getUserDisplayName(supabase, conv.coach_user_id),
+      }))
+    );
 
     return NextResponse.json({
-      asCoach: conversationsAsCoachWithProfiles || [],
-      asAthlete: conversationsAsAthleteWithProfiles || [],
+      asCoach: enrichedCoach,
+      asAthlete: enrichedAthlete,
     });
   } catch (error) {
     console.error('Error fetching conversations:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const { partnerId, partnerRole } = await req.json();
+
+    if (!partnerId || !partnerRole) {
+      return NextResponse.json(
+        { error: 'partnerId and partnerRole required' },
+        { status: 400 }
+      );
+    }
+
+    let coachUserId: string;
+    let athleteUserId: string;
+
+    if (partnerRole === 'coach') {
+      coachUserId = partnerId;
+      athleteUserId = user.id;
+    } else if (partnerRole === 'athlete') {
+      coachUserId = user.id;
+      athleteUserId = partnerId;
+    } else {
+      return NextResponse.json(
+        { error: 'Invalid partnerRole' },
+        { status: 400 }
+      );
+    }
+
+    // Check if conversation exists
+    const { data: existing, error: existError } = await supabase
+      .from('chat_conversations')
+      .select('*')
+      .eq('coach_user_id', coachUserId)
+      .eq('athlete_user_id', athleteUserId)
+      .maybeSingle();
+
+    if (existError) {
+      console.error('Conversation lookup error:', existError);
+      return NextResponse.json({ error: existError.message }, { status: 500 });
+    }
+
+    if (existing) {
+      return NextResponse.json(existing, { status: 200 });
+    }
+
+    // Create new conversation
+    const { data: newConv, error: insertError } = await supabase
+      .from('chat_conversations')
+      .insert({
+        coach_user_id: coachUserId,
+        athlete_user_id: athleteUserId,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('Conversation creation error:', insertError);
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    return NextResponse.json(newConv, { status: 201 });
+  } catch (error) {
+    console.error('Error creating conversation:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

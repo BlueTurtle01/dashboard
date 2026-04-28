@@ -2,19 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { ChatMessage, ChatConversation, ChatParticipant } from '@/lib/chat/types';
+import { ChatMessage, ChatThread } from '@/lib/chat/types';
 import ChatMessageBubble from './ChatMessageBubble';
 
 interface ChatThreadProps {
-  conversation: ChatConversation;
+  thread: ChatThread;
   currentUserId: string;
-  otherParticipant: ChatParticipant;
+  otherParticipantName: string;
 }
 
-export default function ChatThread({
-  conversation,
+export default function ChatThreadComponent({
+  thread,
   currentUserId,
-  otherParticipant,
+  otherParticipantName,
 }: ChatThreadProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -35,15 +35,20 @@ export default function ChatThread({
   useEffect(() => {
     const fetchMessages = async () => {
       try {
+        console.log('[ChatThread] Fetching messages for thread:', thread.id);
         const response = await fetch(
-          `/api/chat/messages/get?conversationId=${conversation.id}&limit=50&offset=0`
+          `/api/chat/messages/get?threadId=${thread.id}&limit=50&offset=0`
         );
-        if (!response.ok) throw new Error('Failed to fetch messages');
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to fetch messages');
+        }
         const { messages: loadedMessages } = await response.json();
+        console.log('[ChatThread] Loaded messages:', loadedMessages.length);
         setMessages(loadedMessages || []);
         setError(null);
       } catch (err) {
-        console.error('Error fetching messages:', err);
+        console.error('[ChatThread] Error fetching messages:', err);
         setError('Failed to load messages');
       } finally {
         setLoading(false);
@@ -54,19 +59,29 @@ export default function ChatThread({
 
     const supabase = supabaseRef.current;
     const channel = supabase
-      .channel(`chat:${conversation.id}`)
+      .channel(`chat-thread:${thread.id}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'chat_messages',
-          filter: `conversation_id=eq.${conversation.id}`,
+          filter: `thread_id=eq.${thread.id}`,
         },
         (payload: any) => {
           const newMessage = payload.new as ChatMessage;
+          console.log('[ChatThread] Realtime message received:', newMessage.id);
+
+          // Only add if status is 'sent' and not already in list (deduplication)
           if (newMessage.status === 'sent') {
-            setMessages((prev) => [...prev, newMessage]);
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMessage.id)) {
+                console.log('[ChatThread] Message already exists, skipping duplicate');
+                return prev;
+              }
+              console.log('[ChatThread] Adding new message');
+              return [...prev, newMessage];
+            });
           }
         }
       )
@@ -75,7 +90,7 @@ export default function ChatThread({
     return () => {
       channel.unsubscribe();
     };
-  }, [conversation.id]);
+  }, [thread.id]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,21 +105,27 @@ export default function ChatThread({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          conversationId: conversation.id,
+          threadId: thread.id,
           content: inputValue,
         }),
       });
 
       if (response.status === 400) {
         setError('Message was blocked by content filter');
-      } else if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        // Don't clear input on blocked message
+        return;
       }
 
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+
+      // Only clear input on success
       setInputValue('');
     } catch (err) {
-      console.error('Error sending message:', err);
-      setError('Failed to send message');
+      console.error('[ChatThread] Error sending message:', err);
+      setError(err instanceof Error ? err.message : 'Failed to send message');
     } finally {
       setSending(false);
     }
@@ -113,7 +134,7 @@ export default function ChatThread({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-zinc-500">Loading conversation...</p>
+        <p className="text-zinc-500">Loading thread...</p>
       </div>
     );
   }
@@ -134,7 +155,7 @@ export default function ChatThread({
             senderName={
               message.sender_user_id === currentUserId
                 ? 'You'
-                : otherParticipant.full_name || 'Coach'
+                : otherParticipantName
             }
           />
         ))}

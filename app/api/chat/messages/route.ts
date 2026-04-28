@@ -28,6 +28,34 @@ async function getBannedPhrases(supabase: any): Promise<BannedPhrase[]> {
   return bannedPhrasesCache;
 }
 
+async function isThreadParticipant(
+  supabase: any,
+  threadId: string,
+  userId: string
+): Promise<boolean> {
+  const { data: thread, error: threadError } = await supabase
+    .from('chat_threads')
+    .select('conversation_id')
+    .eq('id', threadId)
+    .maybeSingle();
+
+  if (threadError || !thread) {
+    return false;
+  }
+
+  const { data: conversation, error: convError } = await supabase
+    .from('chat_conversations')
+    .select('coach_user_id, athlete_user_id')
+    .eq('id', thread.conversation_id)
+    .maybeSingle();
+
+  if (convError || !conversation) {
+    return false;
+  }
+
+  return conversation.coach_user_id === userId || conversation.athlete_user_id === userId;
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -37,32 +65,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const { conversationId, content } = await req.json();
+    const { threadId, content } = await req.json();
 
-    if (!conversationId || !content || typeof content !== 'string' || !content.trim()) {
+    if (!threadId || !content || typeof content !== 'string' || !content.trim()) {
       return NextResponse.json(
-        { error: 'Invalid request: conversationId and non-empty content required' },
+        { error: 'threadId and non-empty content required' },
         { status: 400 }
       );
     }
 
-    const { data: conversation, error: convError } = await supabase
-      .from('chat_conversations')
-      .select('*')
-      .eq('id', conversationId)
-      .maybeSingle();
-
-    if (convError || !conversation) {
-      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
-    }
-
-    const isParticipant =
-      user.id === conversation.coach_user_id || user.id === conversation.athlete_user_id;
+    // Verify user is participant
+    const isParticipant = await isThreadParticipant(supabase, threadId, user.id);
 
     if (!isParticipant) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Check phrase filter
     const bannedPhrases = await getBannedPhrases(supabase);
     const checkResult = checkPhrase(content, bannedPhrases);
 
@@ -75,10 +94,11 @@ export async function POST(req: Request) {
 
     const messageStatus = checkResult.severity === 'flag' ? 'flagged' : 'sent';
 
+    // Insert message
     const { data: message, error: messageError } = await supabase
       .from('chat_messages')
       .insert({
-        conversation_id: conversationId,
+        thread_id: threadId,
         sender_user_id: user.id,
         content: content.trim(),
         status: messageStatus,
@@ -88,13 +108,19 @@ export async function POST(req: Request) {
       .single();
 
     if (messageError) {
+      console.error('Message insert error:', messageError);
       return NextResponse.json({ error: messageError.message }, { status: 500 });
     }
 
-    await supabase
-      .from('chat_conversations')
+    // Update thread's last_message_at
+    const { error: updateError } = await supabase
+      .from('chat_threads')
       .update({ last_message_at: new Date().toISOString() })
-      .eq('id', conversationId);
+      .eq('id', threadId);
+
+    if (updateError) {
+      console.error('Thread update error:', updateError);
+    }
 
     return NextResponse.json(message, { status: 201 });
   } catch (error) {

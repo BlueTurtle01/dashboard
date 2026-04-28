@@ -1,6 +1,34 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
+async function isThreadParticipant(
+  supabase: any,
+  threadId: string,
+  userId: string
+): Promise<boolean> {
+  const { data: thread, error: threadError } = await supabase
+    .from('chat_threads')
+    .select('conversation_id')
+    .eq('id', threadId)
+    .maybeSingle();
+
+  if (threadError || !thread) {
+    return false;
+  }
+
+  const { data: conversation, error: convError } = await supabase
+    .from('chat_conversations')
+    .select('coach_user_id, athlete_user_id')
+    .eq('id', thread.conversation_id)
+    .maybeSingle();
+
+  if (convError || !conversation) {
+    return false;
+  }
+
+  return conversation.coach_user_id === userId || conversation.athlete_user_id === userId;
+}
+
 export async function GET(req: Request) {
   try {
     const supabase = await createClient();
@@ -11,48 +39,40 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const conversationId = searchParams.get('conversationId');
+    const threadId = searchParams.get('threadId');
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-    if (!conversationId) {
+    if (!threadId) {
       return NextResponse.json(
-        { error: 'conversationId is required' },
+        { error: 'threadId is required' },
         { status: 400 }
       );
     }
 
-    const { data: conversation, error: convError } = await supabase
-      .from('chat_conversations')
-      .select('*')
-      .eq('id', conversationId)
-      .maybeSingle();
-
-    if (convError || !conversation) {
-      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
-    }
-
-    const isParticipant =
-      user.id === conversation.coach_user_id || user.id === conversation.athlete_user_id;
+    // Verify participant
+    const isParticipant = await isThreadParticipant(supabase, threadId, user.id);
 
     if (!isParticipant) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Fetch messages
     const { data: messages, error: messagesError } = await supabase
       .from('chat_messages')
       .select('*')
-      .eq('conversation_id', conversationId)
+      .eq('thread_id', threadId)
       .eq('status', 'sent')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
       .range(offset, offset + limit - 1);
 
     if (messagesError) {
+      console.error('Messages fetch error:', messagesError);
       return NextResponse.json({ error: messagesError.message }, { status: 500 });
     }
 
     return NextResponse.json({
-      messages: (messages || []).reverse(),
+      messages: messages || [],
       offset,
       limit,
     });

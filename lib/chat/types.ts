@@ -3,12 +3,20 @@ export interface ChatConversation {
   coach_user_id: string;
   athlete_user_id: string;
   created_at: string;
+}
+
+export interface ChatThread {
+  id: string;
+  conversation_id: string;
+  title: string;
+  created_by: string;
+  created_at: string;
   last_message_at: string | null;
 }
 
 export interface ChatMessage {
   id: string;
-  conversation_id: string;
+  thread_id: string;
   sender_user_id: string;
   content: string;
   status: 'sent' | 'flagged' | 'blocked';

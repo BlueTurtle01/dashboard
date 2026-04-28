@@ -3,74 +3,105 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ChatConversation, ChatParticipant } from '@/lib/chat/types';
-import ChatThread from '@/components/chat/ChatThread';
+import { ChatThread } from '@/lib/chat/types';
+import ChatThreadList from '@/components/chat/ChatThreadList';
+import NewThreadForm from '@/components/chat/NewThreadForm';
 
-interface CoachChatThreadPageProps {
-  params: {
+interface CoachAthleteChatPageProps {
+  params: Promise<{
     athleteId: string;
-  };
+  }>;
 }
 
-export default function CoachChatThreadPage({ params }: CoachChatThreadPageProps) {
-  const [conversation, setConversation] = useState<ChatConversation | null>(null);
-  const [athlete, setAthlete] = useState<ChatParticipant | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+export default function CoachAthleteThreadsPage({ params: paramsPromise }: CoachAthleteChatPageProps) {
+  const [athleteId, setAthleteId] = useState<string | null>(null);
+  const [athleteName, setAthleteName] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<ChatThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showNewThreadForm, setShowNewThreadForm] = useState(false);
+
+  // Handle async params
+  useEffect(() => {
+    (async () => {
+      const resolved = await paramsPromise;
+      setAthleteId(resolved.athleteId);
+    })();
+  }, [paramsPromise]);
 
   useEffect(() => {
+    if (!athleteId) return;
+
     const fetchData = async () => {
       try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+        console.log('[CoachThreadsList] Fetching conversation for athlete:', athleteId);
 
-        if (!user) {
-          setError('Not authenticated');
-          setLoading(false);
-          return;
+        const supabase = createClient();
+
+        // Get or create conversation
+        const convResponse = await fetch('/api/chat/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            partnerId: athleteId,
+            partnerRole: 'athlete',
+          }),
+        });
+
+        if (!convResponse.ok) {
+          const data = await convResponse.json();
+          throw new Error(data.error || 'Failed to get conversation');
         }
 
-        setCurrentUserId(user.id);
+        const conversation = await convResponse.json();
+        console.log('[CoachThreadsList] Got conversation:', conversation.id);
+        setConversationId(conversation.id);
 
-        const response = await fetch(
-          `/api/chat/conversations?athleteId=${params.athleteId}`
-        );
-        if (!response.ok) throw new Error('Failed to fetch conversation');
-        const conv = await response.json();
-        setConversation(conv);
-
-        const athleteResponse = await supabase
+        // Fetch athlete name
+        const { data: profile } = await supabase
           .from('athlete_profiles')
-          .select('user_id, full_name')
-          .eq('user_id', params.athleteId)
+          .select('full_name')
+          .eq('user_id', athleteId)
           .maybeSingle();
 
-        if (athleteResponse.error) throw athleteResponse.error;
-        setAthlete(athleteResponse.data as ChatParticipant | null);
+        setAthleteName(profile?.full_name || 'Athlete');
+
+        // Fetch threads
+        const threadsResponse = await fetch(
+          `/api/chat/threads?conversationId=${conversation.id}`
+        );
+
+        if (!threadsResponse.ok) {
+          throw new Error('Failed to fetch threads');
+        }
+
+        const { threads: loadedThreads } = await threadsResponse.json();
+        console.log('[CoachThreadsList] Loaded threads:', loadedThreads.length);
+        setThreads(loadedThreads || []);
         setError(null);
       } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Failed to load chat');
+        console.error('[CoachThreadsList] Error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load threads');
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [params.athleteId]);
+  }, [athleteId]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-zinc-600">Loading chat...</p>
+        <p className="text-zinc-600">Loading threads...</p>
       </div>
     );
   }
 
-  if (error || !conversation || !athlete || !currentUserId) {
+  if (error || !conversationId) {
     return (
-      <div className="p-4">
+      <div className="p-6">
         <Link
           href="/coach/chat"
           className="text-indigo-600 hover:text-indigo-700 text-sm font-semibold mb-4 inline-block"
@@ -78,7 +109,7 @@ export default function CoachChatThreadPage({ params }: CoachChatThreadPageProps
           ← Back to Messages
         </Link>
         <div className="rounded-lg bg-red-50 border border-red-200 p-4 mt-4">
-          <p className="text-red-900">{error || 'Failed to load chat'}</p>
+          <p className="text-red-900">{error || 'Failed to load threads'}</p>
         </div>
       </div>
     );
@@ -95,16 +126,35 @@ export default function CoachChatThreadPage({ params }: CoachChatThreadPageProps
         </Link>
         <div>
           <h1 className="text-xl font-bold text-zinc-900">
-            {athlete.full_name || 'Athlete'}
+            {athleteName || 'Athlete'}
           </h1>
-          <p className="text-sm text-zinc-600">Message thread</p>
+          <p className="text-sm text-zinc-600">Message threads</p>
         </div>
       </div>
-      <div className="flex-1 overflow-hidden">
-        <ChatThread
-          conversation={conversation}
-          currentUserId={currentUserId}
-          otherParticipant={athlete}
+
+      <div className="flex-1 overflow-y-auto p-6 max-w-2xl">
+        {showNewThreadForm && conversationId ? (
+          <NewThreadForm
+            conversationId={conversationId}
+            onCreated={(newThread) => {
+              setThreads([newThread, ...threads]);
+              setShowNewThreadForm(false);
+            }}
+            onCancel={() => setShowNewThreadForm(false)}
+          />
+        ) : (
+          <button
+            onClick={() => setShowNewThreadForm(true)}
+            className="mb-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+          >
+            + New Thread
+          </button>
+        )}
+
+        <ChatThreadList
+          threads={threads}
+          basePath={`/coach/chat/${athleteId}`}
+          onThreadsUpdate={setThreads}
         />
       </div>
     </main>
