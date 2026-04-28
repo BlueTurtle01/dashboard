@@ -16,6 +16,61 @@ const DAY_FULL_NAMES: Record<string, string> = {
   Sun: "Sunday",
 };
 
+function getMondayOfWeek(date: Date): Date {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  const jsDay = copy.getDay(); // Sun=0
+  const diff = jsDay === 0 ? -6 : 1 - jsDay; // Monday start
+  copy.setDate(copy.getDate() + diff);
+  return copy;
+}
+
+function addDays(date: Date, days: number): Date {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function getPlanWeekStartDates(plan: GeneratedPlan) {
+  try {
+    if (!plan.eventDate) {
+      console.warn("Plan has no eventDate");
+      return [];
+    }
+
+    let eventDate = new Date(plan.eventDate);
+    if (isNaN(eventDate.getTime()) && plan.eventDate.includes("T")) {
+      const dateOnly = plan.eventDate.split("T")[0];
+      eventDate = new Date(dateOnly);
+    }
+
+    if (isNaN(eventDate.getTime())) {
+      console.error("Invalid eventDate format:", plan.eventDate);
+      return [];
+    }
+
+    const eventWeekMonday = getMondayOfWeek(eventDate);
+    const weeksAvailable = typeof plan.weeksAvailable === "number" ? plan.weeksAvailable : plan.weeks?.length ?? 0;
+    const firstWeekMonday = addDays(eventWeekMonday, -(Math.max(weeksAvailable - 1, 0) * 7));
+
+    return plan.weeks
+      .slice()
+      .sort((a, b) => a.weekNumber - b.weekNumber)
+      .map((week, index) => {
+        const monday = addDays(firstWeekMonday, index * 7);
+        return {
+          weekId: week.id,
+          weekNumber: week.weekNumber,
+          monday: isNaN(monday.getTime()) ? new Date() : monday,
+        };
+      })
+      .filter((w) => !isNaN(w.monday.getTime()));
+  } catch (error) {
+    console.error("Error computing plan week start dates:", error);
+    return [];
+  }
+}
+
 function getSessionColorClass(type: string): string {
   const colors: Record<string, string> = {
     Long: "bg-blue-100 text-blue-900",
@@ -78,13 +133,29 @@ export default function AthleteListPage() {
         const loadedPlan = planData.plan_json as GeneratedPlan;
         setPlan(loadedPlan);
 
-        // Jump to current week
-        if (loadedPlan.startDate) {
-          const elapsed = Math.floor(
-            (Date.now() - new Date(loadedPlan.startDate).getTime()) / (7 * 24 * 60 * 60 * 1000)
-          );
-          setDisplayWeekIndex(Math.max(0, Math.min(elapsed, loadedPlan.weeks.length - 1)));
+        // Jump to current week by finding which week contains today
+        const weekStarts = getPlanWeekStartDates(loadedPlan);
+        let currentWeekIdx = 0;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        for (let i = 0; i < weekStarts.length; i++) {
+          const weekStart = weekStarts[i].monday;
+          const weekEnd = addDays(weekStart, 6);
+          if (today >= weekStart && today <= weekEnd) {
+            currentWeekIdx = i;
+            break;
+          }
+          // If today is before the week start, use the first week
+          if (today < weekStart) {
+            currentWeekIdx = 0;
+            break;
+          }
+          // If we're past this week, update currentWeekIdx
+          currentWeekIdx = i;
         }
+
+        setDisplayWeekIndex(Math.min(currentWeekIdx, loadedPlan.weeks.length - 1));
 
         const { data: completionsData } = await supabase
           .from("session_completions")
@@ -128,13 +199,13 @@ export default function AthleteListPage() {
   const displayWeek = plan.weeks[displayWeekIndex];
   if (!displayWeek) return null;
 
-  // Week date range label
+  // Get week start date from computed week starts
+  const weekStarts = getPlanWeekStartDates(plan);
+  const weekStartMonday = weekStarts[displayWeekIndex]?.monday;
   let weekRangeLabel = "";
-  if (plan.startDate) {
-    const weekStartMs = new Date(plan.startDate).getTime() + displayWeekIndex * 7 * 86400000;
-    const monday = new Date(weekStartMs);
-    const sunday = new Date(weekStartMs + 6 * 86400000);
-    weekRangeLabel = `${formatDate(monday)} – ${formatDate(sunday)}`;
+  if (weekStartMonday) {
+    const sunday = addDays(weekStartMonday, 6);
+    weekRangeLabel = `${formatDate(weekStartMonday)} – ${formatDate(sunday)}`;
   }
 
   return (
@@ -184,9 +255,8 @@ export default function AthleteListPage() {
             );
 
             let dayDate: Date | null = null;
-            if (plan.startDate) {
-              const weekStartMs = new Date(plan.startDate).getTime() + displayWeekIndex * 7 * 86400000;
-              dayDate = new Date(weekStartMs + dayIndex * 86400000);
+            if (weekStartMonday) {
+              dayDate = addDays(weekStartMonday, dayIndex);
             }
 
             const dateLabel = dayDate ? formatDate(dayDate) : "";
