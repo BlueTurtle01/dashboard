@@ -88,6 +88,7 @@ export default function CountryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("vaccinations");
+  const [checkedVaccines, setCheckedVaccines] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function load() {
@@ -211,10 +212,14 @@ export default function CountryDetailPage() {
               <>
                 <section style={cardStyle}>
                   <h2 style={sectionTitleStyle}>Vaccinations</h2>
+                  <p style={{ margin: "0 0 16px", fontSize: "13px", color: "#666", fontStyle: "italic" }}>
+                    💡 Check off the vaccinations you've already had so you can see which ones you still need.
+                  </p>
                   <div style={tableWrapStyle}>
                     <table style={tableStyle}>
                       <thead>
                         <tr>
+                          <th style={thStyle} />
                           <th style={thStyle}>Vaccine</th>
                           <th style={thStyle}>Status</th>
                         </tr>
@@ -222,7 +227,25 @@ export default function CountryDetailPage() {
                       <tbody>
                         {VACCINE_LABELS.map(({ field, label }) => (
                           <tr key={field}>
-                            <td style={tdStyle}>{label}</td>
+                            <td style={tdStyle}>
+                              <input
+                                type="checkbox"
+                                checked={checkedVaccines.has(field as string)}
+                                onChange={(e) => {
+                                  const newChecked = new Set(checkedVaccines);
+                                  if (e.target.checked) {
+                                    newChecked.add(field as string);
+                                  } else {
+                                    newChecked.delete(field as string);
+                                  }
+                                  setCheckedVaccines(newChecked);
+                                }}
+                                style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#111" }}
+                              />
+                            </td>
+                            <td style={{ ...tdStyle, opacity: checkedVaccines.has(field as string) ? 0.5 : 1, textDecoration: checkedVaccines.has(field as string) ? "line-through" : "none" }}>
+                              {label}
+                            </td>
                             <td style={tdStyle}>
                               <StatusBadge status={country[field] as VaccinationStatus} />
                             </td>

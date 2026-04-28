@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserRoles } from "@/lib/auth/get-current-user";
-import AthleteNav from "@/components/AthleteNav";
 
 export default async function AthleteLayout({
   children,
@@ -14,11 +13,8 @@ export default async function AthleteLayout({
     redirect("/login");
   }
 
-  const isSoloPlanHolder = roles.includes("solo_plan_holder");
-
   return (
     <main className="app-content">
-      <AthleteNav isSoloPlanHolder={isSoloPlanHolder} />
       {children}
     </main>
   );

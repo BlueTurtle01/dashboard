@@ -62,9 +62,14 @@ export default async function Navbar() {
           {(isAthlete || isSoloPlanHolder) && (
             <>
               <span className="app-sidebar__group-label">Training</span>
-              <Link href="/athlete" className="app-sidebar__link">
-                My Plan
-              </Link>
+              <SidebarDropdown
+                label="My Plan"
+                items={[
+                  { href: "/athlete", label: "Plan" },
+                  { href: "/athlete/sessions", label: "Sessions" },
+                  ...(isSoloPlanHolder ? [] : [{ href: "/athlete/log", label: "Log" }]),
+                ]}
+              />
               <Link href="/athlete/chat" className="app-sidebar__link">
                 Chat
               </Link>
