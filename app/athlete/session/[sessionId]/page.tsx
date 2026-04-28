@@ -209,6 +209,15 @@ export default function SessionDetailPage() {
           </div>
         )}
 
+        {(session as any).reason && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+            <h2 className="font-semibold text-emerald-900">Why This Session</h2>
+            <p className="mt-3 whitespace-pre-wrap text-sm text-emerald-700">
+              {(session as any).reason}
+            </p>
+          </div>
+        )}
+
         {session.tags && session.tags.length > 0 && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="font-semibold text-zinc-900">Tags</h2>
@@ -226,89 +235,39 @@ export default function SessionDetailPage() {
         )}
 
         {/* Session Attributes */}
-        {((session as any).strides ||
-          (session as any).terrain ||
-          (session as any).elevationGainMeters ||
-          (session as any).packWeightKg ||
-          (session as any).warmupMinutes ||
-          (session as any).cooldownMinutes ||
-          (session as any).intervalReps ||
-          (session as any).intervalDuration ||
-          (session as any).intervalRestSeconds ||
-          (session as any).activity ||
-          (session as any).subtype) && (
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="font-semibold text-zinc-900">Session Details</h2>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {(session as any).activity && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Activity</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900 capitalize">{(session as any).activity}</p>
-                </div>
-              )}
-              {(session as any).subtype && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Session Type</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900 capitalize">{(session as any).subtype}</p>
-                </div>
-              )}
-              {(session as any).terrain && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Terrain</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900 capitalize">{(session as any).terrain}</p>
-                </div>
-              )}
-              {(session as any).elevationGainMeters && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Elevation Gain</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).elevationGainMeters}m</p>
-                </div>
-              )}
-              {(session as any).packWeightKg && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Pack Weight</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).packWeightKg}kg</p>
-                </div>
-              )}
-              {(session as any).intervalReps && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Intervals</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).intervalReps} sets</p>
-                </div>
-              )}
-              {(session as any).intervalDuration && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Interval Duration</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).intervalDuration}</p>
-                </div>
-              )}
-              {(session as any).intervalRestSeconds && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Rest Between Sets</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).intervalRestSeconds}s</p>
-                </div>
-              )}
-              {(session as any).strides && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Strides</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).strides}</p>
-                </div>
-              )}
-              {(session as any).warmupMinutes && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Warm-up</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).warmupMinutes} min</p>
-                </div>
-              )}
-              {(session as any).cooldownMinutes && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Cool-down</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-900">{(session as any).cooldownMinutes} min</p>
-                </div>
-              )}
+        {(() => {
+          const s = session as any;
+          const details = [
+            { label: "Activity", value: s.activity, format: (v: any) => v },
+            { label: "Session Type", value: s.subtype, format: (v: any) => v },
+            { label: "Terrain", value: s.terrain, format: (v: any) => v },
+            { label: "Distance", value: s.distance, format: (v: any) => `${v} km` },
+            { label: "Elevation Gain", value: s.elevationGainMeters, format: (v: any) => `${v}m` },
+            { label: "Pack Weight", value: s.packWeightKg, format: (v: any) => `${v}kg` },
+            { label: "Strides", value: s.strides, format: (v: any) => v },
+            { label: "Warm-up", value: s.warmupMinutes, format: (v: any) => `${v} min` },
+            { label: "Cool-down", value: s.cooldownMinutes, format: (v: any) => `${v} min` },
+            { label: "Intervals", value: s.intervalReps, format: (v: any) => `${v} sets` },
+            { label: "Interval Duration", value: s.intervalDuration, format: (v: any) => v },
+            { label: "Rest Between Sets", value: s.intervalRestSeconds, format: (v: any) => `${v}s` },
+          ].filter(({ value }) => value);
+
+          if (details.length === 0) return null;
+
+          return (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <h2 className="font-semibold text-zinc-900">Session Details</h2>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {details.map(({ label, value, format }) => (
+                  <div key={label}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+                    <p className="mt-1 text-sm font-medium text-zinc-900 capitalize">{format(value)}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {stretches.length > 0 && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
