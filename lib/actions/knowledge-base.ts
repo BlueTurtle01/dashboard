@@ -276,3 +276,120 @@ export async function markKbNotificationsRead(): Promise<{ error?: string }> {
   if (error) return { error: error.message };
   return {};
 }
+
+export async function flagQuestion(
+  questionId: string,
+  reason: string
+): Promise<{ error?: string }> {
+  const { supabase, user } = await requireCoach();
+
+  const { error } = await supabase.from("kb_flagged_questions").upsert({
+    question_id: questionId,
+    flagged_by: user.id,
+    flag_reason: reason.trim(),
+    reviewed: false,
+  });
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+export type FlaggedQuestionWithDetails = QuestionWithAnswers & {
+  flag_id: string;
+  flagged_by_name: string;
+  flag_reason: string;
+  flagged_at: string;
+};
+
+export async function getFlaggedQuestions(): Promise<FlaggedQuestionWithDetails[]> {
+  const { supabase } = await requireCoach();
+
+  const { data: flags, error: flagsError } = await supabase
+    .from("kb_flagged_questions")
+    .select("id, question_id, flagged_by, flag_reason, created_at")
+    .eq("reviewed", false)
+    .order("created_at", { ascending: false });
+
+  if (flagsError) throw new Error(flagsError.message);
+  if (!flags || flags.length === 0) return [];
+
+  const questionIds = flags.map((f) => f.question_id);
+  const { data: questions, error: questionsError } = await supabase
+    .from("kb_questions")
+    .select("id, title, body, submitted_by, submitted_by_name, created_at");
+
+  if (questionsError) throw new Error(questionsError.message);
+
+  const questionMap = new Map(
+    (questions ?? []).map((q) => [q.id, q])
+  );
+
+  const answersData = await supabase
+    .from("kb_answers")
+    .select("id, question_id, body, submitted_by, submitted_by_name, created_at")
+    .in("question_id", questionIds);
+
+  const answersByQuestionId = new Map<string, KbAnswer[]>();
+  for (const answer of answersData.data ?? []) {
+    const arr = answersByQuestionId.get(answer.question_id) ?? [];
+    arr.push(answer);
+    answersByQuestionId.set(answer.question_id, arr);
+  }
+
+  return flags
+    .map((flag) => {
+      const question = questionMap.get(flag.question_id);
+      if (!question) return null;
+      return {
+        ...question,
+        answers: answersByQuestionId.get(flag.question_id) ?? [],
+        answer_count: (answersByQuestionId.get(flag.question_id) ?? []).length,
+        flag_id: flag.id,
+        flagged_by_name: flag.flagged_by, // Will be replaced with actual name below
+        flag_reason: flag.flag_reason,
+        flagged_at: flag.created_at,
+      };
+    })
+    .filter((item): item is FlaggedQuestionWithDetails => Boolean(item));
+}
+
+export async function updateQuestionAndClearFlag(
+  questionId: string,
+  newTitle: string,
+  newBody: string
+): Promise<{ error?: string }> {
+  const { supabase } = await requireCoach();
+
+  // Update question
+  const { error: updateError } = await supabase
+    .from("kb_questions")
+    .update({
+      title: newTitle.trim(),
+      body: newBody.trim(),
+    })
+    .eq("id", questionId);
+
+  if (updateError) return { error: updateError.message };
+
+  // Clear flag
+  const { error: flagError } = await supabase
+    .from("kb_flagged_questions")
+    .update({ reviewed: true, reviewed_at: new Date().toISOString() })
+    .eq("question_id", questionId);
+
+  if (flagError) return { error: flagError.message };
+
+  return {};
+}
+
+export async function getFlaggedQuestionsCount(): Promise<number> {
+  const { supabase } = await requireCoach();
+
+  const { count, error } = await supabase
+    .from("kb_flagged_questions")
+    .select("id", { count: "exact", head: true })
+    .eq("reviewed", false);
+
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}

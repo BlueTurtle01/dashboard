@@ -43,6 +43,7 @@ export default async function Navbar() {
 
   // ── Badge counts ──────────────────────────────────────
   let adminOpenTicketCount = 0;
+  let adminFlaggedQbCount = 0;
   let coachHasUnread = false;
   let athleteHasUnread = false;
 
@@ -52,6 +53,12 @@ export default async function Navbar() {
       .select("*", { count: "exact", head: true })
       .eq("status", "open");
     adminOpenTicketCount = count ?? 0;
+
+    const { count: flaggedCount } = await supabase
+      .from("kb_flagged_questions")
+      .select("*", { count: "exact", head: true })
+      .eq("reviewed", false);
+    adminFlaggedQbCount = flaggedCount ?? 0;
   }
 
   if (isCoach && user) {
@@ -276,6 +283,10 @@ export default async function Navbar() {
                   { href: "/admin/support/stats", label: "Support Analytics" },
                 ]}
               />
+              <Link href="/admin/knowledge-base" className="app-sidebar__link">
+                Knowledge Base
+                {adminFlaggedQbCount > 0 && <span className="app-sidebar__nav-badge" />}
+              </Link>
               <SidebarDropdown
                 label="Library"
                 items={[

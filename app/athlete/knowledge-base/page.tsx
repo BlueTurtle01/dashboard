@@ -128,9 +128,6 @@ export default function AthletKnowledgeBase() {
                     {question.answer_count} {question.answer_count === 1 ? "answer" : "answers"}
                   </span>
                 </div>
-                <p className="mt-3 text-xs text-zinc-400">
-                  Asked by {question.submitted_by_name} · {new Date(question.created_at).toLocaleDateString()}
-                </p>
               </div>
 
               {question.answer_count > 0 ? (
