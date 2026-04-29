@@ -223,3 +223,85 @@ export async function deauthorizeWithStrava(accessToken: string): Promise<void> 
     // Don't throw - we still want to disconnect locally even if remote deauth fails
   }
 }
+
+// Webhook-related functions
+export async function subscribeToStravaWebhook(
+  accessToken: string,
+  callbackUrl: string,
+  verifyToken: string
+): Promise<{ id: number; resource_state: number }> {
+  const response = await fetch(`${STRAVA_API_BASE}/push_subscriptions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      callback_url: callbackUrl,
+      verify_token: verifyToken,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to subscribe to webhooks: ${error}`);
+  }
+
+  return response.json();
+}
+
+export async function getStravaWebhookSubscriptions(accessToken: string): Promise<any[]> {
+  const response = await fetch(`${STRAVA_API_BASE}/push_subscriptions`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get webhooks: ${error}`);
+  }
+
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function deleteStravaWebhookSubscription(
+  accessToken: string,
+  webhookId: number
+): Promise<void> {
+  const response = await fetch(`${STRAVA_API_BASE}/push_subscriptions/${webhookId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to delete webhook: ${error}`);
+  }
+}
+
+export async function fetchStravaActivityDetail(
+  accessToken: string,
+  activityId: number
+): Promise<StravaSummaryActivity> {
+  const response = await fetch(`${STRAVA_API_BASE}/activities/${activityId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to fetch activity detail: ${error}`);
+  }
+
+  return response.json();
+}

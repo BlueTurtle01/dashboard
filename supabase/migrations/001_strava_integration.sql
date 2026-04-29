@@ -94,3 +94,68 @@ CREATE TRIGGER athlete_integrations_updated_at BEFORE UPDATE ON athlete_integrat
 
 CREATE TRIGGER athlete_activities_updated_at BEFORE UPDATE ON athlete_activities
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Create strava_webhooks table for tracking webhook subscriptions
+CREATE TABLE strava_webhooks (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  webhook_id bigint NOT NULL,
+  callback_url text NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  subscribed_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+
+  UNIQUE(user_id, webhook_id)
+);
+
+-- Create strava_webhook_events table for tracking received events
+CREATE TABLE strava_webhook_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid,
+  event_type text NOT NULL,
+  object_type text NOT NULL,
+  object_id bigint NOT NULL,
+  owner_id bigint NOT NULL,
+  aspect_type text,
+  updates jsonb,
+  raw_event jsonb NOT NULL,
+  processed boolean NOT NULL DEFAULT false,
+  processed_at timestamptz,
+  error_message text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Create indexes for webhook events
+CREATE INDEX strava_webhook_events_user_processed_idx ON strava_webhook_events(user_id, processed);
+CREATE INDEX strava_webhook_events_object_id_idx ON strava_webhook_events(object_type, object_id);
+CREATE INDEX strava_webhook_events_created_idx ON strava_webhook_events(created_at DESC);
+
+-- Enable RLS on webhook tables
+ALTER TABLE strava_webhooks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE strava_webhook_events ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies for strava_webhooks
+CREATE POLICY "Users can view their own webhooks" ON strava_webhooks
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Service role can manage webhooks" ON strava_webhooks
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Service role can update webhooks" ON strava_webhooks
+  FOR UPDATE USING (true);
+
+-- RLS policies for strava_webhook_events (service role only, limited user read)
+CREATE POLICY "Service role can insert events" ON strava_webhook_events
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users can view their own events" ON strava_webhook_events
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- Create triggers for updated_at on webhook tables
+CREATE TRIGGER strava_webhooks_updated_at BEFORE UPDATE ON strava_webhooks
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER strava_webhook_events_updated_at BEFORE UPDATE ON strava_webhook_events
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

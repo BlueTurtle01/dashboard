@@ -213,6 +213,9 @@ export default async function Navbar() {
               <Link href="/athlete/profile" className="app-sidebar__link">
                 Profile
               </Link>
+              <Link href="/athlete/integrations" className="app-sidebar__link">
+                Integrations
+              </Link>
               <Link href="/athlete/upgrades" className="app-sidebar__link">
                 Upgrades
               </Link>

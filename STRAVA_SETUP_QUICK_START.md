@@ -21,12 +21,18 @@ supabase migration up
 
 ## Step 2: Verify Environment Variables
 
-Check that `.env.local` contains all three Strava environment variables:
+Check that `.env.local` contains all required Strava environment variables:
 
 ```
 STRAVA_CLIENT_ID=232838
 STRAVA_CLIENT_SECRET=4128e61d1f41f930489061f7e3621131ab623d62
 NEXT_PUBLIC_APP_URL=https://dashboard-delta-ten-55.vercel.app
+STRAVA_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token_here
+```
+
+The webhook verify token validates that webhook requests from Strava are genuine. Set it to any random string:
+```
+STRAVA_WEBHOOK_VERIFY_TOKEN=my_secure_random_token_xyz123
 ```
 
 These are already added in your `.env.local` file.
@@ -90,7 +96,10 @@ app/api/strava/                                # OAuth and sync endpoints
   ├── connect/route.ts
   ├── callback/route.ts
   ├── sync/route.ts
-  └── disconnect/route.ts
+  ├── disconnect/route.ts
+  ├── webhook-subscribe/route.ts               # Webhook subscription
+  └── webhook-unsubscribe/route.ts             # Webhook unsubscription
+app/api/webhooks/strava/route.ts               # Webhook receiver endpoint
 app/api/athlete/                               # Data access endpoints
   ├── integrations/route.ts
   └── activities/route.ts
@@ -99,6 +108,7 @@ app/athlete/integrations/                      # UI pages and components
   └── StravaIntegration.tsx
 supabase/migrations/001_strava_integration.sql # Database schema
 STRAVA_INTEGRATION.md                          # Full documentation
+STRAVA_WEBHOOKS.md                             # Webhook setup guide
 ```
 
 ## Troubleshooting
