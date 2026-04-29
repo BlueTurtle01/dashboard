@@ -138,6 +138,7 @@ type TemplateCard = {
   requiresHeatAcclimation: boolean;
   suitableRaceGoals: string[];
   tags: TemplateTag[];
+  createdByUserId: string | null;
 };
 
 type AthleteEventSummary = {
@@ -182,6 +183,57 @@ const TEST_COACH_USER_ID = "bff5270a-cdc6-4bc4-a008-3530259d57e6";
 function normaliseTagRelation(value: TemplateTag | TemplateTag[] | null | undefined) {
   if (!value) return [] as TemplateTag[];
   return Array.isArray(value) ? value : [value];
+}
+
+function generateTagsFromSessions(sessions: ProgramTemplateSessionRow[]): { name: string; id: string }[] {
+  const generatedTags: { name: string; id: string }[] = [];
+  const hasHill = sessions.some((s) => s.terrain?.toLowerCase().includes("hill") || s.subtype?.toLowerCase().includes("hill"));
+  const hasGym = sessions.some((s) => s.type?.toLowerCase() === "gym" || s.activity?.toLowerCase() === "gym" || s.subtype?.toLowerCase() === "gym");
+  const hasRoad = sessions.some((s) => s.terrain?.toLowerCase() === "road" || !s.terrain);
+  const hasTrail = sessions.some((s) => s.terrain?.toLowerCase().includes("trail") || s.terrain?.toLowerCase().includes("terrain"));
+
+  if (hasHill) generatedTags.push({ name: "Hill", id: "generated-hill" });
+  if (hasGym) generatedTags.push({ name: "Gym", id: "generated-gym" });
+
+  return generatedTags;
+}
+
+function calculateRoadTrailRatio(sessions: ProgramTemplateSessionRow[]): {
+  roadPercentage: number;
+  trailPercentage: number;
+  roadCount: number;
+  trailCount: number;
+  totalRunningSessions: number;
+} {
+  const runningSessions = sessions.filter(
+    (s) =>
+      s.type?.toLowerCase() === "running" ||
+      s.type?.toLowerCase() === "run" ||
+      s.activity?.toLowerCase() === "running" ||
+      s.activity?.toLowerCase() === "run",
+  );
+
+  const roadSessions = runningSessions.filter((s) => {
+    const terrain = (s.terrain ?? "").toLowerCase();
+    return terrain === "road" || terrain === "" || !s.terrain;
+  });
+
+  const trailSessions = runningSessions.filter((s) => {
+    const terrain = (s.terrain ?? "").toLowerCase();
+    return terrain.includes("trail") || terrain.includes("terrain");
+  });
+
+  const total = runningSessions.length;
+  const roadPercentage = total > 0 ? (roadSessions.length / total) * 100 : 0;
+  const trailPercentage = total > 0 ? (trailSessions.length / total) * 100 : 0;
+
+  return {
+    roadPercentage: Math.round(roadPercentage),
+    trailPercentage: Math.round(trailPercentage),
+    roadCount: roadSessions.length,
+    trailCount: trailSessions.length,
+    totalRunningSessions: total,
+  };
 }
 
 function getSingleSessionTemplateRelation(value: SessionTemplateRelation) {
@@ -911,6 +963,7 @@ export default function ViewProgramTemplatePage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [isSavingCopy, setIsSavingCopy] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
   const [activeTab, setActiveTab] = useState<"structure" | "summary">("structure");
   const [collapsedWeekIds, setCollapsedWeekIds] = useState<Record<string, boolean>>({});
@@ -932,6 +985,7 @@ export default function ViewProgramTemplatePage() {
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setCurrentUserId(user.id);
         const { data: roles } = await supabase
           .from("user_roles")
           .select("role")
@@ -962,6 +1016,7 @@ export default function ViewProgramTemplatePage() {
           requires_load_carriage,
           requires_heat_acclimation,
           suitable_race_goals,
+          created_by_user_id,
           program_template_tag_links (
             program_template_tags (
               id,
@@ -1018,6 +1073,7 @@ export default function ViewProgramTemplatePage() {
         requiresHeatAcclimation: typedTemplate.requires_heat_acclimation ?? false,
         suitableRaceGoals: typedTemplate.suitable_race_goals ?? [],
         tags,
+        createdByUserId: (typedTemplate as any).created_by_user_id ?? null,
       });
 
       const { data: weekData, error: weekError } = await supabase
@@ -1759,18 +1815,20 @@ export default function ViewProgramTemplatePage() {
               Back to Templates
             </Link>
 
-            <Link
-              href={
-                athleteId
-                  ? `/coach/program-templates/${encodeURIComponent(
-                      template.id,
-                    )}/edit?athleteId=${encodeURIComponent(athleteId)}`
-                  : `/coach/program-templates/${encodeURIComponent(template.id)}/edit`
-              }
-              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-100"
-            >
-              Edit Template
-            </Link>
+            {isAdmin || template.createdByUserId === currentUserId ? (
+              <Link
+                href={
+                  athleteId
+                    ? `/coach/program-templates/${encodeURIComponent(
+                        template.id,
+                      )}/edit?athleteId=${encodeURIComponent(athleteId)}`
+                    : `/coach/program-templates/${encodeURIComponent(template.id)}/edit`
+                }
+                className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-100"
+              >
+                Edit Template
+              </Link>
+            ) : null}
 
             {isAdmin ? (
               <button
@@ -1819,18 +1877,24 @@ export default function ViewProgramTemplatePage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {template.tags.length > 0 ? (
-                  template.tags.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs text-zinc-700"
-                    >
-                      {tag.name}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs text-zinc-500">No tags</span>
-                )}
+                {(() => {
+                  const tagsToDisplay =
+                    template.tags.length > 0
+                      ? template.tags
+                      : generateTagsFromSessions(sessions);
+                  return tagsToDisplay.length > 0 ? (
+                    tagsToDisplay.map((tag) => (
+                      <span
+                        key={tag.id}
+                        className="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs text-zinc-700"
+                      >
+                        {tag.name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-zinc-500">No tags</span>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1855,7 +1919,7 @@ export default function ViewProgramTemplatePage() {
           </div>
         </section>
 
-        {match ? (
+        {match && athleteId ? (
           <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
@@ -2082,6 +2146,53 @@ export default function ViewProgramTemplatePage() {
                   {weekMiles.every((w) => w.miles === 0) && (
                     <p className="mt-2 text-sm text-zinc-400 italic">No distance data on sessions yet — add distance (km) to sessions to see the chart.</p>
                   )}
+                </div>
+              );
+            })()}
+
+            {/* Road vs Trail split */}
+            {(() => {
+              const ratio = calculateRoadTrailRatio(sessions);
+              if (ratio.totalRunningSessions === 0) return null;
+
+              const barHeight = 40;
+              const barWidth = 300;
+
+              return (
+                <div className="mt-8">
+                  <h3 className="mb-3 text-sm font-semibold text-zinc-700">Road vs Trail Sessions</h3>
+                  <div className="flex items-center gap-6">
+                    <div className="flex-1">
+                      <div className="mb-2 flex items-center justify-between text-xs font-semibold text-zinc-700">
+                        <span>Road {ratio.roadPercentage}%</span>
+                        <span>Trail {ratio.trailPercentage}%</span>
+                      </div>
+                      <svg width="100%" height={barHeight} viewBox={`0 0 ${barWidth} ${barHeight}`}>
+                        {/* Road segment */}
+                        <rect
+                          x={0}
+                          y={10}
+                          width={(ratio.roadPercentage / 100) * barWidth}
+                          height={20}
+                          fill="#3b82f6"
+                          rx={4}
+                        />
+                        {/* Trail segment */}
+                        <rect
+                          x={(ratio.roadPercentage / 100) * barWidth}
+                          y={10}
+                          width={(ratio.trailPercentage / 100) * barWidth}
+                          height={20}
+                          fill="#15803d"
+                          rx={4}
+                        />
+                      </svg>
+                    </div>
+                    <div className="text-xs text-zinc-600">
+                      <div>{ratio.roadCount} road sessions</div>
+                      <div>{ratio.trailCount} trail sessions</div>
+                    </div>
+                  </div>
                 </div>
               );
             })()}
