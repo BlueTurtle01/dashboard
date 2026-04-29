@@ -2155,42 +2155,23 @@ export default function ViewProgramTemplatePage() {
               const ratio = calculateRoadTrailRatio(sessions);
               if (ratio.totalRunningSessions === 0) return null;
 
-              const barHeight = 40;
-              const barWidth = 300;
-
               return (
                 <div className="mt-8">
-                  <h3 className="mb-3 text-sm font-semibold text-zinc-700">Road vs Trail Sessions</h3>
-                  <div className="flex items-center gap-6">
-                    <div className="flex-1">
-                      <div className="mb-2 flex items-center justify-between text-xs font-semibold text-zinc-700">
-                        <span>Road {ratio.roadPercentage}%</span>
-                        <span>Trail {ratio.trailPercentage}%</span>
+                  <h3 className="mb-4 text-sm font-semibold text-zinc-700">Running Sessions: Road vs Trail</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Road</div>
+                      <div className="mt-2 space-y-1">
+                        <div className="text-2xl font-bold text-blue-600">{ratio.roadCount}</div>
+                        <div className="text-sm text-zinc-600">{ratio.roadPercentage}% of running sessions</div>
                       </div>
-                      <svg width="100%" height={barHeight} viewBox={`0 0 ${barWidth} ${barHeight}`}>
-                        {/* Road segment */}
-                        <rect
-                          x={0}
-                          y={10}
-                          width={(ratio.roadPercentage / 100) * barWidth}
-                          height={20}
-                          fill="#3b82f6"
-                          rx={4}
-                        />
-                        {/* Trail segment */}
-                        <rect
-                          x={(ratio.roadPercentage / 100) * barWidth}
-                          y={10}
-                          width={(ratio.trailPercentage / 100) * barWidth}
-                          height={20}
-                          fill="#15803d"
-                          rx={4}
-                        />
-                      </svg>
                     </div>
-                    <div className="text-xs text-zinc-600">
-                      <div>{ratio.roadCount} road sessions</div>
-                      <div>{ratio.trailCount} trail sessions</div>
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Trail</div>
+                      <div className="mt-2 space-y-1">
+                        <div className="text-2xl font-bold text-green-600">{ratio.trailCount}</div>
+                        <div className="text-sm text-zinc-600">{ratio.trailPercentage}% of running sessions</div>
+                      </div>
                     </div>
                   </div>
                 </div>
