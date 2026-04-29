@@ -47,3 +47,10 @@ export async function userHasRole(role: AppRole): Promise<boolean> {
   const roles = await getCurrentUserRoles();
   return roles.includes(role);
 }
+
+export async function requireAdminOrThrow(): Promise<void> {
+  const roles = await getCurrentUserRoles();
+  if (!roles.includes("admin")) {
+    throw new Error("Unauthorized: Admin role required");
+  }
+}

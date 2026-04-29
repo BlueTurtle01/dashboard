@@ -1,17 +1,10 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUserRoles } from "@/lib/auth/get-current-user";
-
-async function requireAdmin() {
-  const roles = await getCurrentUserRoles();
-  if (!roles.includes("admin")) {
-    throw new Error("Unauthorized: Admin role required");
-  }
-}
+import { requireAdminOrThrow } from "@/lib/auth/get-current-user";
 
 export async function grantFeature(userId: string, feature: string) {
-  await requireAdmin();
+  await requireAdminOrThrow();
 
   const supabase = await createClient();
 
@@ -26,7 +19,7 @@ export async function grantFeature(userId: string, feature: string) {
 }
 
 export async function revokeFeature(userId: string, feature: string) {
-  await requireAdmin();
+  await requireAdminOrThrow();
 
   const supabase = await createClient();
 

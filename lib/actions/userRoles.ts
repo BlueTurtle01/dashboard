@@ -2,28 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { AppRole } from "@/lib/auth/get-current-user";
+import { AppRole, requireAdminOrThrow } from "@/lib/auth/get-current-user";
 
 const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder"];
-
-async function requireAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("Not authenticated");
-
-  const { data } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-
-  if (!data) throw new Error("Forbidden");
-  return supabase;
-}
 
 export type UserWithRoles = {
   id: string;
@@ -39,7 +20,7 @@ export type UserDetail = UserWithRoles & {
 };
 
 export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
-  await requireAdmin();
+  await requireAdminOrThrow();
 
   const adminClient = createAdminClient();
   const { data, error } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
@@ -66,7 +47,7 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
 }
 
 export async function getUserById(userId: string): Promise<UserDetail> {
-  await requireAdmin();
+  await requireAdminOrThrow();
 
   const adminClient = createAdminClient();
   const { data, error } = await adminClient.auth.admin.getUserById(userId);
@@ -95,7 +76,8 @@ export async function getUserById(userId: string): Promise<UserDetail> {
 }
 
 export async function saveUserRoles(userId: string, roles: AppRole[]) {
-  const supabase = await requireAdmin();
+  await requireAdminOrThrow();
+  const supabase = await createClient();
 
   // Delete existing roles for this user
   const { error: deleteError } = await supabase

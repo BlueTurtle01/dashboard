@@ -14,48 +14,12 @@ import {
   PlanSession,
   PlanWeek,
 } from "@/lib/planner/types";
-
-const canonicalDayOrder = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
-
-const canonicalDayToDisplayLabel: Record<(typeof canonicalDayOrder)[number], string> = {
-  mon: "Mon",
-  tue: "Tue",
-  wed: "Wed",
-  thu: "Thu",
-  fri: "Fri",
-  sat: "Sat",
-  sun: "Sun",
-};
-
-const dayAliases: Record<string, (typeof canonicalDayOrder)[number]> = {
-  mon: "mon",
-  monday: "mon",
-  tue: "tue",
-  tues: "tue",
-  tuesday: "tue",
-  wed: "wed",
-  weds: "wed",
-  wednesday: "wed",
-  thu: "thu",
-  thur: "thu",
-  thurs: "thu",
-  thursday: "thu",
-  fri: "fri",
-  friday: "fri",
-  sat: "sat",
-  saturday: "sat",
-  sun: "sun",
-  sunday: "sun",
-};
-
-function normalizeDayLabel(dayLabel: string) {
-  return dayAliases[dayLabel.trim().toLowerCase()] ?? dayLabel.trim().toLowerCase();
-}
+import { CANONICAL_DAY_ORDER, CANONICAL_DAY_TO_DISPLAY, DAY_ALIASES, normalizeDayLabel } from "@/lib/planner/dayLabels";
 
 function findExistingDayLabelForWeek(
   plan: GeneratedPlan,
   weekId: string,
-  canonicalDay: (typeof canonicalDayOrder)[number]
+  canonicalDay: (typeof CANONICAL_DAY_ORDER)[number]
 ) {
   const labelsForWeek = plan.weeks
     .find((week) => week.id === weekId)
@@ -69,24 +33,24 @@ function findExistingDayLabelForWeek(
     return matchedExistingLabel;
   }
 
-  return canonicalDayToDisplayLabel[canonicalDay];
+  return CANONICAL_DAY_TO_DISPLAY[canonicalDay];
 }
 
 function getDayOrderIndex(dayLabel: string) {
-  return canonicalDayOrder.indexOf(
-    normalizeDayLabel(dayLabel) as (typeof canonicalDayOrder)[number]
+  return CANONICAL_DAY_ORDER.indexOf(
+    normalizeDayLabel(dayLabel) as (typeof CANONICAL_DAY_ORDER)[number]
   );
 }
 
 function getPreviousDaySlot(plan: GeneratedPlan, weekId: string, dayLabel: string) {
-  const normalizedDayLabel = normalizeDayLabel(dayLabel);
-  const dayIndex = canonicalDayOrder.indexOf(normalizedDayLabel);
+  const normalizedDayLabel = normalizeDayLabel(dayLabel) as (typeof CANONICAL_DAY_ORDER)[number];
+  const dayIndex = CANONICAL_DAY_ORDER.indexOf(normalizedDayLabel);
 
   if (!plan.weeks.some((week) => week.id === weekId) || dayIndex <= 0) {
     return null;
   }
 
-  const previousCanonicalDay = canonicalDayOrder[dayIndex - 1];
+  const previousCanonicalDay = CANONICAL_DAY_ORDER[dayIndex - 1];
 
   return {
     weekId,
@@ -195,8 +159,8 @@ function reconcileMobilitySessionsBeforeGym(plan: GeneratedPlan) {
     }
 
     const targetWeek = nextPlan.weeks.find((week) => week.id === weekId);
-    const dayIndex = canonicalDayOrder.indexOf(
-      normalizeDayLabel(dayLabel) as (typeof canonicalDayOrder)[number]
+    const dayIndex = CANONICAL_DAY_ORDER.indexOf(
+      normalizeDayLabel(dayLabel) as (typeof CANONICAL_DAY_ORDER)[number]
     );
     const existingSortOrdersForDay =
       targetWeek?.sessions

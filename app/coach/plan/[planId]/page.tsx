@@ -10,18 +10,7 @@ import { UnifiedSessionForm, type UnifiedSessionFormData } from "@/app/coach/com
 import { calculateAllWarnings } from "@/lib/planner/warningRules";
 import { GeneratedPlan, PlanExercise, PlanSession, PlanSessionType, TrainingPurpose, TRAINING_PURPOSES } from "@/lib/planner/types";
 import { findAlternativesForPicker } from "@/lib/planner/exerciseSwap";
-
-const canonicalDayOrder = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
-
-const canonicalDayToDisplayLabel: Record<(typeof canonicalDayOrder)[number], string> = {
-  mon: "Mon",
-  tue: "Tue",
-  wed: "Wed",
-  thu: "Thu",
-  fri: "Fri",
-  sat: "Sat",
-  sun: "Sun",
-};
+import { CANONICAL_DAY_ORDER, CANONICAL_DAY_TO_DISPLAY, DAY_ALIASES, normalizeDayLabel } from "@/lib/planner/dayLabels";
 
 function deriveEquipmentAvoid(athleteContext: AthleteContextRow | null): string[] {
   if (!athleteContext) return [];
@@ -90,26 +79,6 @@ function getCampsForWeek(weekNumber: number, plan: GeneratedPlan | null, camps: 
   });
 }
 
-const dayAliases: Record<string, (typeof canonicalDayOrder)[number]> = {
-  mon: "mon",
-  monday: "mon",
-  tue: "tue",
-  tues: "tue",
-  tuesday: "tue",
-  wed: "wed",
-  weds: "wed",
-  wednesday: "wed",
-  thu: "thu",
-  thur: "thu",
-  thurs: "thu",
-  thursday: "thu",
-  fri: "fri",
-  friday: "fri",
-  sat: "sat",
-  saturday: "sat",
-  sun: "sun",
-  sunday: "sun",
-};
 
 type AthletePlanRow = {
   id: string;
@@ -287,19 +256,16 @@ type PlanWeekWithTemplateMeta = GeneratedPlan["weeks"][number] & {
   sourceWeekTemplateName?: string | null;
 };
 
-function normalizeDayLabel(dayLabel: string) {
-  return dayAliases[dayLabel.trim().toLowerCase()] ?? dayLabel.trim().toLowerCase();
-}
 
 
 function normalizeCanonicalDayList(days: string[] | null | undefined) {
   return (days ?? [])
-    .map((day) => dayAliases[(day ?? "").trim().toLowerCase()])
-    .filter((day): day is (typeof canonicalDayOrder)[number] => Boolean(day));
+    .map((day) => DAY_ALIASES[(day ?? "").trim().toLowerCase()])
+    .filter((day): day is (typeof CANONICAL_DAY_ORDER)[number] => Boolean(day));
 }
 
 function normalizeCanonicalDay(day: string | null | undefined) {
-  return day ? dayAliases[day.trim().toLowerCase()] ?? null : null;
+  return day ? DAY_ALIASES[day.trim().toLowerCase()] ?? null : null;
 }
 
 function isLongSessionTemplate(row: SessionTemplateRow | undefined | null) {
@@ -314,8 +280,8 @@ function isGymSessionTemplate(row: SessionTemplateRow | undefined | null) {
 }
 
 function pickBestAvailableDay(
-  preferredDays: (typeof canonicalDayOrder)[number][],
-  usedDays: Set<(typeof canonicalDayOrder)[number]>,
+  preferredDays: (typeof CANONICAL_DAY_ORDER)[number][],
+  usedDays: Set<(typeof CANONICAL_DAY_ORDER)[number]>,
   fallbackUsedOk = true,
 ) {
   const unusedPreferred = preferredDays.find((day) => !usedDays.has(day));
@@ -325,10 +291,10 @@ function pickBestAvailableDay(
     return preferredDays[0];
   }
 
-  const unusedAnyDay = canonicalDayOrder.find((day) => !usedDays.has(day));
+  const unusedAnyDay = CANONICAL_DAY_ORDER.find((day) => !usedDays.has(day));
   if (unusedAnyDay) return unusedAnyDay;
 
-  return canonicalDayOrder[0];
+  return CANONICAL_DAY_ORDER[0];
 }
 
 function assignDaysForWeekTemplateSlots(
@@ -342,8 +308,8 @@ function assignDaysForWeekTemplateSlots(
   const runDays = normalizeCanonicalDayList(athleteAvailability?.available_run_days);
   const gymDays = normalizeCanonicalDayList(athleteAvailability?.available_gym_days);
 
-  const assignedDays = new Map<string, (typeof canonicalDayOrder)[number]>();
-  const usedDays = new Set<(typeof canonicalDayOrder)[number]>();
+  const assignedDays = new Map<string, (typeof CANONICAL_DAY_ORDER)[number]>();
+  const usedDays = new Set<(typeof CANONICAL_DAY_ORDER)[number]>();
 
   // Separate slots by type
   const gymSlots = slots.filter((slot) =>
@@ -389,7 +355,7 @@ function assignDaysForWeekTemplateSlots(
 
   // Assign the longest run to the preferred long day (or first available run day if not set)
   if (longestRunSlot) {
-    let longDayChoices: (typeof canonicalDayOrder)[number][] = [];
+    let longDayChoices: (typeof CANONICAL_DAY_ORDER)[number][] = [];
 
     if (preferredLongDay) {
       // Use preferred day if set
@@ -413,7 +379,7 @@ function assignDaysForWeekTemplateSlots(
 
     const chosenDay = runDays.length > 0
       ? pickBestAvailableDay(runDays, usedDays)
-      : pickBestAvailableDay(canonicalDayOrder.slice(), usedDays, true);
+      : pickBestAvailableDay(CANONICAL_DAY_ORDER.slice(), usedDays, true);
     assignedDays.set(slot.id, chosenDay);
     usedDays.add(chosenDay);
   }
@@ -429,7 +395,7 @@ function assignDaysForWeekTemplateSlots(
   for (const slot of slots) {
     if (assignedDays.has(slot.id)) continue;
 
-    const chosenDay = pickBestAvailableDay(canonicalDayOrder.slice(), usedDays, true);
+    const chosenDay = pickBestAvailableDay(CANONICAL_DAY_ORDER.slice(), usedDays, true);
     assignedDays.set(slot.id, chosenDay);
     usedDays.add(chosenDay);
   }
@@ -472,8 +438,8 @@ function sortSessionsForWeek(sessions: PlanSession[]) {
   return [...sessions].sort((a, b) => {
     const dayA = normalizeDayLabel(a.dayLabel);
     const dayB = normalizeDayLabel(b.dayLabel);
-    const idxA = canonicalDayOrder.indexOf(dayA as (typeof canonicalDayOrder)[number]);
-    const idxB = canonicalDayOrder.indexOf(dayB as (typeof canonicalDayOrder)[number]);
+    const idxA = CANONICAL_DAY_ORDER.indexOf(dayA as (typeof CANONICAL_DAY_ORDER)[number]);
+    const idxB = CANONICAL_DAY_ORDER.indexOf(dayB as (typeof CANONICAL_DAY_ORDER)[number]);
     // Sessions with no recognised day sort to the end
     const ordA = idxA === -1 ? 999 : idxA;
     const ordB = idxB === -1 ? 999 : idxB;
@@ -500,7 +466,7 @@ function normalisePlanSessionOrdering(plan: GeneratedPlan): GeneratedPlan {
 function findExistingDayLabelForWeek(
   plan: GeneratedPlan,
   weekId: string,
-  canonicalDay: (typeof canonicalDayOrder)[number],
+  canonicalDay: (typeof CANONICAL_DAY_ORDER)[number],
 ) {
   const labelsForWeek =
     plan.weeks.find((week) => week.id === weekId)?.sessions.map((session) => session.dayLabel) ??
@@ -510,20 +476,20 @@ function findExistingDayLabelForWeek(
     (label) => normalizeDayLabel(label) === canonicalDay,
   );
 
-  return matchedExistingLabel ?? canonicalDayToDisplayLabel[canonicalDay];
+  return matchedExistingLabel ?? CANONICAL_DAY_TO_DISPLAY[canonicalDay];
 }
 
 function getPreviousDaySlot(plan: GeneratedPlan, weekId: string, dayLabel: string) {
   const normalizedDayLabel = normalizeDayLabel(dayLabel);
-  const dayIndex = canonicalDayOrder.indexOf(
-    normalizedDayLabel as (typeof canonicalDayOrder)[number],
+  const dayIndex = CANONICAL_DAY_ORDER.indexOf(
+    normalizedDayLabel as (typeof CANONICAL_DAY_ORDER)[number],
   );
 
   if (!plan.weeks.some((week) => week.id === weekId) || dayIndex <= 0) {
     return null;
   }
 
-  const previousCanonicalDay = canonicalDayOrder[dayIndex - 1];
+  const previousCanonicalDay = CANONICAL_DAY_ORDER[dayIndex - 1];
 
   return {
     weekId,
@@ -2799,7 +2765,7 @@ export default function PlanEditorPage() {
                             !editableSession.alternativeDismissed;
                           const assignedDay =
                             session.dayLabel &&
-                            dayAliases[session.dayLabel.trim().toLowerCase()]
+                            DAY_ALIASES[session.dayLabel.trim().toLowerCase()]
                               ? session.dayLabel
                               : null;
                           const prepRaceConflict = getPrepRaceConflict(typedWeek.weekNumber, session.dayLabel);

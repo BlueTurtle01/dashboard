@@ -1,7 +1,7 @@
-import { getExercises } from '@/lib/exercises'
+import { getExerciseLibrary } from '@/lib/planner/exerciseLibrary'
 
 export default async function CoachExercisesPage() {
-  const exercises = await getExercises()
+  const exercises = await getExerciseLibrary()
 
   return (
     <div style={{ padding: '20px' }}>

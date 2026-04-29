@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { UnifiedSessionForm, type UnifiedSessionFormData } from "@/app/coach/components/UnifiedSessionForm";
+import { CANONICAL_DAY_ORDER, DAY_ALIASES } from "@/lib/planner/dayLabels";
 
 type ProgramTemplateRow = {
   id: string;
@@ -219,29 +220,6 @@ type WeekTemplateSlotRow = {
   session_templates: SessionTemplateRow | null;
 };
 
-const canonicalDayOrder = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
-
-const dayAliases: Record<string, (typeof canonicalDayOrder)[number]> = {
-  mon: "mon",
-  monday: "mon",
-  tue: "tue",
-  tues: "tue",
-  tuesday: "tue",
-  wed: "wed",
-  weds: "wed",
-  wednesday: "wed",
-  thu: "thu",
-  thur: "thu",
-  thurs: "thu",
-  thursday: "thu",
-  fri: "fri",
-  friday: "fri",
-  sat: "sat",
-  saturday: "sat",
-  sun: "sun",
-  sunday: "sun",
-};
-
 const weekdayQuickAddOptions = [
   { label: "Mon", dayNumber: 1 },
   { label: "Tue", dayNumber: 2 },
@@ -378,12 +356,12 @@ function slugify(value: string) {
 }
 
 function normalizeDayLabel(dayLabel: string) {
-  return dayAliases[dayLabel.trim().toLowerCase()] ?? dayLabel.trim().toLowerCase();
+  return DAY_ALIASES[dayLabel.trim().toLowerCase()] ?? dayLabel.trim().toLowerCase();
 }
 
 function getDayOrderIndex(dayLabel: string) {
-  return canonicalDayOrder.indexOf(
-    normalizeDayLabel(dayLabel) as (typeof canonicalDayOrder)[number],
+  return CANONICAL_DAY_ORDER.indexOf(
+    normalizeDayLabel(dayLabel) as (typeof CANONICAL_DAY_ORDER)[number],
   );
 }
 

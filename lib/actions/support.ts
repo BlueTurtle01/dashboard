@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser, requireAdminOrThrow } from "@/lib/auth/get-current-user";
 
 export type TicketCategory = "technical" | "billing" | "coaching" | "account" | "feedback" | "other";
 export type TicketUrgency = "low" | "medium" | "high" | "urgent";
@@ -22,35 +23,15 @@ export type SupportTicket = {
   resolved_at: string | null;
 };
 
-async function requireAuth() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error || !user) throw new Error("Not authenticated");
-  return { supabase, user };
-}
-
-async function requireAdmin() {
-  const { supabase, user } = await requireAuth();
-  const { data } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (!data) throw new Error("Forbidden");
-  return { supabase, user };
-}
-
 export async function createSupportTicket(input: {
   category: TicketCategory;
   urgency: TicketUrgency;
   subject: string;
   description: string;
 }): Promise<{ error?: string }> {
-  const { supabase, user } = await requireAuth();
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not authenticated");
+  const supabase = await createClient();
 
   const { error } = await supabase.from("support_tickets").insert({
     user_id: user.id,
@@ -66,7 +47,7 @@ export async function createSupportTicket(input: {
 }
 
 export async function getMyTickets(): Promise<SupportTicket[]> {
-  const { supabase } = await requireAuth();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("support_tickets")
@@ -78,7 +59,8 @@ export async function getMyTickets(): Promise<SupportTicket[]> {
 }
 
 export async function getAllTickets(): Promise<SupportTicket[]> {
-  const { supabase } = await requireAdmin();
+  await requireAdminOrThrow();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("support_tickets")
@@ -94,7 +76,8 @@ export async function updateTicketStatus(
   status: TicketStatus,
   resolution?: string
 ): Promise<{ error?: string }> {
-  const { supabase } = await requireAdmin();
+  await requireAdminOrThrow();
+  const supabase = await createClient();
 
   // Fetch current ticket so we can protect the first resolved_at
   const { data: current, error: fetchError } = await supabase
@@ -152,7 +135,8 @@ export type TicketStats = {
 };
 
 export async function getTicketStats(): Promise<TicketStats> {
-  const { supabase } = await requireAdmin();
+  await requireAdminOrThrow();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("support_tickets")
@@ -222,7 +206,7 @@ export type TicketMessage = {
 };
 
 export async function getTicketMessages(ticketId: string): Promise<TicketMessage[]> {
-  const { supabase } = await requireAuth();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("ticket_messages")
@@ -240,7 +224,9 @@ export async function addTicketMessage(input: {
   attachmentPath?: string;
   attachmentName?: string;
 }): Promise<{ error?: string }> {
-  const { supabase, user } = await requireAuth();
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not authenticated");
+  const supabase = await createClient();
 
   const isAdminRow = await supabase
     .from("user_roles")

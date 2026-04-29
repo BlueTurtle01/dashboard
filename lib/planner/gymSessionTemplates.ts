@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import { PlanSessionType } from "./types";
 
 export type GymTemplateExercise = {
@@ -177,6 +177,7 @@ async function getCurrentCoachUserId(): Promise<string | null> {
 }
 
 async function loadGymSessionTemplatesFromSupabase(): Promise<GymSessionTemplate[]> {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("gym_session_templates")
     .select(`
@@ -236,6 +237,7 @@ export async function loadCustomGymSessionTemplates(): Promise<GymSessionTemplat
     return [];
   }
 
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("gym_session_templates")
     .select(`
@@ -301,6 +303,7 @@ export async function searchGymSessionTemplates(query: string): Promise<GymSessi
 }
 
 export async function getGymSessionTemplateById(id: string): Promise<GymSessionTemplate | null> {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("gym_session_templates")
     .select(`
@@ -368,6 +371,7 @@ export async function createCustomGymSessionTemplate(template: GymSessionTemplat
     coachUserId,
   });
 
+  const supabase = createClient();
   const { error: templateError } = await supabase.from("gym_session_templates").upsert(
     {
       id: nextTemplate.id,
@@ -437,6 +441,7 @@ export async function deleteCustomGymSessionTemplate(templateId: string) {
     throw new Error("No logged in coach found.");
   }
 
+  const supabase = createClient();
   const { error } = await supabase
     .from("gym_session_templates")
     .delete()

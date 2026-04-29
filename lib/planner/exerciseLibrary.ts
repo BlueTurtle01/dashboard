@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 
 export interface ExerciseLibraryItem {
   id: string
@@ -83,6 +83,7 @@ function scoreExercise(item: ExerciseLibraryItem, query: string) {
 }
 
 export async function getExerciseLibrary(): Promise<ExerciseLibraryItem[]> {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('exercises')
     .select(`
@@ -128,6 +129,7 @@ export async function searchExerciseLibrary(query: string) {
 }
 
 export async function getExerciseLibraryItemById(id: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('exercises')
     .select(`

@@ -1,5 +1,5 @@
 import { PlanExercise, PlanSessionType } from "./types";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 
 export interface SessionLibraryItem {
   id: string;
@@ -113,6 +113,7 @@ function mapSessionRow(row: SessionLibraryRow): SessionLibraryItem {
 }
 
 async function loadSessionLibraryFromSupabase(): Promise<SessionLibraryItem[]> {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("session_library")
     .select(`
@@ -170,6 +171,7 @@ export async function searchSessionLibrary(query: string): Promise<SessionLibrar
 }
 
 export async function getSessionLibraryItemById(id: string): Promise<SessionLibraryItem | null> {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("session_library")
     .select(`
