@@ -248,6 +248,18 @@ const sessionTypeOptions = [
 
 const runTimeTypeOptions = ["any", "morning", "afternoon", "evening"];
 
+const terrainOptions = ["road", "trail", "mixed", "sand", "treadmill", "stairs", "indoor", "water", "any"];
+
+const warmUpOptions = ["", "5", "10", "15", "20"];
+
+const coolDownOptions = ["", "5", "10", "15", "20"];
+
+const strideOptions = ["", "5x100m", "6x100m", "8x100m", "10x100m", "15x100m", "20x100m"];
+
+const intervalRepsOptions = ["", "6", "8", "10", "12", "16", "20"];
+
+const intervalDurationOptions = ["", "400m", "800m", "1km", "1600m", "1min", "2min", "3min", "5min", "10min"];
+
 const weekFocusOptions = [
   "Base",
   "Build",
@@ -2143,7 +2155,7 @@ export default function EditProgramTemplatePage() {
                               {session.terrain && (
                                 <label className="text-sm font-medium text-zinc-700">
                                   Terrain
-                                  <input
+                                  <select
                                     value={session.terrain}
                                     onChange={(e) =>
                                       updateSession(week.localId, session.localId, (current) => ({
@@ -2151,9 +2163,14 @@ export default function EditProgramTemplatePage() {
                                         terrain: e.target.value,
                                       }))
                                     }
-                                    placeholder="e.g. road, trail, mixed"
                                     className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                  />
+                                  >
+                                    {terrainOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option.charAt(0).toUpperCase() + option.slice(1)}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </label>
                               )}
 
@@ -2194,7 +2211,7 @@ export default function EditProgramTemplatePage() {
                               {session.strides && (
                                 <label className="text-sm font-medium text-zinc-700">
                                   Strides
-                                  <input
+                                  <select
                                     value={session.strides}
                                     onChange={(e) =>
                                       updateSession(week.localId, session.localId, (current) => ({
@@ -2202,16 +2219,21 @@ export default function EditProgramTemplatePage() {
                                         strides: e.target.value,
                                       }))
                                     }
-                                    placeholder="e.g. 10x100m"
                                     className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                  />
+                                  >
+                                    {strideOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option === "" ? "— None —" : option}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </label>
                               )}
 
                               {session.warmUpMinutes && (
                                 <label className="text-sm font-medium text-zinc-700">
                                   Warm-up (min)
-                                  <input
+                                  <select
                                     value={session.warmUpMinutes}
                                     onChange={(e) =>
                                       updateSession(week.localId, session.localId, (current) => ({
@@ -2219,16 +2241,21 @@ export default function EditProgramTemplatePage() {
                                         warmUpMinutes: e.target.value,
                                       }))
                                     }
-                                    placeholder="e.g. 10"
                                     className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                  />
+                                  >
+                                    {warmUpOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option === "" ? "— None —" : `${option} min`}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </label>
                               )}
 
                               {session.coolDownMinutes && (
                                 <label className="text-sm font-medium text-zinc-700">
                                   Cool-down (min)
-                                  <input
+                                  <select
                                     value={session.coolDownMinutes}
                                     onChange={(e) =>
                                       updateSession(week.localId, session.localId, (current) => ({
@@ -2236,16 +2263,21 @@ export default function EditProgramTemplatePage() {
                                         coolDownMinutes: e.target.value,
                                       }))
                                     }
-                                    placeholder="e.g. 10"
                                     className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                  />
+                                  >
+                                    {coolDownOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option === "" ? "— None —" : `${option} min`}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </label>
                               )}
 
                               {session.intervalReps && (
                                 <label className="text-sm font-medium text-zinc-700">
                                   Interval Reps
-                                  <input
+                                  <select
                                     value={session.intervalReps}
                                     onChange={(e) =>
                                       updateSession(week.localId, session.localId, (current) => ({
@@ -2253,16 +2285,21 @@ export default function EditProgramTemplatePage() {
                                         intervalReps: e.target.value,
                                       }))
                                     }
-                                    placeholder="e.g. 8"
                                     className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                  />
+                                  >
+                                    {intervalRepsOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option === "" ? "— Select —" : option}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </label>
                               )}
 
                               {session.intervalDuration && (
                                 <label className="text-sm font-medium text-zinc-700">
                                   Interval Duration
-                                  <input
+                                  <select
                                     value={session.intervalDuration}
                                     onChange={(e) =>
                                       updateSession(week.localId, session.localId, (current) => ({
@@ -2270,9 +2307,14 @@ export default function EditProgramTemplatePage() {
                                         intervalDuration: e.target.value,
                                       }))
                                     }
-                                    placeholder="e.g. 400m or 3min"
                                     className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                  />
+                                  >
+                                    {intervalDurationOptions.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option === "" ? "— Select —" : option}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </label>
                               )}
 
