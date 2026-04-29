@@ -268,6 +268,9 @@ export default async function Navbar() {
             Support
             {isAdmin && adminOpenTicketCount > 0 && <span className="app-sidebar__nav-badge" />}
           </Link>
+          <Link href="/help/suggest-feature" className="app-sidebar__link">
+            Suggest Feature
+          </Link>
 
           {/* Admin section */}
           {isAdmin && (

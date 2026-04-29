@@ -27,7 +27,7 @@ export default function SuggestFeaturePage() {
     const { error: insertError } = await supabase
       .from("feature_suggestions")
       .insert({
-        coach_user_id: user.id,
+        user_id: user.id,
         title: title.trim(),
         description: description.trim(),
         created_at: new Date().toISOString(),
@@ -49,7 +49,7 @@ export default function SuggestFeaturePage() {
       <div className="mx-auto max-w-2xl px-6 py-12">
         <h1 className="text-3xl font-bold tracking-tight">Suggest a Feature</h1>
         <p className="mt-3 text-zinc-600">
-          Help us improve the Coach Dashboard by suggesting new features or improvements.
+          Help us improve Endurance Planner by suggesting new features or improvements.
         </p>
 
         {submitted && (
@@ -86,7 +86,7 @@ export default function SuggestFeaturePage() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Tell us more about this feature..."
+              placeholder="Tell us more about this feature and why it would be helpful..."
               rows={6}
               required
               disabled={loading || submitted}
@@ -102,10 +102,10 @@ export default function SuggestFeaturePage() {
               {loading ? "Submitting..." : "Submit Suggestion"}
             </button>
             <Link
-              href="/coach/dashboard"
+              href="/help"
               className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100"
             >
-              Back
+              Back to Help
             </Link>
           </div>
         </form>
