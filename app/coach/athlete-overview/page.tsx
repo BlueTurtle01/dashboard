@@ -311,8 +311,8 @@ export default function CoachAthleteOverviewPage() {
         .from("coach_athlete_links")
         .select(`
           athlete_user_id,
-          athlete_profiles!coach_athlete_links_athlete_user_id_fkey (
-            user_id,
+          users!coach_athlete_links_athlete_user_id_fkey (
+            id,
             full_name
           )
         `)
@@ -331,11 +331,11 @@ export default function CoachAthleteOverviewPage() {
 
       const mappedAthletes = (data ?? [])
         .map((row: any) => {
-          const athlete = Array.isArray(row.athlete_profiles)
-            ? row.athlete_profiles[0]
-            : row.athlete_profiles;
+          const athlete = Array.isArray(row.users)
+            ? row.users[0]
+            : row.users;
 
-          if (!athlete?.user_id) return null;
+          if (!athlete?.id) return null;
 
           // Generate summary from tags
           const generateSummary = (tags: string[] | undefined): string => {
@@ -361,7 +361,7 @@ export default function CoachAthleteOverviewPage() {
           };
 
           return {
-            user_id: athlete.user_id,
+            user_id: athlete.id,
             full_name: athlete.full_name ?? null,
             tags: athlete.tags,
           };

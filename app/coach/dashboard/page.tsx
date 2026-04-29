@@ -36,7 +36,9 @@ type AthleteLinkRow = {
   athlete_user_id: string;
   status: string;
   linked_at: string;
-  full_name: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
   date_of_birth: string | null;
   event_name: string | null;
   athlete_created_at: string | null;
@@ -237,20 +239,36 @@ export default function CoachDashboardPage() {
 
         const profiles = (profilesData ?? []) as AthleteProfile[];
         const profileMap = new Map<string, AthleteProfile>();
-
         for (const profile of profiles) {
           profileMap.set(profile.user_id, profile);
         }
 
+        // Fetch emails from the users table
+        const { data: usersData } = await supabase
+          .from("users")
+          .select("id, email")
+          .in("id", athleteIds);
+
+        const emailMap = new Map<string, string | null>();
+        for (const u of usersData ?? []) {
+          emailMap.set(u.id, u.email ?? null);
+        }
+
         const mergedRows: AthleteLinkRow[] = links.map((link) => {
           const profile = profileMap.get(link.athlete_user_id);
+          const fullName = profile?.full_name?.trim() || "";
+          const spaceIdx = fullName.indexOf(" ");
+          const firstName = spaceIdx === -1 ? fullName : fullName.slice(0, spaceIdx);
+          const lastName = spaceIdx === -1 ? "" : fullName.slice(spaceIdx + 1);
 
           return {
             id: link.id,
             athlete_user_id: link.athlete_user_id,
             status: link.status,
             linked_at: link.created_at,
-            full_name: profile?.full_name?.trim() || "Unnamed athlete",
+            first_name: firstName || "—",
+            last_name: lastName || "—",
+            email: emailMap.get(link.athlete_user_id) ?? null,
             date_of_birth: profile?.date_of_birth ?? null,
             event_name: getEventName(profile?.event),
             athlete_created_at: profile?.created_at ?? null,
@@ -327,7 +345,9 @@ export default function CoachDashboardPage() {
             <table className="coach-dashboard-table">
               <thead>
                 <tr>
-                  <th>Athlete</th>
+                  <th>First Name</th>
+                  <th>Last Name</th>
+                  <th>Email</th>
                   <th>Event</th>
                   <th>Age</th>
                   <th>Status</th>
@@ -340,7 +360,7 @@ export default function CoachDashboardPage() {
                   <tr key={row.id}>
                     <td>
                       <div className="coach-dashboard-athlete-cell">
-                        <strong>{row.full_name}</strong>
+                        <strong>{row.first_name}</strong>
                         {row.summary && (
                           <p style={{ fontSize: "13px", color: "#666", marginTop: "4px" }}>
                             {row.summary}
@@ -348,6 +368,8 @@ export default function CoachDashboardPage() {
                         )}
                       </div>
                     </td>
+                    <td>{row.last_name}</td>
+                    <td>{row.email || "—"}</td>
                     <td>{row.event_name || "—"}</td>
                     <td>{getAge(row.date_of_birth)}</td>
                     <td>
