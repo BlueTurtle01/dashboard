@@ -134,6 +134,7 @@ export default function OnboardingProvider({
       }
 
       const activeIndex = driverInst.getActiveIndex();
+      if (activeIndex === undefined) return;
       const activeStep = stepsToShow[activeIndex];
 
       if (activeStep && activeStep.route && !pathname.startsWith(activeStep.route)) {
