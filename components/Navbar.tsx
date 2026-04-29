@@ -98,6 +98,20 @@ export default async function Navbar() {
     }
   }
 
+  let athleteKbUnread = false;
+  if ((isAthlete || isSoloPlanHolder) && user) {
+    try {
+      const { count } = await supabase
+        .from("kb_answer_notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("athlete_user_id", user.id)
+        .eq("read", false);
+      athleteKbUnread = (count ?? 0) > 0;
+    } catch (err) {
+      console.error("Error checking kb notifications:", err);
+    }
+  }
+
   if (isAthlete && user) {
     try {
       const { data: convs } = await supabase
@@ -178,6 +192,10 @@ export default async function Navbar() {
               <Link href="/athlete/library" className="app-sidebar__link">
                 Library
               </Link>
+              <Link href="/athlete/knowledge-base" className="app-sidebar__link">
+                Knowledge Base
+                {athleteKbUnread && <span className="app-sidebar__nav-badge--green" />}
+              </Link>
               <SidebarDropdown
                 label="Information"
                 items={[
@@ -204,6 +222,9 @@ export default async function Navbar() {
               <Link href="/coach/chat" className="app-sidebar__link">
                 Chat
                 {coachHasUnread && <span className="app-sidebar__nav-badge" />}
+              </Link>
+              <Link href="/coach/knowledge-base" className="app-sidebar__link">
+                Knowledge Base
               </Link>
               <SidebarDropdown
                 label="Programs"

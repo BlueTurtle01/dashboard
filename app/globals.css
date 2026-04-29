@@ -181,6 +181,15 @@ select {
   flex-shrink: 0;
 }
 
+.app-sidebar__nav-badge--green {
+  margin-left: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  flex-shrink: 0;
+}
+
 .app-sidebar__bottom {
   padding: 12px 8px;
   border-top: 1px solid var(--slate-200);
