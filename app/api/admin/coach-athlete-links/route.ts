@@ -31,7 +31,15 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: linksError.message }, { status: 500 });
     }
 
-    // Get coaches
+    // Use admin client to get all auth users — this is the source of truth,
+    // not user_roles which may be missing entries
+    const adminClient = createAdminClient();
+    const { data: { users: allAuthUsers } } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+
+    const emailMap: Record<string, string> = {};
+    allAuthUsers.forEach(u => { if (u.email) emailMap[u.id] = u.email; });
+
+    // Get coaches from user_roles (still gated by role assignment)
     const { data: coachUsers } = await supabase
       .from('user_roles')
       .select('user_id')
@@ -39,49 +47,38 @@ export async function GET(req: Request) {
 
     const coachIds = coachUsers?.map(u => u.user_id) || [];
 
-    // Get athletes
-    const { data: athleteUsers } = await supabase
+    // Get profiles for coaches
+    const { data: coachProfiles } = coachIds.length
+      ? await supabase.from('athlete_profiles').select('user_id, full_name').in('user_id', coachIds)
+      : { data: [] };
+
+    // All athletes = union of:
+    //   1. users with role='athlete' in user_roles
+    //   2. users with an athlete_profiles row
+    //   3. athlete_user_ids referenced in existing links
+    const { data: athleteRoleUsers } = await supabase
       .from('user_roles')
       .select('user_id')
       .eq('role', 'athlete');
 
-    const athleteIds = athleteUsers?.map(u => u.user_id) || [];
-
-    // Get profiles for coaches
-    const { data: coachProfiles } = await supabase
+    const { data: allAthleteProfiles } = await supabase
       .from('athlete_profiles')
-      .select('user_id, full_name')
-      .in('user_id', coachIds);
+      .select('user_id, full_name');
 
-    // Get profiles for athletes
-    const { data: athleteProfiles } = await supabase
-      .from('athlete_profiles')
-      .select('user_id, full_name')
-      .in('user_id', athleteIds);
+    const profileMap: Record<string, string | null> = {};
+    (allAthleteProfiles || []).forEach(p => { profileMap[p.user_id] = p.full_name; });
 
-    // Collect all unique athlete user IDs from both profiles and links
+    const linkedAthleteIds = (links || []).map(l => l.athlete_user_id);
     const allAthleteIds = Array.from(new Set([
-      ...(athleteProfiles?.map(p => p.user_id) || []),
-      ...(links?.map(l => l.athlete_user_id) || []),
+      ...(athleteRoleUsers || []).map(u => u.user_id),
+      ...(allAthleteProfiles || []).map(p => p.user_id),
+      ...linkedAthleteIds,
     ]));
 
-    // Fetch emails from auth using admin client
-    const adminClient = createAdminClient();
-    const emailMap: Record<string, string> = {};
-    await Promise.all(
-      allAthleteIds.map(async (id) => {
-        try {
-          const { data } = await adminClient.auth.admin.getUserById(id);
-          if (data?.user?.email) emailMap[id] = data.user.email;
-        } catch {
-          // ignore individual lookup failures
-        }
-      })
-    );
-
-    const athletesWithEmail = (athleteProfiles || []).map(p => ({
-      ...p,
-      email: emailMap[p.user_id] || null,
+    const athletesWithEmail = allAthleteIds.map(id => ({
+      user_id: id,
+      full_name: profileMap[id] ?? null,
+      email: emailMap[id] ?? null,
     }));
 
     return NextResponse.json({
