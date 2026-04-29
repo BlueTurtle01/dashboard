@@ -445,7 +445,7 @@ function SessionCard({
       }`}
     >
       <div className="flex items-start gap-4">
-        <div className="pt-1">
+        <div className="pt-1 relative group">
           <button
             onClick={onSelectToggle}
             className={`flex items-center justify-center w-6 h-6 rounded-full border-2 transition-colors ${
@@ -456,6 +456,12 @@ function SessionCard({
           >
             {isCompleted && <span className="text-emerald-600 text-sm font-bold">✓</span>}
           </button>
+          <div className="absolute left-10 top-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+            <div className="bg-slate-900 text-white text-xs px-2 py-1 rounded-md">
+              Click to mark complete
+            </div>
+            <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-0 h-0 border-4 border-transparent border-r-slate-900"></div>
+          </div>
         </div>
 
         <div className="flex-1">

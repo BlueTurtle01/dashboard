@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import TourTriggerButton from "@/components/onboarding/TourTriggerButton";
 
 export default function UserAccountDropdown() {
   const router = useRouter();
@@ -121,10 +120,6 @@ export default function UserAccountDropdown() {
                 {email}
               </div>
             </div>
-
-            <TourTriggerButton />
-
-            <div style={{ borderTop: "1px solid var(--slate-100)" }} />
 
             <button
               type="button"

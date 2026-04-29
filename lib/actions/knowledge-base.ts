@@ -52,6 +52,11 @@ function getUserDisplayName(user: any): string {
   return user.user_metadata?.full_name ?? user.email ?? "Anonymous";
 }
 
+function formatCoachName(fullName: string): string {
+  const firstName = fullName.split(/[\s@]/)[0];
+  return `Coach ${firstName}`;
+}
+
 export async function submitQuestion(
   title: string,
   body: string
@@ -197,13 +202,14 @@ export async function submitAnswer(
   }
 
   const displayName = getUserDisplayName(user);
+  const coachDisplayName = formatCoachName(displayName);
   const isFirstAnswer = (answerCount.count ?? 0) === 0;
 
   const { error } = await supabase.from("kb_answers").insert({
     question_id: questionId,
     body: body.trim(),
     submitted_by: user.id,
-    submitted_by_name: displayName,
+    submitted_by_name: coachDisplayName,
   });
 
   if (error) return { error: error.message };
