@@ -269,7 +269,9 @@ export default function CoachAthleteOverviewPage() {
   const [athletesError, setAthletesError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [planError, setPlanError] = useState("");
-  const [activeTab, setActiveTab] = useState<"summary" | "profile" | "health" | "dates" | "plans" | "warnings">("summary");
+  const [activeTab, setActiveTab] = useState<"summary" | "profile" | "health" | "dates" | "plans" | "warnings" | "activity">("summary");
+  const [stravaActivities, setStravaActivities] = useState<any[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
   const [planWarnings, setPlanWarnings] = useState<any[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isClearingCalendar, setIsClearingCalendar] = useState(false);
@@ -1048,6 +1050,40 @@ export default function CoachAthleteOverviewPage() {
     calculatePlanWarnings(latestPlan);
   }, [latestPlan]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStravaActivities() {
+      if (!selectedAthleteId || activeTab !== "activity") {
+        return;
+      }
+
+      setLoadingActivities(true);
+
+      try {
+        const response = await fetch(`/api/coach/athlete-activities?athleteId=${selectedAthleteId}&limit=60`);
+        if (cancelled) return;
+
+        if (response.ok) {
+          const data = await response.json();
+          setStravaActivities(data.activities || []);
+        } else {
+          setStravaActivities([]);
+        }
+      } catch {
+        setStravaActivities([]);
+      } finally {
+        if (!cancelled) setLoadingActivities(false);
+      }
+    }
+
+    void loadStravaActivities();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAthleteId, activeTab]);
+
   const injuries = normaliseStringArray(profile?.injuries);
   const imbalances = normaliseStringArray(profile?.imbalances);
   const holidays = normaliseStringArray(profile?.holidays);
@@ -1192,7 +1228,7 @@ export default function CoachAthleteOverviewPage() {
 
             {/* Tabs */}
             <div className="mb-6 flex border-b border-zinc-200 gap-0 overflow-x-auto">
-              {(["summary", "profile", "health", "dates", "plans", "warnings"] as const).map((tab) => {
+              {(["summary", "profile", "health", "dates", "plans", "warnings", "activity"] as const).map((tab) => {
                 const isActive = activeTab === tab;
                 const warningCount = planWarnings.length;
                 const tabLabels: Record<typeof tab, string> = {
@@ -1202,6 +1238,7 @@ export default function CoachAthleteOverviewPage() {
                   dates: "Important Dates",
                   plans: "Plans",
                   warnings: "Warnings",
+                  activity: "Activity",
                 };
                 let label = tabLabels[tab];
                 if (tab === "warnings" && warningCount > 0 && !isActive) {
@@ -2129,9 +2166,263 @@ export default function CoachAthleteOverviewPage() {
                 )}
               </div>
             )}
+
+            {/* Activity Tab */}
+            {activeTab === "activity" && (
+              <ActivityTab
+                activities={stravaActivities}
+                loading={loadingActivities}
+                athleteName={getFirstName(selectedAthleteName || profile?.full_name)}
+              />
+            )}
           </>
         ) : null}
       </div>
     </main>
   );
+}
+
+// ─── Activity Tab ────────────────────────────────────────────────────────────
+
+type StravaActivity = {
+  id: string;
+  name: string;
+  sport_type: string;
+  distance_m: number;
+  moving_time_seconds: number;
+  total_elevation_gain_m: number;
+  average_heartrate: number | null;
+  start_time: string;
+};
+
+function ActivityTab({
+  activities,
+  loading,
+  athleteName,
+}: {
+  activities: StravaActivity[];
+  loading: boolean;
+  athleteName: string | null;
+}) {
+  if (loading) {
+    return (
+      <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+        <p className="text-sm text-zinc-500">Loading activity data…</p>
+      </div>
+    );
+  }
+
+  if (activities.length === 0) {
+    return (
+      <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+        <h2 className="text-lg font-semibold text-zinc-900 mb-2">Activity Summary</h2>
+        <p className="text-sm text-zinc-500">
+          No Strava activities synced for {athleteName || "this athlete"} yet. The athlete needs to connect Strava and sync their activities.
+        </p>
+      </div>
+    );
+  }
+
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  // Current weekly volume (last 7 days)
+  const thisWeekActivities = activities.filter(
+    (a) => new Date(a.start_time) >= sevenDaysAgo
+  );
+  const weeklyVolumeKm = thisWeekActivities.reduce((sum, a) => sum + (a.distance_m || 0) / 1000, 0);
+
+  // Last 30 days
+  const last30 = activities.filter((a) => new Date(a.start_time) >= thirtyDaysAgo);
+
+  // Training frequency (avg sessions/week over last 4 weeks)
+  const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
+  const last4WeeksActivities = activities.filter((a) => new Date(a.start_time) >= fourWeeksAgo);
+  const avgSessionsPerWeek = last4WeeksActivities.length / 4;
+
+  // Recent consistency (weeks in last 4 with at least 1 activity)
+  const weeksWithActivity = new Set<number>();
+  last4WeeksActivities.forEach((a) => {
+    const daysAgo = Math.floor((now.getTime() - new Date(a.start_time).getTime()) / (24 * 60 * 60 * 1000));
+    const weekBucket = Math.floor(daysAgo / 7);
+    weeksWithActivity.add(weekBucket);
+  });
+  const consistencyPct = Math.round((weeksWithActivity.size / 4) * 100);
+
+  // Longest recent session (last 30 days)
+  const longestSession = last30.reduce(
+    (best, a) => (a.distance_m > (best?.distance_m ?? 0) ? a : best),
+    null as StravaActivity | null
+  );
+
+  // Elevation exposure (last 30 days)
+  const elevationGain30d = last30.reduce((sum, a) => sum + (a.total_elevation_gain_m || 0), 0);
+
+  // Last activity date
+  const lastActivity = activities[0];
+  const daysSinceLastActivity = lastActivity
+    ? Math.floor((now.getTime() - new Date(lastActivity.start_time).getTime()) / (24 * 60 * 60 * 1000))
+    : null;
+
+  // Readiness concerns
+  const concerns: string[] = [];
+  if (daysSinceLastActivity !== null && daysSinceLastActivity >= 7) {
+    concerns.push(`No activity in ${daysSinceLastActivity} days — possible detraining or injury risk.`);
+  }
+  if (consistencyPct < 50) {
+    concerns.push("Training consistency is low over the past 4 weeks.");
+  }
+  if (weeklyVolumeKm === 0 && last30.length > 0) {
+    concerns.push("No activity this week despite recent training history.");
+  }
+  // Spike: this week vs 4-week average
+  const avgWeeklyKm30d = last30.reduce((sum, a) => sum + (a.distance_m || 0) / 1000, 0) / 4;
+  if (avgWeeklyKm30d > 0 && weeklyVolumeKm > avgWeeklyKm30d * 1.4) {
+    concerns.push(`Volume spike this week (${weeklyVolumeKm.toFixed(0)} km vs ~${avgWeeklyKm30d.toFixed(0)} km avg) — monitor for overload.`);
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Metrics grid */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <MetricCard
+          label="Weekly Volume"
+          value={`${weeklyVolumeKm.toFixed(1)} km`}
+          sub="last 7 days"
+        />
+        <MetricCard
+          label="Recent Consistency"
+          value={`${consistencyPct}%`}
+          sub="weeks active / 4 weeks"
+          highlight={consistencyPct < 50 ? "warn" : consistencyPct >= 75 ? "good" : undefined}
+        />
+        <MetricCard
+          label="Avg Sessions / Week"
+          value={avgSessionsPerWeek.toFixed(1)}
+          sub="last 4 weeks"
+        />
+        <MetricCard
+          label="Longest Session (30d)"
+          value={longestSession ? `${(longestSession.distance_m / 1000).toFixed(1)} km` : "—"}
+          sub={longestSession ? longestSession.name : "no data"}
+        />
+        <MetricCard
+          label="Elevation (30d)"
+          value={`${elevationGain30d.toFixed(0)} m`}
+          sub="total gain"
+        />
+        <MetricCard
+          label="Last Activity"
+          value={
+            daysSinceLastActivity === null
+              ? "—"
+              : daysSinceLastActivity === 0
+              ? "Today"
+              : daysSinceLastActivity === 1
+              ? "Yesterday"
+              : `${daysSinceLastActivity} days ago`
+          }
+          sub={lastActivity ? new Date(lastActivity.start_time).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : ""}
+          highlight={daysSinceLastActivity !== null && daysSinceLastActivity >= 7 ? "warn" : undefined}
+        />
+      </div>
+
+      {/* Readiness concerns */}
+      {concerns.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <h3 className="text-sm font-semibold text-amber-900 mb-3">Possible Readiness Concerns</h3>
+          <ul className="space-y-2">
+            {concerns.map((c, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-amber-800">
+                <span className="shrink-0 mt-0.5">⚠</span>
+                <span>{c}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+          <p className="text-sm text-emerald-800 font-medium">No readiness concerns detected from recent activity data.</p>
+        </div>
+      )}
+
+      {/* Recent activities table */}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <h3 className="text-sm font-semibold text-zinc-900 mb-4">Recent Activities</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-zinc-200">
+              <tr>
+                <th className="text-left py-2 px-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Date</th>
+                <th className="text-left py-2 px-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Name</th>
+                <th className="text-left py-2 px-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Type</th>
+                <th className="text-right py-2 px-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Distance</th>
+                <th className="text-right py-2 px-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Time</th>
+                <th className="text-right py-2 px-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Elev (m)</th>
+                <th className="text-right py-2 px-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Avg HR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activities.slice(0, 20).map((activity) => (
+                <tr key={activity.id} className="border-b border-zinc-100 hover:bg-zinc-50">
+                  <td className="py-2 px-2 text-zinc-500 text-xs">
+                    {new Date(activity.start_time).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                  </td>
+                  <td className="py-2 px-2 text-zinc-900 max-w-[140px] truncate">{activity.name}</td>
+                  <td className="py-2 px-2 text-zinc-500 text-xs">{activity.sport_type}</td>
+                  <td className="py-2 px-2 text-right">{(activity.distance_m / 1000).toFixed(1)} km</td>
+                  <td className="py-2 px-2 text-right text-zinc-600">{formatActivityTime(activity.moving_time_seconds)}</td>
+                  <td className="py-2 px-2 text-right text-zinc-600">{activity.total_elevation_gain_m?.toFixed(0) ?? "—"}</td>
+                  <td className="py-2 px-2 text-right text-zinc-600">
+                    {activity.average_heartrate ? Math.round(activity.average_heartrate) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  sub,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  highlight?: "warn" | "good";
+}) {
+  const bg =
+    highlight === "warn"
+      ? "bg-amber-50 border-amber-200"
+      : highlight === "good"
+      ? "bg-emerald-50 border-emerald-200"
+      : "bg-zinc-50 border-zinc-200";
+  const valueColor =
+    highlight === "warn"
+      ? "text-amber-900"
+      : highlight === "good"
+      ? "text-emerald-900"
+      : "text-zinc-900";
+
+  return (
+    <div className={`rounded-2xl border p-4 ${bg}`}>
+      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</div>
+      <div className={`mt-2 text-xl font-bold ${valueColor}`}>{value}</div>
+      {sub && <div className="mt-1 text-xs text-zinc-400">{sub}</div>}
+    </div>
+  );
+}
+
+function formatActivityTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
