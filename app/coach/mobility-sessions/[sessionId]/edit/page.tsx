@@ -329,10 +329,10 @@ export default function EditMobilitySessionPage() {
       return;
     }
 
-    // Check if any selected stretch has equipment
+    // Check if any selected stretch has actual equipment (not just environmental features)
     const hasEquipment = selectedStretches.some((stretch) => {
       const stretchData = allStretches.find((s) => s.id === stretch.stretchId);
-      return stretchData && stretchData.equipment.length > 0;
+      return stretchData && stretchData.equipment.filter(isActualEquipment).length > 0;
     });
 
     const tags = hasEquipment ? ["equipment-required"] : [];
@@ -561,9 +561,9 @@ export default function EditMobilitySessionPage() {
                       <span style={stretchOrderStyle}>{index + 1}</span>
                       <div style={stretchNameWithEquipmentStyle}>
                         <span style={stretchNameInListStyle}>{stretch.name}</span>
-                        {stretch.equipment.length > 0 && (
+                        {stretch.equipment.filter(isActualEquipment).length > 0 && (
                           <div style={equipmentBadgesStyle}>
-                            {stretch.equipment.map((equip) => (
+                            {stretch.equipment.filter(isActualEquipment).map((equip) => (
                               <span key={equip} style={equipmentBadgeStyle}>
                                 {equip}
                               </span>
@@ -667,3 +667,8 @@ const successStyle: React.CSSProperties = { color: "#0a7f3f", marginBottom: "16p
 const buttonRowStyle: React.CSSProperties = { display: "flex", gap: "12px", marginTop: "24px" };
 const buttonStyle: React.CSSProperties = { flex: 1, padding: "12px 16px", border: "none", borderRadius: "6px", background: "#111111", color: "#ffffff", fontWeight: 700, cursor: "pointer", fontSize: "14px" };
 const secondaryButtonStyle: React.CSSProperties = { padding: "12px 16px", border: "1px solid #d1d5db", borderRadius: "6px", background: "#ffffff", color: "#111111", fontWeight: 600, cursor: "pointer", fontSize: "14px" };
+
+function isActualEquipment(item: string): boolean {
+  const nonEquipment = ["wall", "doorway", "ground", "floor", "chair", "bench", "mat"];
+  return !nonEquipment.includes(item.toLowerCase());
+}

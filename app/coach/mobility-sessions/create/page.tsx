@@ -180,10 +180,10 @@ export default function CreateMobilitySessionPage() {
 
     const id = makeSessionId(name);
 
-    // Check if any selected stretch has equipment
+    // Check if any selected stretch has actual equipment (not just environmental features)
     const hasEquipment = selectedStretches.some((stretch) => {
       const stretchData = allStretches.find((s) => s.id === stretch.stretchId);
-      return stretchData && stretchData.equipment.length > 0;
+      return stretchData && stretchData.equipment.filter(isActualEquipment).length > 0;
     });
 
     const tags = hasEquipment ? ["equipment-required"] : [];
@@ -367,9 +367,9 @@ export default function CreateMobilitySessionPage() {
                       <span style={stretchOrderStyle}>{index + 1}</span>
                       <div style={stretchNameWithEquipmentStyle}>
                         <span style={stretchNameInListStyle}>{stretch.name}</span>
-                        {stretch.equipment.length > 0 && (
+                        {stretch.equipment.filter(isActualEquipment).length > 0 && (
                           <div style={equipmentBadgesStyle}>
-                            {stretch.equipment.map((equip) => (
+                            {stretch.equipment.filter(isActualEquipment).map((equip) => (
                               <span key={equip} style={equipmentBadgeStyle}>
                                 {equip}
                               </span>
@@ -467,6 +467,11 @@ function makeSessionId(value: string) {
     .replace(/['"]/g, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function isActualEquipment(item: string): boolean {
+  const nonEquipment = ["wall", "doorway", "ground", "floor", "chair", "bench", "mat"];
+  return !nonEquipment.includes(item.toLowerCase());
 }
 
 // Styles
