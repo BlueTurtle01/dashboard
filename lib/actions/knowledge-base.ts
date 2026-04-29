@@ -37,13 +37,14 @@ async function requireAuth() {
 
 async function requireCoach() {
   const { supabase, user } = await requireAuth();
-  const { data } = await supabase
+  const { data: roles, error } = await supabase
     .from("user_roles")
     .select("role")
-    .in("role", ["coach", "admin"])
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!data) throw new Error("Forbidden: coach or admin role required");
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+  const hasCoachRole = (roles ?? []).some((r: any) => r.role === "coach" || r.role === "admin");
+  if (!hasCoachRole) throw new Error("Forbidden: coach or admin role required");
   return { supabase, user };
 }
 

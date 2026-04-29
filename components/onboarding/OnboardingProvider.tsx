@@ -73,7 +73,7 @@ export default function OnboardingProvider({
       }, 600);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [hasSeenTour, isTourActive, incompleteSteps.length]);
 
   const handleStepComplete = async (stepId: string) => {
     setCompletedStepIds((prev) => {
@@ -118,8 +118,9 @@ export default function OnboardingProvider({
 
         return driverStep;
       }),
-      onDestroyed: () => {
-        handleTourComplete();
+      onDestroyed: async () => {
+        clearInterval(observer);
+        await handleTourComplete();
       },
     });
 
@@ -127,6 +128,7 @@ export default function OnboardingProvider({
     setIsTourActive(true);
 
     // Track step changes and handle navigation
+    let lastCompletedIndex = -1;
     const observer = setInterval(async () => {
       if (!driverInst) {
         clearInterval(observer);
@@ -141,18 +143,19 @@ export default function OnboardingProvider({
         router.push(activeStep.route);
       }
 
-      // Mark current step as complete when we move to next
-      if (activeIndex > 0 && activeIndex < stepsToShow.length) {
-        const prevStep = stepsToShow[activeIndex - 1];
-        if (!completedStepIds.includes(prevStep.id)) {
-          await handleStepComplete(prevStep.id);
+      // Mark previous step as complete when we move past it
+      if (activeIndex > lastCompletedIndex) {
+        for (let i = lastCompletedIndex + 1; i < activeIndex; i++) {
+          const step = stepsToShow[i];
+          if (step && !completedStepIds.includes(step.id)) {
+            await handleStepComplete(step.id);
+          }
         }
+        lastCompletedIndex = activeIndex - 1;
       }
     }, 100);
 
     driverInst.drive();
-
-    return () => clearInterval(observer);
   };
 
   const skipTour = async () => {
