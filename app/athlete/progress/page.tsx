@@ -194,7 +194,7 @@ export default function ProgressPage() {
 
         {/* Charts */}
         {weekStats.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2" data-tour="progress-charts">
             {/* Completion % Chart */}
             <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
               <h2 className="font-semibold text-zinc-900">Weekly Completion %</h2>

@@ -296,7 +296,7 @@ export default function CoachProfilePage() {
   return (
     <main style={containerStyle}>
       <div style={cardStyle}>
-        <h1 style={{ textAlign: "center", marginBottom: "24px" }}>Coach Profile</h1>
+        <h1 style={{ textAlign: "center", marginBottom: "24px" }} data-tour="coach-profile-header">Coach Profile</h1>
 
         {/* Tab Navigation */}
         <div style={{ display: "flex", gap: "12px", marginBottom: "24px", borderBottom: "1px solid #ddd", paddingBottom: "12px" }}>

@@ -1061,7 +1061,7 @@ export default function CoachAthleteOverviewPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-500">
               Coach Dashboard
             </p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight">
+            <h1 className="mt-2 text-3xl font-bold tracking-tight" data-tour="athlete-overview-header">
               {getFirstName(selectedAthleteName || profile?.full_name) ? `${getFirstName(selectedAthleteName || profile?.full_name)}'s Overview` : "Athlete Overview"}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">

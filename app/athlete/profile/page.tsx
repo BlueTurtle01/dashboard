@@ -974,7 +974,7 @@ export default function IntakePage() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto max-w-5xl space-y-8 px-6 py-12">
+      <div className="mx-auto max-w-5xl space-y-8 px-6 py-12" data-tour="athlete-profile-form">
         <div className="flex items-end justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Athlete Intake</h1>

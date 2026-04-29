@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
 import { userHasRole } from "@/lib/auth/get-current-user";
+import { createClient } from "@/lib/supabase/server";
+import OnboardingProvider from "@/components/onboarding/OnboardingProvider";
+import { coachOnboardingConfig } from "@/lib/onboarding/coach-steps";
 
 export default async function CoachLayout({
   children,
@@ -12,5 +15,44 @@ export default async function CoachLayout({
     redirect("/login");
   }
 
-  return <main className="app-content">{children}</main>;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let onboardingState = null;
+  if (user) {
+    const { data } = await supabase
+      .from("user_onboarding")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!data) {
+      // Create initial row if it doesn't exist
+      const { data: newRow } = await supabase
+        .from("user_onboarding")
+        .insert({
+          user_id: user.id,
+          completed_step_ids: [],
+          has_seen_tour: false,
+          tour_version: 0,
+        })
+        .select()
+        .single();
+      onboardingState = newRow;
+    } else {
+      onboardingState = data;
+    }
+  }
+
+  return (
+    <OnboardingProvider
+      initialState={onboardingState}
+      config={coachOnboardingConfig}
+      role="coach"
+    >
+      <main className="app-content">{children}</main>
+    </OnboardingProvider>
+  );
 }
