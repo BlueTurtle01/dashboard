@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 type StretchRow = {
   id: string;
   name: string;
+  alternative_names: string[] | null;
   description: string;
   primary_muscles: string[];
   secondary_muscles: string[];
@@ -36,7 +37,7 @@ export default function AdminStretchesPage() {
       const { data, error } = await supabase
         .from("stretches")
         .select(
-          "id, name, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern, created_at"
+          "id, name, alternative_names, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern, created_at"
         )
         .order("name", { ascending: true });
 
@@ -62,6 +63,7 @@ export default function AdminStretchesPage() {
     return stretches.filter((stretch) => {
       return (
         stretch.name.toLowerCase().includes(query) ||
+        (stretch.alternative_names ?? []).some((item) => item.toLowerCase().includes(query)) ||
         stretch.id.toLowerCase().includes(query) ||
         stretch.description.toLowerCase().includes(query) ||
         (stretch.pattern || "").toLowerCase().includes(query) ||
@@ -114,7 +116,7 @@ export default function AdminStretchesPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by name, id, pattern, muscles, movement tags, equipment..."
+            placeholder="Search by name, alias, id, pattern, muscles, movement tags, equipment..."
             style={searchInputStyle}
           />
 
@@ -128,7 +130,7 @@ export default function AdminStretchesPage() {
                 <thead>
                   <tr>
                     <th style={thStyle}>Name</th>
-                    <th style={thStyle}>ID</th>
+                    <th style={thStyle}>Also known as</th>
                     <th style={thStyle}>Pattern</th>
                     <th style={thStyle}>Movement Tags</th>
                     <th style={thStyle}>Equipment</th>
@@ -145,7 +147,9 @@ export default function AdminStretchesPage() {
                         ) : null}
                       </td>
                       <td style={tdStyle}>
-                        <code>{stretch.id}</code>
+                        {(stretch.alternative_names ?? []).length > 0
+                          ? (stretch.alternative_names ?? []).join(", ")
+                          : "—"}
                       </td>
                       <td style={tdStyle}>{stretch.pattern || "—"}</td>
                       <td style={tdStyle}>

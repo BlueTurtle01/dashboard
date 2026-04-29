@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 type ExerciseRow = {
   id: string;
   name: string;
+  alternative_names: string[] | null;
   description: string;
   primary_muscles: string[];
   secondary_muscles: string[];
@@ -52,7 +53,7 @@ export default function AdminExercisesPage() {
         supabase
           .from("exercises")
           .select(
-            "id, name, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern, created_at"
+            "id, name, alternative_names, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern, created_at"
           )
           .order("name", { ascending: true }),
         supabase
@@ -97,6 +98,7 @@ export default function AdminExercisesPage() {
     return gymExercises.filter((exercise) => {
       return (
         exercise.name.toLowerCase().includes(query) ||
+        (exercise.alternative_names ?? []).some((item) => item.toLowerCase().includes(query)) ||
         exercise.id.toLowerCase().includes(query) ||
         exercise.description.toLowerCase().includes(query) ||
         (exercise.pattern || "").toLowerCase().includes(query) ||
@@ -164,7 +166,7 @@ export default function AdminExercisesPage() {
           <input
             value={gymSearch}
             onChange={(event) => setGymSearch(event.target.value)}
-            placeholder="Search by name, id, pattern, muscles, movement tags, equipment..."
+            placeholder="Search by name, alias, id, pattern, muscles, movement tags, equipment..."
             style={searchInputStyle}
           />
 
@@ -178,7 +180,7 @@ export default function AdminExercisesPage() {
                 <thead>
                   <tr>
                     <th style={thStyle}>Name</th>
-                    <th style={thStyle}>ID</th>
+                    <th style={thStyle}>Also known as</th>
                     <th style={thStyle}>Pattern</th>
                     <th style={thStyle}>Movement Tags</th>
                     <th style={thStyle}>Equipment</th>
@@ -195,7 +197,9 @@ export default function AdminExercisesPage() {
                         ) : null}
                       </td>
                       <td style={tdStyle}>
-                        <code>{exercise.id}</code>
+                        {(exercise.alternative_names ?? []).length > 0
+                          ? (exercise.alternative_names ?? []).join(", ")
+                          : "—"}
                       </td>
                       <td style={tdStyle}>{exercise.pattern || "—"}</td>
                       <td style={tdStyle}>

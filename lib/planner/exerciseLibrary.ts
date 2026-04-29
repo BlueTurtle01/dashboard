@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/client'
 export interface ExerciseLibraryItem {
   id: string
   name: string
+  alternativeNames: string[]
   description: string
   primaryMuscles: string[]
   secondaryMuscles: string[]
@@ -17,6 +18,7 @@ export interface ExerciseLibraryItem {
 type ExerciseRow = {
   id: string
   name: string
+  alternative_names: string[] | null
   description: string
   primary_muscles: string[]
   secondary_muscles: string[]
@@ -32,6 +34,7 @@ function mapExerciseRow(row: ExerciseRow): ExerciseLibraryItem {
   return {
     id: row.id,
     name: row.name,
+    alternativeNames: row.alternative_names ?? [],
     description: row.description,
     primaryMuscles: row.primary_muscles ?? [],
     secondaryMuscles: row.secondary_muscles ?? [],
@@ -51,6 +54,7 @@ function normalise(text: string) {
 function buildSearchText(item: ExerciseLibraryItem) {
   return [
     item.name,
+    ...item.alternativeNames,
     item.description,
     ...item.primaryMuscles,
     ...item.secondaryMuscles,
@@ -72,6 +76,8 @@ function scoreExercise(item: ExerciseLibraryItem, query: string) {
 
   if (name === q) score += 100
   if (name.includes(q)) score += 50
+  if (item.alternativeNames.some((x) => normalise(x) === q)) score += 80
+  if (item.alternativeNames.some((x) => normalise(x).includes(q))) score += 45
   if (item.primaryMuscles.some((x) => normalise(x).includes(q))) score += 40
   if (item.secondaryMuscles.some((x) => normalise(x).includes(q))) score += 25
   if (item.movementTags.some((x) => normalise(x).includes(q))) score += 20
@@ -89,6 +95,7 @@ export async function getExerciseLibrary(): Promise<ExerciseLibraryItem[]> {
     .select(`
       id,
       name,
+      alternative_names,
       description,
       primary_muscles,
       secondary_muscles,
@@ -135,6 +142,7 @@ export async function getExerciseLibraryItemById(id: string) {
     .select(`
       id,
       name,
+      alternative_names,
       description,
       primary_muscles,
       secondary_muscles,

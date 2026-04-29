@@ -26,12 +26,15 @@ type MuscleOption = {
 type ExerciseRow = {
   id: string;
   name: string;
+  alternative_names: string[] | null;
   description: string;
   primary_muscles: string[];
   secondary_muscles: string[];
   movement_tags: string[];
   equipment: string[];
   pattern: string | null;
+  sets: number | null;
+  reps: number | null;
 };
 
 export default function EditExercisePage() {
@@ -43,8 +46,11 @@ export default function EditExercisePage() {
     typeof params.exerciseId === "string" ? params.exerciseId : "";
 
   const [name, setName] = useState("");
+  const [alternativeNames, setAlternativeNames] = useState("");
   const [description, setDescription] = useState("");
   const [pattern, setPattern] = useState("");
+  const [defaultSets, setDefaultSets] = useState("");
+  const [defaultReps, setDefaultReps] = useState("");
 
   const [movementTagSearch, setMovementTagSearch] = useState("");
   const [allMovementTags, setAllMovementTags] = useState<MovementTag[]>([]);
@@ -91,7 +97,7 @@ export default function EditExercisePage() {
           supabase
             .from("exercises")
             .select(
-              "id, name, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern"
+              "id, name, alternative_names, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern, sets, reps"
             )
             .eq("id", exerciseId)
             .single(),
@@ -145,8 +151,11 @@ export default function EditExercisePage() {
         const exercise = exerciseResult.data as ExerciseRow;
 
         setName(exercise.name || "");
+        setAlternativeNames((exercise.alternative_names ?? []).join("\n"));
         setDescription(exercise.description || "");
         setPattern(exercise.pattern || "");
+        setDefaultSets(exercise.sets == null ? "" : String(exercise.sets));
+        setDefaultReps(exercise.reps == null ? "" : String(exercise.reps));
 
         setSelectedMovementTags(
           movementTags.filter((tag) => (exercise.movement_tags || []).includes(tag.slug))
@@ -308,12 +317,15 @@ export default function EditExercisePage() {
 
     const payload = {
       name: trimmedName,
+      alternative_names: parseAlternativeNames(alternativeNames),
       description: description.trim(),
       primary_muscles: selectedPrimaryMuscles.map((item) => item.slug),
       secondary_muscles: selectedSecondaryMuscles.map((item) => item.slug),
       movement_tags: selectedMovementTags.map((item) => item.slug),
       equipment: selectedEquipmentOptions.map((item) => item.slug),
       pattern: pattern.trim() || null,
+      sets: parseOptionalPositiveInteger(defaultSets),
+      reps: parseOptionalPositiveInteger(defaultReps),
     };
 
     const { error } = await supabase
@@ -363,6 +375,18 @@ export default function EditExercisePage() {
             onChange={(event) => setName(event.target.value)}
             style={inputStyle}
             required
+          />
+
+          <label htmlFor="alternative-names" style={labelStyle}>
+            Alternative names
+          </label>
+          <textarea
+            id="alternative-names"
+            value={alternativeNames}
+            onChange={(event) => setAlternativeNames(event.target.value)}
+            rows={3}
+            placeholder="One per line, e.g. RDL"
+            style={textareaStyle}
           />
 
           <label htmlFor="description" style={labelStyle}>
@@ -607,6 +631,38 @@ export default function EditExercisePage() {
             style={inputStyle}
           />
 
+          <div style={numberGridStyle}>
+            <div>
+              <label htmlFor="default-sets" style={labelStyle}>
+                Default sets
+              </label>
+              <input
+                id="default-sets"
+                type="number"
+                min="0"
+                step="1"
+                value={defaultSets}
+                onChange={(event) => setDefaultSets(event.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="default-reps" style={labelStyle}>
+                Default reps
+              </label>
+              <input
+                id="default-reps"
+                type="number"
+                min="0"
+                step="1"
+                value={defaultReps}
+                onChange={(event) => setDefaultReps(event.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
           {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
           {successMessage ? <p style={successStyle}>{successMessage}</p> : null}
 
@@ -626,6 +682,27 @@ export default function EditExercisePage() {
         </form>
       </div>
     </main>
+  );
+}
+
+function parseOptionalPositiveInteger(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const parsed = Number.parseInt(trimmed, 10);
+  if (Number.isNaN(parsed) || parsed < 0) return null;
+
+  return parsed;
+}
+
+function parseAlternativeNames(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(/\r?\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
   );
 }
 
@@ -663,6 +740,12 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid #ccc",
   borderRadius: "8px",
   marginBottom: "16px",
+};
+
+const numberGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "16px",
 };
 
 const textareaStyle: React.CSSProperties = {

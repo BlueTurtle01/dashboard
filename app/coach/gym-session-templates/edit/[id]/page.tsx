@@ -11,6 +11,8 @@ type ExerciseSearchRow = {
   description: string;
   pattern: string | null;
   equipment: string[] | null;
+  sets: number | null;
+  reps: number | null;
 };
 
 type SelectedExercise = {
@@ -106,7 +108,7 @@ export default function EditGymSessionTemplatePage() {
       if (exerciseIds.length > 0) {
         const { data: lookupRows, error: lookupError } = await supabase
           .from("exercises")
-          .select("id, name, description, pattern, equipment")
+          .select("id, name, description, pattern, equipment, sets, reps")
           .in("id", exerciseIds);
 
         if (!lookupError && lookupRows) {
@@ -186,7 +188,7 @@ export default function EditGymSessionTemplatePage() {
 
       let query = supabase
         .from("exercises")
-        .select("id, name, description, pattern, equipment")
+        .select("id, name, description, pattern, equipment, sets, reps")
         .order("name", { ascending: true })
         .limit(20);
 
@@ -239,8 +241,8 @@ export default function EditGymSessionTemplatePage() {
         description: exercise.description,
         pattern: exercise.pattern,
         equipment: exercise.equipment ?? null,
-        sets: "",
-        reps: "",
+        sets: exercise.sets == null ? "" : String(exercise.sets),
+        reps: exercise.reps == null ? "" : String(exercise.reps),
         duration: "",
         notes: "",
       },

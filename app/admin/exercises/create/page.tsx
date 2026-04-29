@@ -28,8 +28,11 @@ export default function CreateExercisePage() {
   const supabase = createClient();
 
   const [name, setName] = useState("");
+  const [alternativeNames, setAlternativeNames] = useState("");
   const [description, setDescription] = useState("");
   const [pattern, setPattern] = useState("");
+  const [defaultSets, setDefaultSets] = useState("");
+  const [defaultReps, setDefaultReps] = useState("");
 
   const [movementTagSearch, setMovementTagSearch] = useState("");
   const [allMovementTags, setAllMovementTags] = useState<MovementTag[]>([]);
@@ -231,12 +234,15 @@ export default function CreateExercisePage() {
     const payload = {
       id,
       name: name.trim(),
+      alternative_names: parseAlternativeNames(alternativeNames),
       description: description.trim(),
       primary_muscles: selectedPrimaryMuscles.map((item) => item.slug),
       secondary_muscles: selectedSecondaryMuscles.map((item) => item.slug),
       movement_tags: selectedMovementTags.map((item) => item.slug),
       equipment: selectedEquipmentOptions.map((item) => item.slug),
       pattern: pattern.trim() || null,
+      sets: parseOptionalPositiveInteger(defaultSets),
+      reps: parseOptionalPositiveInteger(defaultReps),
     };
 
     const { error } = await supabase.from("exercises").insert(payload);
@@ -253,8 +259,11 @@ export default function CreateExercisePage() {
 
     setSuccessMessage("Exercise created successfully.");
     setName("");
+    setAlternativeNames("");
     setDescription("");
     setPattern("");
+    setDefaultSets("");
+    setDefaultReps("");
     setMovementTagSearch("");
     setSelectedMovementTags([]);
     setEquipmentSearch("");
@@ -281,6 +290,18 @@ export default function CreateExercisePage() {
             onChange={(event) => setName(event.target.value)}
             style={inputStyle}
             required
+          />
+
+          <label htmlFor="alternative-names" style={labelStyle}>
+            Alternative names
+          </label>
+          <textarea
+            id="alternative-names"
+            value={alternativeNames}
+            onChange={(event) => setAlternativeNames(event.target.value)}
+            rows={3}
+            placeholder="One per line, e.g. RDL"
+            style={textareaStyle}
           />
 
           <label htmlFor="description" style={labelStyle}>
@@ -525,6 +546,38 @@ export default function CreateExercisePage() {
             style={inputStyle}
           />
 
+          <div style={numberGridStyle}>
+            <div>
+              <label htmlFor="default-sets" style={labelStyle}>
+                Default sets
+              </label>
+              <input
+                id="default-sets"
+                type="number"
+                min="0"
+                step="1"
+                value={defaultSets}
+                onChange={(event) => setDefaultSets(event.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="default-reps" style={labelStyle}>
+                Default reps
+              </label>
+              <input
+                id="default-reps"
+                type="number"
+                min="0"
+                step="1"
+                value={defaultReps}
+                onChange={(event) => setDefaultReps(event.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
           {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
           {successMessage ? <p style={successStyle}>{successMessage}</p> : null}
 
@@ -554,6 +607,27 @@ function makeExerciseId(value: string) {
     .replace(/['"]/g, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function parseOptionalPositiveInteger(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const parsed = Number.parseInt(trimmed, 10);
+  if (Number.isNaN(parsed) || parsed < 0) return null;
+
+  return parsed;
+}
+
+function parseAlternativeNames(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(/\r?\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
 }
 
 const pageStyle: React.CSSProperties = {
@@ -599,6 +673,12 @@ const textareaStyle: React.CSSProperties = {
   borderRadius: "8px",
   marginBottom: "16px",
   resize: "vertical",
+};
+
+const numberGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "16px",
 };
 
 const helperStyle: React.CSSProperties = {

@@ -10,7 +10,10 @@ export default async function CoachExercisesPage() {
       <ul>
         {exercises.map((exercise) => (
           <li key={exercise.id}>
-            {exercise.name}
+            <strong>{exercise.name}</strong>
+            {exercise.alternativeNames.length > 0 ? (
+              <span> Also known as {exercise.alternativeNames.join(", ")}</span>
+            ) : null}
           </li>
         ))}
       </ul>

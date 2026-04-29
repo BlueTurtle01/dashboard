@@ -28,6 +28,7 @@ export default function CreateStretchPage() {
   const supabase = createClient();
 
   const [name, setName] = useState("");
+  const [alternativeNames, setAlternativeNames] = useState("");
   const [description, setDescription] = useState("");
   const [pattern, setPattern] = useState("");
 
@@ -231,6 +232,7 @@ export default function CreateStretchPage() {
     const payload = {
       id,
       name: name.trim(),
+      alternative_names: parseAlternativeNames(alternativeNames),
       description: description.trim(),
       primary_muscles: selectedPrimaryMuscles.map((item) => item.slug),
       secondary_muscles: selectedSecondaryMuscles.map((item) => item.slug),
@@ -253,6 +255,7 @@ export default function CreateStretchPage() {
 
     setSuccessMessage("Stretch created successfully.");
     setName("");
+    setAlternativeNames("");
     setDescription("");
     setPattern("");
     setMovementTagSearch("");
@@ -281,6 +284,18 @@ export default function CreateStretchPage() {
             onChange={(event) => setName(event.target.value)}
             style={inputStyle}
             required
+          />
+
+          <label htmlFor="alternative-names" style={labelStyle}>
+            Alternative names
+          </label>
+          <textarea
+            id="alternative-names"
+            value={alternativeNames}
+            onChange={(event) => setAlternativeNames(event.target.value)}
+            rows={3}
+            placeholder="One per line, e.g. Couch stretch"
+            style={textareaStyle}
           />
 
           <label htmlFor="description" style={labelStyle}>
@@ -554,6 +569,17 @@ function makeStretchId(value: string) {
     .replace(/['"]/g, "")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function parseAlternativeNames(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(/\r?\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
 }
 
 const pageStyle: React.CSSProperties = {

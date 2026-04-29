@@ -23,6 +23,18 @@ type MuscleOption = {
   slug: string;
 };
 
+type StretchRow = {
+  id: string;
+  name: string;
+  alternative_names: string[] | null;
+  description: string;
+  primary_muscles: string[];
+  secondary_muscles: string[];
+  movement_tags: string[];
+  equipment: string[];
+  pattern: string | null;
+};
+
 export default function EditStretchPage() {
   const router = useRouter();
   const params = useParams();
@@ -32,6 +44,7 @@ export default function EditStretchPage() {
     typeof params.stretchId === "string" ? params.stretchId : "";
 
   const [name, setName] = useState("");
+  const [alternativeNames, setAlternativeNames] = useState("");
   const [description, setDescription] = useState("");
   const [pattern, setPattern] = useState("");
 
@@ -80,7 +93,7 @@ export default function EditStretchPage() {
           supabase
             .from("stretches")
             .select(
-              "id, name, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern"
+              "id, name, alternative_names, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern"
             )
             .eq("id", stretchId)
             .single(),
@@ -131,9 +144,10 @@ export default function EditStretchPage() {
       }
 
       if (!stretchResult.error && stretchResult.data) {
-        const stretch = stretchResult.data as any;
+        const stretch = stretchResult.data as StretchRow;
 
         setName(stretch.name || "");
+        setAlternativeNames((stretch.alternative_names ?? []).join("\n"));
         setDescription(stretch.description || "");
         setPattern(stretch.pattern || "");
 
@@ -293,6 +307,7 @@ export default function EditStretchPage() {
 
     const payload = {
       name: trimmedName,
+      alternative_names: parseAlternativeNames(alternativeNames),
       description: description.trim(),
       primary_muscles: selectedPrimaryMuscles.map((item) => item.slug),
       secondary_muscles: selectedSecondaryMuscles.map((item) => item.slug),
@@ -348,6 +363,18 @@ export default function EditStretchPage() {
             onChange={(event) => setName(event.target.value)}
             style={inputStyle}
             required
+          />
+
+          <label htmlFor="alternative-names" style={labelStyle}>
+            Alternative names
+          </label>
+          <textarea
+            id="alternative-names"
+            value={alternativeNames}
+            onChange={(event) => setAlternativeNames(event.target.value)}
+            rows={3}
+            placeholder="One per line, e.g. Couch stretch"
+            style={textareaStyle}
           />
 
           <label htmlFor="description" style={labelStyle}>
@@ -611,6 +638,17 @@ export default function EditStretchPage() {
         </form>
       </div>
     </main>
+  );
+}
+
+function parseAlternativeNames(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(/\r?\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
   );
 }
 
