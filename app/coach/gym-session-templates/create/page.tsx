@@ -114,10 +114,10 @@ export default function NewGymSessionTemplatePage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   const templateNamePreview = useMemo(() => {
-    if (!focusArea || !goal || variantNumber === null) return "";
+    if (!difficultyLevel || !focusArea || !goal || variantNumber === null) return "";
     const location = resolveSessionLocation(selectedExercises);
-    return `${focusArea} - ${goal} - ${variantNumber} (${location})`;
-  }, [focusArea, goal, variantNumber, selectedExercises]);
+    return `${difficultyLevel} - ${focusArea} - ${goal} - ${variantNumber} (${location})`;
+  }, [difficultyLevel, focusArea, goal, variantNumber, selectedExercises]);
 
   const canSave = useMemo(() => {
     return (
@@ -228,7 +228,7 @@ export default function NewGymSessionTemplatePage() {
     let cancelled = false;
 
     async function loadNextVariantNumber() {
-      if (!focusArea || !goal) {
+      if (!difficultyLevel || !focusArea || !goal) {
         setVariantNumber(null);
         setLoadingVariantNumber(false);
         return;
@@ -242,6 +242,7 @@ export default function NewGymSessionTemplatePage() {
         .from("session_templates")
         .select("name")
         .eq("type", "gym")
+        .eq("difficulty_level", difficultyLevel)
         .eq("focus_area", focusArea)
         .eq("goal", goal)
         .order("created_at", { ascending: true });
@@ -258,6 +259,7 @@ export default function NewGymSessionTemplatePage() {
       const rows = (data ?? []) as ExistingTemplateNameRow[];
       const nextNumber = getNextVariantNumber(
         rows.map((row) => row.name),
+        difficultyLevel,
         focusArea,
         goal
       );
@@ -271,7 +273,7 @@ export default function NewGymSessionTemplatePage() {
     return () => {
       cancelled = true;
     };
-  }, [focusArea, goal]);
+  }, [difficultyLevel, focusArea, goal]);
 
   function addExercise(exercise: ExerciseSearchRow) {
     const alreadyAdded = selectedExercises.some(
@@ -514,8 +516,10 @@ export default function NewGymSessionTemplatePage() {
                     Template name
                   </label>
                   <div className="rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm text-zinc-900">
-                    {!focusArea || !goal ? (
-                      <span className="text-zinc-500">Select focus area and goal to generate a name.</span>
+                    {!difficultyLevel || !focusArea || !goal ? (
+                      <span className="text-zinc-500">
+                        Select difficulty, focus area, and goal to generate a name.
+                      </span>
                     ) : loadingVariantNumber ? (
                       <span className="text-zinc-500">Calculating next number…</span>
                     ) : (
