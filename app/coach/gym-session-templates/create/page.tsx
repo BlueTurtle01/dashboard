@@ -41,8 +41,8 @@ function toSubtype(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "_");
 }
 
-function getNextVariantNumber(names: string[], focusArea: string, goal: string) {
-  const prefix = `${focusArea} - ${goal} - `;
+function getNextVariantNumber(names: string[], difficultyLevel: string, focusArea: string, goal: string) {
+  const prefix = `${difficultyLevel} - ${focusArea} - ${goal} - `;
   let maxNumber = 0;
 
   for (const name of names) {
@@ -82,10 +82,22 @@ const goalOptions = [
   "Rehab",
 ];
 
+const difficultyOptions = ["Beginner", "Intermediate", "Advanced"];
+
+const GYM_EQUIPMENT = new Set(["machine", "cable"]);
+
+function resolveSessionLocation(exercises: SelectedExercise[]): "Gym" | "Home" {
+  for (const exercise of exercises) {
+    if (exercise.equipment?.some((eq) => GYM_EQUIPMENT.has(eq))) return "Gym";
+  }
+  return "Home";
+}
+
 export default function NewGymSessionTemplatePage() {
   const [templateDescription, setTemplateDescription] = useState("");
   const [focusArea, setFocusArea] = useState("");
   const [goal, setGoal] = useState("");
+  const [difficultyLevel, setDifficultyLevel] = useState("");
   const [variantNumber, setVariantNumber] = useState<number | null>(null);
   const [loadingVariantNumber, setLoadingVariantNumber] = useState(false);
 
@@ -103,19 +115,21 @@ export default function NewGymSessionTemplatePage() {
 
   const templateNamePreview = useMemo(() => {
     if (!focusArea || !goal || variantNumber === null) return "";
-    return `${focusArea} - ${goal} - ${variantNumber}`;
-  }, [focusArea, goal, variantNumber]);
+    const location = resolveSessionLocation(selectedExercises);
+    return `${focusArea} - ${goal} - ${variantNumber} (${location})`;
+  }, [focusArea, goal, variantNumber, selectedExercises]);
 
   const canSave = useMemo(() => {
     return (
       focusArea.trim().length > 0 &&
       goal.trim().length > 0 &&
+      difficultyLevel.trim().length > 0 &&
       variantNumber !== null &&
       selectedExercises.length > 0 &&
       !saving &&
       !loadingVariantNumber
     );
-  }, [focusArea, goal, variantNumber, selectedExercises.length, saving, loadingVariantNumber]);
+  }, [focusArea, goal, difficultyLevel, variantNumber, selectedExercises.length, saving, loadingVariantNumber]);
 
   useEffect(() => {
     let cancelled = false;
@@ -345,6 +359,7 @@ export default function NewGymSessionTemplatePage() {
         subtype,
         focus_area: focusArea.trim(),
         goal: goal.trim(),
+        difficulty_level: difficultyLevel.trim() || null,
         session_data: {},
       })
       .select("id")
@@ -384,6 +399,7 @@ export default function NewGymSessionTemplatePage() {
     setTemplateDescription("");
     setFocusArea("");
     setGoal("");
+    setDifficultyLevel("");
     setVariantNumber(null);
     setExerciseSearch("");
     setExerciseResults([]);
@@ -477,6 +493,24 @@ export default function NewGymSessionTemplatePage() {
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-zinc-900">
+                    Difficulty level
+                  </label>
+                  <select
+                    value={difficultyLevel}
+                    onChange={(event) => setDifficultyLevel(event.target.value)}
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                  >
+                    <option value="">Select difficulty</option>
+                    {difficultyOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-zinc-900">
                     Template name
                   </label>
                   <div className="rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 text-sm text-zinc-900">
@@ -489,8 +523,8 @@ export default function NewGymSessionTemplatePage() {
                     )}
                   </div>
                   <p className="mt-2 text-xs text-zinc-500">
-                    The number is assigned automatically from existing templates with the same focus
-                    area and goal.
+                    The number is assigned automatically. The Gym/Home suffix is set based on
+                    whether any exercise requires a machine or cable.
                   </p>
                 </div>
 
