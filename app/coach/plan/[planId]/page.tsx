@@ -1087,7 +1087,6 @@ export default function PlanEditorPage() {
 
   const [planRow, setPlanRow] = useState<AthletePlanRow | null>(null);
   const [plan, setPlan] = useState<GeneratedPlan | null>(null);
-  const [history, setHistory] = useState<AthletePlanSnapshotRow[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
   const [pendingSessionSlot, setPendingSessionSlot] = useState<PendingSessionSlot | null>(null);
   const [pendingSessionType, setPendingSessionType] = useState<"gym" | "functional" | "mobility" | null>(null);
@@ -1096,10 +1095,8 @@ export default function PlanEditorPage() {
   const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
   const [sessionTemplateResults, setSessionTemplateResults] = useState<SessionTemplateRow[]>([]);
   const [adHocMode, setAdHocMode] = useState<"search" | "create">("search");
-  const [snapshotName, setSnapshotName] = useState("");
-  const [showAllSnapshots, setShowAllSnapshots] = useState(false);
   const [weekFocusTypes, setWeekFocusTypes] = useState<WeekFocusTypeRow[]>([]);
-  const [activeTab, setActiveTab] = useState<"plan" | "warnings" | "versions">("plan");
+  const [activeTab, setActiveTab] = useState<"plan" | "warnings">("plan");
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
   const [athleteContext, setAthleteContext] = useState<AthleteContextRow | null>(null);
   const [trainingCamps, setTrainingCamps] = useState<TrainingCamp[]>([]);
@@ -1202,16 +1199,6 @@ export default function PlanEditorPage() {
 
     setPlanRow(typedPlan);
     setPlan(parsedPlan);
-
-    const { data: snapshotData, error: snapshotError } = await supabase
-      .from("athlete_plan_snapshots")
-      .select("id, athlete_user_id, athlete_plan_id, name, plan_json, created_at")
-      .eq("athlete_plan_id", planId)
-      .order("created_at", { ascending: false });
-
-    if (!snapshotError) {
-      setHistory((snapshotData ?? []) as AthletePlanSnapshotRow[]);
-    }
 
     setLoading(false);
   }
@@ -1644,113 +1631,6 @@ export default function PlanEditorPage() {
     showTemporaryStatus("Warnings recalculated.", 2000);
   }
 
-  async function saveVersion() {
-    if (!plan || !planRow) return;
-
-    const trimmedSnapshotName = snapshotName.trim();
-    if (!trimmedSnapshotName) {
-      showTemporaryStatus("Please enter a version name before saving.", 2500);
-      return;
-    }
-
-    const athleteEquipmentAvoid = deriveEquipmentAvoid(athleteContext);
-    const athleteEquipmentUnavailable = deriveEquipmentUnavailable(athleteContext);
-    const newWarnings = calculateAllWarnings(plan, athleteEquipmentUnavailable, athleteEquipmentAvoid);
-
-    // Transform warnings to add 'type' field for backward compatibility with warnings page
-    const allWarnings = newWarnings.map((w: any) => ({
-      ...w,
-      type: w.severity, // Map severity to type for display compatibility
-    })) as any[];
-
-    const recalculated: GeneratedPlan = {
-      ...plan,
-      warnings: allWarnings as any,
-      updatedAt: new Date().toISOString(),
-    };
-
-    setPlan(recalculated);
-
-    const { error } = await supabase.from("athlete_plan_snapshots").insert({
-      athlete_user_id: planRow.athlete_user_id,
-      athlete_plan_id: planRow.id,
-      name: trimmedSnapshotName,
-      plan_json: recalculated,
-    });
-
-    if (error) {
-      showTemporaryStatus(`Could not save version: ${error.message}`, 4000);
-      return;
-    }
-
-    setSnapshotName("");
-    await loadPlanAndHistory();
-    showTemporaryStatus("Version saved.", 2000);
-  }
-
-  function revertToLatestSaved() {
-    if (!planRow?.plan_json) return;
-
-    const parsedPlan = coerceSavedPlanJsonToGeneratedPlan(
-      planRow.plan_json,
-      planRow.name ?? "Plan in progress",
-    );
-
-    if (!parsedPlan) {
-      showTemporaryStatus("Saved plan format is not recognised.", 3000);
-      return;
-    }
-
-    setPlan(parsedPlan);
-    setSnapshotName("");
-    setPendingSessionSlot(null);
-    setSessionTemplateSearch("");
-    setSessionTemplateResults([]);
-    showTemporaryStatus("Reverted to latest saved plan.", 2000);
-  }
-
-  async function loadHistoryItem(snapshotId: string) {
-    const selected = history.find((item) => item.id === snapshotId);
-    if (!selected) return;
-
-    const parsedPlan = coerceSavedPlanJsonToGeneratedPlan(
-      selected.plan_json,
-      selected.name ?? "Saved version",
-    );
-
-    if (!parsedPlan) {
-      showTemporaryStatus("Saved version format is not recognised.", 3000);
-      return;
-    }
-
-    setPlan(parsedPlan);
-    setSnapshotName(selected.name ?? "");
-    await persistPlan(parsedPlan);
-    showTemporaryStatus("Loaded saved version.", 2000);
-  }
-
-  async function deleteVersion(snapshotId: string) {
-    const selected = history.find((item) => item.id === snapshotId);
-    if (!selected) return;
-
-    const confirmed = window.confirm(
-      `Delete saved version "${selected.name || "Saved version"}"? This cannot be undone.`,
-    );
-
-    if (!confirmed) return;
-
-    const { error } = await supabase.from("athlete_plan_snapshots").delete().eq("id", snapshotId);
-
-    if (error) {
-      showTemporaryStatus(`Could not delete version: ${error.message}`, 4000);
-      return;
-    }
-
-    setHistory((currentHistory) =>
-      currentHistory.filter((snapshot) => snapshot.id !== snapshotId),
-    );
-    showTemporaryStatus("Saved version deleted.", 2500);
-  }
 
   function addBlankWeekToEnd() {
     if (!plan) return;
@@ -2338,11 +2218,31 @@ export default function PlanEditorPage() {
                 </button>
 
                 <button
-                  onClick={revertToLatestSaved}
-                  disabled={loading || !planRow}
-                  className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100 disabled:opacity-50"
+                  onClick={() => {
+                    if (!plan) return;
+                    void persistPlan(plan).then(() => {
+                      showTemporaryStatus("Saved.", 1500);
+                    });
+                  }}
+                  disabled={buttonsDisabled || savingToAthlete}
+                  className="rounded-xl bg-zinc-900 text-white px-5 py-3 text-sm font-semibold hover:bg-zinc-700 disabled:opacity-50"
                 >
-                  Revert
+                  {savingToAthlete ? "Saving..." : "Save"}
+                </button>
+
+                <button
+                  onClick={addBlankWeekAtStart}
+                  disabled={buttonsDisabled}
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-xs font-semibold hover:bg-zinc-100 disabled:opacity-50"
+                >
+                  Add Blank Week at Start
+                </button>
+                <button
+                  onClick={addBlankWeekToEnd}
+                  disabled={buttonsDisabled}
+                  className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-xs font-semibold hover:bg-zinc-100 disabled:opacity-50"
+                >
+                  Add Blank Week at End
                 </button>
               </>
             )}
@@ -2367,33 +2267,11 @@ export default function PlanEditorPage() {
           <div className="rounded-2xl border bg-white p-8">No plan found.</div>
         ) : (
           <>
-            <div className="flex gap-8 items-start">
-            {/* Left Panel — Week Templates */}
-            <aside className="w-80 shrink-0 space-y-4">
-              <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-3">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Plan Actions</h2>
-                <button
-                  onClick={addBlankWeekAtStart}
-                  disabled={buttonsDisabled}
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold hover:bg-zinc-100 disabled:opacity-50"
-                >
-                  Add Blank Week at Start
-                </button>
-                <button
-                  onClick={addBlankWeekToEnd}
-                  disabled={buttonsDisabled}
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-semibold hover:bg-zinc-100 disabled:opacity-50"
-                >
-                  Add Blank Week at End
-                </button>
-              </div>
-            </aside>
-
-            {/* Right Panel — Tabbed Content */}
-            <div className="min-w-0 flex-1">
+            {/* Tabbed Content */}
+            <div>
               {/* Tab Bar */}
               <div className="mb-6 flex border-b border-zinc-200 gap-0">
-                {["plan", "warnings", "versions"].map((tab) => {
+                {["plan", "warnings"].map((tab) => {
                   const isActive = activeTab === (tab as typeof activeTab);
                   const warningCount = plan?.warnings?.length ?? 0;
                   let label = tab.charAt(0).toUpperCase() + tab.slice(1);
@@ -3197,99 +3075,7 @@ export default function PlanEditorPage() {
                   )}
                 </div>
               )}
-
-              {/* Versions Tab */}
-              {activeTab === "versions" && (
-                <div className="space-y-6">
-                  {/* Save Version Card */}
-                  <div className="rounded-2xl border bg-white p-6 shadow-sm">
-                    <h2 className="text-xl font-semibold">Save Version</h2>
-
-                    <div className="mt-4">
-                      <label className="mb-2 block text-sm font-semibold text-zinc-900">
-                        Version name
-                      </label>
-                      <input
-                        type="text"
-                        value={snapshotName}
-                        onChange={(e) => setSnapshotName(e.target.value)}
-                        placeholder="e.g. More aggressive build option"
-                        className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-                      />
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <button
-                        onClick={() => void saveVersion()}
-                        disabled={loading || !plan || !planRow}
-                        className="rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
-                      >
-                        Save Version
-                      </button>
-                    </div>
-
-                    <div className="mt-3 text-xs text-zinc-500">
-                      Save named restore points for this plan.
-                    </div>
-                  </div>
-
-                  {/* Version History Card */}
-                  <div className="rounded-2xl border bg-white p-6 shadow-sm">
-                    <h2 className="text-xl font-semibold">Version History</h2>
-                    <div className="mt-4 space-y-3">
-                      {history.length === 0 ? (
-                        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-                          No saved versions yet.
-                        </div>
-                      ) : (
-                        <>
-                          {(showAllSnapshots ? history : history.slice(0, 2)).map((snapshot) => (
-                            <div
-                              key={snapshot.id}
-                              className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => void loadHistoryItem(snapshot.id)}
-                                className="block w-full rounded-lg text-left transition hover:bg-zinc-100"
-                              >
-                                <div className="font-medium text-zinc-900">
-                                  {snapshot.name || "Saved version"}
-                                </div>
-                                <div className="mt-1 text-xs text-zinc-500">
-                                  {new Date(snapshot.created_at).toLocaleString()}
-                                </div>
-                              </button>
-
-                              <div className="mt-3 flex justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() => void deleteVersion(snapshot.id)}
-                                  className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-
-                          {history.length > 2 ? (
-                            <button
-                              type="button"
-                              onClick={() => setShowAllSnapshots((currentValue) => !currentValue)}
-                              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-100"
-                            >
-                              {showAllSnapshots ? "Show Less" : `More (${history.length - 2})`}
-                            </button>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
-          </div>
 
           </>
         )}

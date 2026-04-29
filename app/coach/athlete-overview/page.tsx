@@ -1109,13 +1109,6 @@ export default function CoachAthleteOverviewPage() {
 
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <Link
-                    href={`/create-plan?athleteId=${selectedAthleteId}&source=scratch`}
-                    className="rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-zinc-700"
-                  >
-                    New Blank Plan
-                  </Link>
-
-                  <Link
                     href={`/coach/program-templates?athleteId=${selectedAthleteId}&mode=apply`}
                     className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-100"
                   >
