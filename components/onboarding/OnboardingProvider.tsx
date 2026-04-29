@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
@@ -50,6 +50,7 @@ export default function OnboardingProvider({
   );
   const [driverInstance, setDriverInstance] = useState<any>(null);
   const [newStepsAvailable, setNewStepsAvailable] = useState(false);
+  const stepsToShowRef = useRef<OnboardingStep[]>([]);
 
   // Calculate which steps are new (not yet completed)
   const incompleteSteps = config.steps.filter(
@@ -93,30 +94,20 @@ export default function OnboardingProvider({
   const startTour = async () => {
     // Filter steps to only incomplete ones
     const stepsToShow = incompleteSteps;
+    stepsToShowRef.current = stepsToShow;
 
     if (stepsToShow.length === 0) return;
 
     const driverInst = driver({
       showProgress: true,
-      steps: stepsToShow.map((step) => {
+      steps: stepsToShow.map((step, index) => {
         const currentRoute = step.route;
-        const isCurrentRoute = !currentRoute || pathname.startsWith(currentRoute);
 
         const driverStep: any = {
           popover: {
             title: step.title,
             description: step.description,
             side: step.position as any,
-          },
-          onHighlighted: async () => {
-            // Navigate to this step's route if needed
-            if (!isCurrentRoute && currentRoute) {
-              await new Promise<void>((resolve) => {
-                router.push(currentRoute);
-                // Wait for DOM to settle after navigation
-                setTimeout(resolve, 500);
-              });
-            }
           },
         };
 
@@ -127,30 +118,40 @@ export default function OnboardingProvider({
 
         return driverStep;
       }),
-      onCloseClick: () => {
-        driverInst.destroy();
+      onDestroyed: () => {
         handleTourComplete();
-      },
-      onNextClick: async () => {
-        const currentStepIndex = driverInst.getActiveIndex?.() ?? 0;
-        const stepConfig = stepsToShow[currentStepIndex];
-        if (stepConfig) {
-          await handleStepComplete(stepConfig.id);
-        }
-        driverInst.moveNext();
       },
     });
 
     setDriverInstance(driverInst);
     setIsTourActive(true);
+
+    // Track step changes and handle navigation
+    const observer = setInterval(async () => {
+      if (!driverInst) {
+        clearInterval(observer);
+        return;
+      }
+
+      const activeIndex = driverInst.getActiveIndex();
+      const activeStep = stepsToShow[activeIndex];
+
+      if (activeStep && activeStep.route && !pathname.startsWith(activeStep.route)) {
+        router.push(activeStep.route);
+      }
+
+      // Mark current step as complete when we move to next
+      if (activeIndex > 0 && activeIndex < stepsToShow.length) {
+        const prevStep = stepsToShow[activeIndex - 1];
+        if (!completedStepIds.includes(prevStep.id)) {
+          await handleStepComplete(prevStep.id);
+        }
+      }
+    }, 100);
+
     driverInst.drive();
 
-    // Handle tour end
-    const originalOnDestroyed = driverInst.destroy;
-    driverInst.destroy = function() {
-      handleTourComplete();
-      return originalOnDestroyed.call(this);
-    };
+    return () => clearInterval(observer);
   };
 
   const skipTour = async () => {
