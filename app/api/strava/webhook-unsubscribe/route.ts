@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     }
 
     // Get valid access token
-    let accessToken: string;
+    let accessToken: string | undefined;
     try {
       accessToken = await getValidStravaAccessToken(user.id);
     } catch (error) {
