@@ -41,6 +41,107 @@ export default async function Navbar() {
   const hasRaceInfo = features.includes("race_info");
   const hasKitList = features.includes("kit_list");
 
+  // ── Badge counts ──────────────────────────────────────
+  let adminOpenTicketCount = 0;
+  let coachHasUnread = false;
+  let athleteHasUnread = false;
+
+  if (isAdmin) {
+    const { count } = await supabase
+      .from("support_tickets")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "open");
+    adminOpenTicketCount = count ?? 0;
+  }
+
+  if (isCoach) {
+    try {
+      const { data: convs } = await supabase
+        .from("chat_conversations")
+        .select("id, coach_last_read_at")
+        .eq("coach_user_id", user.id);
+
+      if (convs && convs.length > 0) {
+        const { data: threads } = await supabase
+          .from("chat_threads")
+          .select("id, conversation_id")
+          .in(
+            "conversation_id",
+            convs.map((c) => c.id)
+          );
+
+        if (threads && threads.length > 0) {
+          for (const thread of threads) {
+            const conv = convs.find((c) => c.id === thread.conversation_id);
+            if (!conv) continue;
+
+            const lastRead = conv.coach_last_read_at
+              ? new Date(conv.coach_last_read_at)
+              : new Date(0);
+            const { count } = await supabase
+              .from("chat_messages")
+              .select("*", { count: "exact", head: true })
+              .eq("thread_id", thread.id)
+              .neq("sender_user_id", user.id)
+              .eq("status", "sent")
+              .gte("created_at", lastRead.toISOString());
+
+            if ((count ?? 0) > 0) {
+              coachHasUnread = true;
+              break;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error checking coach unread messages:", err);
+    }
+  }
+
+  if (isAthlete) {
+    try {
+      const { data: convs } = await supabase
+        .from("chat_conversations")
+        .select("id, athlete_last_read_at")
+        .eq("athlete_user_id", user.id);
+
+      if (convs && convs.length > 0) {
+        const { data: threads } = await supabase
+          .from("chat_threads")
+          .select("id, conversation_id")
+          .in(
+            "conversation_id",
+            convs.map((c) => c.id)
+          );
+
+        if (threads && threads.length > 0) {
+          for (const thread of threads) {
+            const conv = convs.find((c) => c.id === thread.conversation_id);
+            if (!conv) continue;
+
+            const lastRead = conv.athlete_last_read_at
+              ? new Date(conv.athlete_last_read_at)
+              : new Date(0);
+            const { count } = await supabase
+              .from("chat_messages")
+              .select("*", { count: "exact", head: true })
+              .eq("thread_id", thread.id)
+              .neq("sender_user_id", user.id)
+              .eq("status", "sent")
+              .gte("created_at", lastRead.toISOString());
+
+            if ((count ?? 0) > 0) {
+              athleteHasUnread = true;
+              break;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error checking athlete unread messages:", err);
+    }
+  }
+
   if (!user) return null;
 
   return (

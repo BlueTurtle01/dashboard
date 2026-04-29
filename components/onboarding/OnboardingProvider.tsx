@@ -102,8 +102,7 @@ export default function OnboardingProvider({
         const currentRoute = step.route;
         const isCurrentRoute = !currentRoute || pathname.startsWith(currentRoute);
 
-        return {
-          element: step.selector,
+        const driverStep: any = {
           popover: {
             title: step.title,
             description: step.description,
@@ -120,6 +119,13 @@ export default function OnboardingProvider({
             }
           },
         };
+
+        // Only include element if selector is not null
+        if (step.selector) {
+          driverStep.element = step.selector;
+        }
+
+        return driverStep;
       }),
       onCloseClick: () => {
         driverInst.destroy();
