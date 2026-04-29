@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
 export async function GET(req: Request) {
@@ -31,7 +32,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Athlete not linked to this coach' }, { status: 403 });
     }
 
-    const { data: activities, error } = await supabase
+    // Use admin client to bypass RLS — the coach-athlete link is already
+    // verified above, so this read is authorised.
+    const adminClient = createAdminClient();
+    const { data: activities, error } = await adminClient
       .from('athlete_activities')
       .select('*')
       .eq('user_id', athleteId)
