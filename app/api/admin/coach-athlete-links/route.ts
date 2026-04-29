@@ -31,59 +31,52 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: linksError.message }, { status: 500 });
     }
 
-    // Use admin client to get all auth users — this is the source of truth,
-    // not user_roles which may be missing entries
+    // Query public.users via admin client (bypasses RLS, gets all rows)
     const adminClient = createAdminClient();
-    const { data: { users: allAuthUsers } } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    const { data: allUsers } = await adminClient
+      .from('users')
+      .select('id, full_name, email');
+
+    const userMap: Record<string, { full_name: string | null; email: string | null }> = {};
+    (allUsers || []).forEach((u: any) => {
+      userMap[u.id] = { full_name: u.full_name ?? null, email: u.email ?? null };
+    });
 
     const emailMap: Record<string, string> = {};
-    allAuthUsers.forEach(u => { if (u.email) emailMap[u.id] = u.email; });
+    (allUsers || []).forEach((u: any) => { if (u.email) emailMap[u.id] = u.email; });
 
-    // Get coaches from user_roles (still gated by role assignment)
-    const { data: coachUsers } = await supabase
+    // Coaches: users with role='coach'
+    const { data: coachRoleUsers } = await supabase
       .from('user_roles')
       .select('user_id')
       .eq('role', 'coach');
 
-    const coachIds = coachUsers?.map(u => u.user_id) || [];
+    const coachProfiles = (coachRoleUsers || []).map((r: any) => ({
+      user_id: r.user_id,
+      full_name: userMap[r.user_id]?.full_name ?? null,
+    }));
 
-    // Get profiles for coaches
-    const { data: coachProfiles } = coachIds.length
-      ? await supabase.from('athlete_profiles').select('user_id, full_name').in('user_id', coachIds)
-      : { data: [] };
-
-    // All athletes = union of:
-    //   1. users with role='athlete' in user_roles
-    //   2. users with an athlete_profiles row
-    //   3. athlete_user_ids referenced in existing links
+    // Athletes: union of role='athlete' rows and athlete_user_ids in existing links
     const { data: athleteRoleUsers } = await supabase
       .from('user_roles')
       .select('user_id')
       .eq('role', 'athlete');
 
-    const { data: allAthleteProfiles } = await supabase
-      .from('athlete_profiles')
-      .select('user_id, full_name');
-
-    const profileMap: Record<string, string | null> = {};
-    (allAthleteProfiles || []).forEach(p => { profileMap[p.user_id] = p.full_name; });
-
-    const linkedAthleteIds = (links || []).map(l => l.athlete_user_id);
+    const linkedAthleteIds = (links || []).map((l: any) => l.athlete_user_id);
     const allAthleteIds = Array.from(new Set([
-      ...(athleteRoleUsers || []).map(u => u.user_id),
-      ...(allAthleteProfiles || []).map(p => p.user_id),
+      ...(athleteRoleUsers || []).map((u: any) => u.user_id),
       ...linkedAthleteIds,
     ]));
 
     const athletesWithEmail = allAthleteIds.map(id => ({
       user_id: id,
-      full_name: profileMap[id] ?? null,
-      email: emailMap[id] ?? null,
+      full_name: userMap[id]?.full_name ?? null,
+      email: userMap[id]?.email ?? null,
     }));
 
     return NextResponse.json({
       links: links || [],
-      coaches: coachProfiles || [],
+      coaches: coachProfiles,
       athletes: athletesWithEmail,
       emailMap,
     });

@@ -61,6 +61,14 @@ export default function RegisterPage() {
       return;
     }
 
+    // Ensure users row exists (trigger handles this server-side, but insert
+    // here as a fallback for email-confirmation flows where the trigger may
+    // fire before the session is established)
+    await supabase.from("users").upsert(
+      { id: data.user.id, email: trimmedEmail },
+      { onConflict: "id", ignoreDuplicates: true }
+    );
+
     const { error: roleInsertError } = await supabase.from("user_roles").insert({
       user_id: data.user.id,
       role,
