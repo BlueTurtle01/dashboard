@@ -172,6 +172,15 @@ select {
   color: var(--brand-700);
 }
 
+.app-sidebar__nav-badge {
+  margin-left: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dc2626;
+  flex-shrink: 0;
+}
+
 .app-sidebar__bottom {
   padding: 12px 8px;
   border-top: 1px solid var(--slate-200);

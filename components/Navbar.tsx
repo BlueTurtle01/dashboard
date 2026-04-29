@@ -54,7 +54,7 @@ export default async function Navbar() {
     adminOpenTicketCount = count ?? 0;
   }
 
-  if (isCoach) {
+  if (isCoach && user) {
     try {
       const { data: convs } = await supabase
         .from("chat_conversations")
@@ -98,7 +98,7 @@ export default async function Navbar() {
     }
   }
 
-  if (isAthlete) {
+  if (isAthlete && user) {
     try {
       const { data: convs } = await supabase
         .from("chat_conversations")
@@ -173,6 +173,7 @@ export default async function Navbar() {
               />
               <Link href="/athlete/chat" className="app-sidebar__link">
                 Chat
+                {athleteHasUnread && <span className="app-sidebar__nav-badge" />}
               </Link>
               <Link href="/athlete/library" className="app-sidebar__link">
                 Library
@@ -202,6 +203,7 @@ export default async function Navbar() {
               </Link>
               <Link href="/coach/chat" className="app-sidebar__link">
                 Chat
+                {coachHasUnread && <span className="app-sidebar__nav-badge" />}
               </Link>
               <SidebarDropdown
                 label="Programs"
@@ -236,6 +238,7 @@ export default async function Navbar() {
           <span className="app-sidebar__group-label">Help</span>
           <Link href="/support" className="app-sidebar__link">
             Support
+            {isAdmin && adminOpenTicketCount > 0 && <span className="app-sidebar__nav-badge" />}
           </Link>
 
           {/* Admin section */}

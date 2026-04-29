@@ -93,6 +93,11 @@ export default function AthleteChatPage() {
         console.log('[AthleteChat] Loaded threads:', loadedThreads.length);
         setThreads(loadedThreads || []);
         setError(null);
+
+        // Mark chat as read (fire-and-forget)
+        fetch('/api/chat/mark-read', { method: 'POST' }).catch((err) =>
+          console.error('[AthleteChat] Error marking as read:', err)
+        );
       } catch (err) {
         console.error('[AthleteChat] Error:', err);
         setError(err instanceof Error ? err.message : 'Failed to load chat');

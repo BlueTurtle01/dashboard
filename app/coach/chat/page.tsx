@@ -30,6 +30,11 @@ export default function CoachChatPage() {
         console.log('[CoachChat] Loaded conversations:', data.asCoach.length);
         setConversations(data.asCoach || []);
         setError(null);
+
+        // Mark chat as read (fire-and-forget)
+        fetch('/api/chat/mark-read', { method: 'POST' }).catch((err) =>
+          console.error('[CoachChat] Error marking as read:', err)
+        );
       } catch (err) {
         console.error('[CoachChat] Error fetching conversations:', err);
         setError(
