@@ -59,10 +59,36 @@ export async function GET(req: Request) {
       .select('user_id, full_name')
       .in('user_id', athleteIds);
 
+    // Collect all unique athlete user IDs from both profiles and links
+    const allAthleteIds = Array.from(new Set([
+      ...(athleteProfiles?.map(p => p.user_id) || []),
+      ...(links?.map(l => l.athlete_user_id) || []),
+    ]));
+
+    // Fetch emails from auth using admin client
+    const adminClient = createAdminClient();
+    const emailMap: Record<string, string> = {};
+    await Promise.all(
+      allAthleteIds.map(async (id) => {
+        try {
+          const { data } = await adminClient.auth.admin.getUserById(id);
+          if (data?.user?.email) emailMap[id] = data.user.email;
+        } catch {
+          // ignore individual lookup failures
+        }
+      })
+    );
+
+    const athletesWithEmail = (athleteProfiles || []).map(p => ({
+      ...p,
+      email: emailMap[p.user_id] || null,
+    }));
+
     return NextResponse.json({
       links: links || [],
       coaches: coachProfiles || [],
-      athletes: athleteProfiles || [],
+      athletes: athletesWithEmail,
+      emailMap,
     });
   } catch (error) {
     console.error('Error fetching links:', error);

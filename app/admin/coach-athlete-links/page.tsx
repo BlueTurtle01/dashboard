@@ -11,6 +11,7 @@ interface Coach {
 interface Athlete {
   user_id: string;
   full_name: string | null;
+  email?: string | null;
 }
 
 interface Link {
@@ -24,6 +25,7 @@ interface Link {
 interface LinkWithNames extends Link {
   coachName?: string;
   athleteName?: string;
+  athleteEmail?: string;
 }
 
 export default function CoachAthleteLinksPage() {
@@ -51,11 +53,15 @@ export default function CoachAthleteLinksPage() {
       setCoaches(data.coaches || []);
       setAthletes(data.athletes || []);
 
-      const linksWithNames = (data.links || []).map((link: Link) => ({
-        ...link,
-        coachName: data.coaches.find((c: Coach) => c.user_id === link.coach_user_id)?.full_name,
-        athleteName: data.athletes.find((a: Athlete) => a.user_id === link.athlete_user_id)?.full_name,
-      }));
+      const linksWithNames = (data.links || []).map((link: Link) => {
+        const athlete = data.athletes.find((a: Athlete) => a.user_id === link.athlete_user_id);
+        return {
+          ...link,
+          coachName: data.coaches.find((c: Coach) => c.user_id === link.coach_user_id)?.full_name,
+          athleteName: athlete?.full_name,
+          athleteEmail: athlete?.email ?? data.emailMap?.[link.athlete_user_id] ?? null,
+        };
+      });
 
       setLinks(linksWithNames);
       setError(null);
@@ -212,6 +218,9 @@ export default function CoachAthleteLinksPage() {
                     Athlete
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">
+                    Athlete Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">
@@ -230,6 +239,9 @@ export default function CoachAthleteLinksPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-zinc-900">
                       {link.athleteName || link.athlete_user_id}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-zinc-500">
+                      {link.athleteEmail || '—'}
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <span
