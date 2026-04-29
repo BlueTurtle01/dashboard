@@ -137,6 +137,7 @@ export default function OnboardingProvider({
         if (stepConfig) {
           await handleStepComplete(stepConfig.id);
         }
+        driverInst.moveNext();
       },
     });
 
