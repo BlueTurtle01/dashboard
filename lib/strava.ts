@@ -229,21 +229,20 @@ export async function subscribeToStravaWebhook(
   callbackUrl: string,
   verifyToken: string
 ): Promise<{ id: number; resource_state: number }> {
-  // Strava webhooks API requires Basic Auth with client_id:client_secret
-  const credentials = Buffer.from(
-    `${process.env.STRAVA_CLIENT_ID}:${process.env.STRAVA_CLIENT_SECRET}`
-  ).toString('base64');
+  // Strava push_subscriptions requires client_id + client_secret as form body params
+  const body = new URLSearchParams({
+    client_id: process.env.STRAVA_CLIENT_ID!,
+    client_secret: process.env.STRAVA_CLIENT_SECRET!,
+    callback_url: callbackUrl,
+    verify_token: verifyToken,
+  });
 
   const response = await fetch(`${STRAVA_API_BASE}/push_subscriptions`, {
     method: 'POST',
     headers: {
-      Authorization: `Basic ${credentials}`,
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: JSON.stringify({
-      callback_url: callbackUrl,
-      verify_token: verifyToken,
-    }),
+    body: body.toString(),
   });
 
   if (!response.ok) {
