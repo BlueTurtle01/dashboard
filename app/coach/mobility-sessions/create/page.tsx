@@ -10,6 +10,7 @@ type StretchOption = {
   primaryMuscles: string[];
   secondaryMuscles: string[];
   movementTags: string[];
+  equipment: string[];
 };
 
 type SelectedStretch = {
@@ -27,6 +28,7 @@ type StretchRow = {
   primary_muscles: string[];
   secondary_muscles: string[];
   movement_tags: string[];
+  equipment: string[];
 };
 
 const DIFFICULTY_LEVELS = ["beginner", "intermediate", "advanced"];
@@ -58,7 +60,7 @@ export default function CreateMobilitySessionPage() {
 
       const { data, error } = await supabase
         .from("stretches")
-        .select("id, name, primary_muscles, secondary_muscles, movement_tags")
+        .select("id, name, primary_muscles, secondary_muscles, movement_tags, equipment")
         .order("name", { ascending: true });
 
       if (error) {
@@ -72,6 +74,7 @@ export default function CreateMobilitySessionPage() {
             primaryMuscles: s.primary_muscles || [],
             secondaryMuscles: s.secondary_muscles || [],
             movementTags: s.movement_tags || [],
+            equipment: s.equipment || [],
           })),
         );
       }
@@ -175,6 +178,14 @@ export default function CreateMobilitySessionPage() {
 
     const id = makeSessionId(name);
 
+    // Check if any selected stretch has equipment
+    const hasEquipment = selectedStretches.some((stretch) => {
+      const stretchData = allStretches.find((s) => s.id === stretch.stretchId);
+      return stretchData && stretchData.equipment.length > 0;
+    });
+
+    const tags = hasEquipment ? ["equipment-required"] : [];
+
     const sessionPayload = {
       id,
       name: name.trim(),
@@ -182,6 +193,7 @@ export default function CreateMobilitySessionPage() {
       duration_minutes: durationMinutes ? parseInt(durationMinutes) : null,
       difficulty_level: difficultyLevel,
       focus_areas: selectedFocusAreas,
+      tags,
     };
 
     const { error: sessionError } = await supabase.from("mobility_sessions").insert(sessionPayload);

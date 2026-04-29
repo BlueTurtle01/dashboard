@@ -11,6 +11,7 @@ type StretchOption = {
   primaryMuscles: string[];
   secondaryMuscles: string[];
   movementTags: string[];
+  equipment: string[];
 };
 
 type SelectedStretch = {
@@ -30,6 +31,7 @@ type StretchRow = {
   primary_muscles: string[];
   secondary_muscles: string[];
   movement_tags: string[];
+  equipment: string[];
 };
 
 type SessionTemplateOption = {
@@ -86,12 +88,12 @@ export default function EditMobilitySessionPage() {
       const [sessionResult, stretchesResult, junctionResult, templatesResult, pairsResult] = await Promise.all([
         supabase
           .from("mobility_sessions")
-          .select("id, name, description, duration_minutes, difficulty_level, focus_areas")
+          .select("id, name, description, duration_minutes, difficulty_level, focus_areas, tags")
           .eq("id", sessionId)
           .single(),
         supabase
           .from("stretches")
-          .select("id, name, description, primary_muscles, secondary_muscles, movement_tags")
+          .select("id, name, description, primary_muscles, secondary_muscles, movement_tags, equipment")
           .order("name"),
         supabase
           .from("mobility_session_stretches")
@@ -133,6 +135,7 @@ export default function EditMobilitySessionPage() {
             primaryMuscles: r.primary_muscles ?? [],
             secondaryMuscles: r.secondary_muscles ?? [],
             movementTags: r.movement_tags ?? [],
+            equipment: r.equipment ?? [],
           })),
         );
       }
@@ -318,6 +321,14 @@ export default function EditMobilitySessionPage() {
       return;
     }
 
+    // Check if any selected stretch has equipment
+    const hasEquipment = selectedStretches.some((stretch) => {
+      const stretchData = allStretches.find((s) => s.id === stretch.stretchId);
+      return stretchData && stretchData.equipment.length > 0;
+    });
+
+    const tags = hasEquipment ? ["equipment-required"] : [];
+
     // Update session metadata
     const { error: updateError } = await supabase
       .from("mobility_sessions")
@@ -327,6 +338,7 @@ export default function EditMobilitySessionPage() {
         duration_minutes: durationMinutes ? parseInt(durationMinutes) : null,
         difficulty_level: difficultyLevel,
         focus_areas: selectedFocusAreas,
+        tags,
       })
       .eq("id", sessionId);
 

@@ -26,6 +26,7 @@ type MobilitySessionRow = {
   duration_minutes: number | null;
   difficulty_level: string | null;
   focus_areas: string[];
+  tags: string[];
   created_at: string;
 };
 
@@ -36,6 +37,7 @@ type MobilitySession = {
   durationMinutes: number | null;
   difficultyLevel: string | null;
   focusAreas: string[];
+  tags: string[];
   stretches: Array<{
     id: string;
     stretchId: string;
@@ -63,7 +65,7 @@ export default function MobilitySessionsPage() {
       try {
         const { data: sessionRows, error: sessionError } = await supabase
           .from("mobility_sessions")
-          .select("id, name, description, duration_minutes, difficulty_level, focus_areas, created_at")
+          .select("id, name, description, duration_minutes, difficulty_level, focus_areas, tags, created_at")
           .order("name", { ascending: true });
 
         if (sessionError) {
@@ -127,6 +129,7 @@ export default function MobilitySessionsPage() {
           durationMinutes: session.duration_minutes,
           difficultyLevel: session.difficulty_level,
           focusAreas: session.focus_areas || [],
+          tags: session.tags || [],
           stretches: (stretchesBySessionId.get(session.id) || []).map((stretch) => ({
             id: stretch.id,
             stretchId: stretch.stretch_id,
@@ -235,13 +238,24 @@ export default function MobilitySessionsPage() {
                     <span style={metaStyle}>📋 {session.stretches.length} stretches</span>
                   </div>
 
-                  {session.focusAreas.length > 0 && (
-                    <div style={tagsStyle}>
-                      {session.focusAreas.map((area) => (
-                        <span key={area} style={tagStyle}>
-                          {area}
-                        </span>
-                      ))}
+                  {(session.focusAreas.length > 0 || session.tags.length > 0) && (
+                    <div style={tagsContainerStyle}>
+                      <div style={tagsStyle}>
+                        {session.focusAreas.map((area) => (
+                          <span key={area} style={tagStyle}>
+                            {area}
+                          </span>
+                        ))}
+                      </div>
+                      {session.tags.length > 0 && (
+                        <div style={tagsStyle}>
+                          {session.tags.map((tag) => (
+                            <span key={tag} style={autoTagStyle}>
+                              {tag === "equipment-required" ? "🔧 Equipment" : tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -449,6 +463,13 @@ const metaStyle: React.CSSProperties = {
   gap: "4px",
 };
 
+const tagsContainerStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "12px",
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+
 const tagsStyle: React.CSSProperties = {
   display: "flex",
   gap: "6px",
@@ -460,6 +481,16 @@ const tagStyle: React.CSSProperties = {
   padding: "4px 8px",
   backgroundColor: "#e0e7ff",
   color: "#4f46e5",
+  borderRadius: "4px",
+  fontSize: "11px",
+  fontWeight: 500,
+};
+
+const autoTagStyle: React.CSSProperties = {
+  display: "inline-block",
+  padding: "4px 8px",
+  backgroundColor: "#fef3c7",
+  color: "#92400e",
   borderRadius: "4px",
   fontSize: "11px",
   fontWeight: 500,
