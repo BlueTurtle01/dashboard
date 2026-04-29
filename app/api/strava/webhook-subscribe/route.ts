@@ -26,8 +26,8 @@ export async function POST(req: Request) {
     const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/strava`;
     const verifyToken = process.env.STRAVA_WEBHOOK_VERIFY_TOKEN || 'your_verify_token';
 
-    // Subscribe to webhooks
-    const subscription = await subscribeToStravaWebhook(accessToken, callbackUrl, verifyToken);
+    // Subscribe to webhooks (uses client credentials, not user token)
+    const subscription = await subscribeToStravaWebhook(callbackUrl, verifyToken);
 
     // Store webhook subscription in database
     const { error: insertError } = await supabase

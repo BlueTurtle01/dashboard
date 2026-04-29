@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { getValidStravaAccessToken, deleteStravaWebhookSubscription } from '@/lib/strava';
+import { deleteStravaWebhookSubscription } from '@/lib/strava';
 
 export async function POST(req: Request) {
   try {
@@ -26,23 +26,12 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get valid access token
-    let accessToken: string | undefined;
-    try {
-      accessToken = await getValidStravaAccessToken(user.id);
-    } catch (error) {
-      console.error('Failed to get access token:', error);
-      // Still mark local webhook as inactive even if token is invalid
-    }
-
     // Try to delete webhook from Strava (best effort)
-    if (accessToken) {
-      try {
-        await deleteStravaWebhookSubscription(accessToken, webhook.webhook_id);
-      } catch (error) {
-        console.error('Failed to delete webhook from Strava:', error);
-        // Continue with local deletion even if remote deletion fails
-      }
+    try {
+      await deleteStravaWebhookSubscription(webhook.webhook_id);
+    } catch (error) {
+      console.error('Failed to delete webhook from Strava:', error);
+      // Continue with local deletion even if remote deletion fails
     }
 
     // Mark webhook as inactive

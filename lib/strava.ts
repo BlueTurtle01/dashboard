@@ -226,14 +226,18 @@ export async function deauthorizeWithStrava(accessToken: string): Promise<void> 
 
 // Webhook-related functions
 export async function subscribeToStravaWebhook(
-  accessToken: string,
   callbackUrl: string,
   verifyToken: string
 ): Promise<{ id: number; resource_state: number }> {
+  // Strava webhooks API requires Basic Auth with client_id:client_secret
+  const credentials = Buffer.from(
+    `${process.env.STRAVA_CLIENT_ID}:${process.env.STRAVA_CLIENT_SECRET}`
+  ).toString('base64');
+
   const response = await fetch(`${STRAVA_API_BASE}/push_subscriptions`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Basic ${credentials}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -269,13 +273,17 @@ export async function getStravaWebhookSubscriptions(accessToken: string): Promis
 }
 
 export async function deleteStravaWebhookSubscription(
-  accessToken: string,
   webhookId: number
 ): Promise<void> {
+  // Strava webhooks API requires Basic Auth with client_id:client_secret
+  const credentials = Buffer.from(
+    `${process.env.STRAVA_CLIENT_ID}:${process.env.STRAVA_CLIENT_SECRET}`
+  ).toString('base64');
+
   const response = await fetch(`${STRAVA_API_BASE}/push_subscriptions/${webhookId}`, {
     method: 'DELETE',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Basic ${credentials}`,
       'Content-Type': 'application/json',
     },
   });
