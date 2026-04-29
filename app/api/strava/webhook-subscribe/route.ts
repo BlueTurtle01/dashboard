@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { getValidStravaAccessToken, subscribeToStravaWebhook, getStravaWebhookSubscriptions } from '@/lib/strava';
+import { getValidStravaAccessToken, subscribeToStravaWebhook } from '@/lib/strava';
 
 export async function POST(req: Request) {
   try {
@@ -20,18 +20,6 @@ export async function POST(req: Request) {
         { error: 'No active Strava integration found' },
         { status: 400 }
       );
-    }
-
-    // Check if already subscribed
-    const existingSubscriptions = await getStravaWebhookSubscriptions(accessToken);
-
-    if (existingSubscriptions.length > 0) {
-      // User already has webhook subscriptions
-      return NextResponse.json({
-        success: true,
-        message: 'Already subscribed to webhooks',
-        subscribed: true,
-      });
     }
 
     // Build callback URL
