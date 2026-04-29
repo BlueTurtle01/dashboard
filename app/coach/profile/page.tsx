@@ -55,6 +55,8 @@ const AVAILABLE_TAGS = [
 type CoachProfile = {
   user_id: string;
   full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   bio: string | null;
   tags?: string[];
 };
@@ -84,6 +86,8 @@ export default function CoachProfilePage() {
 
   const [userId, setUserId] = useState("");
   const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [bio, setBio] = useState("");
   const [maxClients, setMaxClients] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -148,6 +152,8 @@ export default function CoachProfilePage() {
       if (profileResult.data) {
         const profile = profileResult.data as CoachProfile & { max_clients?: number | null };
         setFullName(profile.full_name || "");
+        setFirstName(profile.first_name || "");
+        setLastName(profile.last_name || "");
         setBio(profile.bio || "");
         setMaxClients(profile.max_clients ?? null);
         setSelectedTags(profile.tags || []);
@@ -231,9 +237,15 @@ export default function CoachProfilePage() {
     setErrorMessage("");
     setMessage("");
 
+    const computedFullName = [firstName.trim(), lastName.trim()]
+      .filter(Boolean)
+      .join(" ") || null;
+
     const profilePayload = {
       user_id: userId,
-      full_name: fullName.trim() || null,
+      full_name: computedFullName,
+      first_name: firstName.trim() || null,
+      last_name: lastName.trim() || null,
       bio: bio.trim() || null,
       max_clients: maxClients,
       tags: selectedTags,
@@ -326,15 +338,30 @@ export default function CoachProfilePage() {
           {/* Basic Info Tab */}
           {activeTab === "basic" && (
             <>
-              <label htmlFor="full-name" style={labelStyle}>
-                Full name
-              </label>
-              <input
-                id="full-name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                style={inputStyle}
-              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div>
+                  <label htmlFor="first-name" style={labelStyle}>
+                    First name
+                  </label>
+                  <input
+                    id="first-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="last-name" style={labelStyle}>
+                    Last name
+                  </label>
+                  <input
+                    id="last-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
 
               <label htmlFor="bio" style={labelStyle}>
                 Bio

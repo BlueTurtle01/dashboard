@@ -201,8 +201,22 @@ export async function submitAnswer(
     return { error: "You have already answered this question" };
   }
 
-  const displayName = getUserDisplayName(user);
-  const coachDisplayName = formatCoachName(displayName);
+  // Fetch coach profile to get first name
+  const { data: coachProfile } = await supabase
+    .from("coach_profiles")
+    .select("first_name")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  let coachDisplayName = "Coach";
+  if (coachProfile?.first_name) {
+    coachDisplayName = `Coach ${coachProfile.first_name}`;
+  } else {
+    // Fallback: extract first name from email or full name
+    const displayName = getUserDisplayName(user);
+    coachDisplayName = formatCoachName(displayName);
+  }
+
   const isFirstAnswer = (answerCount.count ?? 0) === 0;
 
   const { error } = await supabase.from("kb_answers").insert({

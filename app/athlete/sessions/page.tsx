@@ -22,6 +22,7 @@ export default function SessionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showCircleTooltip, setShowCircleTooltip] = useState(true);
 
   // Form state for selected session
   const [perceivedEffort, setPerceivedEffort] = useState<number | null>(null);
@@ -354,9 +355,10 @@ export default function SessionsPage() {
         )}
 
         <div className="space-y-4">
-          {sessionGroups.map((group) => {
+          {sessionGroups.map((group, groupIndex) => {
             const mainSession = group.mainSession;
             const alternativeSession = group.alternativeSession;
+            const isFirstIncomplete = groupIndex === 0 && !completions.has(mainSession.id) && showCircleTooltip;
 
             return (
               <div key={mainSession.id} className="space-y-2">
@@ -375,6 +377,8 @@ export default function SessionsPage() {
                   setNotes={setNotes}
                   onLogCompletion={() => handleLogCompletion(mainSession.id, alternativeSession?.id)}
                   alternativeSessionId={alternativeSession?.id}
+                  showTooltip={isFirstIncomplete}
+                  onDismissTooltip={() => setShowCircleTooltip(false)}
                 />
 
                 {/* Alternative session card */}
@@ -420,6 +424,8 @@ interface SessionCardProps {
   onLogCompletion: () => void;
   alternativeSessionId?: string;
   isAlternative?: boolean;
+  showTooltip?: boolean;
+  onDismissTooltip?: () => void;
 }
 
 function SessionCard({
@@ -437,6 +443,8 @@ function SessionCard({
   onLogCompletion,
   alternativeSessionId,
   isAlternative = false,
+  showTooltip = false,
+  onDismissTooltip = () => {},
 }: SessionCardProps) {
   return (
     <div
@@ -456,12 +464,33 @@ function SessionCard({
           >
             {isCompleted && <span className="text-emerald-600 text-sm font-bold">✓</span>}
           </button>
-          <div className="absolute left-10 top-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+          {/* Hover tooltip */}
+          <div className="absolute left-10 top-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
             <div className="bg-slate-900 text-white text-xs px-2 py-1 rounded-md">
               Click to mark complete
             </div>
             <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-0 h-0 border-4 border-transparent border-r-slate-900"></div>
           </div>
+
+          {/* First-time tooltip */}
+          {showTooltip && (
+            <div className="absolute left-10 top-0 pointer-events-auto z-50">
+              <div className="bg-indigo-600 text-white text-sm px-3 py-2 rounded-lg shadow-lg font-medium">
+                Click the circle to mark complete
+                <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-2 w-0 h-0 border-4 border-transparent border-r-indigo-600"></div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDismissTooltip();
+                }}
+                className="absolute top-0 right-0 text-xs text-indigo-200 hover:text-white -translate-y-1/2 translate-x-1/2 bg-indigo-700 hover:bg-indigo-800 rounded-full w-5 h-5 flex items-center justify-center"
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex-1">

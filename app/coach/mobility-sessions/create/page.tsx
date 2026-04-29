@@ -20,6 +20,7 @@ type SelectedStretch = {
   sortOrder: number;
   holdDurationSeconds: number | null;
   notes: string;
+  equipment: string[];
 };
 
 type StretchRow = {
@@ -110,6 +111,7 @@ export default function CreateMobilitySessionPage() {
       sortOrder: selectedStretches.length + 1,
       holdDurationSeconds: null,
       notes: "",
+      equipment: stretch.equipment,
     };
     setSelectedStretches([...selectedStretches, newStretch]);
     setStretchSearch("");
@@ -363,7 +365,18 @@ export default function CreateMobilitySessionPage() {
                   <div key={stretch.id} style={stretchItemStyle}>
                     <div style={stretchItemHeaderStyle}>
                       <span style={stretchOrderStyle}>{index + 1}</span>
-                      <span style={stretchNameInListStyle}>{stretch.name}</span>
+                      <div style={stretchNameWithEquipmentStyle}>
+                        <span style={stretchNameInListStyle}>{stretch.name}</span>
+                        {stretch.equipment.length > 0 && (
+                          <div style={equipmentBadgesStyle}>
+                            {stretch.equipment.map((equip) => (
+                              <span key={equip} style={equipmentBadgeStyle}>
+                                {equip}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <div style={stretchItemButtonsStyle}>
                         {index > 0 && (
                           <button
@@ -647,11 +660,33 @@ const stretchOrderStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
-const stretchNameInListStyle: React.CSSProperties = {
+const stretchNameWithEquipmentStyle: React.CSSProperties = {
   flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+};
+
+const stretchNameInListStyle: React.CSSProperties = {
   fontWeight: 500,
   color: "#111827",
   fontSize: "14px",
+};
+
+const equipmentBadgesStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "4px",
+  flexWrap: "wrap",
+};
+
+const equipmentBadgeStyle: React.CSSProperties = {
+  display: "inline-block",
+  padding: "2px 6px",
+  backgroundColor: "#dbeafe",
+  color: "#1e40af",
+  borderRadius: "3px",
+  fontSize: "10px",
+  fontWeight: 600,
 };
 
 const stretchItemButtonsStyle: React.CSSProperties = {

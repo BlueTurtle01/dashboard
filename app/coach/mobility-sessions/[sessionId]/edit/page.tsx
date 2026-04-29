@@ -21,6 +21,7 @@ type SelectedStretch = {
   sortOrder: number;
   holdDurationSeconds: number | null;
   notes: string;
+  equipment: string[];
   isNew?: boolean; // true if not yet saved
 };
 
@@ -143,14 +144,20 @@ export default function EditMobilitySessionPage() {
 
       if (junctionResult.data) {
         setSelectedStretches(
-          junctionResult.data.map((row: any) => ({
-            id: row.id,
-            stretchId: row.stretch_id,
-            name: row.stretches?.name ?? row.stretch_id,
-            sortOrder: row.sort_order,
-            holdDurationSeconds: row.hold_duration_seconds ?? null,
-            notes: row.notes ?? "",
-          })),
+          junctionResult.data.map((row: any) => {
+            const stretchData = (stretchesResult.data as StretchRow[])?.find(
+              (s) => s.id === row.stretch_id,
+            );
+            return {
+              id: row.id,
+              stretchId: row.stretch_id,
+              name: row.stretches?.name ?? row.stretch_id,
+              sortOrder: row.sort_order,
+              holdDurationSeconds: row.hold_duration_seconds ?? null,
+              notes: row.notes ?? "",
+              equipment: stretchData?.equipment ?? [],
+            };
+          }),
         );
       }
 
@@ -218,6 +225,7 @@ export default function EditMobilitySessionPage() {
         sortOrder: prev.length + 1,
         holdDurationSeconds: null,
         notes: "",
+        equipment: stretch.equipment,
         isNew: true,
       },
     ]);
@@ -551,7 +559,18 @@ export default function EditMobilitySessionPage() {
                   <div key={stretch.id} style={stretchItemStyle}>
                     <div style={stretchItemHeaderStyle}>
                       <span style={stretchOrderStyle}>{index + 1}</span>
-                      <span style={stretchNameInListStyle}>{stretch.name}</span>
+                      <div style={stretchNameWithEquipmentStyle}>
+                        <span style={stretchNameInListStyle}>{stretch.name}</span>
+                        {stretch.equipment.length > 0 && (
+                          <div style={equipmentBadgesStyle}>
+                            {stretch.equipment.map((equip) => (
+                              <span key={equip} style={equipmentBadgeStyle}>
+                                {equip}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <div style={stretchItemButtonsStyle}>
                         {index > 0 && (
                           <button type="button" onClick={() => moveStretch(stretch.id, "up")} style={moveButtonStyle}>↑</button>
@@ -632,7 +651,10 @@ const stretchListContainerStyle: React.CSSProperties = { display: "flex", flexDi
 const stretchItemStyle: React.CSSProperties = { backgroundColor: "#fff", border: "1px solid #d1d5db", borderRadius: "4px", padding: "12px" };
 const stretchItemHeaderStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" };
 const stretchOrderStyle: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "#e5e7eb", color: "#374151", fontSize: "12px", fontWeight: 600, flexShrink: 0 };
-const stretchNameInListStyle: React.CSSProperties = { flex: 1, fontWeight: 500, color: "#111827", fontSize: "14px" };
+const stretchNameWithEquipmentStyle: React.CSSProperties = { flex: 1, display: "flex", flexDirection: "column", gap: "4px" };
+const stretchNameInListStyle: React.CSSProperties = { fontWeight: 500, color: "#111827", fontSize: "14px" };
+const equipmentBadgesStyle: React.CSSProperties = { display: "flex", gap: "4px", flexWrap: "wrap" };
+const equipmentBadgeStyle: React.CSSProperties = { display: "inline-block", padding: "2px 6px", backgroundColor: "#dbeafe", color: "#1e40af", borderRadius: "3px", fontSize: "10px", fontWeight: 600 };
 const stretchItemButtonsStyle: React.CSSProperties = { display: "flex", gap: "4px" };
 const moveButtonStyle: React.CSSProperties = { padding: "4px 8px", fontSize: "12px", border: "1px solid #d1d5db", backgroundColor: "#fff", borderRadius: "4px", cursor: "pointer", color: "#6b7280" };
 const removeButtonStyle: React.CSSProperties = { padding: "4px 8px", fontSize: "12px", border: "1px solid #fca5a5", backgroundColor: "#fff", borderRadius: "4px", cursor: "pointer", color: "#dc2626" };
