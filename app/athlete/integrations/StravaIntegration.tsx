@@ -23,20 +23,12 @@ interface Activity {
   start_time: string;
 }
 
-interface WebhookStatus {
-  subscribed: boolean;
-  webhook: { id: string; webhook_id: number; is_active: boolean } | null;
-}
-
 export default function StravaIntegration() {
   const [integration, setIntegration] = useState<StravaIntegration | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [subscribing, setSubscribing] = useState(false);
-  const [unsubscribing, setUnsubscribing] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
@@ -69,13 +61,6 @@ export default function StravaIntegration() {
         if (activitiesResponse.ok) {
           const activitiesData = await activitiesResponse.json();
           setActivities(activitiesData.activities || []);
-        }
-
-        // Load webhook status if connected
-        const webhookResponse = await fetch("/api/strava/webhook-subscribe");
-        if (webhookResponse.ok) {
-          const webhookData = await webhookResponse.json();
-          setWebhookStatus(webhookData);
         }
       }
     } catch (error) {
@@ -112,50 +97,6 @@ export default function StravaIntegration() {
     }
   }
 
-  async function handleSubscribeWebhooks() {
-    try {
-      setSubscribing(true);
-      setMessage(null);
-      const response = await fetch("/api/strava/webhook-subscribe", { method: "POST" });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to subscribe");
-      }
-
-      const data = await response.json();
-      setMessage({ type: "success", text: "Webhook subscription activated" });
-      setWebhookStatus({ subscribed: true, webhook: null });
-      loadIntegration();
-    } catch (error) {
-      setMessage({ type: "error", text: String(error) });
-    } finally {
-      setSubscribing(false);
-    }
-  }
-
-  async function handleUnsubscribeWebhooks() {
-    if (!confirm("Are you sure you want to disable automatic syncing? You can still sync manually."))
-      return;
-
-    try {
-      setUnsubscribing(true);
-      const response = await fetch("/api/strava/webhook-unsubscribe", { method: "POST" });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to unsubscribe");
-      }
-
-      setMessage({ type: "success", text: "Webhook subscription disabled" });
-      setWebhookStatus({ subscribed: false, webhook: null });
-    } catch (error) {
-      setMessage({ type: "error", text: String(error) });
-    } finally {
-      setUnsubscribing(false);
-    }
-  }
-
   async function handleDisconnect() {
     if (!confirm("Are you sure you want to disconnect Strava?")) return;
 
@@ -167,7 +108,6 @@ export default function StravaIntegration() {
 
       setIntegration(null);
       setActivities([]);
-      setWebhookStatus(null);
       setMessage({ type: "success", text: "Disconnected from Strava" });
     } catch (error) {
       setMessage({ type: "error", text: String(error) });
@@ -200,9 +140,11 @@ export default function StravaIntegration() {
         {!integration || !integration.is_active ? (
           <div className="space-y-4">
             <p className="text-gray-600">
-              Connect Strava to automatically sync your completed activities into your training
-              dashboard.
+              Connect Strava to sync your completed activities into your training dashboard.
             </p>
+            <div className="bg-blue-50 border border-blue-200 rounded p-4 text-sm text-blue-700">
+              <strong>Automatic syncing:</strong> Once connected, new activities will sync automatically when you complete them on Strava. You can also manually sync anytime.
+            </div>
             <Link
               href="/api/strava/connect"
               className="inline-block px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition"
@@ -228,35 +170,8 @@ export default function StravaIntegration() {
               </p>
             )}
 
-            {/* Webhook Status Section */}
-            <div className="bg-blue-50 p-4 rounded border border-blue-200">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-semibold text-blue-900">Automatic Syncing</h4>
-                  <p className="text-sm text-blue-700 mt-1">
-                    {webhookStatus?.subscribed
-                      ? "🔄 Enabled - New activities will sync automatically"
-                      : "⏸️ Disabled - Manual sync only"}
-                  </p>
-                </div>
-                {webhookStatus?.subscribed ? (
-                  <button
-                    onClick={handleUnsubscribeWebhooks}
-                    disabled={unsubscribing}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
-                  >
-                    {unsubscribing ? "Disabling..." : "Disable"}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleSubscribeWebhooks}
-                    disabled={subscribing}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
-                  >
-                    {subscribing ? "Enabling..." : "Enable"}
-                  </button>
-                )}
-              </div>
+            <div className="bg-blue-50 border border-blue-200 rounded p-4 text-sm text-blue-700">
+              <strong>✓ Automatic syncing enabled:</strong> New activities will sync automatically when you complete them on Strava.
             </div>
 
             <div className="flex gap-2">
