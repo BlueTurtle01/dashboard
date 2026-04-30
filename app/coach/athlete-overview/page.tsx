@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { TutorialProvider } from "@/lib/context/TutorialContext";
+import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
 import { buildRaceHistorySummary, buildExperienceGaps } from "@/lib/planner/raceHistorySummary";
 
 type AthleteOption = {
@@ -239,10 +241,11 @@ function normaliseStringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
-export default function CoachAthleteOverviewPage() {
+function CoachAthleteOverviewPageContent() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const tutorial = searchParams.get("tutorial");
 
   const [coachUserId, setCoachUserId] = useState<string>(TEST_COACH_USER_ID);
   const [usingFallbackAuth, setUsingFallbackAuth] = useState(false);
@@ -1260,237 +1263,36 @@ export default function CoachAthleteOverviewPage() {
               })}
             </div>
 
+            {tutorial === 'athlete-overview' && (
+              <div className="mb-6">
+                <TutorialInfoBox
+                  title="Explore Each Tab"
+                  description="Each tab below contains different information about your athlete and has its own detailed guide. Click through the tabs to learn about Summary, Profile, Health, Important Dates, Plans, Warnings, and Activity."
+                  step={1}
+                  totalSteps={7}
+                  showNext={false}
+                />
+              </div>
+            )}
+
             {/* Summary Tab */}
             {activeTab === "summary" && (
             <div className="space-y-6">
+              {tutorial === 'athlete-overview' && (
+                <TutorialInfoBox
+                  title="Summary Tab"
+                  description="View the athlete's current training plan status and performance. See their active plan and completion metrics at a glance."
+                  step={2}
+                  totalSteps={7}
+                  showNext={false}
+                />
+              )}
               {loadingProfile || !profile ? (
                 <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
                   <p className="text-sm text-zinc-600">Loading athlete summary…</p>
                 </div>
               ) : (
                 <>
-                  {/* Athlete Overview */}
-                  <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-                    <h2 className="text-lg font-semibold text-zinc-900">Athlete Overview</h2>
-                    <dl className="mt-4 space-y-3">
-                      <div>
-                        <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Name</dt>
-                        <dd className="mt-1 text-sm text-zinc-900">{getFirstName(profile.full_name) || "—"}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Age</dt>
-                        <dd className="mt-1 text-sm text-zinc-900">
-                          {profile.date_of_birth
-                            ? `${Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years old`
-                            : "—"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Member since</dt>
-                        <dd className="mt-1 text-sm text-zinc-900">{formatDate(profile.created_at)}</dd>
-                      </div>
-                    </dl>
-                  </div>
-
-                  {/* Event Details */}
-                  {profile.event && (
-                    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-                      <h2 className="text-lg font-semibold text-zinc-900">Event Goal</h2>
-                      <dl className="mt-4 space-y-3">
-                        <div>
-                          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Event</dt>
-                          <dd className="mt-1 text-sm text-zinc-900">{profile.event.name || "—"}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Date</dt>
-                          <dd className="mt-1 text-sm text-zinc-900">{formatDate(profile.event.event_date)}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Timeframe</dt>
-                          <dd className="mt-1 text-sm text-zinc-900">{getWeeksFromToday(profile.event.event_date)}</dd>
-                        </div>
-                      </dl>
-                    </div>
-                  )}
-
-                  {/* Experience Summary */}
-                  <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-                    <h2 className="text-lg font-semibold text-zinc-900">Race History</h2>
-                    {raceHistory && raceHistory.length > 0 ? (
-                      <>
-                        <p className="mt-4 text-sm text-zinc-700 leading-6">
-                          {buildRaceHistorySummary(
-                            (raceHistory || []).map((entry) => ({
-                              name: entry.race?.name || "Unknown",
-                              distance_km: entry.race?.distance_km || null,
-                              terrain_type: entry.race?.terrain_type || null,
-                              climate_type: entry.race?.climate_type || null,
-                              race_conditions: entry.race?.race_conditions || null,
-                            }))
-                          )}
-                        </p>
-                        <div className="mt-4 space-y-2 text-sm text-zinc-700">
-                          <p className="font-semibold">Recent races:</p>
-                          <ul className="space-y-1 ml-4">
-                            {raceHistory.slice(0, 5).map((entry, idx) => (
-                              <li key={idx} className="flex items-start gap-2">
-                                <span className="text-zinc-400 mt-0.5">•</span>
-                                <div>
-                                  <p>{entry.race?.name || "Unknown"}</p>
-                                  {entry.race?.distance_km && (
-                                    <p className="text-xs text-zinc-500">{entry.race.distance_km}km</p>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="mt-4 text-sm text-zinc-500 italic">No race history recorded yet</p>
-                    )}
-                  </div>
-
-                  {/* Booked Prep Races */}
-                  {profile.event && (
-                    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-                      <h2 className="text-lg font-semibold text-zinc-900">Booked Prep Races</h2>
-                      {bookedPrepRaces && bookedPrepRaces.length > 0 ? (
-                        <div className="mt-4 space-y-3">
-                          <p className="text-sm text-zinc-600">Preparation races for {profile.event.name}:</p>
-                          <ul className="space-y-2 ml-4">
-                            {bookedPrepRaces.map((race, idx) => (
-                              <li key={idx} className="flex items-start gap-3 text-sm">
-                                <span className="text-blue-400 mt-0.5 font-bold">•</span>
-                                <div className="flex-1">
-                                  <p className="font-medium text-zinc-900">{race.name}</p>
-                                  <div className="mt-1 space-y-0.5 text-xs text-zinc-500">
-                                    {race.distance_km && <p>Distance: {race.distance_km}km</p>}
-                                    {race.event_date && <p>Date: {formatDate(race.event_date)}</p>}
-                                  </div>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : (
-                        <p className="mt-4 text-sm text-zinc-500 italic">No prep races booked</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Experience Comparison */}
-                  {profile.event && (
-                    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-                      <h2 className="text-lg font-semibold text-zinc-900">Experience Assessment</h2>
-                      {(() => {
-                        const gaps = buildExperienceGaps(
-                          (raceHistory || []).map((entry) => ({
-                            name: entry.race?.name || "Unknown",
-                            distance_km: entry.race?.distance_km || null,
-                            terrain_type: entry.race?.terrain_type || null,
-                            climate_type: entry.race?.climate_type || null,
-                            race_conditions: entry.race?.race_conditions || null,
-                          })),
-                          {
-                            name: profile.event?.name || "",
-                            event_type: null,
-                            terrain_type: (profile.event_profile as any)?.terrain || null,
-                            climate_type: (profile.event_profile as any)?.climate || null,
-                            race_conditions: profile.event?.race_conditions as any,
-                          }
-                        );
-
-                        const eventProfile = profile.event_profile as any || {};
-                        const eventTerrain = eventProfile.terrain || "Road";
-                        const eventClimate = eventProfile.climate || "Temperate";
-
-                        return (
-                          <div className="mt-4 space-y-4">
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b border-zinc-200 text-left">
-                                    <th className="pb-3 font-semibold text-zinc-900">Experience Type</th>
-                                    <th className="pb-3 font-semibold text-zinc-900">Event Requires</th>
-                                    <th className="pb-3 font-semibold text-zinc-900">Athlete Has</th>
-                                    <th className="pb-3 font-semibold text-zinc-900">Status</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-zinc-100">
-                                  <tr>
-                                    <td className="py-3 text-zinc-700">Distance</td>
-                                    <td className="py-3 text-zinc-700">{profile.event.name || "—"}</td>
-                                    <td className="py-3 text-zinc-700">
-                                      {raceHistory && raceHistory.length > 0
-                                        ? `${raceHistory.length} race${raceHistory.length === 1 ? "" : "s"}`
-                                        : "None"}
-                                    </td>
-                                    <td className="py-3">
-                                      {raceHistory && raceHistory.length > 0 ? (
-                                        <span className="inline-block px-2 py-1 rounded bg-emerald-100 text-xs font-semibold text-emerald-900">✓</span>
-                                      ) : (
-                                        <span className="inline-block px-2 py-1 rounded bg-amber-100 text-xs font-semibold text-amber-900">—</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                  <tr>
-                                    <td className="py-3 text-zinc-700">Terrain</td>
-                                    <td className="py-3 text-zinc-700">{eventTerrain}</td>
-                                    <td className="py-3 text-zinc-700">
-                                      {raceHistory && raceHistory.some(r => r.race?.terrain_type)
-                                        ? raceHistory.filter(r => r.race?.terrain_type).map(r => r.race?.terrain_type).join(", ")
-                                        : "None"}
-                                    </td>
-                                    <td className="py-3">
-                                      {raceHistory && raceHistory.some(r => r.race?.terrain_type) ? (
-                                        <span className="inline-block px-2 py-1 rounded bg-emerald-100 text-xs font-semibold text-emerald-900">✓</span>
-                                      ) : (
-                                        <span className="inline-block px-2 py-1 rounded bg-amber-100 text-xs font-semibold text-amber-900">—</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                  <tr>
-                                    <td className="py-3 text-zinc-700">Climate</td>
-                                    <td className="py-3 text-zinc-700">{eventClimate}</td>
-                                    <td className="py-3 text-zinc-700">
-                                      {raceHistory && raceHistory.some(r => r.race?.climate_type)
-                                        ? raceHistory.filter(r => r.race?.climate_type).map(r => r.race?.climate_type).join(", ")
-                                        : "None"}
-                                    </td>
-                                    <td className="py-3">
-                                      {raceHistory && raceHistory.some(r => r.race?.climate_type) ? (
-                                        <span className="inline-block px-2 py-1 rounded bg-emerald-100 text-xs font-semibold text-emerald-900">✓</span>
-                                      ) : (
-                                        <span className="inline-block px-2 py-1 rounded bg-amber-100 text-xs font-semibold text-amber-900">—</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-
-                            {gaps.length > 0 && (
-                              <div className="space-y-2 pt-2">
-                                <p className="text-sm font-semibold text-amber-900">Areas to focus on:</p>
-                                <div className="space-y-2">
-                                  {gaps.map((gap, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-2"
-                                    >
-                                      <span className="shrink-0 mt-0.5">⚠</span>
-                                      <span>{gap}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
 
                   {/* Plan Status */}
                   {latestPlan && (
@@ -1611,6 +1413,15 @@ export default function CoachAthleteOverviewPage() {
             {/* Profile Tab */}
             {activeTab === "profile" && (
             <div className="space-y-6">
+              {tutorial === 'athlete-overview' && (
+                <TutorialInfoBox
+                  title="Profile Tab"
+                  description="View and manage the athlete's personal information, contact details, date of birth, and event goal. This is where you update key athlete profile data."
+                  step={3}
+                  totalSteps={7}
+                  showNext={false}
+                />
+              )}
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
                 <h2 className="text-xl font-semibold text-zinc-900">
                   {getFirstName(selectedAthleteName || profile?.full_name) || "Unnamed athlete"}
@@ -1680,6 +1491,15 @@ export default function CoachAthleteOverviewPage() {
             {/* Health Tab */}
             {activeTab === "health" && (
             <div className="space-y-6">
+              {tutorial === 'athlete-overview' && (
+                <TutorialInfoBox
+                  title="Health Tab"
+                  description="Track and manage the athlete's injuries, imbalances, and other health concerns. Flag any physical issues that might impact training."
+                  step={4}
+                  totalSteps={7}
+                  showNext={false}
+                />
+              )}
               {/* Injuries & Clearances */}
               <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-zinc-900 mb-4">Health Diary</h2>
@@ -1767,8 +1587,18 @@ export default function CoachAthleteOverviewPage() {
 
             {/* Dates Tab */}
             {activeTab === "dates" && (
-            <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold text-zinc-900 mb-6">Important Dates</h2>
+            <div className="space-y-6">
+              {tutorial === 'athlete-overview' && (
+                <TutorialInfoBox
+                  title="Important Dates Tab"
+                  description="Manage the athlete's holidays, blocked training dates, recovery periods, and training camps. Mark times when the athlete will be unavailable or needs modified training."
+                  step={5}
+                  totalSteps={7}
+                  showNext={false}
+                />
+              )}
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-zinc-900 mb-6">Important Dates</h2>
 
               <div className="grid gap-6 md:grid-cols-3">
                 <div>
@@ -1905,11 +1735,21 @@ export default function CoachAthleteOverviewPage() {
                 </div>
               </div>
             </div>
+            </div>
             )}
 
             {/* Plans Tab */}
             {activeTab === "plans" && (
             <div className="space-y-6">
+              {tutorial === 'athlete-overview' && (
+                <TutorialInfoBox
+                  title="Plans Tab"
+                  description="View the athlete's training plans and historical plan data. Create new plans from templates or view detailed week-by-week training schedules."
+                  step={6}
+                  totalSteps={7}
+                  showNext={false}
+                />
+              )}
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
@@ -2144,8 +1984,18 @@ export default function CoachAthleteOverviewPage() {
 
             {/* Warnings Tab */}
             {activeTab === "warnings" && (
-              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-zinc-900">Plan Warnings</h2>
+              <div className="space-y-6">
+                {tutorial === 'athlete-overview' && (
+                  <TutorialInfoBox
+                    title="Warnings Tab"
+                    description="Review any alerts or warnings about the athlete's current plan, such as training load issues, upcoming gaps, or other concerns that need attention."
+                    step={7}
+                    totalSteps={7}
+                    showNext={false}
+                  />
+                )}
+                <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                  <h2 className="text-xl font-semibold text-zinc-900">Plan Warnings</h2>
                 {planWarnings.length === 0 ? (
                   <p className="mt-4 text-sm text-zinc-600">No warnings. Plan looks good!</p>
                 ) : (
@@ -2165,20 +2015,44 @@ export default function CoachAthleteOverviewPage() {
                   </div>
                 )}
               </div>
+            </div>
             )}
 
             {/* Activity Tab */}
             {activeTab === "activity" && (
-              <ActivityTab
-                activities={stravaActivities}
-                loading={loadingActivities}
-                athleteName={getFirstName(selectedAthleteName || profile?.full_name)}
-              />
+              <div className="space-y-6">
+                {tutorial === 'athlete-overview' && (
+                  <TutorialInfoBox
+                    title="Activity Tab"
+                    description="View the athlete's training activities synced from Strava or other sources. Track completion rates and see how the athlete is following their prescribed plans."
+                    step={7}
+                    totalSteps={7}
+                    showNext={false}
+                  />
+                )}
+                <ActivityTab
+                  activities={stravaActivities}
+                  loading={loadingActivities}
+                  athleteName={getFirstName(selectedAthleteName || profile?.full_name)}
+                />
+              </div>
             )}
           </>
         ) : null}
       </div>
     </main>
+  );
+}
+
+export default function CoachAthleteOverviewPage() {
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get("tutorial");
+  const isInTutorial = tutorial === "athlete-overview";
+
+  return (
+    <TutorialProvider isInTutorial={isInTutorial} tutorialType="athlete-overview">
+      <CoachAthleteOverviewPageContent />
+    </TutorialProvider>
   );
 }
 

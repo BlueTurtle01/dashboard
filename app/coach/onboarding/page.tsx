@@ -18,7 +18,7 @@ const TUTORIALS: Omit<Tutorial, "completed">[] = [
     id: "1",
     title: "Getting Started with Coach Dashboard",
     description: "Learn how to navigate the coach dashboard and access your athletes.",
-    href: "/coach/dashboard",
+    href: "/coach/dashboard?tutorial=dashboard",
   },
   {
     id: "2",

@@ -1074,8 +1074,8 @@ function TemplatesPageContent() {
               {tutorial === 'programs' && (
                 <div className="mt-6 mb-6">
                   <TutorialInfoBox
-                    title="Understanding Template Fit Scores"
-                    description="Each template shows fit scores based on your athlete's profile and event. Green cards indicate a good match. Click 'Use Template' to create a plan, or 'Edit' to customize it before applying."
+                    title="See Fit Scores for Your Athlete"
+                    description="To see how well each template matches a specific athlete's profile and event, go to the Dashboard, select an athlete, then return to this page. You'll see personalized fit scores and recommendations."
                     step={2}
                     totalSteps={2}
                     showNext={false}
@@ -1097,18 +1097,22 @@ function TemplatesPageContent() {
                               Featured
                             </span>
                           ) : null}
-                          {match.isGoodMatch ? (
-                            <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white">
-                              Good Match
-                            </span>
-                          ) : null}
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getBaselineBadgeClass(
-                              match.baselineStatus,
-                            )}`}
-                          >
-                            {formatBaselineStatus(match.baselineStatus)}
-                          </span>
+                          {athleteId && (
+                            <>
+                              {match.isGoodMatch ? (
+                                <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white">
+                                  Good Match
+                                </span>
+                              ) : null}
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getBaselineBadgeClass(
+                                  match.baselineStatus,
+                                )}`}
+                              >
+                                {formatBaselineStatus(match.baselineStatus)}
+                              </span>
+                            </>
+                          )}
                         </div>
 
                         <p className="mt-2 text-sm text-zinc-600">{template.description || "—"}</p>

@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { TutorialProvider } from "@/lib/context/TutorialContext";
+import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
 import "./CoachDashboard.css";
 
 type CoachAthleteLink = {
@@ -164,7 +167,9 @@ function getEventName(
   return event.name ?? null;
 }
 
-export default function CoachDashboardPage() {
+function CoachDashboardContent() {
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get("tutorial");
   const [rows, setRows] = useState<AthleteLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -330,6 +335,18 @@ export default function CoachDashboardPage() {
           </div>
         )}
 
+        {tutorial === 'dashboard' && (
+          <div className="coach-dashboard-message" style={{ marginBottom: '24px', backgroundColor: '#f0f9ff', borderColor: '#bfdbfe' }}>
+            <TutorialInfoBox
+              title="Welcome to Coach Dashboard"
+              description="This is your central hub for managing all your athletes. Click 'View' on any athlete to see their detailed profile, where you'll find tabs for training plans, injury management, race history, and more."
+              step={1}
+              totalSteps={1}
+              showNext={false}
+            />
+          </div>
+        )}
+
         {loading ? (
           <div className="coach-dashboard-message">Loading athletes...</div>
         ) : error ? (
@@ -396,5 +413,17 @@ export default function CoachDashboardPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function CoachDashboardPage() {
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get("tutorial");
+  const isInTutorial = tutorial === "dashboard";
+
+  return (
+    <TutorialProvider isInTutorial={isInTutorial} tutorialType="dashboard">
+      <CoachDashboardContent />
+    </TutorialProvider>
   );
 }
