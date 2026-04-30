@@ -53,7 +53,7 @@ const TUTORIALS: Omit<Tutorial, "completed">[] = [
     id: "7",
     title: "Knowledge Base",
     description: "Answer public questions from athletes and learn platform tips from the Coach FAQ.",
-    href: "/coach/knowledge-base?tutorial=knowledge-base",
+    href: "/knowledge-base?tutorial=knowledge-base",
   },
   {
     id: "8",
