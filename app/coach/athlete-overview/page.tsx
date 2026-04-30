@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { TutorialProvider } from "@/lib/context/TutorialContext";
+import { TutorialProvider, useTutorial } from "@/lib/context/TutorialContext";
 import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
 import { buildRaceHistorySummary, buildExperienceGaps } from "@/lib/planner/raceHistorySummary";
 
@@ -246,6 +246,7 @@ function CoachAthleteOverviewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tutorial = searchParams.get("tutorial");
+  const { isInTutorial } = useTutorial();
 
   const [coachUserId, setCoachUserId] = useState<string>(TEST_COACH_USER_ID);
   const [usingFallbackAuth, setUsingFallbackAuth] = useState(false);
@@ -1263,7 +1264,7 @@ function CoachAthleteOverviewPageContent() {
               })}
             </div>
 
-            {tutorial === 'athlete-overview' && (
+            {isInTutorial && (
               <div className="mb-6">
                 <TutorialInfoBox
                   title="Explore Each Tab"
@@ -1278,7 +1279,7 @@ function CoachAthleteOverviewPageContent() {
             {/* Summary Tab */}
             {activeTab === "summary" && (
             <div className="space-y-6">
-              {tutorial === 'athlete-overview' && (
+              {isInTutorial && (
                 <TutorialInfoBox
                   title="Summary Tab"
                   description="View the athlete's current training plan status and performance. See their active plan and completion metrics at a glance."
@@ -1413,7 +1414,7 @@ function CoachAthleteOverviewPageContent() {
             {/* Profile Tab */}
             {activeTab === "profile" && (
             <div className="space-y-6">
-              {tutorial === 'athlete-overview' && (
+              {isInTutorial && (
                 <TutorialInfoBox
                   title="Profile Tab"
                   description="View and manage the athlete's personal information, contact details, date of birth, and event goal. This is where you update key athlete profile data."
@@ -1491,7 +1492,7 @@ function CoachAthleteOverviewPageContent() {
             {/* Health Tab */}
             {activeTab === "health" && (
             <div className="space-y-6">
-              {tutorial === 'athlete-overview' && (
+              {isInTutorial && (
                 <TutorialInfoBox
                   title="Health Tab"
                   description="Track and manage the athlete's injuries, imbalances, and other health concerns. Flag any physical issues that might impact training."
@@ -1588,7 +1589,7 @@ function CoachAthleteOverviewPageContent() {
             {/* Dates Tab */}
             {activeTab === "dates" && (
             <div className="space-y-6">
-              {tutorial === 'athlete-overview' && (
+              {isInTutorial && (
                 <TutorialInfoBox
                   title="Important Dates Tab"
                   description="Manage the athlete's holidays, blocked training dates, recovery periods, and training camps. Mark times when the athlete will be unavailable or needs modified training."
@@ -1741,7 +1742,7 @@ function CoachAthleteOverviewPageContent() {
             {/* Plans Tab */}
             {activeTab === "plans" && (
             <div className="space-y-6">
-              {tutorial === 'athlete-overview' && (
+              {isInTutorial && (
                 <TutorialInfoBox
                   title="Plans Tab"
                   description="View the athlete's training plans and historical plan data. Create new plans from templates or view detailed week-by-week training schedules."
@@ -1985,7 +1986,7 @@ function CoachAthleteOverviewPageContent() {
             {/* Warnings Tab */}
             {activeTab === "warnings" && (
               <div className="space-y-6">
-                {tutorial === 'athlete-overview' && (
+                {isInTutorial && (
                   <TutorialInfoBox
                     title="Warnings Tab"
                     description="Review any alerts or warnings about the athlete's current plan, such as training load issues, upcoming gaps, or other concerns that need attention."
@@ -2021,7 +2022,7 @@ function CoachAthleteOverviewPageContent() {
             {/* Activity Tab */}
             {activeTab === "activity" && (
               <div className="space-y-6">
-                {tutorial === 'athlete-overview' && (
+                {isInTutorial && (
                   <TutorialInfoBox
                     title="Activity Tab"
                     description="View the athlete's training activities synced from Strava or other sources. Track completion rates and see how the athlete is following their prescribed plans."
