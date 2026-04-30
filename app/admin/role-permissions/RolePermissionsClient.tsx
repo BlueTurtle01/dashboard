@@ -31,6 +31,7 @@ export default function RolePermissionsClient({ permissions }: Props) {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   function handleToggle(role: ManagedRole, navItem: NavItemKey) {
     if (role === "admin") return;
@@ -51,14 +52,20 @@ export default function RolePermissionsClient({ permissions }: Props) {
     setSavingKey(key);
     setSavedKey(null);
     setErrorKey(null);
+    setErrorMessage(null);
 
     startTransition(async () => {
       try {
-        await toggleNavPermission(role, navItem, enabled);
+        const result = await toggleNavPermission(role, navItem, enabled);
+        if (!result.ok) {
+          throw new Error(result.error);
+        }
+
         setSavedKey(key);
         setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1500);
       } catch (error) {
-        console.error("Failed to save role permission:", error);
+        const message = error instanceof Error ? error.message : "Failed to save role permission";
+        console.error("Failed to save role permission:", message);
         setLocal((prev) => {
           const next = { ...prev, [role]: new Set(prev[role]) };
           if (enabled) {
@@ -69,6 +76,7 @@ export default function RolePermissionsClient({ permissions }: Props) {
           return next;
         });
         setErrorKey(key);
+        setErrorMessage(message);
       } finally {
         setSavingKey(null);
       }
@@ -82,6 +90,11 @@ export default function RolePermissionsClient({ permissions }: Props) {
 
   return (
     <div className="overflow-x-auto">
+      {errorMessage && (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {errorMessage}
+        </div>
+      )}
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr>
@@ -130,7 +143,7 @@ export default function RolePermissionsClient({ permissions }: Props) {
                             isAdmin
                               ? "Admins always have full access"
                               : hasError
-                                ? "Save failed. Try again."
+                                ? errorMessage ?? "Save failed. Try again."
                                 : undefined
                           }
                           className={[
