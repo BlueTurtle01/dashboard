@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ChatThread } from '@/lib/chat/types';
 import ChatThreadList from '@/components/chat/ChatThreadList';
 import NewThreadForm from '@/components/chat/NewThreadForm';
+import { TutorialProvider } from '@/lib/context/TutorialContext';
+import TutorialInfoBox from '@/components/tutorial/TutorialInfoBox';
 
 interface CoachAthleteChatPageProps {
   params: Promise<{
@@ -13,7 +16,7 @@ interface CoachAthleteChatPageProps {
   }>;
 }
 
-export default function CoachAthleteThreadsPage({ params: paramsPromise }: CoachAthleteChatPageProps) {
+function CoachAthleteThreadsPageContent({ params: paramsPromise }: CoachAthleteChatPageProps) {
   const [athleteId, setAthleteId] = useState<string | null>(null);
   const [athleteName, setAthleteName] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -21,6 +24,8 @@ export default function CoachAthleteThreadsPage({ params: paramsPromise }: Coach
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNewThreadForm, setShowNewThreadForm] = useState(false);
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get('tutorial');
 
   // Handle async params
   useEffect(() => {
@@ -119,7 +124,7 @@ export default function CoachAthleteThreadsPage({ params: paramsPromise }: Coach
     <main className="h-screen flex flex-col bg-white">
       <div className="border-b border-zinc-200 p-6 flex items-center gap-4">
         <Link
-          href="/coach/chat"
+          href={`/coach/chat${tutorial === 'chat' ? '?tutorial=chat' : ''}`}
           className="text-zinc-600 hover:text-zinc-900"
         >
           ←
@@ -132,31 +137,58 @@ export default function CoachAthleteThreadsPage({ params: paramsPromise }: Coach
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 max-w-2xl">
-        {showNewThreadForm && conversationId ? (
-          <NewThreadForm
-            conversationId={conversationId}
-            onCreated={(newThread) => {
-              setThreads([newThread, ...threads]);
-              setShowNewThreadForm(false);
-            }}
-            onCancel={() => setShowNewThreadForm(false)}
-          />
-        ) : (
-          <button
-            onClick={() => setShowNewThreadForm(true)}
-            className="mb-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-          >
-            + New Thread
-          </button>
-        )}
+      {tutorial === 'chat' && (
+        <div className="border-b border-zinc-200 px-6 pt-4">
+          <div className="max-w-2xl mx-auto w-full">
+            <TutorialInfoBox
+              title="Message Threads"
+              description="Organize conversations with your athlete into threads by topic. Click 'New Thread' to start a conversation."
+              step={2}
+              totalSteps={3}
+            />
+          </div>
+        </div>
+      )}
 
-        <ChatThreadList
-          threads={threads}
-          basePath={`/coach/chat/${athleteId}`}
-          onThreadsUpdate={setThreads}
-        />
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-2xl mx-auto w-full">
+          {showNewThreadForm && conversationId ? (
+            <NewThreadForm
+              conversationId={conversationId}
+              onCreated={(newThread) => {
+                setThreads([newThread, ...threads]);
+                setShowNewThreadForm(false);
+              }}
+              onCancel={() => setShowNewThreadForm(false)}
+            />
+          ) : (
+            <button
+              onClick={() => setShowNewThreadForm(true)}
+              className="mb-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+            >
+              + New Thread
+            </button>
+          )}
+
+          <ChatThreadList
+            threads={threads}
+            basePath={`/coach/chat/${athleteId}${tutorial === 'chat' ? '?tutorial=chat' : ''}`}
+            onThreadsUpdate={setThreads}
+          />
+        </div>
       </div>
     </main>
+  );
+}
+
+export default function CoachAthleteThreadsPage({ params: paramsPromise }: CoachAthleteChatPageProps) {
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get('tutorial');
+  const isInTutorial = tutorial === 'chat';
+
+  return (
+    <TutorialProvider isInTutorial={isInTutorial} tutorialType="chat">
+      <CoachAthleteThreadsPageContent params={paramsPromise} />
+    </TutorialProvider>
   );
 }

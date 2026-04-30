@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ChatThread } from '@/lib/chat/types';
 import ChatThreadComponent from '@/components/chat/ChatThread';
+import { TutorialProvider } from '@/lib/context/TutorialContext';
+import TutorialInfoBox from '@/components/tutorial/TutorialInfoBox';
 
 interface CoachChatThreadPageProps {
   params: Promise<{
@@ -13,7 +16,7 @@ interface CoachChatThreadPageProps {
   }>;
 }
 
-export default function CoachChatThreadPage({ params: paramsPromise }: CoachChatThreadPageProps) {
+function CoachChatThreadPageContent({ params: paramsPromise }: CoachChatThreadPageProps) {
   const [athleteId, setAthleteId] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [thread, setThread] = useState<ChatThread | null>(null);
@@ -21,6 +24,8 @@ export default function CoachChatThreadPage({ params: paramsPromise }: CoachChat
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get('tutorial');
 
   // Handle async params
   useEffect(() => {
@@ -108,7 +113,7 @@ export default function CoachChatThreadPage({ params: paramsPromise }: CoachChat
     <main className="h-screen flex flex-col bg-white">
       <div className="border-b border-zinc-200 p-6 flex items-center gap-4">
         <Link
-          href={`/coach/chat/${athleteId}`}
+          href={`/coach/chat/${athleteId}${tutorial === 'chat' ? '?tutorial=chat' : ''}`}
           className="text-zinc-600 hover:text-zinc-900"
         >
           ←
@@ -118,6 +123,20 @@ export default function CoachChatThreadPage({ params: paramsPromise }: CoachChat
           <p className="text-sm text-zinc-600">with {athleteName || 'Athlete'}</p>
         </div>
       </div>
+
+      {tutorial === 'chat' && (
+        <div className="border-b border-zinc-200 px-6 pt-4 pb-4">
+          <div className="max-w-2xl mx-auto w-full">
+            <TutorialInfoBox
+              title="Send and Receive Messages"
+              description="Type your message at the bottom and send it. Your athlete will see it immediately. You can discuss training plans, answer questions, and provide feedback here."
+              step={3}
+              totalSteps={3}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-hidden">
         <ChatThreadComponent
           thread={thread}
@@ -126,5 +145,17 @@ export default function CoachChatThreadPage({ params: paramsPromise }: CoachChat
         />
       </div>
     </main>
+  );
+}
+
+export default function CoachChatThreadPage({ params: paramsPromise }: CoachChatThreadPageProps) {
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get('tutorial');
+  const isInTutorial = tutorial === 'chat';
+
+  return (
+    <TutorialProvider isInTutorial={isInTutorial} tutorialType="chat">
+      <CoachChatThreadPageContent params={paramsPromise} />
+    </TutorialProvider>
   );
 }
