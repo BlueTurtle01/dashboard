@@ -129,7 +129,9 @@ export default function AthleteKnowledgeBase() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-zinc-600">{question.body}</p>
+                    {question.type !== "faq" && (
+                      <p className="text-sm text-zinc-600">{question.body}</p>
+                    )}
                   </div>
                   <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
                     {question.answer_count} {question.answer_count === 1 ? "answer" : "answers"}

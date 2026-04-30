@@ -368,18 +368,16 @@ export async function flagQuestion(
 
 export async function submitFaqQuestion(
   title: string,
-  body: string,
   answer: string,
   audience: KbQuestionAudience = "athlete"
 ): Promise<{ error?: string; questionId?: string }> {
   const { supabase, user } = await requireAdmin();
 
   const questionTitle = title.trim();
-  const questionBody = body.trim();
   const answerBody = answer.trim();
 
-  if (!questionTitle || !questionBody || !answerBody) {
-    return { error: "Please provide a title, question details, and answer" };
+  if (!questionTitle || !answerBody) {
+    return { error: "Please provide a FAQ title and answer" };
   }
 
   if (audience !== "athlete" && audience !== "coach") {
@@ -390,7 +388,7 @@ export async function submitFaqQuestion(
     .from("kb_questions")
     .insert({
       title: questionTitle,
-      body: questionBody,
+      body: questionTitle,
       type: "faq",
       audience,
       submitted_by: user.id,

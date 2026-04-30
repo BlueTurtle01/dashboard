@@ -32,7 +32,6 @@ export default function AdminKbClient({
   const [faqSubmitting, setFaqSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [faqTitle, setFaqTitle] = useState("");
-  const [faqBody, setFaqBody] = useState("");
   const [faqAnswer, setFaqAnswer] = useState("");
   const [faqAudience, setFaqAudience] = useState<KbQuestionAudience>("athlete");
   const [markAsFaq, setMarkAsFaq] = useState(true);
@@ -43,8 +42,8 @@ export default function AdminKbClient({
   }
 
   async function handleSubmitFaq() {
-    if (!faqTitle.trim() || !faqBody.trim() || !faqAnswer.trim()) {
-      setError("Please provide a FAQ title, question details, and answer.");
+    if (!faqTitle.trim() || !faqAnswer.trim()) {
+      setError("Please provide a FAQ title and answer.");
       return;
     }
 
@@ -57,14 +56,13 @@ export default function AdminKbClient({
     setError(null);
 
     try {
-      const result = await submitFaqQuestion(faqTitle, faqBody, faqAnswer, faqAudience);
+      const result = await submitFaqQuestion(faqTitle, faqAnswer, faqAudience);
       if (result.error) {
         setError(result.error);
         return;
       }
 
       setFaqTitle("");
-      setFaqBody("");
       setFaqAnswer("");
       setFaqAudience("athlete");
       setMarkAsFaq(true);
@@ -169,21 +167,6 @@ export default function AdminKbClient({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="faqBody">
-              Question Details
-            </label>
-            <textarea
-              id="faqBody"
-              value={faqBody}
-              onChange={(e) => setFaqBody(e.target.value)}
-              placeholder="Add enough context for athletes to recognise the policy question."
-              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
-              rows={3}
-              disabled={faqSubmitting}
-            />
-          </div>
-
-          <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="faqAnswer">
               Admin Answer
             </label>
@@ -201,7 +184,7 @@ export default function AdminKbClient({
 
         <button
           onClick={() => void handleSubmitFaq()}
-          disabled={!faqTitle.trim() || !faqBody.trim() || !faqAnswer.trim() || !markAsFaq || faqSubmitting}
+          disabled={!faqTitle.trim() || !faqAnswer.trim() || !markAsFaq || faqSubmitting}
           className="mt-5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
         >
           {faqSubmitting ? "Publishing..." : "Publish FAQ"}
@@ -222,7 +205,6 @@ export default function AdminKbClient({
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h3 className="text-lg font-semibold text-zinc-900">{question.title}</h3>
-                      <p className="mt-1 text-sm text-zinc-600">{question.body}</p>
                     </div>
                     <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                       {question.audience === "coach" ? "Coach FAQ" : "Athlete FAQ"}

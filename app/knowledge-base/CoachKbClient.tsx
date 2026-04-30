@@ -158,7 +158,9 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-zinc-600">{question.body}</p>
+                      {question.type !== "faq" && (
+                        <p className="text-sm text-zinc-600">{question.body}</p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       <span
