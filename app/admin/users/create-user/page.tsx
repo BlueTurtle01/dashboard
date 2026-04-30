@@ -10,7 +10,7 @@ interface User {
   createdAt: string;
 }
 
-const AVAILABLE_ROLES = ['coach', 'athlete', 'solo_plan_holder', 'admin'];
+const AVAILABLE_ROLES = ['coach', 'athlete', 'solo_plan_holder', 'admin', 'creator'];
 
 export default function CreateUserPage() {
   const [users, setUsers] = useState<User[]>([]);

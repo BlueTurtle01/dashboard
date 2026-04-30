@@ -36,7 +36,31 @@ export default async function Navbar() {
   const isCoach = roles.includes("coach");
   const isAthlete = roles.includes("athlete");
   const isSoloPlanHolder = roles.includes("solo_plan_holder");
-  const canAccessCoachArea = isAdmin || isCoach;
+
+  // Load nav permissions for non-admin roles
+  let allowedNavItems = new Set<string>();
+  if (!isAdmin && user) {
+    const { data: permRows } = await supabase
+      .from("role_nav_permissions")
+      .select("nav_item")
+      .in("role", roles)
+      .eq("enabled", true);
+    allowedNavItems = new Set(permRows?.map((r) => r.nav_item) ?? []);
+  }
+
+  // Admins bypass the permissions table; everyone else uses it
+  function can(navItem: string): boolean {
+    if (isAdmin) return true;
+    return allowedNavItems.has(navItem);
+  }
+
+  const canAccessCoachArea = isAdmin || isCoach || can("coach_dashboard") ||
+    can("coach_chat") || can("coach_knowledge_base") || can("coach_programs") ||
+    can("coach_mobility") || can("coach_gym_sessions") || can("coach_profile");
+  const canAccessTrainingArea = isAthlete || isSoloPlanHolder ||
+    can("athlete_plan") || can("athlete_chat") || can("athlete_library") ||
+    can("athlete_knowledge_base") || can("athlete_information") ||
+    can("athlete_profile") || can("athlete_integrations") || can("athlete_upgrades");
 
   const hasRaceInfo = features.includes("race_info");
   const hasKitList = features.includes("kit_list");
@@ -180,45 +204,61 @@ export default async function Navbar() {
 
         {/* Navigation */}
         <nav className="app-sidebar__nav">
-          {/* Athlete section */}
-          {(isAthlete || isSoloPlanHolder) && (
+          {/* Athlete / Training section */}
+          {canAccessTrainingArea && (
             <>
               <span className="app-sidebar__group-label">Training</span>
-              <SidebarDropdown
-                label="My Plan"
-                items={[
-                  { href: "/athlete", label: "Plan" },
-                  { href: "/athlete/sessions", label: "Sessions" },
-                  ...(isSoloPlanHolder ? [] : [{ href: "/athlete/log", label: "Log" }]),
-                ]}
-              />
-              <Link href="/athlete/chat" className="app-sidebar__link">
-                Chat
-                {athleteHasUnread && <span className="app-sidebar__nav-badge" />}
-              </Link>
-              <Link href="/athlete/library" className="app-sidebar__link">
-                Library
-              </Link>
-              <Link href="/athlete/knowledge-base" className="app-sidebar__link">
-                Knowledge Base
-                {athleteKbUnread && <span className="app-sidebar__nav-badge--green" />}
-              </Link>
-              <SidebarDropdown
-                label="Information"
-                items={[
-                  { href: "/athlete/information/destination", label: "Destination", requiresUpgrade: !hasRaceInfo },
-                  { href: "/athlete/information/kit-list", label: "Kit List", requiresUpgrade: !hasKitList },
-                ]}
-              />
-              <Link href="/athlete/profile" className="app-sidebar__link">
-                Profile
-              </Link>
-              <Link href="/athlete/integrations" className="app-sidebar__link">
-                Integrations
-              </Link>
-              <Link href="/athlete/upgrades" className="app-sidebar__link">
-                Upgrades
-              </Link>
+              {can("athlete_plan") && (
+                <SidebarDropdown
+                  label="My Plan"
+                  items={[
+                    { href: "/athlete", label: "Plan" },
+                    { href: "/athlete/sessions", label: "Sessions" },
+                    ...(isSoloPlanHolder ? [] : [{ href: "/athlete/log", label: "Log" }]),
+                  ]}
+                />
+              )}
+              {can("athlete_chat") && (
+                <Link href="/athlete/chat" className="app-sidebar__link">
+                  Chat
+                  {athleteHasUnread && <span className="app-sidebar__nav-badge" />}
+                </Link>
+              )}
+              {can("athlete_library") && (
+                <Link href="/athlete/library" className="app-sidebar__link">
+                  Library
+                </Link>
+              )}
+              {can("athlete_knowledge_base") && (
+                <Link href="/athlete/knowledge-base" className="app-sidebar__link">
+                  Knowledge Base
+                  {athleteKbUnread && <span className="app-sidebar__nav-badge--green" />}
+                </Link>
+              )}
+              {can("athlete_information") && (
+                <SidebarDropdown
+                  label="Information"
+                  items={[
+                    { href: "/athlete/information/destination", label: "Destination", requiresUpgrade: !hasRaceInfo },
+                    { href: "/athlete/information/kit-list", label: "Kit List", requiresUpgrade: !hasKitList },
+                  ]}
+                />
+              )}
+              {can("athlete_profile") && (
+                <Link href="/athlete/profile" className="app-sidebar__link">
+                  Profile
+                </Link>
+              )}
+              {can("athlete_integrations") && (
+                <Link href="/athlete/integrations" className="app-sidebar__link">
+                  Integrations
+                </Link>
+              )}
+              {can("athlete_upgrades") && (
+                <Link href="/athlete/upgrades" className="app-sidebar__link">
+                  Upgrades
+                </Link>
+              )}
             </>
           )}
 
@@ -226,38 +266,50 @@ export default async function Navbar() {
           {canAccessCoachArea && (
             <>
               <span className="app-sidebar__group-label">Coach</span>
-              <Link href="/coach/dashboard" className="app-sidebar__link">
-                Dashboard
-              </Link>
-              <Link href="/coach/chat" className="app-sidebar__link">
-                Chat
-                {coachHasUnread && <span className="app-sidebar__nav-badge" />}
-              </Link>
-              <Link href="/coach/knowledge-base" className="app-sidebar__link">
-                Knowledge Base
-              </Link>
-              <SidebarDropdown
-                label="Programs"
-                items={[
-                  { href: "/coach/program-templates", label: "View Programs" },
-                  { href: "/coach/program-templates/create", label: "Create Program" },
-                ]}
-              />
-              <SidebarDropdown
-                label="Mobility"
-                items={[
-                  { href: "/coach/mobility-sessions", label: "View Mobility Sessions" },
-                  { href: "/coach/mobility-sessions/create", label: "Create Mobility Session" },
-                ]}
-              />
-              <SidebarDropdown
-                label="Gym Sessions"
-                items={[
-                  { href: "/coach/gym-session-templates", label: "View Gym Sessions" },
-                  { href: "/coach/gym-session-templates/create", label: "Create Gym Session" },
-                ]}
-              />
-              {canAccessCoachArea && (
+              {can("coach_dashboard") && (
+                <Link href="/coach/dashboard" className="app-sidebar__link">
+                  Dashboard
+                </Link>
+              )}
+              {can("coach_chat") && (
+                <Link href="/coach/chat" className="app-sidebar__link">
+                  Chat
+                  {coachHasUnread && <span className="app-sidebar__nav-badge" />}
+                </Link>
+              )}
+              {can("coach_knowledge_base") && (
+                <Link href="/coach/knowledge-base" className="app-sidebar__link">
+                  Knowledge Base
+                </Link>
+              )}
+              {can("coach_programs") && (
+                <SidebarDropdown
+                  label="Programs"
+                  items={[
+                    { href: "/coach/program-templates", label: "View Programs" },
+                    { href: "/coach/program-templates/create", label: "Create Program" },
+                  ]}
+                />
+              )}
+              {can("coach_mobility") && (
+                <SidebarDropdown
+                  label="Mobility"
+                  items={[
+                    { href: "/coach/mobility-sessions", label: "View Mobility Sessions" },
+                    { href: "/coach/mobility-sessions/create", label: "Create Mobility Session" },
+                  ]}
+                />
+              )}
+              {can("coach_gym_sessions") && (
+                <SidebarDropdown
+                  label="Gym Sessions"
+                  items={[
+                    { href: "/coach/gym-session-templates", label: "View Gym Sessions" },
+                    { href: "/coach/gym-session-templates/create", label: "Create Gym Session" },
+                  ]}
+                />
+              )}
+              {can("coach_profile") && (
                 <Link href="/coach/profile" className="app-sidebar__link">
                   My Profile
                 </Link>
@@ -276,59 +328,72 @@ export default async function Navbar() {
           </Link>
 
           {/* Admin section */}
-          {isAdmin && (
+          {can("admin_panel") || can("admin_knowledge_base") || can("admin_library") || can("admin_templates") || can("admin_destinations") || can("admin_config") ? (
             <>
               <span className="app-sidebar__group-label">Admin</span>
-              <SidebarDropdown
-                label="Admin"
-                items={[
-                  { href: "/admin/users/create-user", label: "Create Users" },
-                  { href: "/admin/users", label: "Users" },
-                  { href: "/admin/coach-performance", label: "Coach Performance" },
-                  { href: "/admin/support", label: "Support Tickets" },
-                  { href: "/admin/support/stats", label: "Support Analytics" },
-                ]}
-              />
-              <Link href="/admin/knowledge-base" className="app-sidebar__link">
-                Knowledge Base
-                {adminFlaggedQbCount > 0 && <span className="app-sidebar__nav-badge" />}
-              </Link>
-              <SidebarDropdown
-                label="Library"
-                items={[
-                  { href: "/admin/exercises", label: "Exercises" },
-                  { href: "/admin/exercises/create", label: "Create Exercise" },
-                  { href: "/admin/stretches", label: "Stretches" },
-                  { href: "/admin/stretches/create", label: "Create Stretch" },
-                ]}
-              />
-              <SidebarDropdown
-                label="Templates"
-                items={[
-                  { href: "/coach/functional-session-templates", label: "Functional Sessions" },
-                  { href: "/coach/functional-session-templates/create", label: "Create Functional Session" },
-                  { href: "/admin/functional/types/create", label: "Functional Types" },
-                ]}
-              />
-              <SidebarDropdown
-                label="Destinations"
-                items={[
-                  { href: "/admin/countries", label: "Countries" },
-                ]}
-              />
-              <SidebarDropdown
-                label="Config"
-                items={[
-                  { href: "/admin/session-template-field-config", label: "Session Template Tags" },
-                  { href: "/athlete/profile", label: "Athlete Profile" },
-                  { href: "/admin/solo-plans", label: "Solo Plans" },
-                  { href: "/admin/coach-athlete-links", label: "Coach-Athlete Links" },
-                  { href: "/admin/chat/phrases", label: "Chat Moderation" },
-                  { href: "/admin/chat/moderation", label: "Review Flagged Messages" },
-                ]}
-              />
+              {can("admin_panel") && (
+                <SidebarDropdown
+                  label="Admin"
+                  items={[
+                    { href: "/admin/users/create-user", label: "Create Users" },
+                    { href: "/admin/users", label: "Users" },
+                    { href: "/admin/role-permissions", label: "Role Permissions" },
+                    { href: "/admin/coach-performance", label: "Coach Performance" },
+                    { href: "/admin/support", label: "Support Tickets" },
+                    { href: "/admin/support/stats", label: "Support Analytics" },
+                  ]}
+                />
+              )}
+              {can("admin_knowledge_base") && (
+                <Link href="/admin/knowledge-base" className="app-sidebar__link">
+                  Knowledge Base
+                  {adminFlaggedQbCount > 0 && <span className="app-sidebar__nav-badge" />}
+                </Link>
+              )}
+              {can("admin_library") && (
+                <SidebarDropdown
+                  label="Library"
+                  items={[
+                    { href: "/admin/exercises", label: "Exercises" },
+                    { href: "/admin/exercises/create", label: "Create Exercise" },
+                    { href: "/admin/stretches", label: "Stretches" },
+                    { href: "/admin/stretches/create", label: "Create Stretch" },
+                  ]}
+                />
+              )}
+              {can("admin_templates") && (
+                <SidebarDropdown
+                  label="Templates"
+                  items={[
+                    { href: "/coach/functional-session-templates", label: "Functional Sessions" },
+                    { href: "/coach/functional-session-templates/create", label: "Create Functional Session" },
+                    { href: "/admin/functional/types/create", label: "Functional Types" },
+                  ]}
+                />
+              )}
+              {can("admin_destinations") && (
+                <SidebarDropdown
+                  label="Destinations"
+                  items={[
+                    { href: "/admin/countries", label: "Countries" },
+                  ]}
+                />
+              )}
+              {can("admin_config") && (
+                <SidebarDropdown
+                  label="Config"
+                  items={[
+                    { href: "/admin/session-template-field-config", label: "Session Template Tags" },
+                    { href: "/athlete/profile", label: "Athlete Profile" },
+                    { href: "/admin/solo-plans", label: "Solo Plans" },
+                    { href: "/admin/coach-athlete-links", label: "Coach-Athlete Links" },
+                    { href: "/admin/chat/phrases", label: "Chat Moderation" },
+                    { href: "/admin/chat/moderation", label: "Review Flagged Messages" },
+                  ]}
+                />
+              )}
             </>
-          )}
+          ) : null}
         </nav>
 
         {/* Bottom user area */}
