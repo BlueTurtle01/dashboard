@@ -13,6 +13,8 @@ type ExerciseSearchRow = {
   equipment: string[] | null;
   sets: number | null;
   reps: number | null;
+  photo_url: string | null;
+  video_url: string | null;
 };
 
 type SelectedExercise = {
@@ -27,6 +29,10 @@ type SelectedExercise = {
   reps: string;
   duration: string;
   notes: string;
+  photoUrl: string | null;
+  videoUrl: string;
+  uploadingPhoto: boolean;
+  mediaChanged: boolean;
 };
 
 function prefixedExerciseName(name: string, equipmentPiece: string | null): string {
@@ -65,13 +71,15 @@ export default function EditGymSessionTemplatePage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   const canSave = useMemo(() => {
+    const anyUploading = selectedExercises.some((ex) => ex.uploadingPhoto);
     return (
       templateName.trim().length > 0 &&
       selectedExercises.length > 0 &&
       !saving &&
-      !loading
+      !loading &&
+      !anyUploading
     );
-  }, [templateName, selectedExercises.length, saving, loading]);
+  }, [templateName, selectedExercises, saving, loading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,7 +123,7 @@ export default function EditGymSessionTemplatePage() {
       if (exerciseIds.length > 0) {
         const { data: lookupRows, error: lookupError } = await supabase
           .from("exercises")
-          .select("id, name, description, pattern, equipment, sets, reps")
+          .select("id, name, description, pattern, equipment, sets, reps, photo_url, video_url")
           .in("id", exerciseIds);
 
         if (!lookupError && lookupRows) {
@@ -143,6 +151,10 @@ export default function EditGymSessionTemplatePage() {
               reps: (row.reps as string | null) ?? "",
               duration: (row.duration as string | null) ?? "",
               notes: (row.notes as string | null) ?? "",
+              photoUrl: lookup?.photo_url ?? null,
+              videoUrl: lookup?.video_url ?? "",
+              uploadingPhoto: false,
+              mediaChanged: false,
             };
           })
         );
@@ -254,6 +266,10 @@ export default function EditGymSessionTemplatePage() {
         reps: exercise.reps == null ? "" : String(exercise.reps),
         duration: "",
         notes: "",
+        photoUrl: exercise.photo_url ?? null,
+        videoUrl: exercise.video_url ?? "",
+        uploadingPhoto: false,
+        mediaChanged: false,
       },
     ]);
     setStatusMessage(`${exercise.name} added.`);
@@ -282,6 +298,50 @@ export default function EditGymSessionTemplatePage() {
         ex.clientId === clientId
           ? { ...ex, selectedEquipmentPiece: ex.selectedEquipmentPiece === piece ? null : piece }
           : ex
+      )
+    );
+  }
+
+  async function uploadExercisePhoto(clientId: string, exerciseId: string, file: File) {
+    setSelectedExercises((current) =>
+      current.map((ex) => (ex.clientId === clientId ? { ...ex, uploadingPhoto: true } : ex))
+    );
+
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `exercise-photos/${exerciseId}/${Date.now()}.${ext}`;
+    const supabase = createClient();
+    const { error } = await supabase.storage.from("exercise-media").upload(path, file, { upsert: true });
+
+    if (error) {
+      setSelectedExercises((current) =>
+        current.map((ex) => (ex.clientId === clientId ? { ...ex, uploadingPhoto: false } : ex))
+      );
+      setErrorMessage(`Photo upload failed: ${error.message}`);
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from("exercise-media").getPublicUrl(path);
+    setSelectedExercises((current) =>
+      current.map((ex) =>
+        ex.clientId === clientId
+          ? { ...ex, uploadingPhoto: false, photoUrl: publicUrl, mediaChanged: true }
+          : ex
+      )
+    );
+  }
+
+  function clearExercisePhoto(clientId: string) {
+    setSelectedExercises((current) =>
+      current.map((ex) =>
+        ex.clientId === clientId ? { ...ex, photoUrl: null, mediaChanged: true } : ex
+      )
+    );
+  }
+
+  function updateExerciseVideoUrl(clientId: string, url: string) {
+    setSelectedExercises((current) =>
+      current.map((ex) =>
+        ex.clientId === clientId ? { ...ex, videoUrl: url, mediaChanged: true } : ex
       )
     );
   }
@@ -349,6 +409,18 @@ export default function EditGymSessionTemplatePage() {
       setSaving(false);
       setErrorMessage(`Exercises not saved: ${insertError.message}`);
       return;
+    }
+
+    const mediaUpdates = selectedExercises.filter((ex) => ex.mediaChanged);
+    if (mediaUpdates.length > 0) {
+      await Promise.all(
+        mediaUpdates.map((ex) =>
+          supabase
+            .from("exercises")
+            .update({ photo_url: ex.photoUrl, video_url: ex.videoUrl.trim() || null })
+            .eq("id", ex.exerciseId)
+        )
+      );
     }
 
     setSaving(false);
@@ -711,6 +783,91 @@ export default function EditGymSessionTemplatePage() {
                           placeholder="Optional"
                           className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
                         />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 border-t border-zinc-200 pt-4">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Media
+                      </p>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-zinc-900">
+                            Photo
+                          </label>
+                          {exercise.photoUrl ? (
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={exercise.photoUrl}
+                                alt=""
+                                className="h-16 w-16 rounded-lg border border-zinc-200 object-cover"
+                              />
+                              <div className="flex flex-col gap-1.5">
+                                <label className="cursor-pointer rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-center text-xs font-medium hover:bg-zinc-50">
+                                  {exercise.uploadingPhoto ? "Uploading…" : "Replace"}
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    className="sr-only"
+                                    disabled={exercise.uploadingPhoto}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) void uploadExercisePhoto(exercise.clientId, exercise.exerciseId, file);
+                                    }}
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => clearExercisePhoto(exercise.clientId)}
+                                  className="text-xs text-rose-600 hover:underline"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <label
+                              className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50 px-4 py-5 text-center transition hover:bg-zinc-100 ${exercise.uploadingPhoto ? "pointer-events-none opacity-50" : ""}`}
+                            >
+                              <span className="text-xs text-zinc-500">
+                                {exercise.uploadingPhoto ? "Uploading…" : "Click to upload photo"}
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                className="sr-only"
+                                disabled={exercise.uploadingPhoto}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) void uploadExercisePhoto(exercise.clientId, exercise.exerciseId, file);
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-zinc-900">
+                            Video URL
+                          </label>
+                          <input
+                            type="url"
+                            value={exercise.videoUrl}
+                            onChange={(e) => updateExerciseVideoUrl(exercise.clientId, e.target.value)}
+                            placeholder="https://youtube.com/watch?v=…"
+                            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                          />
+                          {exercise.videoUrl.trim() && (
+                            <a
+                              href={exercise.videoUrl.trim()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1.5 inline-block text-xs text-blue-600 hover:underline"
+                            >
+                              Open video ↗
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
