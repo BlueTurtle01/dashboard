@@ -262,6 +262,11 @@ export default async function Navbar() {
           {canAccessCoachArea && (
             <>
               <span className="app-sidebar__group-label">Coach</span>
+              {can("coach_onboarding") && (
+                <Link href="/coach/onboarding" className="app-sidebar__link">
+                  Onboarding
+                </Link>
+              )}
               {can("coach_dashboard") && (
                 <Link href="/coach/dashboard" className="app-sidebar__link">
                   Dashboard
