@@ -55,12 +55,14 @@ export default async function Navbar() {
   }
 
   const canAccessCoachArea = isAdmin || isCoach || can("coach_dashboard") ||
-    can("coach_chat") || can("coach_knowledge_base") || can("coach_programs") ||
+    can("coach_chat") || can("coach_programs") ||
     can("coach_mobility") || can("coach_gym_sessions") || can("coach_profile");
   const canAccessTrainingArea = isAthlete || isSoloPlanHolder ||
     can("athlete_plan") || can("athlete_chat") || can("athlete_library") ||
-    can("athlete_knowledge_base") || can("athlete_information") ||
+    can("athlete_information") ||
     can("athlete_profile") || can("athlete_integrations") || can("athlete_upgrades");
+  const canAccessKnowledgeBase = isAdmin || isCoach || isAthlete || isSoloPlanHolder ||
+    can("athlete_knowledge_base") || can("coach_knowledge_base") || can("admin_knowledge_base");
 
   const hasRaceInfo = features.includes("race_info");
   const hasKitList = features.includes("kit_list");
@@ -229,12 +231,6 @@ export default async function Navbar() {
                   Library
                 </Link>
               )}
-              {can("athlete_knowledge_base") && (
-                <Link href="/athlete/knowledge-base" className="app-sidebar__link">
-                  Knowledge Base
-                  {athleteKbUnread && <span className="app-sidebar__nav-badge--green" />}
-                </Link>
-              )}
               {can("athlete_information") && (
                 <SidebarDropdown
                   label="Information"
@@ -275,11 +271,6 @@ export default async function Navbar() {
                 <Link href="/coach/chat" className="app-sidebar__link">
                   Chat
                   {coachHasUnread && <span className="app-sidebar__nav-badge" />}
-                </Link>
-              )}
-              {can("coach_knowledge_base") && (
-                <Link href="/coach/knowledge-base" className="app-sidebar__link">
-                  Knowledge Base
                 </Link>
               )}
               {can("coach_programs") && (
@@ -323,12 +314,19 @@ export default async function Navbar() {
             Support
             {isAdmin && adminOpenTicketCount > 0 && <span className="app-sidebar__nav-badge" />}
           </Link>
+          {canAccessKnowledgeBase && (
+            <Link href="/knowledge-base" className="app-sidebar__link">
+              Knowledge Base
+              {athleteKbUnread && <span className="app-sidebar__nav-badge--green" />}
+              {isAdmin && adminFlaggedQbCount > 0 && <span className="app-sidebar__nav-badge" />}
+            </Link>
+          )}
           <Link href="/help/suggest-feature" className="app-sidebar__link">
             Suggest Feature
           </Link>
 
           {/* Admin section */}
-          {can("admin_panel") || can("admin_knowledge_base") || can("admin_library") || can("admin_templates") || can("admin_destinations") || can("admin_config") ? (
+          {can("admin_panel") || can("admin_library") || can("admin_templates") || can("admin_destinations") || can("admin_config") ? (
             <>
               <span className="app-sidebar__group-label">Admin</span>
               {can("admin_panel") && (
@@ -343,12 +341,6 @@ export default async function Navbar() {
                     { href: "/admin/support/stats", label: "Support Analytics" },
                   ]}
                 />
-              )}
-              {can("admin_knowledge_base") && (
-                <Link href="/admin/knowledge-base" className="app-sidebar__link">
-                  Knowledge Base
-                  {adminFlaggedQbCount > 0 && <span className="app-sidebar__nav-badge" />}
-                </Link>
               )}
               {can("admin_library") && (
                 <SidebarDropdown

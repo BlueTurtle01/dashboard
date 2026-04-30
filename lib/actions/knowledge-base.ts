@@ -73,6 +73,38 @@ async function requireAdmin() {
   return { supabase, user };
 }
 
+async function requireCoachKnowledgeBaseAccess() {
+  const { supabase, user } = await requireAuth();
+  const { data: roles, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  const roleRows = (roles ?? []) as UserRoleRow[];
+  const roleNames = roleRows.map((r) => r.role).filter((role): role is string => Boolean(role));
+  if (roleNames.includes("admin") || roleNames.includes("coach")) {
+    return { supabase, user };
+  }
+
+  if (roleNames.length > 0) {
+    const { data: permissions, error: permissionError } = await supabase
+      .from("role_nav_permissions")
+      .select("nav_item")
+      .in("role", roleNames)
+      .eq("nav_item", "coach_knowledge_base")
+      .eq("enabled", true);
+
+    if (permissionError) throw new Error(permissionError.message);
+    if ((permissions ?? []).length > 0) {
+      return { supabase, user };
+    }
+  }
+
+  throw new Error("Forbidden: coach knowledge base access required");
+}
+
 function getUserDisplayName(user: User): string {
   return user.user_metadata?.full_name ?? user.email ?? "Anonymous";
 }
@@ -160,7 +192,7 @@ export async function getQuestions(search?: string): Promise<QuestionWithAnswers
 }
 
 export async function getQuestionsForCoach(): Promise<QuestionWithAnswers[]> {
-  const { supabase } = await requireCoach();
+  const { supabase } = await requireCoachKnowledgeBaseAccess();
 
   const { data: questions, error } = await supabase
     .from("kb_questions")

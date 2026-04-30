@@ -8,7 +8,7 @@ import {
   type QuestionWithAnswers,
 } from "@/lib/actions/knowledge-base";
 
-export default function AthletKnowledgeBase() {
+export default function AthleteKnowledgeBase() {
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
