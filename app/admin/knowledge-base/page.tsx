@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { userHasRole } from "@/lib/auth/get-current-user";
-import { getFlaggedQuestions } from "@/lib/actions/knowledge-base";
+import { getFaqQuestionsForAdmin, getFlaggedQuestions } from "@/lib/actions/knowledge-base";
 import AdminKbClient from "./AdminKbClient";
 
 export default async function AdminKnowledgeBase() {
@@ -9,7 +9,15 @@ export default async function AdminKnowledgeBase() {
     redirect("/login");
   }
 
-  const flaggedQuestions = await getFlaggedQuestions();
+  const [flaggedQuestions, faqQuestions] = await Promise.all([
+    getFlaggedQuestions(),
+    getFaqQuestionsForAdmin(),
+  ]);
 
-  return <AdminKbClient initialFlaggedQuestions={flaggedQuestions} />;
+  return (
+    <AdminKbClient
+      initialFlaggedQuestions={flaggedQuestions}
+      initialFaqQuestions={faqQuestions}
+    />
+  );
 }

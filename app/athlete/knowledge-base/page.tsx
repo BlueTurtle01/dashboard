@@ -121,7 +121,14 @@ export default function AthletKnowledgeBase() {
               <div className="border-b border-zinc-100 px-6 py-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
-                    <h2 className="mb-1 text-lg font-semibold text-zinc-900">{question.title}</h2>
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-semibold text-zinc-900">{question.title}</h2>
+                      {question.type === "faq" && (
+                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                          FAQ
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-zinc-600">{question.body}</p>
                   </div>
                   <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
@@ -163,7 +170,7 @@ export default function AthletKnowledgeBase() {
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <h2 className="mb-1 text-lg font-semibold text-zinc-900">Ask a Question</h2>
             <p className="mb-5 text-sm text-zinc-500">
-              Share your question with our coaching team. They'll provide answers that might help other athletes too.
+              Share your question with our coaching team. They will provide answers that might help other athletes too.
             </p>
 
             <div className="mb-4">

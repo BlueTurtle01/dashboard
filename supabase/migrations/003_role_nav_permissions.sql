@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS public.role_nav_permissions (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.role_nav_permissions
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
 DELETE FROM public.role_nav_permissions a
 USING public.role_nav_permissions b
 WHERE a.ctid < b.ctid

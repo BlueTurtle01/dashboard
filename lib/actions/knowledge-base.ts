@@ -1,11 +1,17 @@
 "use server";
 
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+
+export type KbQuestionType = "community" | "faq";
+export type KbQuestionAudience = "athlete" | "coach";
 
 export type KbQuestion = {
   id: string;
   title: string;
   body: string;
+  type: KbQuestionType;
+  audience: KbQuestionAudience;
   submitted_by: string;
   submitted_by_name: string;
   created_at: string;
@@ -23,6 +29,10 @@ export type KbAnswer = {
 export type QuestionWithAnswers = KbQuestion & {
   answers: KbAnswer[];
   answer_count: number;
+};
+
+type UserRoleRow = {
+  role: string | null;
 };
 
 async function requireAuth() {
@@ -43,12 +53,27 @@ async function requireCoach() {
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
-  const hasCoachRole = (roles ?? []).some((r: any) => r.role === "coach" || r.role === "admin");
+  const roleRows = (roles ?? []) as UserRoleRow[];
+  const hasCoachRole = roleRows.some((r) => r.role === "coach" || r.role === "admin");
   if (!hasCoachRole) throw new Error("Forbidden: coach or admin role required");
+  return { supabase, user, roles: roleRows.map((r) => r.role).filter((role): role is string => Boolean(role)) };
+}
+
+async function requireAdmin() {
+  const { supabase, user } = await requireAuth();
+  const { data: roles, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+  const roleRows = (roles ?? []) as UserRoleRow[];
+  const hasAdminRole = roleRows.some((r) => r.role === "admin");
+  if (!hasAdminRole) throw new Error("Forbidden: admin role required");
   return { supabase, user };
 }
 
-function getUserDisplayName(user: any): string {
+function getUserDisplayName(user: User): string {
   return user.user_metadata?.full_name ?? user.email ?? "Anonymous";
 }
 
@@ -70,6 +95,8 @@ export async function submitQuestion(
     .insert({
       title: title.trim(),
       body: body.trim(),
+      type: "community",
+      audience: "athlete",
       submitted_by: user.id,
       submitted_by_name: displayName,
     })
@@ -83,9 +110,10 @@ export async function submitQuestion(
 export async function getQuestions(search?: string): Promise<QuestionWithAnswers[]> {
   const supabase = await createClient();
 
-  let query = supabase
+  const query = supabase
     .from("kb_questions")
-    .select("id, title, body, submitted_by, submitted_by_name, created_at")
+    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at")
+    .eq("audience", "athlete")
     .order("created_at", { ascending: false });
 
   const { data: questions, error } = await query;
@@ -136,7 +164,8 @@ export async function getQuestionsForCoach(): Promise<QuestionWithAnswers[]> {
 
   const { data: questions, error } = await supabase
     .from("kb_questions")
-    .select("id, title, body, submitted_by, submitted_by_name, created_at");
+    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at")
+    .or("type.eq.community,audience.eq.coach");
 
   if (error) throw new Error(error.message);
 
@@ -180,7 +209,18 @@ export async function submitAnswer(
   questionId: string,
   body: string
 ): Promise<{ error?: string }> {
-  const { supabase, user } = await requireCoach();
+  const { supabase, user, roles } = await requireCoach();
+
+  const { data: questionToAnswer, error: questionError } = await supabase
+    .from("kb_questions")
+    .select("type")
+    .eq("id", questionId)
+    .single();
+
+  if (questionError) return { error: questionError.message };
+  if (questionToAnswer?.type === "faq" && !roles.includes("admin")) {
+    return { error: "FAQ questions can only be answered by admins" };
+  }
 
   const answerCount = await supabase
     .from("kb_answers")
@@ -294,6 +334,92 @@ export async function flagQuestion(
   return {};
 }
 
+export async function submitFaqQuestion(
+  title: string,
+  body: string,
+  answer: string,
+  audience: KbQuestionAudience = "athlete"
+): Promise<{ error?: string; questionId?: string }> {
+  const { supabase, user } = await requireAdmin();
+
+  const questionTitle = title.trim();
+  const questionBody = body.trim();
+  const answerBody = answer.trim();
+
+  if (!questionTitle || !questionBody || !answerBody) {
+    return { error: "Please provide a title, question details, and answer" };
+  }
+
+  if (audience !== "athlete" && audience !== "coach") {
+    return { error: "Please choose a valid FAQ audience" };
+  }
+
+  const { data: question, error: questionError } = await supabase
+    .from("kb_questions")
+    .insert({
+      title: questionTitle,
+      body: questionBody,
+      type: "faq",
+      audience,
+      submitted_by: user.id,
+      submitted_by_name: "Admin",
+    })
+    .select("id")
+    .single();
+
+  if (questionError) return { error: questionError.message };
+  if (!question?.id) return { error: "FAQ question was not created" };
+
+  const { error: answerError } = await supabase.from("kb_answers").insert({
+    question_id: question.id,
+    body: answerBody,
+    submitted_by: user.id,
+    submitted_by_name: "Admin",
+  });
+
+  if (answerError) return { error: answerError.message, questionId: question.id };
+  return { questionId: question.id };
+}
+
+export async function getFaqQuestionsForAdmin(): Promise<QuestionWithAnswers[]> {
+  const { supabase } = await requireAdmin();
+
+  const { data: questions, error } = await supabase
+    .from("kb_questions")
+    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at")
+    .eq("type", "faq")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  const questionIds = (questions ?? []).map((q) => q.id);
+
+  let answersData: KbAnswer[] = [];
+  if (questionIds.length > 0) {
+    const { data, error: answersError } = await supabase
+      .from("kb_answers")
+      .select("id, question_id, body, submitted_by, submitted_by_name, created_at")
+      .in("question_id", questionIds)
+      .order("created_at");
+
+    if (answersError) throw new Error(answersError.message);
+    answersData = data ?? [];
+  }
+
+  const answersByQuestionId = new Map<string, KbAnswer[]>();
+  for (const answer of answersData) {
+    const arr = answersByQuestionId.get(answer.question_id) ?? [];
+    arr.push(answer);
+    answersByQuestionId.set(answer.question_id, arr);
+  }
+
+  return (questions ?? []).map((q) => ({
+    ...q,
+    answers: answersByQuestionId.get(q.id) ?? [],
+    answer_count: (answersByQuestionId.get(q.id) ?? []).length,
+  }));
+}
+
 export type FlaggedQuestionWithDetails = QuestionWithAnswers & {
   flag_id: string;
   flagged_by_name: string;
@@ -302,7 +428,7 @@ export type FlaggedQuestionWithDetails = QuestionWithAnswers & {
 };
 
 export async function getFlaggedQuestions(): Promise<FlaggedQuestionWithDetails[]> {
-  const { supabase } = await requireCoach();
+  const { supabase } = await requireAdmin();
 
   const { data: flags, error: flagsError } = await supabase
     .from("kb_flagged_questions")
@@ -316,7 +442,7 @@ export async function getFlaggedQuestions(): Promise<FlaggedQuestionWithDetails[
   const questionIds = flags.map((f) => f.question_id);
   const { data: questions, error: questionsError } = await supabase
     .from("kb_questions")
-    .select("id, title, body, submitted_by, submitted_by_name, created_at");
+    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at");
 
   if (questionsError) throw new Error(questionsError.message);
 
@@ -358,7 +484,7 @@ export async function updateQuestionAndClearFlag(
   newTitle: string,
   newBody: string
 ): Promise<{ error?: string }> {
-  const { supabase } = await requireCoach();
+  const { supabase } = await requireAdmin();
 
   // Update question
   const { error: updateError } = await supabase
@@ -383,7 +509,7 @@ export async function updateQuestionAndClearFlag(
 }
 
 export async function getFlaggedQuestionsCount(): Promise<number> {
-  const { supabase } = await requireCoach();
+  const { supabase } = await requireAdmin();
 
   const { count, error } = await supabase
     .from("kb_flagged_questions")

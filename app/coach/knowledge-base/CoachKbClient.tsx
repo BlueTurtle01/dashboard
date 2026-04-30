@@ -101,7 +101,7 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
     }
   }
 
-  const unansweredCount = questions.filter((q) => q.answer_count === 0).length;
+  const unansweredCount = questions.filter((q) => q.type === "community" && q.answer_count === 0).length;
 
   if (error) {
     return (
@@ -115,17 +115,17 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8">
         <h1 className="mb-1 text-2xl font-bold text-zinc-900">Knowledge Base</h1>
-        <p className="text-sm text-zinc-500">Answer questions from our community of athletes.</p>
+        <p className="text-sm text-zinc-500">Answer athlete questions and review coach guidance from admins.</p>
       </div>
 
       {/* Stats */}
       <div className="mb-8 flex gap-4">
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
-          <p className="text-xs font-medium text-zinc-600">Total Questions</p>
+          <p className="text-xs font-medium text-zinc-600">Visible Items</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">{questions.length}</p>
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
-          <p className="text-xs font-medium text-zinc-600">Unanswered</p>
+          <p className="text-xs font-medium text-zinc-600">Unanswered Athlete Questions</p>
           <p className="mt-1 text-2xl font-bold text-amber-600">{unansweredCount}</p>
         </div>
       </div>
@@ -150,7 +150,14 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
                 <div className="border-b border-zinc-100 px-6 py-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <h2 className="mb-1 text-lg font-semibold text-zinc-900">{question.title}</h2>
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg font-semibold text-zinc-900">{question.title}</h2>
+                        {question.type === "faq" && (
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                            Coach FAQ
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-zinc-600">{question.body}</p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -199,9 +206,11 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
 
                 {/* Answer Form or Status */}
                 <div className="px-6 py-5">
-                  {hasAnswered ? (
+                  {question.type === "faq" ? (
+                    <p className="text-sm font-medium text-blue-700">Admin FAQ for coaches</p>
+                  ) : hasAnswered ? (
                     <p className="text-sm font-medium text-green-600">✓ You answered this question</p>
-                  ) : question.answer_count >= 3 ? (
+                  ) : !canAnswer ? (
                     <p className="text-sm font-medium text-zinc-500">Maximum answers reached</p>
                   ) : (
                     <div>
