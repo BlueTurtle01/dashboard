@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { TutorialProvider } from "@/lib/context/TutorialContext";
+import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
 
 type TemplateTag = {
   id: string;
@@ -624,11 +626,12 @@ function formatBaselineStatus(status: BaselineStatus) {
   return "Baseline Unknown";
 }
 
-export default function TemplatesPage() {
+function TemplatesPageContent() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const athleteId = searchParams.get("athleteId") || null;
+  const tutorial = searchParams.get("tutorial");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -1002,6 +1005,17 @@ export default function TemplatesPage() {
           </div>
         </div>
 
+        {tutorial === 'programs' && (
+          <div className="mb-6">
+            <TutorialInfoBox
+              title="Browse and Create Program Templates"
+              description="Browse our library of pre-built training plans or create your own templates. Once created, new templates go through admin approval before becoming visible to other coaches. Click 'Create Public Template' to add your own, or browse existing templates to apply them to athletes."
+              step={1}
+              totalSteps={2}
+            />
+          </div>
+        )}
+
         {athleteEvent ? (
           <div className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">
             Athlete event: <span className="font-semibold">{athleteEvent.eventName || "Unnamed event"}</span>
@@ -1056,8 +1070,20 @@ export default function TemplatesPage() {
               No program templates matched that search.
             </div>
           ) : (
-            <div className="mt-6 space-y-4">
-              {filteredTemplates.map((template) => {
+            <>
+              {tutorial === 'programs' && (
+                <div className="mt-6 mb-6">
+                  <TutorialInfoBox
+                    title="Understanding Template Fit Scores"
+                    description="Each template shows fit scores based on your athlete's profile and event. Green cards indicate a good match. Click 'Use Template' to create a plan, or 'Edit' to customize it before applying."
+                    step={2}
+                    totalSteps={2}
+                    showNext={false}
+                  />
+                </div>
+              )}
+              <div className="mt-6 space-y-4">
+                {filteredTemplates.map((template) => {
                 const match = getTemplateMatch(template, athleteEvent, athleteProfile, athleteRaceExperience);
 
                 return (
@@ -1095,53 +1121,57 @@ export default function TemplatesPage() {
                           <span>{template.eventGoal || "No goal specified"}</span>
                         </div>
 
-                        <div className="mt-4 grid gap-3 md:grid-cols-4">
-                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Overall Fit</div>
-                            <div className="mt-1 text-2xl font-bold text-zinc-900">{match.overallScore}</div>
-                          </div>
-                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Time Fit</div>
-                            <div className="mt-1 text-2xl font-bold text-zinc-900">{match.timeFitScore}</div>
-                          </div>
-                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Baseline Fit</div>
-                            <div className="mt-1 text-2xl font-bold text-zinc-900">{match.baselineScore}</div>
-                          </div>
-                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Event Fit</div>
-                            <div className="mt-1 text-2xl font-bold text-zinc-900">{match.eventFitScore}</div>
-                          </div>
-                          {match.experienceFitScore !== null && (
-                            <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Experience Fit</div>
-                              <div className="mt-1 text-2xl font-bold text-zinc-900">{match.experienceFitScore}</div>
+                        {athleteId && (
+                          <>
+                            <div className="mt-4 grid gap-3 md:grid-cols-4">
+                              <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Overall Fit</div>
+                                <div className="mt-1 text-2xl font-bold text-zinc-900">{match.overallScore}</div>
+                              </div>
+                              <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Time Fit</div>
+                                <div className="mt-1 text-2xl font-bold text-zinc-900">{match.timeFitScore}</div>
+                              </div>
+                              <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Baseline Fit</div>
+                                <div className="mt-1 text-2xl font-bold text-zinc-900">{match.baselineScore}</div>
+                              </div>
+                              <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Event Fit</div>
+                                <div className="mt-1 text-2xl font-bold text-zinc-900">{match.eventFitScore}</div>
+                              </div>
+                              {match.experienceFitScore !== null && (
+                                <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Experience Fit</div>
+                                  <div className="mt-1 text-2xl font-bold text-zinc-900">{match.experienceFitScore}</div>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
 
-                        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Strengths</div>
-                            <div className="mt-2 space-y-1 text-sm text-emerald-900">
-                              {match.strengths.length > 0 ? match.strengths.map((item) => <div key={item}>• {item}</div>) : <div>• No major strengths identified yet</div>}
-                            </div>
-                          </div>
+                            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Strengths</div>
+                                <div className="mt-2 space-y-1 text-sm text-emerald-900">
+                                  {match.strengths.length > 0 ? match.strengths.map((item) => <div key={item}>• {item}</div>) : <div>• No major strengths identified yet</div>}
+                                </div>
+                              </div>
 
-                          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-rose-700">Baseline Gaps</div>
-                            <div className="mt-2 space-y-1 text-sm text-rose-900">
-                              {match.baselineIssues.length > 0 ? match.baselineIssues.map((item) => <div key={item}>• {item}</div>) : <div>• No baseline gaps flagged</div>}
-                            </div>
-                          </div>
+                              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-rose-700">Baseline Gaps</div>
+                                <div className="mt-2 space-y-1 text-sm text-rose-900">
+                                  {match.baselineIssues.length > 0 ? match.baselineIssues.map((item) => <div key={item}>• {item}</div>) : <div>• No baseline gaps flagged</div>}
+                                </div>
+                              </div>
 
-                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Coach Tweaks</div>
-                            <div className="mt-2 space-y-1 text-sm text-amber-900">
-                              {match.tweakNotes.length > 0 ? match.tweakNotes.map((item) => <div key={item}>• {item}</div>) : <div>• No obvious tweaks needed</div>}
+                              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                                <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Coach Tweaks</div>
+                                <div className="mt-2 space-y-1 text-sm text-amber-900">
+                                  {match.tweakNotes.length > 0 ? match.tweakNotes.map((item) => <div key={item}>• {item}</div>) : <div>• No obvious tweaks needed</div>}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
+                          </>
+                        )}
 
                         <div className="mt-4 flex flex-wrap gap-2">
                           {template.tags.length > 0 ? (
@@ -1175,10 +1205,23 @@ export default function TemplatesPage() {
                   </div>
                 );
               })}
-            </div>
+              </div>
+            </>
           )}
         </div>
       </div>
     </main>
+  );
+}
+
+export default function TemplatesPage() {
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get("tutorial");
+  const isInTutorial = tutorial === "programs";
+
+  return (
+    <TutorialProvider isInTutorial={isInTutorial} tutorialType="programs">
+      <TemplatesPageContent />
+    </TutorialProvider>
   );
 }

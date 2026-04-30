@@ -46,8 +46,8 @@ const TUTORIALS: Omit<Tutorial, "completed">[] = [
   {
     id: "6",
     title: "Program Templates",
-    description: "Build and manage program templates to quickly assign training to athletes.",
-    href: "/coach/program-templates",
+    description: "Browse and apply pre-built program templates from our repository to quickly get your athletes started with training plans.",
+    href: "/coach/program-templates?tutorial=programs",
   },
   {
     id: "7",
