@@ -22,11 +22,18 @@ type SelectedExercise = {
   description: string;
   pattern: string | null;
   equipment: string[] | null;
+  selectedEquipmentPiece: string | null;
   sets: string;
   reps: string;
   duration: string;
   notes: string;
 };
+
+function prefixedExerciseName(name: string, equipmentPiece: string | null): string {
+  if (!equipmentPiece) return name;
+  const cap = equipmentPiece.charAt(0).toUpperCase() + equipmentPiece.slice(1);
+  return `${cap} ${name}`;
+}
 
 function buildClientId(prefix: string) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -90,7 +97,7 @@ export default function EditGymSessionTemplatePage() {
 
       const { data: exerciseRows, error: exerciseError } = await supabase
         .from("session_template_exercises")
-        .select("id, exercise_id, exercise_order, sets, reps, duration, notes")
+        .select("id, exercise_id, exercise_order, sets, reps, duration, notes, selected_equipment")
         .eq("session_template_id", templateId)
         .order("exercise_order", { ascending: true });
 
@@ -131,6 +138,7 @@ export default function EditGymSessionTemplatePage() {
               description: lookup?.description ?? "",
               pattern: lookup?.pattern ?? null,
               equipment: lookup?.equipment ?? null,
+              selectedEquipmentPiece: (row.selected_equipment as string | null) ?? null,
               sets: (row.sets as string | null) ?? "",
               reps: (row.reps as string | null) ?? "",
               duration: (row.duration as string | null) ?? "",
@@ -241,6 +249,7 @@ export default function EditGymSessionTemplatePage() {
         description: exercise.description,
         pattern: exercise.pattern,
         equipment: exercise.equipment ?? null,
+        selectedEquipmentPiece: null,
         sets: exercise.sets == null ? "" : String(exercise.sets),
         reps: exercise.reps == null ? "" : String(exercise.reps),
         duration: "",
@@ -265,6 +274,16 @@ export default function EditGymSessionTemplatePage() {
       next.splice(targetIndex, 0, moved);
       return next;
     });
+  }
+
+  function toggleEquipmentPiece(clientId: string, piece: string) {
+    setSelectedExercises((current) =>
+      current.map((ex) =>
+        ex.clientId === clientId
+          ? { ...ex, selectedEquipmentPiece: ex.selectedEquipmentPiece === piece ? null : piece }
+          : ex
+      )
+    );
   }
 
   function updateSelectedExercise(
@@ -319,6 +338,7 @@ export default function EditGymSessionTemplatePage() {
       reps: e.reps.trim() || null,
       duration: e.duration.trim() || null,
       notes: e.notes.trim() || null,
+      selected_equipment: e.selectedEquipmentPiece || null,
     }));
 
     const { error: insertError } = await supabase
@@ -579,20 +599,27 @@ export default function EditGymSessionTemplatePage() {
                           Exercise {index + 1}
                         </div>
                         <h3 className="mt-1 text-base font-semibold text-zinc-900">
-                          {exercise.name}
+                          {prefixedExerciseName(exercise.name, exercise.selectedEquipmentPiece)}
                         </h3>
                         {exercise.description ? (
                           <p className="mt-1 text-sm text-zinc-600">{exercise.description}</p>
                         ) : null}
                         {exercise.equipment && exercise.equipment.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
+                          <div className="mt-2 flex flex-wrap items-center gap-1">
+                            <span className="mr-1 text-xs text-zinc-500">Equipment:</span>
                             {exercise.equipment.map((eq) => (
-                              <span
+                              <button
                                 key={eq}
-                                className="inline-block rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-900"
+                                type="button"
+                                onClick={() => toggleEquipmentPiece(exercise.clientId, eq)}
+                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium transition ${
+                                  exercise.selectedEquipmentPiece === eq
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-blue-100 text-blue-900 hover:bg-blue-200"
+                                }`}
                               >
                                 {eq}
-                              </span>
+                              </button>
                             ))}
                           </div>
                         )}

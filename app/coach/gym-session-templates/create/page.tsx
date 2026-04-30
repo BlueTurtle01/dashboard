@@ -21,6 +21,7 @@ type SelectedExercise = {
   description: string;
   pattern: string | null;
   equipment: string[] | null;
+  selectedEquipmentPiece: string | null;
   sets: string;
   reps: string;
   duration: string;
@@ -87,6 +88,12 @@ const goalOptions = [
 const difficultyOptions = ["Beginner", "Intermediate", "Advanced"];
 
 const GYM_EQUIPMENT = new Set(["machine", "cable"]);
+
+function prefixedExerciseName(name: string, equipmentPiece: string | null): string {
+  if (!equipmentPiece) return name;
+  const cap = equipmentPiece.charAt(0).toUpperCase() + equipmentPiece.slice(1);
+  return `${cap} ${name}`;
+}
 
 function resolveSessionLocation(exercises: SelectedExercise[]): "Gym" | "Home" {
   for (const exercise of exercises) {
@@ -296,6 +303,7 @@ export default function NewGymSessionTemplatePage() {
         description: exercise.description,
         pattern: exercise.pattern,
         equipment: exercise.equipment || null,
+        selectedEquipmentPiece: null,
         sets: exercise.sets == null ? "" : String(exercise.sets),
         reps: exercise.reps == null ? "" : String(exercise.reps),
         duration: "",
@@ -325,6 +333,16 @@ export default function NewGymSessionTemplatePage() {
       next.splice(targetIndex, 0, moved);
       return next;
     });
+  }
+
+  function toggleEquipmentPiece(clientId: string, piece: string) {
+    setSelectedExercises((current) =>
+      current.map((ex) =>
+        ex.clientId === clientId
+          ? { ...ex, selectedEquipmentPiece: ex.selectedEquipmentPiece === piece ? null : piece }
+          : ex
+      )
+    );
   }
 
   function updateSelectedExercise(
@@ -385,6 +403,7 @@ export default function NewGymSessionTemplatePage() {
       reps: selectedExercise.reps.trim() || null,
       duration: selectedExercise.duration.trim() || null,
       notes: selectedExercise.notes.trim() || null,
+      selected_equipment: selectedExercise.selectedEquipmentPiece || null,
     }));
 
     const { error: exerciseLinkError } = await supabase
@@ -696,7 +715,7 @@ export default function NewGymSessionTemplatePage() {
                           Exercise {index + 1}
                         </div>
                         <h3 className="mt-1 text-base font-semibold text-zinc-900">
-                          {selectedExercise.name}
+                          {prefixedExerciseName(selectedExercise.name, selectedExercise.selectedEquipmentPiece)}
                         </h3>
                         {selectedExercise.description ? (
                           <p className="mt-1 text-sm text-zinc-600">
@@ -704,14 +723,21 @@ export default function NewGymSessionTemplatePage() {
                           </p>
                         ) : null}
                         {selectedExercise.equipment && selectedExercise.equipment.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
+                          <div className="mt-2 flex flex-wrap items-center gap-1">
+                            <span className="mr-1 text-xs text-zinc-500">Equipment:</span>
                             {selectedExercise.equipment.map((eq) => (
-                              <span
+                              <button
                                 key={eq}
-                                className="inline-block rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-900"
+                                type="button"
+                                onClick={() => toggleEquipmentPiece(selectedExercise.clientId, eq)}
+                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium transition ${
+                                  selectedExercise.selectedEquipmentPiece === eq
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-blue-100 text-blue-900 hover:bg-blue-200"
+                                }`}
                               >
                                 {eq}
-                              </span>
+                              </button>
                             ))}
                           </div>
                         )}
