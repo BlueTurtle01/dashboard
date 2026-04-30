@@ -411,6 +411,71 @@ export async function submitFaqQuestion(
   return { questionId: question.id };
 }
 
+export async function updateFaqQuestion(
+  questionId: string,
+  title: string,
+  answer: string,
+  audience: KbQuestionAudience
+): Promise<{ error?: string }> {
+  const { supabase, user } = await requireAdmin();
+
+  const questionTitle = title.trim();
+  const answerBody = answer.trim();
+
+  if (!questionTitle || !answerBody) {
+    return { error: "Please provide a FAQ title and answer" };
+  }
+
+  if (audience !== "athlete" && audience !== "coach") {
+    return { error: "Please choose a valid FAQ audience" };
+  }
+
+  const { error: questionError } = await supabase
+    .from("kb_questions")
+    .update({
+      title: questionTitle,
+      body: questionTitle,
+      audience,
+    })
+    .eq("id", questionId)
+    .eq("type", "faq");
+
+  if (questionError) return { error: questionError.message };
+
+  const { data: existingAnswer, error: answerLookupError } = await supabase
+    .from("kb_answers")
+    .select("id")
+    .eq("question_id", questionId)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+
+  if (answerLookupError) return { error: answerLookupError.message };
+
+  if (existingAnswer?.id) {
+    const { error: answerError } = await supabase
+      .from("kb_answers")
+      .update({
+        body: answerBody,
+        submitted_by_name: "Admin",
+      })
+      .eq("id", existingAnswer.id);
+
+    if (answerError) return { error: answerError.message };
+  } else {
+    const { error: answerError } = await supabase.from("kb_answers").insert({
+      question_id: questionId,
+      body: answerBody,
+      submitted_by: user.id,
+      submitted_by_name: "Admin",
+    });
+
+    if (answerError) return { error: answerError.message };
+  }
+
+  return {};
+}
+
 export async function getFaqQuestionsForAdmin(): Promise<QuestionWithAnswers[]> {
   const { supabase } = await requireAdmin();
 
