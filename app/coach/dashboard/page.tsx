@@ -399,7 +399,7 @@ function CoachDashboardContent() {
                     <td>{formatDate(row.linked_at)}</td>
                     <td>
                       <Link
-                        href={`/coach/athlete-overview?athleteId=${row.athlete_user_id}`}
+                        href={`/coach/athlete-overview?athleteId=${row.athlete_user_id}${tutorial === 'dashboard' ? '&tutorial=athlete-overview' : ''}`}
                         className="coach-dashboard-view-link"
                       >
                         View
