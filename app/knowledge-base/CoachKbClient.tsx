@@ -8,6 +8,8 @@ import {
   type QuestionWithAnswers,
 } from "@/lib/actions/knowledge-base";
 import { createClient } from "@/lib/supabase/client";
+import { useTutorial } from "@/lib/context/TutorialContext";
+import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
 
 type QuestionUI = QuestionWithAnswers & {
   answerBody?: string;
@@ -15,6 +17,7 @@ type QuestionUI = QuestionWithAnswers & {
 };
 
 export default function CoachKbClient({ initialQuestions }: { initialQuestions: QuestionWithAnswers[] }) {
+  const { isInTutorial } = useTutorial();
   const [questions, setQuestions] = useState<QuestionUI[]>(
     initialQuestions.map((q) => ({ ...q, answerBody: "", isSubmitting: false }))
   );
@@ -118,6 +121,18 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
         <p className="text-sm text-zinc-500">Answer athlete questions and review coach guidance from admins.</p>
       </div>
 
+      {isInTutorial && (
+        <div className="mb-8">
+          <TutorialInfoBox
+            title="Help the Community & Learn"
+            description="View public questions from all athletes across the platform and answer them to help everyone. You'll also find a Coach FAQ section with guidance on using the platform."
+            step={1}
+            totalSteps={2}
+            showNext={false}
+          />
+        </div>
+      )}
+
       {/* Stats */}
       <div className="mb-8 flex gap-4">
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
@@ -140,6 +155,15 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
         </div>
       ) : (
         <div className="flex flex-col gap-6">
+          {isInTutorial && (
+            <TutorialInfoBox
+              title="Two Types of Content"
+              description="Community questions are from your athletes—answer them to build knowledge across the platform. Coach FAQ items are admin-curated guidance to help you use the platform effectively."
+              step={2}
+              totalSteps={2}
+              showNext={false}
+            />
+          )}
           {questions.map((question) => {
             const hasAnswered = question.answers.some((a) => a.submitted_by === currentUserId);
             const canAnswer = question.answer_count < 3 && !hasAnswered;

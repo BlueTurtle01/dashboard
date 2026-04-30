@@ -51,11 +51,17 @@ const TUTORIALS: Omit<Tutorial, "completed">[] = [
   },
   {
     id: "7",
+    title: "Knowledge Base",
+    description: "Answer public questions from athletes and learn platform tips from the Coach FAQ.",
+    href: "/coach/knowledge-base?tutorial=knowledge-base",
+  },
+  {
+    id: "8",
     title: "Viewing Athlete Progress",
     description: "Track athlete activity logs, performance metrics, and training compliance.",
   },
   {
-    id: "8",
+    id: "9",
     title: "Advanced Features",
     description: "Explore notifications, athlete feedback, and integration settings.",
   },

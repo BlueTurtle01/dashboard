@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import AdminKbClient from "./AdminKbClient";
 import CoachKbClient from "./CoachKbClient";
 import AthleteKnowledgeBase from "./AthleteKbClient";
+import { TutorialProvider } from "@/lib/context/TutorialContext";
 import type {
   FlaggedQuestionWithDetails,
   QuestionWithAnswers,
@@ -20,7 +22,7 @@ type KnowledgeBaseClientProps = {
   initialFaqQuestions: QuestionWithAnswers[];
 };
 
-export default function KnowledgeBaseClient({
+function KnowledgeBaseClientContent({
   canViewAthleteKb,
   canViewCoachKb,
   canViewAdminKb,
@@ -85,5 +87,17 @@ export default function KnowledgeBaseClient({
         />
       )}
     </div>
+  );
+}
+
+export default function KnowledgeBaseClient(props: KnowledgeBaseClientProps) {
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get("tutorial");
+  const isInTutorial = tutorial === "knowledge-base";
+
+  return (
+    <TutorialProvider isInTutorial={isInTutorial} tutorialType="knowledge-base">
+      <KnowledgeBaseClientContent {...props} />
+    </TutorialProvider>
   );
 }
