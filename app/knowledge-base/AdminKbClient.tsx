@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   getFaqQuestionsForAdmin,
   submitFaqQuestion,
+  updateFaqQuestion,
   updateQuestionAndClearFlag,
   type FlaggedQuestionWithDetails,
   type KbQuestionAudience,
@@ -14,6 +15,13 @@ type EditingQuestion = {
   id: string;
   title: string;
   body: string;
+};
+
+type EditingFaq = {
+  id: string;
+  title: string;
+  answer: string;
+  audience: KbQuestionAudience;
 };
 
 export default function AdminKbClient({
@@ -28,8 +36,10 @@ export default function AdminKbClient({
   );
   const [faqQuestions, setFaqQuestions] = useState<QuestionWithAnswers[]>(initialFaqQuestions);
   const [editingQuestion, setEditingQuestion] = useState<EditingQuestion | null>(null);
+  const [editingFaq, setEditingFaq] = useState<EditingFaq | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [faqSubmitting, setFaqSubmitting] = useState(false);
+  const [faqEditSubmitting, setFaqEditSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [faqTitle, setFaqTitle] = useState("");
   const [faqAnswer, setFaqAnswer] = useState("");
@@ -71,6 +81,39 @@ export default function AdminKbClient({
       setError(err instanceof Error ? err.message : "Failed to create FAQ");
     } finally {
       setFaqSubmitting(false);
+    }
+  }
+
+  async function handleSubmitFaqEdit() {
+    if (!editingFaq) return;
+
+    if (!editingFaq.title.trim() || !editingFaq.answer.trim()) {
+      setError("Please provide a FAQ title and answer.");
+      return;
+    }
+
+    setFaqEditSubmitting(true);
+    setError(null);
+
+    try {
+      const result = await updateFaqQuestion(
+        editingFaq.id,
+        editingFaq.title,
+        editingFaq.answer,
+        editingFaq.audience
+      );
+
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      setEditingFaq(null);
+      await refreshFaqs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update FAQ");
+    } finally {
+      setFaqEditSubmitting(false);
     }
   }
 
@@ -224,6 +267,19 @@ export default function AdminKbClient({
                   ) : (
                     <p className="text-sm italic text-zinc-400">No admin answer yet.</p>
                   )}
+                  <button
+                    onClick={() =>
+                      setEditingFaq({
+                        id: question.id,
+                        title: question.title,
+                        answer: question.answers[0]?.body ?? "",
+                        audience: question.audience,
+                      })
+                    }
+                    className="mt-4 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Edit FAQ
+                  </button>
                 </div>
               </div>
             ))}
@@ -303,6 +359,81 @@ export default function AdminKbClient({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Edit FAQ Modal */}
+      {editingFaq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="mb-1 text-lg font-semibold text-zinc-900">Edit FAQ</h2>
+            <p className="mb-6 text-sm text-zinc-500">
+              Update the audience, question title, and official answer.
+            </p>
+
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="editFaqAudience">
+                Audience
+              </label>
+              <select
+                id="editFaqAudience"
+                value={editingFaq.audience}
+                onChange={(e) =>
+                  setEditingFaq({ ...editingFaq, audience: e.target.value as KbQuestionAudience })
+                }
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                disabled={faqEditSubmitting}
+              >
+                <option value="athlete">Athletes</option>
+                <option value="coach">Coaches</option>
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="editFaqTitle">
+                Question Title
+              </label>
+              <input
+                id="editFaqTitle"
+                type="text"
+                value={editingFaq.title}
+                onChange={(e) => setEditingFaq({ ...editingFaq, title: e.target.value })}
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                disabled={faqEditSubmitting}
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="editFaqAnswer">
+                Admin Answer
+              </label>
+              <textarea
+                id="editFaqAnswer"
+                value={editingFaq.answer}
+                onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })}
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                rows={5}
+                disabled={faqEditSubmitting}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEditingFaq(null)}
+                disabled={faqEditSubmitting}
+                className="flex-1 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleSubmitFaqEdit()}
+                disabled={!editingFaq.title.trim() || !editingFaq.answer.trim() || faqEditSubmitting}
+                className="flex-1 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {faqEditSubmitting ? "Saving..." : "Save FAQ"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
