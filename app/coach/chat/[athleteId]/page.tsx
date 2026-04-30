@@ -142,9 +142,16 @@ function CoachAthleteThreadsPageContent({ params: paramsPromise }: CoachAthleteC
           <div className="max-w-2xl mx-auto w-full">
             <TutorialInfoBox
               title="Message Threads"
-              description="Organize conversations with your athlete into threads by topic. Click 'New Thread' to start a conversation."
+              description="Organize conversations with your athlete into threads by topic. Click on a thread below to see the messaging interface, or create a new one."
               step={2}
               totalSteps={3}
+              showNext={threads.length > 0}
+              onNext={threads.length > 0 ? () => {
+                const firstThread = threads[0];
+                if (firstThread) {
+                  window.location.href = `/coach/chat/${athleteId}/${firstThread.id}?tutorial=chat`;
+                }
+              } : undefined}
             />
           </div>
         </div>
