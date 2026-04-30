@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { NAV_ITEMS, ALL_ROLES, type NavItemKey, type ManagedRole } from "@/lib/nav-items";
 import { toggleNavPermission } from "./actions";
 
 type Props = {
-  permissions: Record<ManagedRole, Set<NavItemKey>>;
+  permissions: Record<ManagedRole, NavItemKey[]>;
 };
 
 const ROLE_LABELS: Record<ManagedRole, string> = {
@@ -22,7 +22,7 @@ export default function RolePermissionsClient({ permissions }: Props) {
   const [local, setLocal] = useState<Record<ManagedRole, Set<NavItemKey>>>(() => {
     const copy = {} as Record<ManagedRole, Set<NavItemKey>>;
     for (const role of ALL_ROLES) {
-      copy[role] = new Set(permissions[role]);
+      copy[role] = new Set(permissions[role] ?? []);
     }
     return copy;
   });
@@ -30,27 +30,48 @@ export default function RolePermissionsClient({ permissions }: Props) {
   const [pending, startTransition] = useTransition();
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [savedKey, setSavedKey] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
 
   function handleToggle(role: ManagedRole, navItem: NavItemKey) {
-    if (role === "admin") return; // admin always has full access
+    if (role === "admin") return;
 
     const key = `${role}:${navItem}`;
     const enabled = !local[role].has(navItem);
 
     setLocal((prev) => {
       const next = { ...prev, [role]: new Set(prev[role]) };
-      enabled ? next[role].add(navItem) : next[role].delete(navItem);
+      if (enabled) {
+        next[role].add(navItem);
+      } else {
+        next[role].delete(navItem);
+      }
       return next;
     });
 
     setSavingKey(key);
     setSavedKey(null);
+    setErrorKey(null);
 
     startTransition(async () => {
-      await toggleNavPermission(role, navItem, enabled);
-      setSavingKey(null);
-      setSavedKey(key);
-      setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1500);
+      try {
+        await toggleNavPermission(role, navItem, enabled);
+        setSavedKey(key);
+        setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1500);
+      } catch (error) {
+        console.error("Failed to save role permission:", error);
+        setLocal((prev) => {
+          const next = { ...prev, [role]: new Set(prev[role]) };
+          if (enabled) {
+            next[role].delete(navItem);
+          } else {
+            next[role].add(navItem);
+          }
+          return next;
+        });
+        setErrorKey(key);
+      } finally {
+        setSavingKey(null);
+      }
     });
   }
 
@@ -79,8 +100,8 @@ export default function RolePermissionsClient({ permissions }: Props) {
         </thead>
         <tbody>
           {sections.map(({ section, items }) => (
-            <>
-              <tr key={section}>
+            <Fragment key={section}>
+              <tr>
                 <td
                   colSpan={ALL_ROLES.length + 1}
                   className="pb-1 pt-6 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400"
@@ -97,6 +118,7 @@ export default function RolePermissionsClient({ permissions }: Props) {
                     const checked = isAdmin || local[role].has(item.key);
                     const isSaving = savingKey === key;
                     const isSaved = savedKey === key;
+                    const hasError = errorKey === key;
 
                     return (
                       <td key={role} className="px-4 py-3 text-center">
@@ -104,30 +126,38 @@ export default function RolePermissionsClient({ permissions }: Props) {
                           type="button"
                           disabled={isAdmin || pending}
                           onClick={() => handleToggle(role, item.key)}
-                          title={isAdmin ? "Admins always have full access" : undefined}
+                          title={
+                            isAdmin
+                              ? "Admins always have full access"
+                              : hasError
+                                ? "Save failed. Try again."
+                                : undefined
+                          }
                           className={[
                             "mx-auto flex h-6 w-6 items-center justify-center rounded-md border text-xs font-bold transition",
                             isAdmin
                               ? "cursor-default border-zinc-200 bg-zinc-100 text-zinc-400"
-                              : checked
-                              ? isSaving
-                                ? "border-emerald-300 bg-emerald-100 text-emerald-700 opacity-60"
-                                : isSaved
-                                ? "border-emerald-400 bg-emerald-500 text-white"
-                                : "border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600"
-                              : isSaving
-                              ? "border-zinc-200 bg-zinc-50 text-zinc-400 opacity-60"
-                              : "border-zinc-300 bg-white text-zinc-300 hover:border-zinc-400",
+                              : hasError
+                                ? "border-red-400 bg-red-50 text-red-600 hover:bg-red-100"
+                                : checked
+                                  ? isSaving
+                                    ? "border-emerald-300 bg-emerald-100 text-emerald-700 opacity-60"
+                                    : isSaved
+                                      ? "border-emerald-400 bg-emerald-500 text-white"
+                                      : "border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600"
+                                  : isSaving
+                                    ? "border-zinc-200 bg-zinc-50 text-zinc-400 opacity-60"
+                                    : "border-zinc-300 bg-white text-zinc-300 hover:border-zinc-400",
                           ].join(" ")}
                         >
-                          {isAdmin ? "✓" : checked ? "✓" : ""}
+                          {hasError ? "!" : isAdmin ? "✓" : checked ? "✓" : ""}
                         </button>
                       </td>
                     );
                   })}
                 </tr>
               ))}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>

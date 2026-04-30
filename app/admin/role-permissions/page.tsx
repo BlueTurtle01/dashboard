@@ -32,6 +32,11 @@ export default async function RolePermissionsPage() {
     }
   }
 
+  const serializedPermissions = {} as Record<ManagedRole, NavItemKey[]>;
+  for (const role of ALL_ROLES) {
+    serializedPermissions[role] = [...permissions[role]];
+  }
+
   return (
     <main className="min-h-screen">
       <div className="mx-auto max-w-5xl px-6 py-12">
@@ -47,7 +52,7 @@ export default async function RolePermissionsPage() {
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <RolePermissionsClient permissions={permissions} />
+          <RolePermissionsClient permissions={serializedPermissions} />
         </div>
       </div>
     </main>
