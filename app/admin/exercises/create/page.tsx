@@ -51,6 +51,11 @@ export default function CreateExercisePage() {
   const [selectedSecondaryMuscles, setSelectedSecondaryMuscles] = useState<MuscleOption[]>([]);
   const [loadingMuscleOptions, setLoadingMuscleOptions] = useState(true);
 
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -216,6 +221,50 @@ export default function CreateExercisePage() {
     );
   }
 
+  async function uploadPhoto(file: File) {
+    setUploadingPhoto(true);
+    setErrorMessage("");
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const uploadId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : Date.now().toString(36);
+    const path = `exercise-photos/${uploadId}.${ext}`;
+    const { error } = await supabase.storage.from("exercise-media").upload(path, file, { upsert: true });
+    if (error) {
+      setErrorMessage(`Photo upload failed: ${error.message}`);
+      setUploadingPhoto(false);
+      return;
+    }
+    const { data: { publicUrl } } = supabase.storage.from("exercise-media").getPublicUrl(path);
+    setPhotoUrl(publicUrl);
+    setUploadingPhoto(false);
+  }
+
+  function clearPhoto() {
+    setPhotoUrl(null);
+  }
+
+  async function uploadVideo(file: File) {
+    setUploadingVideo(true);
+    setErrorMessage("");
+    const ext = file.name.split(".").pop() ?? "mp4";
+    const uploadId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : Date.now().toString(36);
+    const path = `exercise-videos/${uploadId}.${ext}`;
+    const { error } = await supabase.storage.from("exercise-media").upload(path, file, { upsert: true });
+    if (error) {
+      setErrorMessage(`Video upload failed: ${error.message}`);
+      setUploadingVideo(false);
+      return;
+    }
+    const { data: { publicUrl } } = supabase.storage.from("exercise-media").getPublicUrl(path);
+    setVideoUrl(publicUrl);
+    setUploadingVideo(false);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -243,6 +292,8 @@ export default function CreateExercisePage() {
       pattern: pattern.trim() || null,
       sets: parseOptionalPositiveInteger(defaultSets),
       reps: parseOptionalPositiveInteger(defaultReps),
+      photo_url: photoUrl,
+      video_url: videoUrl.trim() || null,
     };
 
     const { error } = await supabase.from("exercises").insert(payload);
@@ -272,6 +323,9 @@ export default function CreateExercisePage() {
     setSecondaryMuscleSearch("");
     setSelectedPrimaryMuscles([]);
     setSelectedSecondaryMuscles([]);
+    setPhotoUrl(null);
+    setVideoUrl("");
+    setUploadingVideo(false);
     setSaving(false);
   }
 
@@ -578,11 +632,91 @@ export default function CreateExercisePage() {
             </div>
           </div>
 
+          <label style={labelStyle}>Photo</label>
+          {photoUrl ? (
+            <div style={thumbnailRowStyle}>
+              <img src={photoUrl} alt="" style={thumbnailStyle} />
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={replaceButtonStyle}>
+                  {uploadingPhoto ? "Uploading…" : "Replace"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: "none" }}
+                    disabled={uploadingPhoto}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadPhoto(f); }}
+                  />
+                </label>
+                <button type="button" onClick={clearPhoto} style={removePhotoStyle}>Remove</button>
+              </div>
+            </div>
+          ) : (
+            <label style={uploadAreaStyle(uploadingPhoto)}>
+              <span style={{ color: "#666", fontSize: "14px" }}>
+                {uploadingPhoto ? "Uploading…" : "Click to upload a photo"}
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: "none" }}
+                disabled={uploadingPhoto}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadPhoto(f); }}
+              />
+            </label>
+          )}
+
+          <label style={labelStyle}>Video</label>
+          {videoUrl ? (
+            <div style={{ marginBottom: "16px" }}>
+              {isDirectVideoUrl(videoUrl) && (
+                <video src={videoUrl} controls style={videoPlayerStyle} />
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "8px" }}>
+                <a href={videoUrl} target="_blank" rel="noopener noreferrer" style={videoLinkStyle}>
+                  Open ↗
+                </a>
+                <label style={{ ...replaceButtonStyle, cursor: uploadingVideo ? "default" : "pointer" }}>
+                  {uploadingVideo ? "Uploading…" : "Replace"}
+                  <input
+                    type="file"
+                    accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
+                    style={{ display: "none" }}
+                    disabled={uploadingVideo}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadVideo(f); }}
+                  />
+                </label>
+                <button type="button" onClick={() => setVideoUrl("")} style={removePhotoStyle}>Remove</button>
+              </div>
+            </div>
+          ) : (
+            <label style={uploadAreaStyle(uploadingVideo)}>
+              <span style={{ color: "#666", fontSize: "14px" }}>
+                {uploadingVideo ? "Uploading…" : "Click to upload a video"}
+              </span>
+              <input
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
+                style={{ display: "none" }}
+                disabled={uploadingVideo}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadVideo(f); }}
+              />
+            </label>
+          )}
+          <label htmlFor="video-url" style={labelStyle}>Or paste a video URL</label>
+          <input
+            id="video-url"
+            type="url"
+            value={videoUrl}
+            onChange={(e) => setVideoUrl(e.target.value)}
+            placeholder="https://youtube.com/watch?v=…"
+            style={inputStyle}
+          />
+
           {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
           {successMessage ? <p style={successStyle}>{successMessage}</p> : null}
 
           <div style={buttonRowStyle}>
-            <button type="submit" disabled={saving} style={buttonStyle}>
+            <button type="submit" disabled={saving || uploadingPhoto || uploadingVideo} style={buttonStyle}>
               {saving ? "Creating..." : "Create Exercise"}
             </button>
 
@@ -794,3 +928,73 @@ const secondaryButtonStyle: React.CSSProperties = {
   fontWeight: 700,
   cursor: "pointer",
 };
+
+function uploadAreaStyle(disabled: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "2px dashed #ccc",
+    borderRadius: "8px",
+    padding: "24px",
+    cursor: disabled ? "default" : "pointer",
+    marginBottom: "16px",
+    background: "#fafafa",
+    opacity: disabled ? 0.5 : 1,
+  };
+}
+
+const thumbnailRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "16px",
+  marginBottom: "16px",
+};
+
+const thumbnailStyle: React.CSSProperties = {
+  width: "64px",
+  height: "64px",
+  objectFit: "cover",
+  borderRadius: "8px",
+  border: "1px solid #eee",
+};
+
+const replaceButtonStyle: React.CSSProperties = {
+  display: "block",
+  padding: "6px 12px",
+  border: "1px solid #ccc",
+  borderRadius: "6px",
+  background: "#fff",
+  cursor: "pointer",
+  fontSize: "13px",
+  fontWeight: 600,
+  textAlign: "center",
+};
+
+const removePhotoStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "#b00020",
+  cursor: "pointer",
+  fontSize: "13px",
+  padding: 0,
+};
+
+const videoLinkStyle: React.CSSProperties = {
+  display: "inline-block",
+  marginTop: "-8px",
+  marginBottom: "16px",
+  fontSize: "13px",
+  color: "#1a56db",
+};
+
+const videoPlayerStyle: React.CSSProperties = {
+  width: "100%",
+  borderRadius: "8px",
+  border: "1px solid #eee",
+  maxHeight: "240px",
+};
+
+function isDirectVideoUrl(url: string) {
+  return url.includes("supabase.co") || /\.(mp4|webm|mov|avi)(\?|$)/i.test(url);
+}
