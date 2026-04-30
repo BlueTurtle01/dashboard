@@ -22,6 +22,7 @@ export default function SessionDetailPage() {
   const [plan, setPlan] = useState<GeneratedPlan | null>(null);
   const [session, setSession] = useState<PlanSession | null>(null);
   const [stretches, setStretches] = useState<SessionStretch[]>([]);
+  const [exerciseMedia, setExerciseMedia] = useState<Map<string, { photoUrl: string | null; videoUrl: string | null }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,6 +73,26 @@ export default function SessionDetailPage() {
         }
 
         setSession(foundSession);
+
+        // Fetch media for exercises that have an exerciseId
+        const exerciseIds = foundSession.exercises
+          .map((ex) => ex.exerciseId)
+          .filter((id): id is string => !!id);
+
+        if (exerciseIds.length > 0) {
+          const { data: mediaRows } = await supabase
+            .from("exercises")
+            .select("id, photo_url, video_url")
+            .in("id", exerciseIds);
+
+          if (mediaRows) {
+            const mediaMap = new Map<string, { photoUrl: string | null; videoUrl: string | null }>();
+            for (const row of mediaRows as { id: string; photo_url: string | null; video_url: string | null }[]) {
+              mediaMap.set(row.id, { photoUrl: row.photo_url, videoUrl: row.video_url });
+            }
+            setExerciseMedia(mediaMap);
+          }
+        }
 
         // Fetch stretches if this session has a mobilitySessionId
         const mobilitySessionId = (foundSession as any).mobilitySessionId;
@@ -361,6 +382,28 @@ export default function SessionDetailPage() {
                       ))}
                     </div>
                   )}
+
+                  {exercise.exerciseId && exerciseMedia.get(exercise.exerciseId)?.videoUrl && (
+                    <div className="mt-3">
+                      {isDirectVideoUrl(exerciseMedia.get(exercise.exerciseId)!.videoUrl!) ? (
+                        <video
+                          src={exerciseMedia.get(exercise.exerciseId)!.videoUrl!}
+                          controls
+                          className="w-full rounded-xl border border-zinc-200"
+                          style={{ maxHeight: "280px" }}
+                        />
+                      ) : (
+                        <a
+                          href={exerciseMedia.get(exercise.exerciseId)!.videoUrl!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+                        >
+                          Watch video ↗
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -369,4 +412,8 @@ export default function SessionDetailPage() {
       </div>
     </main>
   );
+}
+
+function isDirectVideoUrl(url: string) {
+  return url.includes("supabase.co") || /\.(mp4|webm|mov|avi)(\?|$)/i.test(url);
 }
