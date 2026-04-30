@@ -158,7 +158,7 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
                           </span>
                         )}
                       </div>
-                      {question.type !== "faq" && (
+                      {question.type !== "faq" && question.body.trim() !== question.title.trim() && (
                         <p className="text-sm text-zinc-600">{question.body}</p>
                       )}
                     </div>

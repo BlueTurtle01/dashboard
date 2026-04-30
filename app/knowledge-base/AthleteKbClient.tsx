@@ -36,8 +36,8 @@ export default function AthleteKnowledgeBase() {
   }
 
   async function handleSubmitQuestion() {
-    if (!modalTitle.trim() || !modalBody.trim()) {
-      alert("Please fill in both title and body");
+    if (!modalTitle.trim()) {
+      alert("Please enter a question title");
       return;
     }
 
@@ -129,7 +129,7 @@ export default function AthleteKnowledgeBase() {
                         </span>
                       )}
                     </div>
-                    {question.type !== "faq" && (
+                    {question.type !== "faq" && question.body.trim() !== question.title.trim() && (
                       <p className="text-sm text-zinc-600">{question.body}</p>
                     )}
                   </div>
@@ -191,7 +191,7 @@ export default function AthleteKnowledgeBase() {
 
             <div className="mb-6">
               <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="questionBody">
-                Question Details <span className="text-red-500">*</span>
+                Question Details <span className="text-zinc-400">(optional)</span>
               </label>
               <textarea
                 id="questionBody"
@@ -217,7 +217,7 @@ export default function AthleteKnowledgeBase() {
               </button>
               <button
                 onClick={() => void handleSubmitQuestion()}
-                disabled={!modalTitle.trim() || !modalBody.trim() || submitting}
+                disabled={!modalTitle.trim() || submitting}
                 className="flex-1 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
               >
                 {submitting ? "Submitting..." : "Submit Question"}

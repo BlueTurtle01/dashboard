@@ -121,12 +121,18 @@ export async function submitQuestion(
   const { supabase, user } = await requireAuth();
 
   const displayName = getUserDisplayName(user);
+  const questionTitle = title.trim();
+  const questionBody = body.trim() || questionTitle;
+
+  if (!questionTitle) {
+    return { error: "Please provide a question title" };
+  }
 
   const { data, error } = await supabase
     .from("kb_questions")
     .insert({
-      title: title.trim(),
-      body: body.trim(),
+      title: questionTitle,
+      body: questionBody,
       type: "community",
       audience: "athlete",
       submitted_by: user.id,
