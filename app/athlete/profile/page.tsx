@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { TutorialProvider, useTutorial } from "@/lib/context/TutorialContext";
+import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
 import { createHolidayNotification, createBlockedDateNotification } from "@/lib/actions/createNotification";
 import {
   saveAthleteProfile,
@@ -271,7 +274,8 @@ function formatFinishTime(days: number, hours: number, minutes: number, seconds:
   return parts.join(" ");
 }
 
-export default function IntakePage() {
+function AthleteProfileContent() {
+  const { isInTutorial } = useTutorial();
   const [profile, setProfile] = useState<AthleteProfile>(defaultProfile);
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -997,6 +1001,18 @@ export default function IntakePage() {
           </div>
         ) : null}
 
+        {isInTutorial && (
+          <div className="mb-6">
+            <TutorialInfoBox
+              title="Complete Your Profile"
+              description="Your profile information helps your coach tailor your training plan. Click through each tab to fill in your event details, training background, preferences, and constraints."
+              step={1}
+              totalSteps={8}
+              showNext={false}
+            />
+          </div>
+        )}
+
         {/* Tab Navigation */}
         <div className="flex gap-1 border-b border-zinc-200">
           <button
@@ -1083,7 +1099,16 @@ export default function IntakePage() {
 
         {/* Event Tab */}
         {activeTab === "event" && (
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm space-y-6">
+          {isInTutorial && (
+            <TutorialInfoBox
+              title="Select Your Event"
+              description="Choose the race or event you're training for. This helps your coach create a plan tailored to your specific goal."
+              step={2}
+              totalSteps={8}
+              showNext={false}
+            />
+          )}
           <h2 className="text-xl font-semibold">Event</h2>
 
           <select
@@ -1155,6 +1180,17 @@ export default function IntakePage() {
         {/* Training Tab */}
         {activeTab === "training" && (
         <>
+        {isInTutorial && (
+          <div className="mb-6">
+            <TutorialInfoBox
+              title="Share Your Training Background"
+              description="Tell your coach about your current fitness level, training days per week, and recent training history. This helps them create an appropriate progression plan."
+              step={3}
+              totalSteps={8}
+              showNext={false}
+            />
+          </div>
+        )}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">Current Training Baseline</h2>
 
@@ -1533,6 +1569,17 @@ export default function IntakePage() {
         {/* Preferences Tab */}
         {activeTab === "preferences" && (
         <>
+        {isInTutorial && (
+          <div className="mb-6">
+            <TutorialInfoBox
+              title="Configure Your Preferences"
+              description="Share your training style preferences, session types you enjoy, and any special preparation needs. This ensures your plan matches your personality."
+              step={4}
+              totalSteps={8}
+              showNext={false}
+            />
+          </div>
+        )}
         {isDesertRace ? (
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold">Desert Race Preparation</h2>
@@ -1643,6 +1690,18 @@ export default function IntakePage() {
 
         {/* Races Tab */}
         {activeTab === "races" && (
+        <>
+        {isInTutorial && (
+          <div className="mb-6">
+            <TutorialInfoBox
+              title="Add Preparation Races"
+              description="Include any smaller races or events you're using to prepare for your main goal. These help your coach structure your training progression."
+              step={7}
+              totalSteps={8}
+              showNext={false}
+            />
+          </div>
+        )}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">Preparation Races</h2>
 
@@ -1709,6 +1768,18 @@ export default function IntakePage() {
 
         {/* Race History Tab */}
         {activeTab === "history" && (
+        <>
+        {isInTutorial && (
+          <div className="mb-6">
+            <TutorialInfoBox
+              title="Share Your Race History"
+              description="Tell your coach about races you've completed. Your past performance and experience help create a realistic and tailored plan."
+              step={8}
+              totalSteps={8}
+              showNext={false}
+            />
+          </div>
+        )}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">Race History</h2>
           <p className="mt-1 text-sm text-zinc-500">
@@ -2000,6 +2071,17 @@ export default function IntakePage() {
         {/* Constraints Tab */}
         {activeTab === "constraints" && (
         <>
+        {isInTutorial && (
+          <div className="mb-6">
+            <TutorialInfoBox
+              title="Specify Your Constraints"
+              description="Share any equipment limitations, injuries, or medical requirements. This ensures your coach creates a safe and appropriate plan."
+              step={5}
+              totalSteps={8}
+              showNext={false}
+            />
+          </div>
+        )}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">Unavailable Equipment</h2>
 
@@ -2047,6 +2129,18 @@ export default function IntakePage() {
 
         {/* Schedule Tab */}
         {activeTab === "schedule" && (
+        <>
+        {isInTutorial && (
+          <div className="mb-6">
+            <TutorialInfoBox
+              title="Manage Your Holidays & Availability"
+              description="Mark dates when you'll be unavailable or have limited equipment access. Your coach will plan around these constraints."
+              step={6}
+              totalSteps={8}
+              showNext={false}
+            />
+          </div>
+        )}
         <>
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-4">
@@ -2244,6 +2338,18 @@ export default function IntakePage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function IntakePage() {
+  const searchParams = useSearchParams();
+  const tutorial = searchParams.get("tutorial");
+  const isInTutorial = tutorial === "profile";
+
+  return (
+    <TutorialProvider isInTutorial={isInTutorial} tutorialType="profile">
+      <AthleteProfileContent />
+    </TutorialProvider>
   );
 }
 
