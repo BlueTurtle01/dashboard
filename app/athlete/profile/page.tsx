@@ -1764,6 +1764,7 @@ function AthleteProfileContent() {
             )}
           </div>
         </section>
+        </>
         )}
 
         {/* Race History Tab */}
@@ -2039,6 +2040,7 @@ function AthleteProfileContent() {
             );
           })()}
         </section>
+        </>
         )}
 
         {/* Health Tab */}
