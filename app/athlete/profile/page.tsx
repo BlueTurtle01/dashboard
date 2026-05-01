@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { TutorialProvider, useTutorial } from "@/lib/context/TutorialContext";
 import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
-import { createHolidayNotification, createBlockedDateNotification } from "@/lib/actions/createNotification";
+import { createHolidayNotification, createBlockedDateNotification, createProfileSubmittedNotification } from "@/lib/actions/createNotification";
 import {
   saveAthleteProfile,
   loadAthleteProfile,
@@ -282,6 +282,9 @@ function AthleteProfileContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSoloPlanHolder, setIsSoloPlanHolder] = useState(false);
   const [activeTab, setActiveTab] = useState<"event" | "training" | "preferences" | "constraints" | "schedule" | "races" | "history" | "health">("event");
+  const [completedTabs, setCompletedTabs] = useState<Set<string>>(new Set());
+  const [showSendConfirm, setShowSendConfirm] = useState<"low-progress" | "no-holidays" | false>(false);
+  const [isSendingToCoach, setIsSendingToCoach] = useState(false);
 
   const [equipmentOptions, setEquipmentOptions] = useState<string[]>([]);
   const [eventOptions, setEventOptions] = useState<EventOption[]>([]);
@@ -477,6 +480,7 @@ function AthleteProfileContent() {
               ...(existingProfile.eventProfile ?? {}),
             },
           });
+          setCompletedTabs(new Set(existingProfile.completedTabs ?? []));
         }
       } catch (error) {
         console.error("Failed to load intake page data", error);
@@ -803,7 +807,7 @@ function AthleteProfileContent() {
     }));
   }
 
-  async function handleSave() {
+  async function handleSave(options?: { markSubmitted?: boolean }) {
     if (profile.hasAccessToHills === "") {
       setStatusMessage("Please select whether the athlete has access to hills.");
       return;
@@ -841,6 +845,8 @@ function AthleteProfileContent() {
         selectedPreparationRaceIds: profile.selectedPreparationRaceIds ?? [],
         selectedTags: profile.selectedTags ?? [],
         blockedDates: profile.blockedDates,
+        completedTabs: Array.from(completedTabs),
+        profileSubmittedAt: options?.markSubmitted ? new Date().toISOString() : profile.profileSubmittedAt ?? null,
       });
 
       // Save holidays to athlete_events
@@ -953,13 +959,50 @@ function AthleteProfileContent() {
         }
       }
 
-      setStatusMessage("Profile saved.");
+      if (options?.markSubmitted) {
+        try {
+          await createProfileSubmittedNotification();
+          setStatusMessage("Profile sent to your coach!");
+        } catch (err) {
+          console.error("Error creating profile submission notification:", err);
+          setStatusMessage("Profile saved (notification failed, but profile was sent).");
+        }
+      } else {
+        setStatusMessage("Profile saved.");
+      }
       window.setTimeout(() => setStatusMessage(""), 2000);
     } catch (error) {
       console.error("Failed to save athlete profile", error);
       setStatusMessage("Failed to save profile.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleSendToCoach() {
+    const profileProgress = Math.round((completedTabs.size / 8) * 100);
+    const hasHolidays = holidayEvents.length > 0;
+
+    if (profileProgress < 75) {
+      setShowSendConfirm("low-progress");
+      return;
+    }
+
+    if (!hasHolidays) {
+      setShowSendConfirm("no-holidays");
+      return;
+    }
+
+    await doSendToCoach();
+  }
+
+  async function doSendToCoach() {
+    setIsSendingToCoach(true);
+    try {
+      await handleSave({ markSubmitted: true });
+      setShowSendConfirm(false);
+    } finally {
+      setIsSendingToCoach(false);
     }
   }
 
@@ -988,12 +1031,30 @@ function AthleteProfileContent() {
           </div>
 
           <Link
-            href="/create-plan"
+            href="/athlete"
             className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100"
           >
-            Back
+            Back to Plan
           </Link>
         </div>
+
+        {(() => {
+          const profileProgress = Math.round((completedTabs.size / 8) * 100);
+          return (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-zinc-500">
+                <span>Profile completion</span>
+                <span>{profileProgress}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-zinc-200">
+                <div
+                  className="h-2 rounded-full bg-emerald-500 transition-all"
+                  style={{ width: `${profileProgress}%` }}
+                />
+              </div>
+            </div>
+          );
+        })()}
 
         {statusMessage ? (
           <div className="rounded-2xl border border-emerald-300 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-900">
@@ -2312,23 +2373,103 @@ function AthleteProfileContent() {
         </>
         )}
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={isSaving}
-            className="rounded-xl bg-zinc-900 px-6 py-3 text-sm font-semibold text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSaving ? "Saving..." : "Save Profile"}
-          </button>
+        <div className="border-t border-zinc-100 pt-6">
+          <div className="mb-6 flex items-center justify-end">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-600">
+              <input
+                type="checkbox"
+                checked={completedTabs.has(activeTab)}
+                onChange={() => {
+                  setCompletedTabs((prev) => {
+                    const next = new Set(prev);
+                    next.has(activeTab) ? next.delete(activeTab) : next.add(activeTab);
+                    return next;
+                  });
+                }}
+                className="h-4 w-4 rounded border-zinc-300"
+              />
+              Mark tab as complete
+            </label>
+          </div>
 
-          <Link
-            href="/create-plan"
-            className="rounded-xl border border-zinc-300 bg-white px-6 py-3 text-sm font-semibold hover:bg-zinc-100"
-          >
-            Continue to Plan
-          </Link>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={isSaving || isSendingToCoach}
+              className="rounded-xl bg-zinc-900 px-6 py-3 text-sm font-semibold text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSaving ? "Saving..." : "Save Profile"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleSendToCoach()}
+              disabled={isSendingToCoach || isSaving}
+              className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSendingToCoach ? "Sending..." : "Send to Coach"}
+            </button>
+          </div>
         </div>
+
+        {showSendConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="mx-4 max-w-md rounded-2xl bg-white p-6 shadow-lg">
+              {showSendConfirm === "low-progress" && (
+                <>
+                  <h2 className="text-lg font-bold text-zinc-900">Profile Only {Math.round((completedTabs.size / 8) * 100)}% Complete</h2>
+                  <p className="mt-3 text-sm text-zinc-600">
+                    Your profile is only {Math.round((completedTabs.size / 8) * 100)}% complete. Your coach will have less information to build your plan. Would you like to complete more tabs first, or send now?
+                  </p>
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      onClick={() => setShowSendConfirm(false)}
+                      className="flex-1 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold hover:bg-zinc-100"
+                    >
+                      Complete More Tabs
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowSendConfirm("no-holidays");
+                      }}
+                      className="flex-1 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                      Send Anyway
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {showSendConfirm === "no-holidays" && (
+                <>
+                  <h2 className="text-lg font-bold text-zinc-900">No Holidays Added</h2>
+                  <p className="mt-3 text-sm text-zinc-600">
+                    You haven't added any holidays or time off. Are you sure you don't have any planned? Your coach needs this information to schedule around your availability.
+                  </p>
+                  <div className="mt-6 flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowSendConfirm(false);
+                        setActiveTab("schedule");
+                      }}
+                      className="flex-1 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold hover:bg-zinc-100"
+                    >
+                      Check Holidays
+                    </button>
+                    <button
+                      onClick={() => void doSendToCoach()}
+                      disabled={isSendingToCoach}
+                      className="flex-1 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {isSendingToCoach ? "Sending..." : "Continue Sending"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {isSoloPlanHolder && (
           <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-4">

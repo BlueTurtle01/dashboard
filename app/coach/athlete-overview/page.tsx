@@ -37,6 +37,8 @@ type AthleteProfile = {
     event_date: string | null;
     race_conditions?: any;
   } | null;
+  completedTabs?: string[];
+  profileSubmittedAt?: string | null;
 };
 
 type AthletePlanSummary = {
@@ -1819,6 +1821,40 @@ function CoachAthleteOverviewPageContent() {
                   </div>
                 </div>
               )}
+
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-zinc-900">
+                  Profile completion
+                </h2>
+                {(() => {
+                  const profileProgress = Array.isArray(profile?.completedTabs)
+                    ? Math.round((profile.completedTabs.length / 8) * 100)
+                    : 0;
+                  return (
+                    <div className="mt-4 space-y-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-zinc-900">Intake form</span>
+                          <span className="text-zinc-600">{profileProgress}%</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-zinc-100">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              profileProgress >= 75 ? "bg-emerald-500" : "bg-amber-400"
+                            }`}
+                            style={{ width: `${profileProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                      {profile?.profileSubmittedAt && (
+                        <p className="text-xs text-zinc-500">
+                          Submitted {new Date(profile.profileSubmittedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
 
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
                   <h2 className="text-lg font-semibold text-zinc-900">

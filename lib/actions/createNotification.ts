@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-type NotificationType = "holiday_deleted" | "blocked_date_deleted" | "holiday_created" | "holiday_edited";
+type NotificationType = "holiday_deleted" | "blocked_date_deleted" | "holiday_created" | "holiday_edited" | "profile_submitted";
 
 export async function createBlockedDateNotification(
   type: "blocked_date_deleted",
@@ -176,6 +176,55 @@ export async function createHolidayNotification(
     return { success: true };
   } catch (error) {
     console.error("[createHolidayNotification] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+export async function createProfileSubmittedNotification(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const { data: planData } = await supabase
+      .from("athlete_plans")
+      .select("coach_user_id")
+      .eq("athlete_user_id", user.id)
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (!planData?.coach_user_id) {
+      return { success: true };
+    }
+
+    const coachId = planData.coach_user_id;
+    const message = "Athlete has submitted their profile and is ready for planning";
+
+    const { error: insertError } = await supabase.from("notifications").insert({
+      coach_id: coachId,
+      athlete_id: user.id,
+      type: "profile_submitted",
+      message,
+    });
+
+    if (insertError) {
+      console.error("Failed to create profile submitted notification:", insertError);
+      return { success: false, error: insertError.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error creating profile submitted notification:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

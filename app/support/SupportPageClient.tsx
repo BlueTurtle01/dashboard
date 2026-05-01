@@ -1,22 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { TutorialProvider, useTutorial } from "@/lib/context/TutorialContext";
-import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
 import SupportTicketForm from "./SupportTicketForm";
 import MyTickets from "./MyTickets";
 import { SupportTicket } from "@/lib/actions/support";
 
 type Tab = "new" | "mine";
 
-function SupportPageContent({
+export default function SupportPageClient({
   initialTickets,
   currentUserId,
 }: {
   initialTickets: SupportTicket[];
   currentUserId: string;
 }) {
-  const { isInTutorial } = useTutorial();
   const [tab, setTab] = useState<Tab>("new");
   const [tickets, setTickets] = useState<SupportTicket[]>(initialTickets);
   const [successMsg, setSuccessMsg] = useState(false);
@@ -41,18 +38,6 @@ function SupportPageContent({
 
   return (
     <div>
-      {isInTutorial && (
-        <div style={{ marginBottom: "20px" }}>
-          <TutorialInfoBox
-            title="Getting Help & Support"
-            description="Use this page to report issues, ask questions, or request features. Create new tickets for quick support, or view all your open and resolved tickets."
-            step={1}
-            totalSteps={2}
-            showNext={false}
-          />
-        </div>
-      )}
-
       {/* Tabs */}
       <div style={tabsRow}>
         <button
@@ -80,54 +65,12 @@ function SupportPageContent({
         </div>
       )}
 
-      {isInTutorial && tab === "new" && (
-        <div style={{ marginBottom: "20px" }}>
-          <TutorialInfoBox
-            title="Create a Support Ticket"
-            description="Describe your issue, question, or feature request. Our team will review your ticket and respond as soon as possible."
-            step={2}
-            totalSteps={2}
-            showNext={false}
-          />
-        </div>
-      )}
-
-      {isInTutorial && tab === "mine" && (
-        <div style={{ marginBottom: "20px" }}>
-          <TutorialInfoBox
-            title="Track Your Support Tickets"
-            description="View all your submitted tickets here. You can see the status of each ticket and follow up on responses from our support team."
-            step={2}
-            totalSteps={2}
-            showNext={false}
-          />
-        </div>
-      )}
-
       {tab === "new" ? (
         <SupportTicketForm onSuccess={handleTicketCreated} />
       ) : (
         <MyTickets tickets={tickets} currentUserId={currentUserId} />
       )}
     </div>
-  );
-}
-
-export default function SupportPageClient({
-  initialTickets,
-  currentUserId,
-  tutorial,
-}: {
-  initialTickets: SupportTicket[];
-  currentUserId: string;
-  tutorial?: string;
-}) {
-  const isInTutorial = tutorial === "support";
-
-  return (
-    <TutorialProvider isInTutorial={isInTutorial} tutorialType="support">
-      <SupportPageContent initialTickets={initialTickets} currentUserId={currentUserId} />
-    </TutorialProvider>
   );
 }
 

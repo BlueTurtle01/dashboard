@@ -629,13 +629,6 @@ export default function CoachPage() {
 
           <div className="flex flex-wrap gap-3">
             <Link
-              href={athleteId ? `/create-plan?athleteId=${encodeURIComponent(athleteId)}&source=scratch` : "/create-plan"}
-              className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100"
-            >
-              New Blank Plan
-            </Link>
-
-            <Link
               href={athleteId ? `/coach/program-templates?athleteId=${encodeURIComponent(athleteId)}` : "/coach/program-templates"}
               className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100"
             >

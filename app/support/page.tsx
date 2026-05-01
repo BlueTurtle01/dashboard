@@ -5,11 +5,7 @@ import SupportPageClient from "./SupportPageClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function SupportPage({
-  searchParams,
-}: {
-  searchParams: { tutorial?: string };
-}) {
+export default async function SupportPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -35,7 +31,6 @@ export default async function SupportPage({
         <SupportPageClient
           initialTickets={tickets}
           currentUserId={user.id}
-          tutorial={searchParams.tutorial}
         />
       </div>
     </main>

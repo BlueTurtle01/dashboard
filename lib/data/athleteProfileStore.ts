@@ -47,6 +47,8 @@ export type AthleteProfile = {
   availableRunDays?: string[];
   selectedTags?: string[];
   eventProfile: AthleteEventProfile;
+  completedTabs?: string[];
+  profileSubmittedAt?: string | null;
 };
 
 type AthleteProfileRow = {
@@ -78,6 +80,8 @@ type AthleteProfileRow = {
   available_run_days: string[] | null;
   tags: string[] | null;
   event_profile: AthleteEventProfile | null;
+  completed_tabs: string[] | null;
+  profile_submitted_at: string | null;
 };
 
 type EquipmentJoinRow = {
@@ -143,6 +147,8 @@ function mapRowToProfile(
       backToBack: row.event_profile?.backToBack ?? "none",
       sandAccess: row.event_profile?.sandAccess ?? false,
     },
+    completedTabs: row.completed_tabs ?? [],
+    profileSubmittedAt: row.profile_submitted_at ?? null,
   };
 }
 
@@ -213,7 +219,9 @@ export async function loadAthleteProfile(): Promise<AthleteProfile | null> {
       available_gym_days,
       available_run_days,
       tags,
-      event_profile
+      event_profile,
+      completed_tabs,
+      profile_submitted_at
     `)
     .eq("user_id", userId)
     .maybeSingle();
@@ -295,6 +303,8 @@ export async function saveAthleteProfile(profile: AthleteProfile): Promise<Athle
       backToBack: profile.eventProfile?.backToBack ?? "none",
       sandAccess: profile.eventProfile?.sandAccess ?? false,
     },
+    completed_tabs: profile.completedTabs ?? [],
+    profile_submitted_at: profile.profileSubmittedAt ?? null,
   };
 
   const { data: upsertedProfile, error: profileError } = await supabase
@@ -328,7 +338,9 @@ export async function saveAthleteProfile(profile: AthleteProfile): Promise<Athle
       available_gym_days,
       available_run_days,
       tags,
-      event_profile
+      event_profile,
+      completed_tabs,
+      profile_submitted_at
     `)
     .single();
 
