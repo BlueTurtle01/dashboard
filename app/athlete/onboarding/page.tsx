@@ -19,6 +19,7 @@ const TUTORIALS: Omit<Tutorial, "completed">[] = [
     id: "5",
     title: "Managing Your Profile",
     description: "Update your personal information and training preferences. This helps your coach tailor your plan to your specific needs.",
+    href: "/athlete/profile?tutorial=profile",
     priority: true,
   },
   {
