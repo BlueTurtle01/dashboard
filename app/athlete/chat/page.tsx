@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ChatThread } from '@/lib/chat/types';
 import ChatThreadList from '@/components/chat/ChatThreadList';
 import NewThreadForm from '@/components/chat/NewThreadForm';
+import { TutorialProvider, useTutorial } from '@/lib/context/TutorialContext';
+import TutorialInfoBox from '@/components/tutorial/TutorialInfoBox';
 
-export default function AthleteChatPage() {
+function AthleteChatContent() {
   const [coachId, setCoachId] = useState<string | null>(null);
   const [coachName, setCoachName] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -14,6 +17,7 @@ export default function AthleteChatPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNewThreadForm, setShowNewThreadForm] = useState(false);
+  const { isInTutorial } = useTutorial();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -130,6 +134,18 @@ export default function AthleteChatPage() {
 
   return (
     <main className="h-screen flex flex-col bg-white">
+      {isInTutorial && (
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb' }}>
+          <TutorialInfoBox
+            title="Communicate with Your Coach"
+            description="Message your coach directly with questions about your training plan. Create new discussion threads to organize conversations by topic."
+            step={1}
+            totalSteps={1}
+            showNext={false}
+          />
+        </div>
+      )}
+
       <div className="border-b border-zinc-200 p-6">
         <h1 className="text-xl font-bold text-zinc-900">
           {coachName || 'Coach'}
@@ -163,5 +179,16 @@ export default function AthleteChatPage() {
         />
       </div>
     </main>
+  );
+}
+
+export default function AthleteChatPage() {
+  const searchParams = useSearchParams();
+  const isInTutorial = searchParams.get('tutorial') === 'chat';
+
+  return (
+    <TutorialProvider isInTutorial={isInTutorial} tutorialType="chat">
+      <AthleteChatContent />
+    </TutorialProvider>
   );
 }

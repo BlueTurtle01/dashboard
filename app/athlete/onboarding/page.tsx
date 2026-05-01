@@ -51,6 +51,7 @@ const TUTORIALS: Omit<Tutorial, "completed">[] = [
     id: "6",
     title: "Integrations",
     description: "Connect your training apps like Strava to sync your activities.",
+    href: "/athlete/integrations?tutorial=integrations",
   },
   {
     id: "7",
