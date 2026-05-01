@@ -210,6 +210,11 @@ export default async function Navbar() {
           {canAccessTrainingArea && (
             <>
               <span className="app-sidebar__group-label">Training</span>
+              {can("athlete_onboarding") && (
+                <Link href="/athlete/onboarding" className="app-sidebar__link">
+                  Onboarding
+                </Link>
+              )}
               {can("athlete_plan") && (
                 <SidebarDropdown
                   label="My Plan"
