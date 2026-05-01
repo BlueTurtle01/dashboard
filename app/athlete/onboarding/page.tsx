@@ -11,20 +11,22 @@ type Tutorial = {
   videoUrl?: string;
   completed: boolean;
   href?: string;
+  priority?: boolean;
 };
 
 const TUTORIALS: Omit<Tutorial, "completed">[] = [
+  {
+    id: "5",
+    title: "Managing Your Profile",
+    description: "Update your personal information and training preferences. This helps your coach tailor your plan to your specific needs.",
+    priority: true,
+  },
   {
     id: "1",
     title: "Getting Started with Your Plan",
     description: "Learn how to navigate your training plan and understand how to use the platform.",
     href: "/athlete?tutorial=plan",
-  },
-  {
-    id: "2",
-    title: "Logging Your Sessions",
-    description: "Track your completed workouts and provide feedback on your training.",
-    href: "/athlete/log?tutorial=log",
+    priority: true,
   },
   {
     id: "3",
@@ -33,15 +35,16 @@ const TUTORIALS: Omit<Tutorial, "completed">[] = [
     href: "/athlete/chat?tutorial=chat",
   },
   {
+    id: "2",
+    title: "Logging Your Sessions",
+    description: "Track your completed workouts and provide feedback on your training.",
+    href: "/athlete/log?tutorial=log",
+  },
+  {
     id: "4",
     title: "Exploring the Knowledge Base",
     description: "Find answers to common questions and learn tips for better training.",
     href: "/knowledge-base?tutorial=knowledge-base",
-  },
-  {
-    id: "5",
-    title: "Managing Your Profile",
-    description: "Update your personal information and training preferences.",
   },
   {
     id: "6",
@@ -158,74 +161,151 @@ export default function AthleteOnboardingPage() {
         </div>
 
         {/* Tutorials Grid */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {tutorials.map((tutorial) => {
-            const TutorialCard = (
-              <div className="rounded-xl border border-zinc-200 bg-white p-6 transition hover:border-zinc-300 hover:shadow-sm">
-                {/* Checkbox */}
-                <div className="mb-3 flex items-center justify-between">
-                  <button
-                    onClick={() => void toggleTutorial(tutorial.id)}
-                    className="flex h-6 w-6 items-center justify-center rounded border-2 transition"
-                    style={{
-                      borderColor: tutorial.completed ? "#059669" : "#d4d4d8",
-                      backgroundColor: tutorial.completed ? "#059669" : "white",
-                    }}
-                  >
-                    {tutorial.completed && (
-                      <svg
-                        className="h-4 w-4 text-white"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={3}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                </div>
+        <div className="space-y-6">
+          {/* Priority Tutorials Section */}
+          {tutorials.some((t) => t.priority) && (
+            <div>
+              <h2 className="mb-4 text-lg font-semibold text-zinc-900">Essential First Steps</h2>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {tutorials
+                  .filter((t) => t.priority)
+                  .map((tutorial) => (
+                    <div key={tutorial.id} className="text-left">
+                      <div className="relative rounded-xl border-2 border-amber-300 bg-amber-50 p-6 transition hover:shadow-md">
+                        {/* Priority Badge */}
+                        <div className="absolute -top-3 left-4">
+                          <span className="inline-flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white">
+                            Priority
+                          </span>
+                        </div>
 
-                {/* Content */}
-                <h3
-                  className={`text-lg font-semibold transition ${
-                    tutorial.completed
-                      ? "text-zinc-500 line-through"
-                      : "text-zinc-900"
-                  }`}
-                >
-                  {tutorial.title}
-                </h3>
-                <p className="mt-2 text-sm text-zinc-600">
-                  {tutorial.description}
-                </p>
+                        {/* Checkbox */}
+                        <div className="mb-3 mt-2 flex items-center justify-between">
+                          <button
+                            onClick={() => void toggleTutorial(tutorial.id)}
+                            className="flex h-6 w-6 items-center justify-center rounded border-2 transition"
+                            style={{
+                              borderColor: tutorial.completed ? "#059669" : "#b45309",
+                              backgroundColor: tutorial.completed ? "#059669" : "white",
+                            }}
+                          >
+                            {tutorial.completed && (
+                              <svg
+                                className="h-4 w-4 text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={3}
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
 
-                {tutorial.href && !tutorial.completed && (
-                  <div className="mt-4 pt-4 border-t border-zinc-100">
-                    <Link
-                      href={tutorial.href}
-                      className="text-sm font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
-                    >
-                      Start Tutorial →
-                    </Link>
-                  </div>
-                )}
+                        {/* Content */}
+                        <h3
+                          className={`text-lg font-semibold transition ${
+                            tutorial.completed
+                              ? "text-zinc-500 line-through"
+                              : "text-zinc-900"
+                          }`}
+                        >
+                          {tutorial.title}
+                        </h3>
+                        <p className="mt-2 text-sm text-zinc-600">
+                          {tutorial.description}
+                        </p>
+
+                        {tutorial.href && !tutorial.completed && (
+                          <div className="mt-4 pt-4 border-t border-amber-200">
+                            <Link
+                              href={tutorial.href}
+                              className="text-sm font-semibold text-amber-700 hover:text-amber-800 inline-flex items-center gap-1"
+                            >
+                              Start Tutorial →
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
               </div>
-            );
+            </div>
+          )}
 
-            return (
-              <div
-                key={tutorial.id}
-                className="text-left"
-              >
-                {TutorialCard}
+          {/* Other Tutorials Section */}
+          {tutorials.some((t) => !t.priority) && (
+            <div>
+              <h2 className="mb-4 text-lg font-semibold text-zinc-900">Additional Topics</h2>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {tutorials
+                  .filter((t) => !t.priority)
+                  .map((tutorial) => (
+                    <div key={tutorial.id} className="text-left">
+                      <div className="rounded-xl border border-zinc-200 bg-white p-6 transition hover:border-zinc-300 hover:shadow-sm">
+                        {/* Checkbox */}
+                        <div className="mb-3 flex items-center justify-between">
+                          <button
+                            onClick={() => void toggleTutorial(tutorial.id)}
+                            className="flex h-6 w-6 items-center justify-center rounded border-2 transition"
+                            style={{
+                              borderColor: tutorial.completed ? "#059669" : "#d4d4d8",
+                              backgroundColor: tutorial.completed ? "#059669" : "white",
+                            }}
+                          >
+                            {tutorial.completed && (
+                              <svg
+                                className="h-4 w-4 text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={3}
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Content */}
+                        <h3
+                          className={`text-lg font-semibold transition ${
+                            tutorial.completed
+                              ? "text-zinc-500 line-through"
+                              : "text-zinc-900"
+                          }`}
+                        >
+                          {tutorial.title}
+                        </h3>
+                        <p className="mt-2 text-sm text-zinc-600">
+                          {tutorial.description}
+                        </p>
+
+                        {tutorial.href && !tutorial.completed && (
+                          <div className="mt-4 pt-4 border-t border-zinc-100">
+                            <Link
+                              href={tutorial.href}
+                              className="text-sm font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
+                            >
+                              Start Tutorial →
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
 
         {/* Completion Message */}
