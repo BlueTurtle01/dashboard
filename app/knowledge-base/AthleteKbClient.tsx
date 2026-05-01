@@ -8,6 +8,8 @@ import {
   type QuestionWithAnswers,
 } from "@/lib/actions/knowledge-base";
 
+type AthleteTab = "community" | "faq";
+
 export default function AthleteKnowledgeBase() {
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +19,7 @@ export default function AthleteKnowledgeBase() {
   const [modalTitle, setModalTitle] = useState("");
   const [modalBody, setModalBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<AthleteTab>("community");
 
   useEffect(() => {
     void loadQuestions();
@@ -60,6 +63,8 @@ export default function AthleteKnowledgeBase() {
   }
 
   const filteredQuestions = questions.filter((q) => {
+    const typeMatch = activeTab === "faq" ? q.type === "faq" : q.type !== "faq";
+    if (!typeMatch) return false;
     if (!search) return true;
     const searchLower = search.toLowerCase();
     return q.title.toLowerCase().includes(searchLower) || q.body.toLowerCase().includes(searchLower);
@@ -88,11 +93,36 @@ export default function AthleteKnowledgeBase() {
           <h1 className="mb-1 text-2xl font-bold text-zinc-900">Knowledge Base</h1>
           <p className="text-sm text-zinc-500">Find answers to common questions about your training.</p>
         </div>
+        {activeTab === "community" && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700"
+          >
+            Ask a Question
+          </button>
+        )}
+      </div>
+
+      <div className="mb-6 flex gap-2 border-b border-zinc-200 pb-3">
         <button
-          onClick={() => setShowModal(true)}
-          className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700"
+          onClick={() => setActiveTab("community")}
+          className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+            activeTab === "community"
+              ? "bg-zinc-900 text-white"
+              : "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+          }`}
         >
-          Ask a Question
+          Community Questions
+        </button>
+        <button
+          onClick={() => setActiveTab("faq")}
+          className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+            activeTab === "faq"
+              ? "bg-zinc-900 text-white"
+              : "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+          }`}
+        >
+          FAQ
         </button>
       </div>
 
@@ -109,7 +139,9 @@ export default function AthleteKnowledgeBase() {
       {filteredQuestions.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center">
           <p className="text-zinc-500">
-            {questions.length === 0
+            {activeTab === "faq"
+              ? "No FAQs available yet. Check back soon!"
+              : questions.length === 0
               ? "No questions yet. Be the first to ask one!"
               : "No questions match your search."}
           </p>
