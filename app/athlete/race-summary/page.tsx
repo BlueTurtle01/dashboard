@@ -56,7 +56,7 @@ export default function RaceSummaryPage() {
         // Fetch athlete's active plan
         const { data: planData, error: planError } = await supabase
           .from("athlete_plans")
-          .select("id, plan_json")
+          .select("id, plan_json, event_id")
           .eq("athlete_user_id", user.id)
           .eq("status", "active")
           .order("updated_at", { ascending: false })
@@ -111,8 +111,8 @@ export default function RaceSummaryPage() {
         }
         setTemplateMap(templates);
 
-        // Extract race ID from plan
-        const raceId = (loadedPlan as any).eventId || (loadedPlan as any).race_id || (loadedPlan as any).goalRaceId;
+        // Get race ID from athlete_plans event_id column
+        const raceId = planData.event_id;
 
         if (!raceId) {
           setError("Plan does not have a race assigned");
