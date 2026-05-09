@@ -135,3 +135,30 @@ Caused by:
     4: The system cannot find the path specified. (os error 3)
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
 Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+
+thread 'tokio-runtime-worker' (23324) panicked at turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:196:17:
+Failed to restore task data (corrupted database or bug): Data for TaskId 65746)
+
+Caused by:
+    0: Looking up task storage for TaskId 65746 from database failed
+    1: Unable to open static sorted file referenced from 00000798.meta
+    2: Unable to open static sorted file 00000794.sst
+    3: Failed to open SST file C:\Users\danie\OneDrive\Documents\Coach Dashboard\Coach Dashboard\endurance-planner\.next\dev\cache/turbopack\3e37bb42\00000794.sst
+    4: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (23324) panicked at turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:196:17:
+Failed to restore task data (corrupted database or bug): Data for TaskId 65746)
+
+Caused by:
+    0: Looking up task storage for TaskId 65746 from database failed
+    1: Unable to open static sorted file referenced from 00000798.meta
+    2: Unable to open static sorted file 00000794.sst
+    3: Failed to open SST file C:\Users\danie\OneDrive\Documents\Coach Dashboard\Coach Dashboard\endurance-planner\.next\dev\cache/turbopack\3e37bb42\00000794.sst
+    4: The system cannot find the path specified. (os error 3)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
