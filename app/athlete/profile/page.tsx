@@ -1252,7 +1252,10 @@ function AthleteProfileContent() {
                 type="text"
                 placeholder="Search by race name..."
                 value={eventSearchQuery}
-                onChange={(e) => searchEvents(e.target.value)}
+                onChange={(e) => {
+                  setEventSearchQuery(e.target.value);
+                  searchEvents(e.target.value);
+                }}
                 disabled={isSoloPlanHolder}
                 className={`w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
               />
