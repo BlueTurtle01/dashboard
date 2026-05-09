@@ -1527,14 +1527,6 @@ function CoachAthleteOverviewPageContent() {
                     <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Selected event</dt>
                     <dd className="mt-1 break-all text-sm text-zinc-900">{profile?.event?.name || "—"}</dd>
                   </div>
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Event date</dt>
-                    <dd className="mt-1 text-sm text-zinc-900">{formatDate(profile?.event?.event_date)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Weeks from today</dt>
-                    <dd className="mt-1 text-sm text-zinc-900">{getWeeksFromToday(profile?.event?.event_date)}</dd>
-                  </div>
                   {profile && profile.event_profile != null && (
                     <div className="col-span-full">
                       <details className="group">
