@@ -23,6 +23,10 @@ type EventOption = {
   distance_km: number | null;
   elevation_gain_m: number | null;
   location: string | null;
+  event_type?: string | null;
+  terrain_type?: string | null;
+  climate_type?: string | null;
+  race_conditions?: any | null;
 };
 
 type LookupOption = {
@@ -337,7 +341,7 @@ function AthleteProfileContent() {
             .order("sort_order"),
           supabase
             .from("races")
-            .select("id, name, event_date, distance_km, elevation_gain_m, location")
+            .select("id, name, event_date, distance_km, elevation_gain_m, location, races_meta(meta_key, meta_value)")
             .order("name"),
           supabase
             .from("preparation_races")
@@ -383,7 +387,29 @@ function AthleteProfileContent() {
 
         if (cancelled) return;
 
-        const loadedEvents = (eventsResponse.data ?? []) as EventOption[];
+        const rawEvents = (eventsResponse.data ?? []) as any[];
+        const enrichedEvents: EventOption[] = rawEvents.map((race: any) => {
+          const metadata = race.races_meta || [];
+          const metaMap = new Map(metadata.map((m: any) => [m.meta_key, m.meta_value]));
+
+          const eventType = metaMap.get("event_type");
+          const terrainType = metaMap.get("terrain_type");
+          const climateType = metaMap.get("climate");
+
+          return {
+            id: race.id,
+            name: race.name,
+            event_date: race.event_date,
+            distance_km: race.distance_km,
+            elevation_gain_m: race.elevation_gain_m,
+            location: race.location,
+            event_type: eventType ? String(eventType) : null,
+            terrain_type: terrainType ? String(terrainType) : null,
+            climate_type: climateType ? String(climateType) : null,
+            race_conditions: metaMap.has("race_conditions") ? JSON.parse(String(metaMap.get("race_conditions") || "{}")) : null,
+          };
+        });
+
         const loadedPrepRaces = (preparationRacesResponse.data ?? []) as PrepRaceOption[];
 
         setEquipmentOptions(
@@ -392,7 +418,7 @@ function AthleteProfileContent() {
             .filter((slug): slug is string => Boolean(slug) && slug !== "bodyweight"),
         );
 
-        setEventOptions(loadedEvents);
+        setEventOptions(enrichedEvents);
         setPreparationRaceOptions(loadedPrepRaces);
         const loadedHolidayEvents = (holidayEventsResponse.data ?? []) as any;
         setHolidayEvents(loadedHolidayEvents);
@@ -430,7 +456,7 @@ function AthleteProfileContent() {
             "";
 
           const matchedEvent =
-            loadedEvents.find((event) => event.id === selectedEventId) ?? null;
+            enrichedEvents.find((event) => event.id === selectedEventId) ?? null;
 
           setProfile({
             ...defaultProfile,
@@ -505,12 +531,15 @@ function AthleteProfileContent() {
     [eventOptions, profile.selectedEventId],
   );
 
-  const isDesertRace = false;
+  const isDesertRace = selectedEvent?.event_type === "Desert Race";
 
   function handleEventChange(eventId: string) {
+    const matchedEvent = eventOptions.find((event) => event.id === eventId) ?? null;
+
     setProfile((p) => ({
       ...p,
       selectedEventId: eventId,
+      eventType: matchedEvent?.event_type ?? "",
     }));
   }
 
@@ -764,7 +793,7 @@ function AthleteProfileContent() {
     try {
       const { data, error } = await supabase
         .from("races")
-        .select("id, name, event_date, distance_km, elevation_gain_m, location")
+        .select("id, name, event_date, distance_km, elevation_gain_m, location, races_meta(meta_key, meta_value)")
         .ilike("name", `%${query}%`)
         .order("event_date")
         .limit(10);
@@ -773,7 +802,23 @@ function AthleteProfileContent() {
         console.error("Failed to search races:", error);
         setEventSearchResults([]);
       } else {
-        setEventSearchResults((data ?? []) as EventOption[]);
+        const enrichedData = (data ?? []).map((race: any) => {
+          const metadata = race.races_meta || [];
+          const metaMap = new Map(metadata.map((m: any) => [m.meta_key, m.meta_value]));
+
+          const eventType = metaMap.get("event_type");
+          const terrainType = metaMap.get("terrain_type");
+          const climateType = metaMap.get("climate");
+
+          return {
+            ...race,
+            event_type: eventType ? String(eventType) : null,
+            terrain_type: terrainType ? String(terrainType) : null,
+            climate_type: climateType ? String(climateType) : null,
+            race_conditions: metaMap.has("race_conditions") ? JSON.parse(String(metaMap.get("race_conditions") || "{}")) : null,
+          };
+        });
+        setEventSearchResults(enrichedData);
       }
     } catch (err) {
       console.error("Error searching races:", err);
@@ -1237,7 +1282,16 @@ function AthleteProfileContent() {
 
           {selectedEvent ? (
             <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700 space-y-1">
+              {selectedEvent.event_type && (
+                <div><span className="font-medium">Type:</span> {selectedEvent.event_type}</div>
+              )}
               <div><span className="font-medium">Date:</span> {selectedEvent.event_date ? new Date(selectedEvent.event_date).toLocaleDateString("en-GB") : "TBC"}</div>
+              {selectedEvent.terrain_type && (
+                <div><span className="font-medium">Terrain:</span> {selectedEvent.terrain_type}</div>
+              )}
+              {selectedEvent.climate_type && (
+                <div><span className="font-medium">Climate:</span> {selectedEvent.climate_type}</div>
+              )}
               {selectedEvent.distance_km && (
                 <div><span className="font-medium">Distance:</span> {selectedEvent.distance_km} km</div>
               )}
@@ -1246,6 +1300,25 @@ function AthleteProfileContent() {
               )}
               {selectedEvent.location && (
                 <div><span className="font-medium">Location:</span> {selectedEvent.location}</div>
+              )}
+              {selectedEvent.race_conditions && (
+                <>
+                  {selectedEvent.race_conditions.temperature && (
+                    <div><span className="font-medium">Temperature:</span> {selectedEvent.race_conditions.temperature.replace(/_/g, " ")}</div>
+                  )}
+                  {selectedEvent.race_conditions.altitude && (
+                    <div><span className="font-medium">Altitude:</span> {selectedEvent.race_conditions.altitude.replace(/_/g, " ")}</div>
+                  )}
+                  {selectedEvent.race_conditions.humidity && (
+                    <div><span className="font-medium">Humidity:</span> {selectedEvent.race_conditions.humidity}</div>
+                  )}
+                  {selectedEvent.race_conditions.specialConditions?.length > 0 && (
+                    <div><span className="font-medium">Conditions:</span> {selectedEvent.race_conditions.specialConditions.map((c: string) => c.replace(/_/g, " ")).join(", ")}</div>
+                  )}
+                  {selectedEvent.race_conditions.notes && (
+                    <div><span className="font-medium">Notes:</span> {selectedEvent.race_conditions.notes}</div>
+                  )}
+                </>
               )}
             </div>
           ) : null}
@@ -2102,10 +2175,14 @@ function AthleteProfileContent() {
           {raceHistory.length > 0 && selectedEvent && (() => {
             const goalEvent = {
               name: selectedEvent.name,
-              event_type: null,
-              terrain_type: null,
-              climate_type: null,
-              race_conditions: null,
+              event_type: (selectedEvent.event_type || null) as string | null,
+              terrain_type: selectedEvent.terrain_type || null,
+              climate_type: selectedEvent.climate_type || null,
+              race_conditions: selectedEvent.race_conditions ? {
+                specialConditions: selectedEvent.race_conditions.specialConditions,
+                temperature: selectedEvent.race_conditions.temperature || undefined,
+                altitude: selectedEvent.race_conditions.altitude || undefined,
+              } : null,
             };
             const gaps = buildExperienceGaps(
               raceHistory.map((e) => ({
