@@ -9,8 +9,6 @@ type RaceData = {
   name: string;
   location: string | null;
   distance_km: number | null;
-  elevation_gain_m: number | null;
-  event_date: string | null;
 };
 
 type SegmentTag = {
@@ -123,7 +121,7 @@ export default function RaceSummaryPage() {
         // Fetch race details
         const { data: races, error: raceError } = await supabase
           .from("races")
-          .select("id, name, location, distance_km, elevation_gain_m, event_date")
+          .select("id, name, location, distance_km")
           .eq("id", raceId)
           .limit(1)
           .single();
@@ -243,31 +241,13 @@ export default function RaceSummaryPage() {
           {raceData.location && (
             <p className="mt-1 text-sm text-zinc-600">{raceData.location}</p>
           )}
-          {raceData.event_date && (
-            <p className="mt-2 text-sm text-zinc-600">
-              {new Date(raceData.event_date).toLocaleDateString("en-GB", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
-          )}
 
-          <div className="mt-6 grid grid-cols-2 gap-4">
-            {raceData.distance_km !== null && (
-              <div>
-                <p className="text-xs text-zinc-500">Distance</p>
-                <p className="mt-1 text-lg font-semibold text-zinc-900">{raceData.distance_km} km</p>
-              </div>
-            )}
-            {raceData.elevation_gain_m !== null && (
-              <div>
-                <p className="text-xs text-zinc-500">Elevation Gain</p>
-                <p className="mt-1 text-lg font-semibold text-zinc-900">{raceData.elevation_gain_m} m</p>
-              </div>
-            )}
-          </div>
+          {raceData.distance_km && (
+            <div className="mt-6">
+              <p className="text-xs text-zinc-500">Distance</p>
+              <p className="mt-1 text-lg font-semibold text-zinc-900">{raceData.distance_km} km</p>
+            </div>
+          )}
         </div>
 
         {/* Race Segments and Coach Strategy */}
