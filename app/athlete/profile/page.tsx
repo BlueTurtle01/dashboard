@@ -767,21 +767,20 @@ function AthleteProfileContent() {
 
     try {
       const { data, error } = await supabase
-        .from("preparation_races")
-        .select("id, name, event_date, distance_km, event_type, location")
+        .from("races")
+        .select("id, name, event_date, distance_km, location")
         .ilike("name", `%${query}%`)
-        .eq("is_active", true)
         .order("event_date")
         .limit(10);
 
       if (error) {
-        console.error("Failed to search prep races:", error);
+        console.error("Failed to search races:", error);
         setPrepRaceSearchResults([]);
       } else {
         setPrepRaceSearchResults((data ?? []) as PrepRaceOption[]);
       }
     } catch (err) {
-      console.error("Error searching prep races:", err);
+      console.error("Error searching races:", err);
       setPrepRaceSearchResults([]);
     }
   }
