@@ -379,7 +379,7 @@ export default function CoachProfilePage() {
       .eq("coach_user_id", userId);
 
     if (deleteRacesResult.error) {
-      setErrorMessage(`Could not update completed races: ${deleteRacesResult.message}`);
+      setErrorMessage(`Could not update completed races: ${deleteRacesResult.error.message}`);
       setSaving(false);
       return;
     }
