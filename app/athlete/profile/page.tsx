@@ -1243,6 +1243,7 @@ function AthleteProfileContent() {
 
           {selectedEvent ? (
             <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700 space-y-1">
+              <div className="font-semibold text-base text-zinc-900">{selectedEvent.name}</div>
               {selectedEvent.event_type && (
                 <div><span className="font-medium">Type:</span> {selectedEvent.event_type}</div>
               )}
