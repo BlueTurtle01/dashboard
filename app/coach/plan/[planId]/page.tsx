@@ -1105,6 +1105,9 @@ export default function PlanEditorPage() {
   const [equipmentConflictAlternatives, setEquipmentConflictAlternatives] = useState<Record<string, any[]>>({});
   const [pairedMobilitySessions, setPairedMobilitySessions] = useState<Array<any>>([]);
   const [allMobilitySessions, setAllMobilitySessions] = useState<Array<any>>([]);
+  const [eventSearchQuery, setEventSearchQuery] = useState("");
+  const [eventSearchResults, setEventSearchResults] = useState<Array<{ id: string; name: string; distance_km: number | null }>>([]);
+  const [showEventSearch, setShowEventSearch] = useState(false);
 
   function toggleWeekExpanded(weekId: string) {
     const newExpanded = new Set(expandedWeeks);
@@ -1135,6 +1138,47 @@ export default function PlanEditorPage() {
   function showTemporaryStatus(message: string, timeoutMs = 2500) {
     setStatusMessage(message);
     window.setTimeout(() => setStatusMessage(""), timeoutMs);
+  }
+
+  async function searchEvents(query: string) {
+    if (!query.trim()) {
+      setEventSearchResults([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("races")
+      .select("id, name, distance_km")
+      .or(`name.ilike.%${query}%,location.ilike.%${query}%`)
+      .limit(8);
+
+    if (!error && data) {
+      setEventSearchResults(data);
+    }
+  }
+
+  async function updatePlanEvent(eventId: string) {
+    if (!planRow) return;
+
+    try {
+      const { error } = await supabase
+        .from("athlete_plans")
+        .update({ event_id: eventId })
+        .eq("id", planRow.id);
+
+      if (error) {
+        console.error("Failed to update event:", error);
+        return;
+      }
+
+      setPlanRow({ ...planRow, event_id: eventId });
+      setEventSearchQuery("");
+      setEventSearchResults([]);
+      setShowEventSearch(false);
+      showTemporaryStatus("Plan event updated.");
+    } catch (err) {
+      console.error("Error updating event:", err);
+    }
   }
 
   function getPrepRaceConflict(weekNumber: number, dayLabel: string | null | undefined): { race_name: string } | null {
@@ -2172,9 +2216,53 @@ export default function PlanEditorPage() {
               Edit the selected plan, add sessions, manage week focus, and save named versions.
             </p>
             {planRow ? (
-              <div className="mt-3 text-sm text-zinc-600">
-                <span className="font-semibold">{planRow.name}</span> ({planRow.status}) · Updated{" "}
-                {formatDateTime(planRow.updated_at)}
+              <div className="mt-4 space-y-2">
+                <div className="text-sm text-zinc-600">
+                  <span className="font-semibold">{planRow.name}</span> ({planRow.status}) · Updated{" "}
+                  {formatDateTime(planRow.updated_at)}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowEventSearch(!showEventSearch)}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700 underline"
+                  >
+                    {planRow.event_id ? "Change event" : "Set event"}
+                  </button>
+                </div>
+                {showEventSearch && (
+                  <div className="rounded-xl border border-zinc-300 bg-zinc-50 p-3 space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Search races..."
+                      value={eventSearchQuery}
+                      onChange={(e) => {
+                        setEventSearchQuery(e.target.value);
+                        searchEvents(e.target.value);
+                      }}
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                    />
+                    {eventSearchResults.length > 0 && (
+                      <div className="max-h-48 overflow-y-auto space-y-1">
+                        {eventSearchResults.map((event) => (
+                          <button
+                            key={event.id}
+                            onClick={() => updatePlanEvent(event.id)}
+                            className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-100 text-sm border border-transparent hover:border-blue-300 transition-colors"
+                          >
+                            <div className="font-medium text-zinc-900">{event.name}</div>
+                            {event.distance_km && (
+                              <div className="text-xs text-zinc-600">{event.distance_km} km</div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {eventSearchQuery && eventSearchResults.length === 0 && (
+                      <div className="text-sm text-zinc-600">No races found.</div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
