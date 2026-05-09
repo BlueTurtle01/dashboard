@@ -93,6 +93,12 @@ const goalOptions = [
 
 const difficultyOptions = ["Beginner", "Intermediate", "Advanced"];
 
+const RACE_FOCUS_TAGS = [
+  "downhill", "uphill", "technical-terrain", "pack-carry", "long-distance",
+  "flat-course", "heat", "altitude", "run-economy", "injury-prevention",
+  "race-simulation", "multi-stage", "speed-endurance", "power-output", "recovery",
+];
+
 const GYM_EQUIPMENT = new Set(["machine", "cable"]);
 
 function prefixedExerciseName(name: string, equipmentPiece: string | null): string {
@@ -123,6 +129,9 @@ export default function NewGymSessionTemplatePage() {
   const [allEquipment, setAllEquipment] = useState<string[]>([]);
   const [loadingEquipment, setLoadingEquipment] = useState(true);
   const [selectedExercises, setSelectedExercises] = useState<SelectedExercise[]>([]);
+
+  const [aimTags, setAimTags] = useState<string[]>([]);
+  const [aimTagSearch, setAimTagSearch] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -438,7 +447,7 @@ export default function NewGymSessionTemplatePage() {
         focus_area: focusArea.trim(),
         goal: goal.trim(),
         difficulty_level: difficultyLevel.trim() || null,
-        session_data: {},
+        session_data: { aim_tags: aimTags },
       })
       .select("id")
       .single();
@@ -632,6 +641,76 @@ export default function NewGymSessionTemplatePage() {
                     placeholder="Brief summary of what this session is for..."
                     className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
                   />
+                </div>
+
+                <div>
+                  <span className="mb-1 block text-sm font-semibold text-zinc-900">Race Focus Tags</span>
+
+                  {/* Selected aim tags */}
+                  {aimTags.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1">
+                      {aimTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-3 py-1 text-xs font-medium text-white"
+                        >
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => setAimTags(aimTags.filter((t) => t !== tag))}
+                            className="ml-0.5 text-amber-200 hover:text-white leading-none"
+                            aria-label={`Remove ${tag}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Search input */}
+                  <input
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                    value={aimTagSearch}
+                    onChange={(e) => setAimTagSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && aimTagSearch.trim()) {
+                        e.preventDefault();
+                        const tag = aimTagSearch.trim().toLowerCase();
+                        if (!aimTags.includes(tag)) {
+                          setAimTags([...aimTags, tag]);
+                        }
+                        setAimTagSearch("");
+                      }
+                    }}
+                    placeholder="Search or type a tag, press Enter to add"
+                  />
+
+                  {/* Suggestions */}
+                  {(() => {
+                    const q = aimTagSearch.trim().toLowerCase();
+                    const suggestions = RACE_FOCUS_TAGS.filter(
+                      (t) => (!q || t.includes(q)) && !aimTags.includes(t)
+                    ).slice(0, 12);
+                    if (suggestions.length === 0) return null;
+                    return (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {suggestions.map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                              setAimTags([...aimTags, tag]);
+                              setAimTagSearch("");
+                            }}
+                            className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-700 hover:border-amber-900 hover:bg-amber-100 transition-colors"
+                          >
+                            + {tag}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <button

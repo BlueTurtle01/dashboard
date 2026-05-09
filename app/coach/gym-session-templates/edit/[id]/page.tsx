@@ -48,6 +48,18 @@ function buildClientId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const RACE_FOCUS_TAGS = [
+  "downhill", "uphill", "technical-terrain", "pack-carry", "long-distance",
+  "flat-course", "heat", "altitude", "run-economy", "injury-prevention",
+  "race-simulation", "multi-stage", "speed-endurance", "power-output", "recovery",
+];
+
+function extractAimTags(sessionData: Record<string, unknown> | null | undefined) {
+  const rawTags = sessionData?.aim_tags;
+  if (!Array.isArray(rawTags)) return [] as string[];
+  return rawTags.filter((value): value is string => typeof value === "string");
+}
+
 export default function EditGymSessionTemplatePage() {
   const params = useParams();
   const router = useRouter();
@@ -65,6 +77,10 @@ export default function EditGymSessionTemplatePage() {
   const [allEquipment, setAllEquipment] = useState<string[]>([]);
   const [loadingEquipment, setLoadingEquipment] = useState(true);
   const [selectedExercises, setSelectedExercises] = useState<SelectedExercise[]>([]);
+
+  const [aimTags, setAimTags] = useState<string[]>([]);
+  const [aimTagSearch, setAimTagSearch] = useState("");
+  const [sessionDataRest, setSessionDataRest] = useState<Record<string, unknown>>({});
 
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -90,7 +106,7 @@ export default function EditGymSessionTemplatePage() {
 
       const { data: templateRow, error: templateError } = await supabase
         .from("session_templates")
-        .select("id, name, description, type")
+        .select("id, name, description, type, session_data")
         .eq("id", templateId)
         .eq("type", "gym")
         .single();
@@ -136,6 +152,10 @@ export default function EditGymSessionTemplatePage() {
       if (!cancelled) {
         setTemplateName(templateRow.name as string);
         setTemplateDescription((templateRow.description as string | null) ?? "");
+        const sessionData = (templateRow.session_data as Record<string, unknown> | null) ?? {};
+        setAimTags(extractAimTags(sessionData));
+        const { aim_tags: _removed, ...restData } = sessionData;
+        setSessionDataRest(restData);
         setSelectedExercises(
           (exerciseRows ?? []).map((row) => {
             const lookup = exerciseLookup.get(row.exercise_id as string);
@@ -370,6 +390,7 @@ export default function EditGymSessionTemplatePage() {
       .update({
         name: templateName.trim(),
         description: templateDescription.trim() || null,
+        session_data: { ...sessionDataRest, aim_tags: aimTags },
       })
       .eq("id", templateId);
 
@@ -523,6 +544,76 @@ export default function EditGymSessionTemplatePage() {
                     placeholder="Brief summary of what this session is for..."
                     className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
                   />
+                </div>
+
+                <div>
+                  <span className="mb-1 block text-sm font-semibold text-zinc-900">Race Focus Tags</span>
+
+                  {/* Selected aim tags */}
+                  {aimTags.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1">
+                      {aimTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-3 py-1 text-xs font-medium text-white"
+                        >
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => setAimTags(aimTags.filter((t) => t !== tag))}
+                            className="ml-0.5 text-amber-200 hover:text-white leading-none"
+                            aria-label={`Remove ${tag}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Search input */}
+                  <input
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                    value={aimTagSearch}
+                    onChange={(e) => setAimTagSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && aimTagSearch.trim()) {
+                        e.preventDefault();
+                        const tag = aimTagSearch.trim().toLowerCase();
+                        if (!aimTags.includes(tag)) {
+                          setAimTags([...aimTags, tag]);
+                        }
+                        setAimTagSearch("");
+                      }
+                    }}
+                    placeholder="Search or type a tag, press Enter to add"
+                  />
+
+                  {/* Suggestions */}
+                  {(() => {
+                    const q = aimTagSearch.trim().toLowerCase();
+                    const suggestions = RACE_FOCUS_TAGS.filter(
+                      (t) => (!q || t.includes(q)) && !aimTags.includes(t)
+                    ).slice(0, 12);
+                    if (suggestions.length === 0) return null;
+                    return (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {suggestions.map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                              setAimTags([...aimTags, tag]);
+                              setAimTagSearch("");
+                            }}
+                            className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-700 hover:border-amber-900 hover:bg-amber-100 transition-colors"
+                          >
+                            + {tag}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <button

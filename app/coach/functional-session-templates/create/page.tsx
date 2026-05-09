@@ -40,6 +40,7 @@ type FunctionalTemplateForm = {
   restSeconds: string;
   notes: string;
   tags: string[];
+  aimTags: string[];
 };
 
 // ---------------------------------------------------------------------------
@@ -124,6 +125,12 @@ const SUGGESTED_TAGS = [
   "strength", "upper-body", "heat", "night", "trail", "sand",
 ];
 
+const RACE_FOCUS_TAGS = [
+  "downhill", "uphill", "technical-terrain", "pack-carry", "long-distance",
+  "flat-course", "heat", "altitude", "run-economy", "injury-prevention",
+  "race-simulation", "multi-stage", "speed-endurance", "power-output", "recovery",
+];
+
 const terrainOptions = [
   "road",
   "trail",
@@ -176,6 +183,7 @@ function createEmptyForm(): FunctionalTemplateForm {
     restSeconds: "",
     notes: "",
     tags: [],
+    aimTags: [],
   };
 }
 
@@ -220,6 +228,7 @@ function buildSessionData(form: FunctionalTemplateForm) {
     rest_seconds: parseNullableInteger(form.restSeconds),
     notes: form.notes.trim() || null,
     tags: form.tags,
+    aim_tags: form.aimTags,
   };
 }
 
@@ -232,6 +241,7 @@ function formFromRow(row: FunctionalTemplateRow): FunctionalTemplateForm {
   const intervalRepsValue = sessionData["interval_reps"];
   const intervalDurationValue = sessionData["interval_duration"];
   const tagValue = sessionData["tags"];
+  const aimTagValue = sessionData["aim_tags"];
 
   return {
     description: row.description ?? "",
@@ -283,6 +293,7 @@ function formFromRow(row: FunctionalTemplateRow): FunctionalTemplateForm {
     restSeconds: sessionData["rest_seconds"] != null ? String(sessionData["rest_seconds"]) : "",
     notes: typeof sessionData["notes"] === "string" ? sessionData["notes"] : "",
     tags: Array.isArray(tagValue) ? tagValue.map(String) : [],
+    aimTags: Array.isArray(aimTagValue) ? aimTagValue.map(String) : [],
   };
 }
 
@@ -316,6 +327,7 @@ export default function FunctionalSessionTemplatesPage() {
   const [loadingGeneratedNumber, setLoadingGeneratedNumber] = useState(false);
 
   const [tagSearch, setTagSearch] = useState("");
+  const [aimTagSearch, setAimTagSearch] = useState("");
   const [activityOptions, setActivityOptions] = useState<ActivityOption[]>([]);
   const [subtypeOptionsByActivitySlug, setSubtypeOptionsByActivitySlug] = useState<
     Record<string, SubtypeOption[]>
@@ -1293,6 +1305,76 @@ const generatedNamePreview = useMemo(() => {
                             setTagSearch("");
                           }}
                           className="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 hover:border-zinc-900 hover:bg-zinc-100 transition-colors"
+                        >
+                          + {tag}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div>
+                <span className="mb-1 block text-sm font-semibold text-zinc-900">Race Focus Tags</span>
+
+                {/* Selected aim tags */}
+                {form.aimTags.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-1">
+                    {form.aimTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-3 py-1 text-xs font-medium text-white"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => updateForm("aimTags", form.aimTags.filter((t) => t !== tag))}
+                          className="ml-0.5 text-amber-200 hover:text-white leading-none"
+                          aria-label={`Remove ${tag}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Search input */}
+                <input
+                  className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                  value={aimTagSearch}
+                  onChange={(e) => setAimTagSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && aimTagSearch.trim()) {
+                      e.preventDefault();
+                      const tag = aimTagSearch.trim().toLowerCase();
+                      if (!form.aimTags.includes(tag)) {
+                        updateForm("aimTags", [...form.aimTags, tag]);
+                      }
+                      setAimTagSearch("");
+                    }
+                  }}
+                  placeholder="Search or type a tag, press Enter to add"
+                />
+
+                {/* Suggestions */}
+                {(() => {
+                  const q = aimTagSearch.trim().toLowerCase();
+                  const suggestions = RACE_FOCUS_TAGS.filter(
+                    (t) => (!q || t.includes(q)) && !form.aimTags.includes(t)
+                  ).slice(0, 12);
+                  if (suggestions.length === 0) return null;
+                  return (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {suggestions.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            updateForm("aimTags", [...form.aimTags, tag]);
+                            setAimTagSearch("");
+                          }}
+                          className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-700 hover:border-amber-900 hover:bg-amber-100 transition-colors"
                         >
                           + {tag}
                         </button>

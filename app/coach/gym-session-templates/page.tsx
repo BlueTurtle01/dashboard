@@ -55,6 +55,7 @@ type GymSessionTemplate = {
   duration: string;
   intensity: string;
   tags: string[];
+  aimTags: string[];
   type: string;
   isCustom: boolean;
   isKeySession: boolean;
@@ -68,6 +69,7 @@ function buildTemplateSearchText(template: GymSessionTemplate) {
     template.duration,
     template.intensity,
     ...(template.tags ?? []),
+    ...(template.aimTags ?? []),
     ...(template.exercises ?? []).flatMap((exercise) => [
       exercise.name,
       exercise.description,
@@ -82,6 +84,7 @@ function cloneTemplate(template: GymSessionTemplate): GymSessionTemplate {
   return {
     ...template,
     tags: [...(template.tags ?? [])],
+    aimTags: [...(template.aimTags ?? [])],
     exercises: (template.exercises ?? []).map((exercise) => ({
       ...exercise,
       tags: [...(exercise.tags ?? [])],
@@ -111,6 +114,12 @@ function buildDurationLabel(minutes: number | null) {
 
 function extractTemplateTags(sessionData: Record<string, unknown> | null | undefined) {
   const rawTags = sessionData?.tags;
+  if (!Array.isArray(rawTags)) return [] as string[];
+  return rawTags.filter((value): value is string => typeof value === "string");
+}
+
+function extractAimTags(sessionData: Record<string, unknown> | null | undefined) {
+  const rawTags = sessionData?.aim_tags;
   if (!Array.isArray(rawTags)) return [] as string[];
   return rawTags.filter((value): value is string => typeof value === "string");
 }
@@ -204,6 +213,7 @@ async function getAllGymSessionTemplates(): Promise<GymSessionTemplate[]> {
     duration: buildDurationLabel(template.duration_minutes),
     intensity: template.target_intensity ?? "",
     tags: extractTemplateTags(template.session_data),
+    aimTags: extractAimTags(template.session_data),
     type: "Gym",
     isCustom: Boolean(template.is_custom),
     isKeySession: Boolean(template.is_key_session),
@@ -670,9 +680,32 @@ export default function SessionTemplateDashboardPage() {
                               <div className="mt-2 text-xs text-zinc-500">
                                 {template.duration || "—"} · {template.intensity || "—"}
                               </div>
-                              <div className="mt-1 text-xs text-zinc-500">
-                                {(template.tags ?? []).join(", ") || "—"}
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {(template.tags ?? []).length > 0 ? (
+                                  (template.tags ?? []).map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="inline-block rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-700"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-zinc-500">—</span>
+                                )}
                               </div>
+                              {(template.aimTags ?? []).length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {(template.aimTags ?? []).map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                               <div className="mt-1 text-xs text-zinc-500">
                                 {(template.exercises ?? []).length} exercises
                               </div>
@@ -870,9 +903,32 @@ export default function SessionTemplateDashboardPage() {
                               <div className="mt-2 text-xs text-zinc-500">
                                 {template.duration || "—"} · {template.intensity || "—"}
                               </div>
-                              <div className="mt-1 text-xs text-zinc-500">
-                                {(template.tags ?? []).join(", ") || "—"}
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {(template.tags ?? []).length > 0 ? (
+                                  (template.tags ?? []).map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="inline-block rounded-full bg-zinc-200 px-2 py-0.5 text-xs text-zinc-700"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-zinc-500">—</span>
+                                )}
                               </div>
+                              {(template.aimTags ?? []).length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {(template.aimTags ?? []).map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                               <div className="mt-1 text-xs text-zinc-500">
                                 {(template.exercises ?? []).length} exercises
                               </div>

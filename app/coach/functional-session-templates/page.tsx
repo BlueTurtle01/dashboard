@@ -36,6 +36,7 @@ type FunctionalTemplateForm = {
   restSeconds: string;
   notes: string;
   tags: string;
+  aimTags: string;
 };
 
 type FieldVisibility = {
@@ -134,6 +135,7 @@ function createFormFromRow(row: FunctionalTemplateRow): FunctionalTemplateForm {
   const sessionData = row.session_data ?? {};
   const packWeightValue = sessionData["pack_weight_kg"];
   const tagValue = sessionData["tags"];
+  const aimTagValue = sessionData["aim_tags"];
 
   return {
     name: row.name ?? "",
@@ -168,6 +170,7 @@ function createFormFromRow(row: FunctionalTemplateRow): FunctionalTemplateForm {
     restSeconds: sessionData["rest_seconds"] != null ? String(sessionData["rest_seconds"]) : "",
     notes: typeof sessionData["notes"] === "string" ? sessionData["notes"] : "",
     tags: Array.isArray(tagValue) ? tagValue.join(", ") : "",
+    aimTags: Array.isArray(aimTagValue) ? aimTagValue.join(", ") : "",
   };
 }
 
@@ -207,12 +210,14 @@ function buildSessionData(form: FunctionalTemplateForm) {
     rest_seconds: parseNullableInteger(form.restSeconds),
     notes: form.notes.trim() || null,
     tags: parseTags(form.tags),
+    aim_tags: parseTags(form.aimTags),
   };
 }
 
 function buildTemplateSearchText(template: FunctionalTemplateRow) {
   const sessionData = template.session_data ?? {};
   const tags = Array.isArray(sessionData["tags"]) ? sessionData["tags"].join(" ") : "";
+  const aimTags = Array.isArray(sessionData["aim_tags"]) ? sessionData["aim_tags"].join(" ") : "";
 
   return [
     template.name,
@@ -227,6 +232,7 @@ function buildTemplateSearchText(template: FunctionalTemplateRow) {
     sessionData["time_of_day"],
     sessionData["notes"],
     tags,
+    aimTags,
   ]
     .join(" ")
     .toLowerCase();
@@ -1037,6 +1043,20 @@ export default function FunctionalSessionTemplatesPage() {
                                 updateDraftField(template.id, "tags", e.target.value)
                               }
                               placeholder="easy, trail, night"
+                            />
+                          </label>
+
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-medium text-zinc-700">
+                              Race Focus Tags
+                            </span>
+                            <input
+                              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+                              value={draft.aimTags}
+                              onChange={(e) =>
+                                updateDraftField(template.id, "aimTags", e.target.value)
+                              }
+                              placeholder="downhill, uphill, heat"
                             />
                           </label>
                         </div>
