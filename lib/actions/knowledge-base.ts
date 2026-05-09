@@ -792,7 +792,7 @@ export async function submitRaceAnswer(
 
   const { data: hasCompleted, error: completedError } = await supabase
     .from("coach_completed_races")
-    .select("race_id", { count: "exact", head: true })
+    .select("race_id")
     .eq("coach_user_id", user.id)
     .eq("race_id", question.race_id)
     .maybeSingle();
