@@ -1573,26 +1573,34 @@ export default function PlanEditorPage() {
 
     const escaped = trimmed.replace(/,/g, " ").replace(/%/g, "").replace(/\*/g, "").trim();
 
-    const { data, error } = await supabase
-      .from("session_templates")
-      .select(
-        "id, name, description, type, activity, subtype, duration_minutes, distance_km, target_intensity, session_data, is_key_session, focus_area, goal",
-      )
-      .or(
-        `name.ilike.%${escaped}%,description.ilike.%${escaped}%,type.ilike.%${escaped}%,activity.ilike.%${escaped}%,subtype.ilike.%${escaped}%,target_intensity.ilike.%${escaped}%,session_data::text.ilike.%${escaped}%`,
-      )
-      .order("name", { ascending: true })
-      .limit(10);
+    try {
+      const { data, error } = await supabase
+        .from("session_templates")
+        .select(
+          "id, name, description, type, activity, subtype, duration_minutes, distance_km, target_intensity, session_data, is_key_session, focus_area, goal",
+        )
+        .or(
+          `name.ilike.%${escaped}%,description.ilike.%${escaped}%,type.ilike.%${escaped}%,activity.ilike.%${escaped}%,subtype.ilike.%${escaped}%,target_intensity.ilike.%${escaped}%,session_data::text.ilike.%${escaped}%`,
+        )
+        .order("name", { ascending: true })
+        .limit(10);
 
-    setSearchingTemplates(false);
+      setSearchingTemplates(false);
 
-    if (error) {
+      if (error) {
+        console.error("Session template search error:", error);
+        setSessionTemplateResults([]);
+        showTemporaryStatus(`Could not search session templates: ${error.message}`, 4000);
+        return;
+      }
+
+      setSessionTemplateResults((data ?? []) as SessionTemplateRow[]);
+    } catch (err) {
+      console.error("Session template search exception:", err);
+      setSearchingTemplates(false);
       setSessionTemplateResults([]);
-      showTemporaryStatus(`Could not search session templates: ${error.message}`, 4000);
-      return;
+      showTemporaryStatus(`Error searching templates: ${err instanceof Error ? err.message : String(err)}`, 4000);
     }
-
-    setSessionTemplateResults((data ?? []) as SessionTemplateRow[]);
   }
 
   async function persistPlan(nextPlan: GeneratedPlan): Promise<void> {
