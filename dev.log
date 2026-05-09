@@ -37,3 +37,42 @@ Compaction failed: Another write batch or compaction is already active (Only a s
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
 Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+
+thread 'tokio-runtime-worker' (5784) panicked at turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:196:17:
+Failed to restore task data (corrupted database or bug): Meta for TaskId 220374)
+
+Caused by:
+    0: Looking up task storage for TaskId 220374 from database failed
+    1: Unable to open static sorted file referenced from 00000006.meta
+    2: Unable to open static sorted file 00000001.sst
+    3: Failed to open SST file C:\Users\danie\OneDrive\Documents\Coach Dashboard\Coach Dashboard\endurance-planner\.next\dev\cache/turbopack\3e37bb42\00000001.sst
+    4: The system cannot find the path specified. (os error 3)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'tokio-runtime-worker' (5568) panicked at turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:196:17:
+Failed to restore task data (corrupted database or bug): Meta for TaskId 220374)
+
+Caused by:
+    0: Looking up task storage for TaskId 220374 from database failed
+    1: Unable to open static sorted file referenced from 00000006.meta
+    2: Unable to open static sorted file 00000001.sst
+    3: Failed to open SST file C:\Users\danie\OneDrive\Documents\Coach Dashboard\Coach Dashboard\endurance-planner\.next\dev\cache/turbopack\3e37bb42\00000001.sst
+    4: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (5568) panicked at turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:196:17:
+Failed to restore task data (corrupted database or bug): Meta for TaskId 65908)
+
+Caused by:
+    0: Looking up task storage for TaskId 65908 from database failed
+    1: Unable to open static sorted file referenced from 00000059.meta
+    2: Unable to open static sorted file 00000055.sst
+    3: Failed to open SST file C:\Users\danie\OneDrive\Documents\Coach Dashboard\Coach Dashboard\endurance-planner\.next\dev\cache/turbopack\3e37bb42\00000055.sst
+    4: The system cannot find the path specified. (os error 3)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Compaction failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
