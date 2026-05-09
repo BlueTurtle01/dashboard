@@ -671,7 +671,7 @@ export async function getRaceQuestionsForAthlete(): Promise<QuestionWithAnswers[
     raceIds.add(athleteProfile.selected_event_id);
   }
   if (athleteProfile?.selected_preparation_race_ids?.length) {
-    athleteProfile.selected_preparation_race_ids.forEach((id) => raceIds.add(id));
+    athleteProfile.selected_preparation_race_ids.forEach((id: string) => raceIds.add(id));
   }
 
   if (raceIds.size === 0) {
