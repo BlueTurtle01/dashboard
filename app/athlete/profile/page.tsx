@@ -202,6 +202,7 @@ const defaultProfile: AthleteProfile = {
   blockedDates: [],
   eventType: "",
   selectedEventId: "",
+  eventLocked: false,
   raceGoal: "finish",
   baselineFitness: "beginner",
   currentTrainingDaysPerWeek: 0,
@@ -1206,6 +1207,12 @@ function AthleteProfileContent() {
           )}
           <h2 className="text-xl font-semibold">Event</h2>
 
+          {profile.eventLocked && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm text-amber-900">🔒 Your coach has locked this event. Contact them to change it.</p>
+            </div>
+          )}
+
           <div className="mt-4 space-y-3">
             <div>
               <label className="mb-3 block text-sm font-medium text-zinc-700">Search for races</label>
@@ -1217,8 +1224,8 @@ function AthleteProfileContent() {
                   setEventSearchQuery(e.target.value);
                   searchEvents(e.target.value);
                 }}
-                disabled={isSoloPlanHolder}
-                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
+                disabled={isSoloPlanHolder || profile.eventLocked}
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm ${isSoloPlanHolder || profile.eventLocked ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
               />
             </div>
             {eventSearchResults.length > 0 && (
@@ -1228,7 +1235,7 @@ function AthleteProfileContent() {
                     key={event.id}
                     type="button"
                     onClick={() => selectEvent(event)}
-                    disabled={isSoloPlanHolder}
+                    disabled={isSoloPlanHolder || profile.eventLocked}
                     className="w-full text-left px-4 py-2 hover:bg-zinc-100 border-b border-zinc-200 last:border-b-0 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="font-medium">{event.name}</div>

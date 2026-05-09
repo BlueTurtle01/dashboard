@@ -51,18 +51,34 @@ export default function RaceSummaryPage() {
           return;
         }
 
-        // Fetch athlete's active plan
-        const { data: planData, error: planError } = await supabase
-          .from("athlete_plans")
-          .select("id, plan_json, event_id")
-          .eq("athlete_user_id", user.id)
-          .eq("status", "active")
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        // Fetch athlete's active plan and profile
+        const [planResult, profileResult] = await Promise.all([
+          supabase
+            .from("athlete_plans")
+            .select("id, plan_json, event_id")
+            .eq("athlete_user_id", user.id)
+            .eq("status", "active")
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from("athlete_profiles")
+            .select("selected_event_id")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+        ]);
+
+        const { data: planData, error: planError } = planResult;
+        const { data: profileData, error: profileError } = profileResult;
 
         if (planError) {
           setError("Failed to load plan");
+          setLoading(false);
+          return;
+        }
+
+        if (profileError) {
+          setError("Failed to load profile");
           setLoading(false);
           return;
         }
@@ -109,13 +125,21 @@ export default function RaceSummaryPage() {
         }
         setTemplateMap(templates);
 
-        // Get race ID from athlete_plans event_id column
-        const raceId = planData.event_id;
+        // Get race ID from athlete's selected_event_id (current goal) or fallback to plan's event_id
+        const raceId = profileData?.selected_event_id || planData.event_id;
 
         if (!raceId) {
-          setError("Plan does not have a race assigned");
+          setError("No race assigned");
           setLoading(false);
           return;
+        }
+
+        // Sync athlete_plans.event_id to match the current selected_event_id
+        if (profileData?.selected_event_id && planData.event_id !== profileData.selected_event_id) {
+          await supabase
+            .from("athlete_plans")
+            .update({ event_id: profileData.selected_event_id })
+            .eq("id", planData.id);
         }
 
         // Fetch race details - try without eq filter first to debug

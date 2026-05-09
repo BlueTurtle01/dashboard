@@ -24,6 +24,7 @@ export type AthleteProfile = {
   blockedDates: string[];
   eventType?: string;
   selectedEventId: string;
+  eventLocked?: boolean;
   raceGoal?: string;
   baselineFitness?: string;
   currentTrainingDaysPerWeek?: number;
@@ -57,6 +58,7 @@ type AthleteProfileRow = {
   temp_user_key: string | null;
   blocked_dates: string[] | null;
   selected_event_id: string | null;
+  event_locked: boolean | null;
   race_goal: string | null;
   baseline_fitness: string | null;
   current_training_days_per_week: number | null;
@@ -118,6 +120,7 @@ function mapRowToProfile(
     equipmentAvoid,
     blockedDates: row.blocked_dates ?? [],
     selectedEventId: row.selected_event_id ?? "",
+    eventLocked: row.event_locked ?? false,
     raceGoal: row.race_goal ?? "finish",
     baselineFitness: row.baseline_fitness ?? "beginner",
     currentTrainingDaysPerWeek: row.current_training_days_per_week ?? 0,
@@ -197,6 +200,7 @@ export async function loadAthleteProfile(): Promise<AthleteProfile | null> {
       temp_user_key,
       blocked_dates,
       selected_event_id,
+      event_locked,
       race_goal,
       baseline_fitness,
       current_training_days_per_week,

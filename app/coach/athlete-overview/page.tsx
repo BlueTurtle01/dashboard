@@ -28,6 +28,7 @@ type AthleteProfile = {
   event_type: string;
   event_profile: unknown;
   selected_event_id: string | null;
+  event_locked: boolean | null;
   tags?: string[];
   equipment_unavailable?: string[];
   equipment_avoid?: string[];
@@ -446,6 +447,7 @@ function CoachAthleteOverviewPageContent() {
         .from("athlete_profiles")
         .select(`
           *,
+          event_locked,
           event:races!athlete_profiles_selected_event_id_fkey (
             id,
             name,
@@ -1105,6 +1107,30 @@ function CoachAthleteOverviewPageContent() {
     }
   };
 
+  const toggleEventLocked = async () => {
+    if (!profile) return;
+
+    try {
+      const newLockedState = !profile.event_locked;
+      const { error } = await supabase
+        .from("athlete_profiles")
+        .update({ event_locked: newLockedState })
+        .eq("id", profile.id);
+
+      if (error) {
+        console.error("Failed to update event lock state:", error);
+        return;
+      }
+
+      setProfile({
+        ...profile,
+        event_locked: newLockedState,
+      });
+    } catch (err) {
+      console.error("Error toggling event lock:", err);
+    }
+  };
+
   function calculatePlanWarnings(plan: AthletePlanSummary | null) {
     if (!plan || typeof plan.plan_json !== "object" || !plan.plan_json) {
       setPlanWarnings([]);
@@ -1521,7 +1547,19 @@ function CoachAthleteOverviewPageContent() {
               </div>
 
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-                <h2 className="text-lg font-semibold text-zinc-900">Event Details</h2>
+                <div className="flex items-start justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-zinc-900">Event Details</h2>
+                  <button
+                    onClick={toggleEventLocked}
+                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      profile?.event_locked
+                        ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                        : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                    }`}
+                  >
+                    {profile?.event_locked ? "🔒 Locked" : "🔓 Unlocked"}
+                  </button>
+                </div>
                 <dl className="mt-5 space-y-4">
                   <div>
                     <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Selected event</dt>
