@@ -122,9 +122,7 @@ export default function RaceSummaryPage() {
         const { data: races, error: raceError } = await supabase
           .from("races")
           .select("id, name, location, distance_km")
-          .eq("id", raceId)
-          .limit(1)
-          .single();
+          .eq("id", raceId);
 
         if (raceError) {
           setError("Failed to load race details");
@@ -132,7 +130,14 @@ export default function RaceSummaryPage() {
           return;
         }
 
-        setRaceData(races);
+        const raceRecord = Array.isArray(races) ? races[0] : races;
+        if (!raceRecord) {
+          setError("Race not found");
+          setLoading(false);
+          return;
+        }
+
+        setRaceData(raceRecord);
 
         // Fetch race segment tags
         const { data: segmentTags, error: segmentsError } = await supabase
