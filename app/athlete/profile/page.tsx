@@ -19,14 +19,12 @@ const supabase = createClient();
 type EventOption = {
   id: string;
   name: string;
-  event_date: string | null;
   distance_km: number | null;
-  elevation_gain_m: number | null;
   location: string | null;
-  event_type?: string | null;
-  terrain_type?: string | null;
-  climate_type?: string | null;
-  race_conditions?: any | null;
+  event_type: string | null;
+  terrain_type: string | null;
+  climate_type: string | null;
+  race_conditions: any | null;
 };
 
 type LookupOption = {
@@ -341,7 +339,7 @@ function AthleteProfileContent() {
             .order("sort_order"),
           supabase
             .from("races")
-            .select("id, name, event_date, distance_km, elevation_gain_m, location, races_meta(meta_key, meta_value)")
+            .select("id, name, distance_km, location, event_type, terrain_type, climate_type, race_conditions")
             .order("name"),
           supabase
             .from("preparation_races")
@@ -387,28 +385,7 @@ function AthleteProfileContent() {
 
         if (cancelled) return;
 
-        const rawEvents = (eventsResponse.data ?? []) as any[];
-        const enrichedEvents: EventOption[] = rawEvents.map((race: any) => {
-          const metadata = race.races_meta || [];
-          const metaMap = new Map(metadata.map((m: any) => [m.meta_key, m.meta_value]));
-
-          const eventType = metaMap.get("event_type");
-          const terrainType = metaMap.get("terrain_type");
-          const climateType = metaMap.get("climate");
-
-          return {
-            id: race.id,
-            name: race.name,
-            event_date: race.event_date,
-            distance_km: race.distance_km,
-            elevation_gain_m: race.elevation_gain_m,
-            location: race.location,
-            event_type: eventType ? String(eventType) : null,
-            terrain_type: terrainType ? String(terrainType) : null,
-            climate_type: climateType ? String(climateType) : null,
-            race_conditions: metaMap.has("race_conditions") ? JSON.parse(String(metaMap.get("race_conditions") || "{}")) : null,
-          };
-        });
+        const loadedEvents = (eventsResponse.data ?? []) as EventOption[];
 
         const loadedPrepRaces = (preparationRacesResponse.data ?? []) as PrepRaceOption[];
 
@@ -418,7 +395,7 @@ function AthleteProfileContent() {
             .filter((slug): slug is string => Boolean(slug) && slug !== "bodyweight"),
         );
 
-        setEventOptions(enrichedEvents);
+        setEventOptions(loadedEvents);
         setPreparationRaceOptions(loadedPrepRaces);
         const loadedHolidayEvents = (holidayEventsResponse.data ?? []) as any;
         setHolidayEvents(loadedHolidayEvents);
@@ -456,7 +433,7 @@ function AthleteProfileContent() {
             "";
 
           const matchedEvent =
-            enrichedEvents.find((event) => event.id === selectedEventId) ?? null;
+            loadedEvents.find((event) => event.id === selectedEventId) ?? null;
 
           setProfile({
             ...defaultProfile,
@@ -793,32 +770,16 @@ function AthleteProfileContent() {
     try {
       const { data, error } = await supabase
         .from("races")
-        .select("id, name, event_date, distance_km, elevation_gain_m, location, races_meta(meta_key, meta_value)")
+        .select("id, name, distance_km, location, event_type, terrain_type, climate_type, race_conditions")
         .ilike("name", `%${query}%`)
-        .order("event_date")
+        .order("name")
         .limit(10);
 
       if (error) {
         console.error("Failed to search races:", error);
         setEventSearchResults([]);
       } else {
-        const enrichedData = (data ?? []).map((race: any) => {
-          const metadata = race.races_meta || [];
-          const metaMap = new Map(metadata.map((m: any) => [m.meta_key, m.meta_value]));
-
-          const eventType = metaMap.get("event_type");
-          const terrainType = metaMap.get("terrain_type");
-          const climateType = metaMap.get("climate");
-
-          return {
-            ...race,
-            event_type: eventType ? String(eventType) : null,
-            terrain_type: terrainType ? String(terrainType) : null,
-            climate_type: climateType ? String(climateType) : null,
-            race_conditions: metaMap.has("race_conditions") ? JSON.parse(String(metaMap.get("race_conditions") || "{}")) : null,
-          };
-        });
-        setEventSearchResults(enrichedData);
+        setEventSearchResults((data ?? []) as EventOption[]);
       }
     } catch (err) {
       console.error("Error searching races:", err);
@@ -1272,10 +1233,7 @@ function AthleteProfileContent() {
                   >
                     <div className="font-medium">{event.name}</div>
                     <div className="text-xs text-zinc-500">
-                      {event.event_date
-                        ? new Date(event.event_date).toLocaleDateString("en-GB")
-                        : "Date TBC"}{" "}
-                      {event.distance_km && `• ${event.distance_km}km`}
+                      {event.distance_km && `${event.distance_km}km`}
                     </div>
                   </button>
                 ))}
@@ -1288,7 +1246,6 @@ function AthleteProfileContent() {
               {selectedEvent.event_type && (
                 <div><span className="font-medium">Type:</span> {selectedEvent.event_type}</div>
               )}
-              <div><span className="font-medium">Date:</span> {selectedEvent.event_date ? new Date(selectedEvent.event_date).toLocaleDateString("en-GB") : "TBC"}</div>
               {selectedEvent.terrain_type && (
                 <div><span className="font-medium">Terrain:</span> {selectedEvent.terrain_type}</div>
               )}
@@ -1297,9 +1254,6 @@ function AthleteProfileContent() {
               )}
               {selectedEvent.distance_km && (
                 <div><span className="font-medium">Distance:</span> {selectedEvent.distance_km} km</div>
-              )}
-              {selectedEvent.elevation_gain_m && (
-                <div><span className="font-medium">Elevation Gain:</span> {selectedEvent.elevation_gain_m} m</div>
               )}
               {selectedEvent.location && (
                 <div><span className="font-medium">Location:</span> {selectedEvent.location}</div>
