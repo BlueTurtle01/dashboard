@@ -50,7 +50,7 @@ export default function AthleteRaceKbClient() {
       const raceIds = new Set<string>();
       if (profile?.selected_event_id) raceIds.add(profile.selected_event_id);
       if (profile?.selected_preparation_race_ids?.length) {
-        profile.selected_preparation_race_ids.forEach((id) => raceIds.add(id));
+        profile.selected_preparation_race_ids.forEach((id: string) => raceIds.add(id));
       }
 
       if (raceIds.size > 0) {
