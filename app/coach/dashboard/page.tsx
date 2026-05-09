@@ -231,7 +231,7 @@ function CoachDashboardContent() {
             selected_event_id,
             created_at,
             tags,
-            event:events!athlete_profiles_selected_event_id_fkey (
+            event:races!athlete_profiles_selected_event_id_fkey (
               id,
               name
             )

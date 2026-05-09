@@ -86,7 +86,7 @@ export async function requestMentorship(coachUserId: string) {
     // Get athlete profile for notification
     const { data: athleteProfile } = await supabase
       .from("athlete_profiles")
-      .select("full_name, date_of_birth, tags, selected_event_id, events!athlete_profiles_selected_event_id_fkey(id, name)")
+      .select("full_name, date_of_birth, tags, selected_event_id, races!athlete_profiles_selected_event_id_fkey(id, name)")
       .eq("user_id", user.id)
       .maybeSingle();
 

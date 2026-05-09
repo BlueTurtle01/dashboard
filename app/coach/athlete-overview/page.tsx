@@ -34,7 +34,6 @@ type AthleteProfile = {
   event: {
     id: string;
     name: string;
-    event_date: string | null;
     race_conditions?: any;
   } | null;
   completedTabs?: string[];
@@ -447,10 +446,9 @@ function CoachAthleteOverviewPageContent() {
         .from("athlete_profiles")
         .select(`
           *,
-          event:events!athlete_profiles_selected_event_id_fkey (
+          event:races!athlete_profiles_selected_event_id_fkey (
             id,
             name,
-            event_date,
             race_conditions
           )
         `)

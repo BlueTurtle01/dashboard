@@ -10,7 +10,7 @@ interface AthleteProfile {
   date_of_birth: string | null;
   tags?: string[];
   selected_event_id: string | null;
-  events?: {
+  races?: {
     id: string;
     name: string;
   }[] | null;
@@ -49,7 +49,7 @@ export default function MentorshipRequestNotification({
           date_of_birth,
           tags,
           selected_event_id,
-          events!athlete_profiles_selected_event_id_fkey(id, name)
+          races!athlete_profiles_selected_event_id_fkey(id, name)
         `
         )
         .eq("user_id", notification.athlete_id)
@@ -96,7 +96,7 @@ export default function MentorshipRequestNotification({
     }
   };
 
-  const eventName = athleteProfile?.events?.[0]?.name ?? null;
+  const eventName = athleteProfile?.races?.[0]?.name ?? null;
 
   return (
     <div

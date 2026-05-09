@@ -118,26 +118,33 @@ export default function RaceSummaryPage() {
           return;
         }
 
-        // Fetch race details
+        // Fetch race details - try without eq filter first to debug
         const { data: races, error: raceError } = await supabase
           .from("races")
-          .select("id, name, location, distance_km")
-          .eq("id", raceId);
+          .select("*")
+          .match({ id: raceId });
 
         if (raceError) {
-          setError("Failed to load race details");
+          console.error("Race fetch error:", raceError);
+          setError(`Failed to load race details: ${raceError.message}`);
           setLoading(false);
           return;
         }
 
         const raceRecord = Array.isArray(races) ? races[0] : races;
         if (!raceRecord) {
-          setError("Race not found");
+          console.error("No race found with id:", raceId);
+          setError(`Race with ID ${raceId} not found. The plan may reference a race that has been deleted.`);
           setLoading(false);
           return;
         }
 
-        setRaceData(raceRecord);
+        setRaceData({
+          id: raceRecord.id,
+          name: raceRecord.name,
+          location: raceRecord.location,
+          distance_km: raceRecord.distance_km,
+        });
 
         // Fetch race segment tags
         const { data: segmentTags, error: segmentsError } = await supabase
