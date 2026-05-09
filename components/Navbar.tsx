@@ -220,6 +220,7 @@ export default async function Navbar() {
                   label="My Plan"
                   items={[
                     { href: "/athlete", label: "Plan" },
+                    { href: "/athlete/race-summary", label: "Race Summary" },
                     { href: "/athlete/sessions", label: "Sessions" },
                     ...(isSoloPlanHolder ? [] : [{ href: "/athlete/log", label: "Log" }]),
                   ]}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useParams, useRouter } from "next/navigation";
+import { SEGMENT_TRAINING_FOCUS_TAGS } from "@/lib/constants/race-segment-tags";
 
 type ExerciseSearchRow = {
   id: string;
@@ -47,12 +48,6 @@ function buildClientId(prefix: string) {
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-
-const RACE_FOCUS_TAGS = [
-  "downhill", "uphill", "technical-terrain", "pack-carry", "long-distance",
-  "flat-course", "heat", "altitude", "run-economy", "injury-prevention",
-  "race-simulation", "multi-stage", "speed-endurance", "power-output", "recovery",
-];
 
 function extractAimTags(sessionData: Record<string, unknown> | null | undefined) {
   const rawTags = sessionData?.aim_tags;
@@ -592,7 +587,7 @@ export default function EditGymSessionTemplatePage() {
                   {/* Suggestions */}
                   {(() => {
                     const q = aimTagSearch.trim().toLowerCase();
-                    const suggestions = RACE_FOCUS_TAGS.filter(
+                    const suggestions = SEGMENT_TRAINING_FOCUS_TAGS.filter(
                       (t) => (!q || t.includes(q)) && !aimTags.includes(t)
                     ).slice(0, 12);
                     if (suggestions.length === 0) return null;

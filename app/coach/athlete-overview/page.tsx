@@ -76,6 +76,12 @@ type AthleteEvent = {
   equipment_unavailable?: string[];
 };
 
+type SegmentTag = {
+  tag: string;
+  start_km: number;
+  end_km: number;
+};
+
 type TrainingCamp = {
   id: string;
   title: string;
@@ -275,6 +281,9 @@ function CoachAthleteOverviewPageContent() {
   const [athletesError, setAthletesError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [planError, setPlanError] = useState("");
+  const [raceSegmentTags, setRaceSegmentTags] = useState<SegmentTag[]>([]);
+  const [loadingRaceSegmentTags, setLoadingRaceSegmentTags] = useState(false);
+  const [raceSegmentTagsError, setRaceSegmentTagsError] = useState("");
   const [activeTab, setActiveTab] = useState<"summary" | "profile" | "health" | "dates" | "plans" | "warnings" | "activity">("summary");
   const [stravaActivities, setStravaActivities] = useState<any[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
@@ -657,6 +666,62 @@ function CoachAthleteOverviewPageContent() {
       cancelled = true;
     };
   }, [selectedAthleteId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRaceSegmentTags() {
+      if (!latestPlan?.plan_json) {
+        setRaceSegmentTags([]);
+        return;
+      }
+
+      setLoadingRaceSegmentTags(true);
+      setRaceSegmentTagsError("");
+
+      try {
+        const planData = latestPlan.plan_json as any;
+        const raceId = planData?.eventId || planData?.race_id || planData?.goalRaceId;
+
+        if (!raceId) {
+          setRaceSegmentTags([]);
+          setLoadingRaceSegmentTags(false);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("race_segment_tags")
+          .select("tag, start_km, end_km")
+          .eq("race_id", raceId)
+          .order("start_km", { ascending: true });
+
+        if (cancelled) return;
+
+        if (error) {
+          setRaceSegmentTagsError(error.message);
+          setRaceSegmentTags([]);
+        } else {
+          setRaceSegmentTags((data ?? []) as SegmentTag[]);
+          setRaceSegmentTagsError("");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setRaceSegmentTagsError(err instanceof Error ? err.message : "Failed to load race segment tags");
+          setRaceSegmentTags([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingRaceSegmentTags(false);
+        }
+      }
+    }
+
+    void loadRaceSegmentTags();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [latestPlan?.plan_json]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1790,6 +1855,39 @@ function CoachAthleteOverviewPageContent() {
                   </div>
                 )}
               </div>
+
+              {/* Race Segment Tags */}
+              {raceSegmentTags.length > 0 && (
+                <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                  <h2 className="text-lg font-semibold text-zinc-900">Race Segment Training Focus</h2>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Training focus tags for elevation segments in the athlete's goal race. Use these to select gym and functional sessions that target the specific demands of each race segment.
+                  </p>
+
+                  <div className="mt-6 space-y-3">
+                    {raceSegmentTags.map((segment, index) => (
+                      <div key={index} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-zinc-900">
+                              km {segment.start_km}–{segment.end_km}
+                            </div>
+                          </div>
+                          <span className="inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-900">
+                            {segment.tag}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {raceSegmentTagsError && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                      Could not load race segment tags: {raceSegmentTagsError}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Clear Calendar Confirmation Modal */}
               {showClearConfirm && (

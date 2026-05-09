@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { SEGMENT_TRAINING_FOCUS_TAGS } from "@/lib/constants/race-segment-tags";
 
 type FunctionalTemplateRow = {
   id: string;
@@ -123,12 +124,6 @@ const SUGGESTED_TAGS = [
   "intervals", "legs", "low-impact", "lower-body", "mobility",
   "pack-carry", "posterior-chain", "recovery", "stability",
   "strength", "upper-body", "heat", "night", "trail", "sand",
-];
-
-const RACE_FOCUS_TAGS = [
-  "downhill", "uphill", "technical-terrain", "pack-carry", "long-distance",
-  "flat-course", "heat", "altitude", "run-economy", "injury-prevention",
-  "race-simulation", "multi-stage", "speed-endurance", "power-output", "recovery",
 ];
 
 const terrainOptions = [
@@ -1360,7 +1355,7 @@ const generatedNamePreview = useMemo(() => {
                 {/* Suggestions */}
                 {(() => {
                   const q = aimTagSearch.trim().toLowerCase();
-                  const suggestions = RACE_FOCUS_TAGS.filter(
+                  const suggestions = SEGMENT_TRAINING_FOCUS_TAGS.filter(
                     (t) => (!q || t.includes(q)) && !form.aimTags.includes(t)
                   ).slice(0, 12);
                   if (suggestions.length === 0) return null;

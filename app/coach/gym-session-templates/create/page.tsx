@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { SEGMENT_TRAINING_FOCUS_TAGS } from "@/lib/constants/race-segment-tags";
 
 type ExerciseSearchRow = {
   id: string;
@@ -92,12 +93,6 @@ const goalOptions = [
 ];
 
 const difficultyOptions = ["Beginner", "Intermediate", "Advanced"];
-
-const RACE_FOCUS_TAGS = [
-  "downhill", "uphill", "technical-terrain", "pack-carry", "long-distance",
-  "flat-course", "heat", "altitude", "run-economy", "injury-prevention",
-  "race-simulation", "multi-stage", "speed-endurance", "power-output", "recovery",
-];
 
 const GYM_EQUIPMENT = new Set(["machine", "cable"]);
 
@@ -689,7 +684,7 @@ export default function NewGymSessionTemplatePage() {
                   {/* Suggestions */}
                   {(() => {
                     const q = aimTagSearch.trim().toLowerCase();
-                    const suggestions = RACE_FOCUS_TAGS.filter(
+                    const suggestions = SEGMENT_TRAINING_FOCUS_TAGS.filter(
                       (t) => (!q || t.includes(q)) && !aimTags.includes(t)
                     ).slice(0, 12);
                     if (suggestions.length === 0) return null;
