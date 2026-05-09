@@ -5,6 +5,8 @@ import {
   getFaqQuestionsForAdmin,
   getFlaggedQuestions,
   getQuestionsForCoach,
+  getRaceQuestionsForAthlete,
+  getRaceQuestionsForCoach,
 } from "@/lib/actions/knowledge-base";
 import KnowledgeBaseClient from "./KnowledgeBaseClient";
 
@@ -37,14 +39,24 @@ export default async function KnowledgeBasePage() {
     roles.includes("solo_plan_holder") ||
     hasPermission("athlete_knowledge_base");
 
+  const canViewRaceKb = canViewAthleteKb || canViewCoachKb;
+
   if (!canViewAthleteKb && !canViewCoachKb && !canViewAdminKb) {
     redirect("/support");
   }
 
-  const [initialCoachQuestions, initialFlaggedQuestions, initialFaqQuestions] = await Promise.all([
+  const [
+    initialCoachQuestions,
+    initialFlaggedQuestions,
+    initialFaqQuestions,
+    initialAthleteRaceQuestions,
+    initialCoachRaceQuestions,
+  ] = await Promise.all([
     canViewCoachKb ? getQuestionsForCoach() : Promise.resolve([]),
     canViewAdminKb ? getFlaggedQuestions() : Promise.resolve([]),
     canViewAdminKb ? getFaqQuestionsForAdmin() : Promise.resolve([]),
+    canViewRaceKb && canViewAthleteKb ? getRaceQuestionsForAthlete() : Promise.resolve([]),
+    canViewRaceKb && canViewCoachKb ? getRaceQuestionsForCoach() : Promise.resolve([]),
   ]);
 
   return (
@@ -52,9 +64,12 @@ export default async function KnowledgeBasePage() {
       canViewAthleteKb={canViewAthleteKb}
       canViewCoachKb={canViewCoachKb}
       canViewAdminKb={canViewAdminKb}
+      canViewRaceKb={canViewRaceKb}
       initialCoachQuestions={initialCoachQuestions}
       initialFlaggedQuestions={initialFlaggedQuestions}
       initialFaqQuestions={initialFaqQuestions}
+      initialAthleteRaceQuestions={initialAthleteRaceQuestions}
+      initialCoachRaceQuestions={initialCoachRaceQuestions}
     />
   );
 }

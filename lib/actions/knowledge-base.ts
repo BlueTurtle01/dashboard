@@ -3,7 +3,7 @@
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
-export type KbQuestionType = "community" | "faq";
+export type KbQuestionType = "community" | "faq" | "race";
 export type KbQuestionAudience = "athlete" | "coach";
 
 export type KbQuestion = {
@@ -15,6 +15,7 @@ export type KbQuestion = {
   submitted_by: string;
   submitted_by_name: string;
   created_at: string;
+  race_id?: string | null;
 };
 
 export type KbAnswer = {
@@ -619,4 +620,248 @@ export async function getFlaggedQuestionsCount(): Promise<number> {
 
   if (error) throw new Error(error.message);
   return count ?? 0;
+}
+
+export async function submitRaceQuestion(
+  title: string,
+  body: string,
+  raceId: string
+): Promise<{ error?: string; questionId?: string }> {
+  const { supabase, user } = await requireAuth();
+
+  const displayName = getUserDisplayName(user);
+  const questionTitle = title.trim();
+  const questionBody = body.trim() || questionTitle;
+
+  if (!questionTitle || !raceId) {
+    return { error: "Please provide a question title and select a race" };
+  }
+
+  const { data, error } = await supabase
+    .from("kb_questions")
+    .insert({
+      title: questionTitle,
+      body: questionBody,
+      type: "race",
+      audience: "athlete",
+      submitted_by: user.id,
+      submitted_by_name: displayName,
+      race_id: raceId,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+  return { questionId: data?.id };
+}
+
+export async function getRaceQuestionsForAthlete(): Promise<QuestionWithAnswers[]> {
+  const { supabase, user } = await requireAuth();
+
+  const { data: athleteProfile, error: profileError } = await supabase
+    .from("athlete_profiles")
+    .select("selected_event_id, selected_preparation_race_ids")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (profileError) throw new Error(profileError.message);
+
+  const raceIds = new Set<string>();
+  if (athleteProfile?.selected_event_id) {
+    raceIds.add(athleteProfile.selected_event_id);
+  }
+  if (athleteProfile?.selected_preparation_race_ids?.length) {
+    athleteProfile.selected_preparation_race_ids.forEach((id) => raceIds.add(id));
+  }
+
+  if (raceIds.size === 0) {
+    return [];
+  }
+
+  const { data: questions, error } = await supabase
+    .from("kb_questions")
+    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at, race_id")
+    .eq("type", "race")
+    .in("race_id", Array.from(raceIds))
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  const questionIds = (questions ?? []).map((q) => q.id);
+
+  let answersData: KbAnswer[] = [];
+  if (questionIds.length > 0) {
+    const { data, error: answersError } = await supabase
+      .from("kb_answers")
+      .select("id, question_id, body, submitted_by, submitted_by_name, created_at")
+      .in("question_id", questionIds)
+      .order("created_at");
+
+    if (answersError) throw new Error(answersError.message);
+    answersData = data ?? [];
+  }
+
+  const answersByQuestionId = new Map<string, KbAnswer[]>();
+  for (const answer of answersData) {
+    const arr = answersByQuestionId.get(answer.question_id) ?? [];
+    arr.push(answer);
+    answersByQuestionId.set(answer.question_id, arr);
+  }
+
+  return (questions ?? []).map((q) => ({
+    ...q,
+    answers: answersByQuestionId.get(q.id) ?? [],
+    answer_count: (answersByQuestionId.get(q.id) ?? []).length,
+  }));
+}
+
+export async function getRaceQuestionsForCoach(): Promise<QuestionWithAnswers[]> {
+  const { supabase } = await requireCoachKnowledgeBaseAccess();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not authenticated");
+
+  const { data: coachRaces, error: racesError } = await supabase
+    .from("coach_completed_races")
+    .select("race_id")
+    .eq("coach_user_id", user.id);
+
+  if (racesError) throw new Error(racesError.message);
+
+  const raceIds = (coachRaces ?? []).map((r) => r.race_id);
+
+  if (raceIds.length === 0) {
+    return [];
+  }
+
+  const { data: questions, error } = await supabase
+    .from("kb_questions")
+    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at, race_id")
+    .eq("type", "race")
+    .in("race_id", raceIds)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  const questionIds = (questions ?? []).map((q) => q.id);
+
+  let answersData: KbAnswer[] = [];
+  if (questionIds.length > 0) {
+    const { data, error: answersError } = await supabase
+      .from("kb_answers")
+      .select("id, question_id, body, submitted_by, submitted_by_name, created_at")
+      .in("question_id", questionIds)
+      .order("created_at");
+
+    if (answersError) throw new Error(answersError.message);
+    answersData = data ?? [];
+  }
+
+  const answersByQuestionId = new Map<string, KbAnswer[]>();
+  for (const answer of answersData) {
+    const arr = answersByQuestionId.get(answer.question_id) ?? [];
+    arr.push(answer);
+    answersByQuestionId.set(answer.question_id, arr);
+  }
+
+  return (questions ?? []).map((q) => ({
+    ...q,
+    answers: answersByQuestionId.get(q.id) ?? [],
+    answer_count: (answersByQuestionId.get(q.id) ?? []).length,
+  }));
+}
+
+export async function submitRaceAnswer(
+  questionId: string,
+  body: string
+): Promise<{ error?: string }> {
+  const { supabase, user } = await requireCoach();
+
+  const { data: question, error: questionError } = await supabase
+    .from("kb_questions")
+    .select("race_id")
+    .eq("id", questionId)
+    .eq("type", "race")
+    .maybeSingle();
+
+  if (questionError) return { error: questionError.message };
+  if (!question) return { error: "Question not found or is not a race question" };
+  if (!question.race_id) return { error: "Question has no race associated" };
+
+  const { data: hasCompleted, error: completedError } = await supabase
+    .from("coach_completed_races")
+    .select("race_id", { count: "exact", head: true })
+    .eq("coach_user_id", user.id)
+    .eq("race_id", question.race_id)
+    .maybeSingle();
+
+  if (completedError) return { error: completedError.message };
+  if (!hasCompleted) {
+    return { error: "You can only answer questions about races you have completed" };
+  }
+
+  const answerCount = await supabase
+    .from("kb_answers")
+    .select("id", { count: "exact", head: true })
+    .eq("question_id", questionId);
+
+  if ((answerCount.count ?? 0) >= 3) {
+    return { error: "Maximum 3 answers per question reached" };
+  }
+
+  const hasAnswered = await supabase
+    .from("kb_answers")
+    .select("id", { count: "exact", head: true })
+    .eq("question_id", questionId)
+    .eq("submitted_by", user.id);
+
+  if ((hasAnswered.count ?? 0) > 0) {
+    return { error: "You have already answered this question" };
+  }
+
+  const { data: coachProfile } = await supabase
+    .from("coach_profiles")
+    .select("first_name")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  let coachDisplayName = "Coach";
+  if (coachProfile?.first_name) {
+    coachDisplayName = `Coach ${coachProfile.first_name}`;
+  } else {
+    const displayName = getUserDisplayName(user);
+    coachDisplayName = formatCoachName(displayName);
+  }
+
+  const isFirstAnswer = (answerCount.count ?? 0) === 0;
+
+  const { error } = await supabase.from("kb_answers").insert({
+    question_id: questionId,
+    body: body.trim(),
+    submitted_by: user.id,
+    submitted_by_name: coachDisplayName,
+  });
+
+  if (error) return { error: error.message };
+
+  if (isFirstAnswer) {
+    const { data: questionData } = await supabase
+      .from("kb_questions")
+      .select("submitted_by")
+      .eq("id", questionId)
+      .single();
+
+    if (questionData?.submitted_by) {
+      const notifyError = await supabase.from("kb_answer_notifications").insert({
+        question_id: questionId,
+        athlete_user_id: questionData.submitted_by,
+        read: false,
+      });
+
+      if (notifyError.error) {
+        return { error: `Answer posted but notification failed: ${notifyError.error.message}` };
+      }
+    }
+  }
+
+  return {};
 }

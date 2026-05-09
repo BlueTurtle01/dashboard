@@ -5,34 +5,43 @@ import { useSearchParams } from "next/navigation";
 import AdminKbClient from "./AdminKbClient";
 import CoachKbClient from "./CoachKbClient";
 import AthleteKnowledgeBase from "./AthleteKbClient";
+import AthleteRaceKbClient from "./AthleteRaceKbClient";
+import CoachRaceKbClient from "./CoachRaceKbClient";
 import { TutorialProvider } from "@/lib/context/TutorialContext";
 import type {
   FlaggedQuestionWithDetails,
   QuestionWithAnswers,
 } from "@/lib/actions/knowledge-base";
 
-type KnowledgeBaseTab = "athlete" | "coach" | "admin";
+type KnowledgeBaseTab = "athlete" | "coach" | "admin" | "race";
 
 type KnowledgeBaseClientProps = {
   canViewAthleteKb: boolean;
   canViewCoachKb: boolean;
   canViewAdminKb: boolean;
+  canViewRaceKb: boolean;
   initialCoachQuestions: QuestionWithAnswers[];
   initialFlaggedQuestions: FlaggedQuestionWithDetails[];
   initialFaqQuestions: QuestionWithAnswers[];
+  initialAthleteRaceQuestions: QuestionWithAnswers[];
+  initialCoachRaceQuestions: QuestionWithAnswers[];
 };
 
 function KnowledgeBaseClientContent({
   canViewAthleteKb,
   canViewCoachKb,
   canViewAdminKb,
+  canViewRaceKb,
   initialCoachQuestions,
   initialFlaggedQuestions,
   initialFaqQuestions,
+  initialAthleteRaceQuestions,
+  initialCoachRaceQuestions,
 }: KnowledgeBaseClientProps) {
   const tabs = [
     canViewAthleteKb ? { key: "athlete" as const, label: "Athletes" } : null,
     canViewCoachKb ? { key: "coach" as const, label: "Coaches" } : null,
+    canViewRaceKb ? { key: "race" as const, label: "Race Questions" } : null,
     canViewAdminKb ? { key: "admin" as const, label: "Admin" } : null,
   ].filter((tab): tab is { key: KnowledgeBaseTab; label: string } => Boolean(tab));
 
@@ -79,6 +88,12 @@ function KnowledgeBaseClientContent({
       {activeTab === "athlete" && canViewAthleteKb && <AthleteKnowledgeBase />}
       {activeTab === "coach" && canViewCoachKb && (
         <CoachKbClient initialQuestions={initialCoachQuestions} />
+      )}
+      {activeTab === "race" && canViewRaceKb && canViewAthleteKb && (
+        <AthleteRaceKbClient />
+      )}
+      {activeTab === "race" && canViewRaceKb && canViewCoachKb && !canViewAthleteKb && (
+        <CoachRaceKbClient />
       )}
       {activeTab === "admin" && canViewAdminKb && (
         <AdminKbClient

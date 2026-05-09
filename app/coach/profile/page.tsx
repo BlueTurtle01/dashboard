@@ -69,9 +69,22 @@ type EventRow = {
   event_date: string | null;
 };
 
+type RaceRow = {
+  id: string;
+  name: string;
+  distance_km: number | null;
+  terrain_type: string | null;
+  climate_type: string | null;
+};
+
 type CoachCompletedEventRow = {
   event_id: string;
   events: EventRow | EventRow[] | null;
+};
+
+type CoachCompletedRaceRow = {
+  race_id: string;
+  races: RaceRow | RaceRow[] | null;
 };
 
 export default function CoachProfilePage() {
@@ -96,6 +109,10 @@ export default function CoachProfilePage() {
   const [allEvents, setAllEvents] = useState<EventRow[]>([]);
   const [selectedEvents, setSelectedEvents] = useState<EventRow[]>([]);
 
+  const [raceSearchTerm, setRaceSearchTerm] = useState("");
+  const [allRaces, setAllRaces] = useState<RaceRow[]>([]);
+  const [selectedRaces, setSelectedRaces] = useState<RaceRow[]>([]);
+
   useEffect(() => {
     async function loadProfile() {
       setLoading(true);
@@ -114,7 +131,7 @@ export default function CoachProfilePage() {
 
       setUserId(user.id);
 
-      const [profileResult, eventsResult, selectedEventsResult] = await Promise.all([
+      const [profileResult, eventsResult, selectedEventsResult, racesResult, selectedRacesResult] = await Promise.all([
         supabase
           .from("coach_profiles")
           .select("*")
@@ -128,6 +145,14 @@ export default function CoachProfilePage() {
         supabase
           .from("coach_completed_events")
           .select("event_id, events(id, name, event_type, location, event_date)")
+          .eq("coach_user_id", user.id),
+        supabase
+          .from("races")
+          .select("id, name, distance_km, terrain_type, climate_type")
+          .order("name"),
+        supabase
+          .from("coach_completed_races")
+          .select("race_id, races(id, name, distance_km, terrain_type, climate_type)")
           .eq("coach_user_id", user.id),
       ]);
 
@@ -145,6 +170,18 @@ export default function CoachProfilePage() {
 
       if (selectedEventsResult.error) {
         setErrorMessage("Could not load completed events.");
+        setLoading(false);
+        return;
+      }
+
+      if (racesResult.error) {
+        setErrorMessage("Could not load races.");
+        setLoading(false);
+        return;
+      }
+
+      if (selectedRacesResult.error) {
+        setErrorMessage("Could not load completed races.");
         setLoading(false);
         return;
       }
@@ -170,6 +207,18 @@ export default function CoachProfilePage() {
         .filter((event): event is EventRow => Boolean(event));
 
       setSelectedEvents(mappedSelectedEvents);
+
+      setAllRaces((racesResult.data || []) as RaceRow[]);
+
+      const mappedSelectedRaces: RaceRow[] = ((selectedRacesResult.data ||
+        []) as CoachCompletedRaceRow[])
+        .map((row) => {
+          const relatedRace = Array.isArray(row.races) ? row.races[0] : row.races;
+          return relatedRace || null;
+        })
+        .filter((race): race is RaceRow => Boolean(race));
+
+      setSelectedRaces(mappedSelectedRaces);
       setLoading(false);
     }
 
@@ -199,6 +248,29 @@ export default function CoachProfilePage() {
       .slice(0, 12);
   }, [allEvents, searchTerm, selectedEvents]);
 
+  const filteredRaces = useMemo(() => {
+    const selectedIds = new Set(selectedRaces.map((race) => race.id));
+    const query = raceSearchTerm.trim().toLowerCase();
+
+    return allRaces
+      .filter((race) => !selectedIds.has(race.id))
+      .filter((race) => {
+        if (!query) return true;
+
+        const haystack = [
+          race.name,
+          race.terrain_type || "",
+          race.climate_type || "",
+          race.distance_km ? `${race.distance_km}km` : "",
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return haystack.includes(query);
+      })
+      .slice(0, 12);
+  }, [allRaces, raceSearchTerm, selectedRaces]);
+
   // Get unique categories from AVAILABLE_TAGS
   const tagsByCategory = useMemo(() => {
     const grouped: Record<string, typeof AVAILABLE_TAGS> = {};
@@ -223,6 +295,20 @@ export default function CoachProfilePage() {
 
   function removeEvent(eventId: string) {
     setSelectedEvents((current) => current.filter((event) => event.id !== eventId));
+  }
+
+  function addRace(race: RaceRow) {
+    setSelectedRaces((current) => {
+      if (current.some((item) => item.id === race.id)) {
+        return current;
+      }
+      return [...current, race];
+    });
+    setRaceSearchTerm("");
+  }
+
+  function removeRace(raceId: string) {
+    setSelectedRaces((current) => current.filter((race) => race.id !== raceId));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -282,6 +368,34 @@ export default function CoachProfilePage() {
 
       if (insertResult.error) {
         setErrorMessage(`Could not save completed events: ${insertResult.error.message}`);
+        setSaving(false);
+        return;
+      }
+    }
+
+    const deleteRacesResult = await supabase
+      .from("coach_completed_races")
+      .delete()
+      .eq("coach_user_id", userId);
+
+    if (deleteRacesResult.error) {
+      setErrorMessage(`Could not update completed races: ${deleteRacesResult.message}`);
+      setSaving(false);
+      return;
+    }
+
+    if (selectedRaces.length > 0) {
+      const insertRacesPayload = selectedRaces.map((selectedRace) => ({
+        coach_user_id: userId,
+        race_id: selectedRace.id,
+      }));
+
+      const insertRacesResult = await supabase
+        .from("coach_completed_races")
+        .insert(insertRacesPayload);
+
+      if (insertRacesResult.error) {
+        setErrorMessage(`Could not save completed races: ${insertRacesResult.error.message}`);
         setSaving(false);
         return;
       }
@@ -412,6 +526,80 @@ export default function CoachProfilePage() {
                   {searchTerm.trim() ? "No matching events found." : "Start typing to search events."}
                 </p>
               )}
+
+              <label htmlFor="race-search" style={labelStyle}>
+                Races you've completed
+              </label>
+              <input
+                id="race-search"
+                value={raceSearchTerm}
+                onChange={(e) => setRaceSearchTerm(e.target.value)}
+                placeholder="Search races by name, terrain, climate..."
+                style={inputStyle}
+              />
+
+              {filteredRaces.length > 0 ? (
+                <div style={searchResultsStyle}>
+                  {filteredRaces.map((raceItem) => (
+                    <button
+                      key={raceItem.id}
+                      type="button"
+                      onClick={() => addRace(raceItem)}
+                      style={searchResultItemStyle}
+                    >
+                      <div style={{ fontWeight: 600 }}>{raceItem.name}</div>
+                      <div style={metaTextStyle}>
+                        {[
+                          raceItem.distance_km ? `${raceItem.distance_km}km` : "",
+                          raceItem.terrain_type,
+                          raceItem.climate_type,
+                        ]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p style={helperTextStyle}>
+                  {raceSearchTerm.trim() ? "No matching races found." : "Start typing to search races."}
+                </p>
+              )}
+
+              <div style={selectedSectionStyle}>
+                <div style={{ fontWeight: 600, marginBottom: "10px" }}>Selected races</div>
+
+                {selectedRaces.length === 0 ? (
+                  <p style={helperTextStyle}>No races selected yet.</p>
+                ) : (
+                  <div style={chipContainerStyle}>
+                    {selectedRaces.map((raceItem) => (
+                      <div key={raceItem.id} style={chipStyle}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{raceItem.name}</div>
+                          <div style={chipMetaStyle}>
+                            {[
+                              raceItem.distance_km ? `${raceItem.distance_km}km` : "",
+                              raceItem.terrain_type,
+                              raceItem.climate_type,
+                            ]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => removeRace(raceItem.id)}
+                          style={removeButtonStyle}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div style={selectedSectionStyle}>
                 <div style={{ fontWeight: 600, marginBottom: "10px" }}>Selected events</div>
