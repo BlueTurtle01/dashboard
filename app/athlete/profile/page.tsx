@@ -19,12 +19,10 @@ const supabase = createClient();
 type EventOption = {
   id: string;
   name: string;
-  event_type: string;
   event_date: string | null;
-  terrain_type: string | null;
-  climate_type: string | null;
+  distance_km: number | null;
+  elevation_gain_m: number | null;
   location: string | null;
-  race_conditions: import("@/lib/planner/types").RaceConditions | null;
 };
 
 type LookupOption = {
@@ -288,6 +286,8 @@ function AthleteProfileContent() {
 
   const [equipmentOptions, setEquipmentOptions] = useState<string[]>([]);
   const [eventOptions, setEventOptions] = useState<EventOption[]>([]);
+  const [eventSearchQuery, setEventSearchQuery] = useState("");
+  const [eventSearchResults, setEventSearchResults] = useState<EventOption[]>([]);
   const [preparationRaceOptions, setPreparationRaceOptions] = useState<PrepRaceOption[]>([]);
   const [prepRaceSearchQuery, setPrepRaceSearchQuery] = useState("");
   const [prepRaceSearchResults, setPrepRaceSearchResults] = useState<PrepRaceOption[]>([]);
@@ -336,9 +336,8 @@ function AthleteProfileContent() {
             .eq("is_active", true)
             .order("sort_order"),
           supabase
-            .from("events")
-            .select("id, name, event_type, event_date, terrain_type, climate_type, location, race_conditions")
-            .eq("is_active", true)
+            .from("races")
+            .select("id, name, event_date, distance_km, elevation_gain_m, location")
             .order("name"),
           supabase
             .from("preparation_races")
@@ -474,7 +473,7 @@ function AthleteProfileContent() {
               existingProfile.preferredLongSessionDay ?? defaultProfile.preferredLongSessionDay,
             selectedPreparationRaceIds:
               existingProfile.selectedPreparationRaceIds ?? defaultProfile.selectedPreparationRaceIds,
-            eventType: matchedEvent?.event_type ?? existingProfile.eventType ?? "",
+            eventType: existingProfile.eventType ?? "",
             eventProfile: {
               ...defaultProfile.eventProfile,
               ...(existingProfile.eventProfile ?? {}),
@@ -506,15 +505,12 @@ function AthleteProfileContent() {
     [eventOptions, profile.selectedEventId],
   );
 
-  const isDesertRace = selectedEvent?.event_type === "Desert Race";
+  const isDesertRace = false;
 
   function handleEventChange(eventId: string) {
-    const matchedEvent = eventOptions.find((event) => event.id === eventId) ?? null;
-
     setProfile((p) => ({
       ...p,
       selectedEventId: eventId,
-      eventType: matchedEvent?.event_type ?? "",
     }));
   }
 
@@ -757,6 +753,38 @@ function AthleteProfileContent() {
       ...p,
       blockedDates: p.blockedDates.filter((_, i) => i !== index),
     }));
+  }
+
+  async function searchEvents(query: string) {
+    if (!query.trim()) {
+      setEventSearchResults([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("races")
+        .select("id, name, event_date, distance_km, elevation_gain_m, location")
+        .ilike("name", `%${query}%`)
+        .order("event_date")
+        .limit(10);
+
+      if (error) {
+        console.error("Failed to search races:", error);
+        setEventSearchResults([]);
+      } else {
+        setEventSearchResults((data ?? []) as EventOption[]);
+      }
+    } catch (err) {
+      console.error("Error searching races:", err);
+      setEventSearchResults([]);
+    }
+  }
+
+  function selectEvent(event: EventOption) {
+    handleEventChange(event.id);
+    setEventSearchQuery("");
+    setEventSearchResults([]);
   }
 
   async function searchPrepRaces(query: string) {
@@ -1172,45 +1200,52 @@ function AthleteProfileContent() {
           )}
           <h2 className="text-xl font-semibold">Event</h2>
 
-          <select
-            className={`mt-4 w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
-            value={profile.selectedEventId}
-            onChange={(e) => handleEventChange(e.target.value)}
-            disabled={isSoloPlanHolder}
-          >
-            <option value="">Select event</option>
-            {eventOptions.map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="mb-3 block text-sm font-medium text-zinc-700">Search for races</label>
+              <input
+                type="text"
+                placeholder="Search by race name..."
+                value={eventSearchQuery}
+                onChange={(e) => searchEvents(e.target.value)}
+                disabled={isSoloPlanHolder}
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
+              />
+            </div>
+            {eventSearchResults.length > 0 && (
+              <div className="rounded-xl border border-zinc-300 max-h-48 overflow-y-auto">
+                {eventSearchResults.map((event) => (
+                  <button
+                    key={event.id}
+                    type="button"
+                    onClick={() => selectEvent(event)}
+                    disabled={isSoloPlanHolder}
+                    className="w-full text-left px-4 py-2 hover:bg-zinc-100 border-b border-zinc-200 last:border-b-0 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="font-medium">{event.name}</div>
+                    <div className="text-xs text-zinc-500">
+                      {event.event_date
+                        ? new Date(event.event_date).toLocaleDateString("en-GB")
+                        : "Date TBC"}{" "}
+                      {event.distance_km && `• ${event.distance_km}km`}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {selectedEvent ? (
             <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700 space-y-1">
-              <div><span className="font-medium">Type:</span> {selectedEvent.event_type}</div>
-              <div><span className="font-medium">Date:</span> {selectedEvent.event_date || "TBC"}</div>
-              <div><span className="font-medium">Terrain:</span> {selectedEvent.terrain_type || "—"}</div>
-              <div><span className="font-medium">Climate:</span> {selectedEvent.climate_type || "—"}</div>
-              <div><span className="font-medium">Location:</span> {selectedEvent.location || "—"}</div>
-              {selectedEvent.race_conditions && (
-                <>
-                  {selectedEvent.race_conditions.temperature && (
-                    <div><span className="font-medium">Temperature:</span> {selectedEvent.race_conditions.temperature.replace(/_/g, " ")}</div>
-                  )}
-                  {selectedEvent.race_conditions.altitude && (
-                    <div><span className="font-medium">Altitude:</span> {selectedEvent.race_conditions.altitude.replace(/_/g, " ")}</div>
-                  )}
-                  {selectedEvent.race_conditions.humidity && (
-                    <div><span className="font-medium">Humidity:</span> {selectedEvent.race_conditions.humidity}</div>
-                  )}
-                  {selectedEvent.race_conditions.specialConditions?.length > 0 && (
-                    <div><span className="font-medium">Conditions:</span> {selectedEvent.race_conditions.specialConditions.map(c => c.replace(/_/g, " ")).join(", ")}</div>
-                  )}
-                  {selectedEvent.race_conditions.notes && (
-                    <div><span className="font-medium">Notes:</span> {selectedEvent.race_conditions.notes}</div>
-                  )}
-                </>
+              <div><span className="font-medium">Date:</span> {selectedEvent.event_date ? new Date(selectedEvent.event_date).toLocaleDateString("en-GB") : "TBC"}</div>
+              {selectedEvent.distance_km && (
+                <div><span className="font-medium">Distance:</span> {selectedEvent.distance_km} km</div>
+              )}
+              {selectedEvent.elevation_gain_m && (
+                <div><span className="font-medium">Elevation Gain:</span> {selectedEvent.elevation_gain_m} m</div>
+              )}
+              {selectedEvent.location && (
+                <div><span className="font-medium">Location:</span> {selectedEvent.location}</div>
               )}
             </div>
           ) : null}
@@ -2067,14 +2102,10 @@ function AthleteProfileContent() {
           {raceHistory.length > 0 && selectedEvent && (() => {
             const goalEvent = {
               name: selectedEvent.name,
-              event_type: (selectedEvent.event_type || null) as string | null,
-              terrain_type: selectedEvent.terrain_type,
-              climate_type: selectedEvent.climate_type,
-              race_conditions: selectedEvent.race_conditions ? {
-                specialConditions: selectedEvent.race_conditions.specialConditions,
-                temperature: selectedEvent.race_conditions.temperature || undefined,
-                altitude: selectedEvent.race_conditions.altitude || undefined,
-              } : null,
+              event_type: null,
+              terrain_type: null,
+              climate_type: null,
+              race_conditions: null,
             };
             const gaps = buildExperienceGaps(
               raceHistory.map((e) => ({
