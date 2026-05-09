@@ -1580,7 +1580,7 @@ export default function PlanEditorPage() {
           "id, name, description, type, activity, subtype, duration_minutes, distance_km, target_intensity, session_data, is_key_session, focus_area, goal",
         )
         .or(
-          `name.ilike.%${escaped}%,description.ilike.%${escaped}%,type.ilike.%${escaped}%,activity.ilike.%${escaped}%,subtype.ilike.%${escaped}%,target_intensity.ilike.%${escaped}%,session_data::text.ilike.%${escaped}%`,
+          `name.ilike.%${escaped}%,description.ilike.%${escaped}%,type.ilike.%${escaped}%,activity.ilike.%${escaped}%,subtype.ilike.%${escaped}%,target_intensity.ilike.%${escaped}%,focus_area.ilike.%${escaped}%,goal.ilike.%${escaped}%`,
         )
         .order("name", { ascending: true })
         .limit(10);
