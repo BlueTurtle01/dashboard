@@ -243,6 +243,11 @@ export default function AthleteKnowledgeBase() {
                           FAQ
                         </span>
                       )}
+                      {activeTab === "race" && question.race_name && (
+                        <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                          {question.race_name}
+                        </span>
+                      )}
                     </div>
                     {question.type !== "faq" && question.body.trim() !== question.title.trim() && (
                       <p className="text-sm text-zinc-600">{question.body}</p>

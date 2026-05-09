@@ -16,6 +16,7 @@ export type KbQuestion = {
   submitted_by_name: string;
   created_at: string;
   race_id?: string | null;
+  race_name?: string | null;
 };
 
 export type KbAnswer = {
@@ -680,7 +681,7 @@ export async function getRaceQuestionsForAthlete(): Promise<QuestionWithAnswers[
 
   const { data: questions, error } = await supabase
     .from("kb_questions")
-    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at, race_id")
+    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at, race_id, races(name)")
     .eq("type", "race")
     .in("race_id", Array.from(raceIds))
     .order("created_at", { ascending: false });
@@ -708,8 +709,9 @@ export async function getRaceQuestionsForAthlete(): Promise<QuestionWithAnswers[
     answersByQuestionId.set(answer.question_id, arr);
   }
 
-  return (questions ?? []).map((q) => ({
+  return (questions ?? []).map((q: any) => ({
     ...q,
+    race_name: Array.isArray(q.races) ? q.races[0]?.name : q.races?.name,
     answers: answersByQuestionId.get(q.id) ?? [],
     answer_count: (answersByQuestionId.get(q.id) ?? []).length,
   }));
@@ -735,7 +737,7 @@ export async function getRaceQuestionsForCoach(): Promise<QuestionWithAnswers[]>
 
   const { data: questions, error } = await supabase
     .from("kb_questions")
-    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at, race_id")
+    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at, race_id, races(name)")
     .eq("type", "race")
     .in("race_id", raceIds)
     .order("created_at", { ascending: false });
@@ -763,8 +765,9 @@ export async function getRaceQuestionsForCoach(): Promise<QuestionWithAnswers[]>
     answersByQuestionId.set(answer.question_id, arr);
   }
 
-  return (questions ?? []).map((q) => ({
+  return (questions ?? []).map((q: any) => ({
     ...q,
+    race_name: Array.isArray(q.races) ? q.races[0]?.name : q.races?.name,
     answers: answersByQuestionId.get(q.id) ?? [],
     answer_count: (answersByQuestionId.get(q.id) ?? []).length,
   }));

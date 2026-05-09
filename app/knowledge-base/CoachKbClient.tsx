@@ -56,16 +56,21 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
   }, []);
 
   async function handleSubmitAnswer(questionId: string) {
-    const question = questions.find((q) => q.id === questionId);
+    const questionsToSearch = activeTab === "race" ? raceQuestions : questions;
+    const question = questionsToSearch.find((q) => q.id === questionId);
     if (!question?.answerBody?.trim()) {
       alert("Please enter an answer");
       return;
     }
 
-    const updated = questions.map((q) =>
+    const updated = questionsToSearch.map((q) =>
       q.id === questionId ? { ...q, isSubmitting: true } : q
     );
-    setQuestions(updated);
+    if (activeTab === "race") {
+      setRaceQuestions(updated);
+    } else {
+      setQuestions(updated);
+    }
 
     try {
       const result = question.type === "race"
@@ -74,7 +79,11 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
 
       if (result.error) {
         alert(`Error: ${result.error}`);
-        setQuestions(questions);
+        if (activeTab === "race") {
+          setRaceQuestions(raceQuestions);
+        } else {
+          setQuestions(questions);
+        }
         return;
       }
 
@@ -91,7 +100,11 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to submit answer");
-      setQuestions(questions);
+      if (activeTab === "race") {
+        setRaceQuestions(raceQuestions);
+      } else {
+        setQuestions(questions);
+      }
     }
   }
 
@@ -243,6 +256,11 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
                             Coach FAQ
                           </span>
                         )}
+                        {activeTab === "race" && question.race_name && (
+                          <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                            {question.race_name}
+                          </span>
+                        )}
                       </div>
                       {question.type !== "faq" && question.body.trim() !== question.title.trim() && (
                         <p className="text-sm text-zinc-600">{question.body}</p>
@@ -308,10 +326,17 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
                       <textarea
                         value={question.answerBody || ""}
                         onChange={(e) => {
-                          const updated = questions.map((q) =>
-                            q.id === question.id ? { ...q, answerBody: e.target.value } : q
-                          );
-                          setQuestions(updated);
+                          if (activeTab === "race") {
+                            const updated = raceQuestions.map((q) =>
+                              q.id === question.id ? { ...q, answerBody: e.target.value } : q
+                            );
+                            setRaceQuestions(updated);
+                          } else {
+                            const updated = questions.map((q) =>
+                              q.id === question.id ? { ...q, answerBody: e.target.value } : q
+                            );
+                            setQuestions(updated);
+                          }
                         }}
                         placeholder="Provide your expert answer..."
                         className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
