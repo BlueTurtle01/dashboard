@@ -5,6 +5,8 @@ import {
   getQuestionsForCoach,
   submitAnswer,
   flagQuestion,
+  getRaceQuestionsForCoach,
+  submitRaceAnswer,
   type QuestionWithAnswers,
 } from "@/lib/actions/knowledge-base";
 import { createClient } from "@/lib/supabase/client";
@@ -16,23 +18,40 @@ type QuestionUI = QuestionWithAnswers & {
   isSubmitting?: boolean;
 };
 
+type CoachTab = "community" | "race";
+
 export default function CoachKbClient({ initialQuestions }: { initialQuestions: QuestionWithAnswers[] }) {
   const { isInTutorial } = useTutorial();
   const [questions, setQuestions] = useState<QuestionUI[]>(
     initialQuestions.map((q) => ({ ...q, answerBody: "", isSubmitting: false }))
   );
+  const [raceQuestions, setRaceQuestions] = useState<QuestionUI[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flagModalQuestionId, setFlagModalQuestionId] = useState<string | null>(null);
   const [flagReason, setFlagReason] = useState("");
   const [flagSubmitting, setFlagSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<CoachTab>("community");
 
   useEffect(() => {
     void (async () => {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.id) setCurrentUserId(user.id);
+
+      try {
+        const data = await getRaceQuestionsForCoach();
+        setRaceQuestions(
+          data.map((q) => ({
+            ...q,
+            answerBody: "",
+            isSubmitting: false,
+          }))
+        );
+      } catch (err) {
+        console.error("Failed to load race questions:", err);
+      }
     })();
   }, []);
 
@@ -49,7 +68,10 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
     setQuestions(updated);
 
     try {
-      const result = await submitAnswer(questionId, question.answerBody);
+      const result = question.type === "race"
+        ? await submitRaceAnswer(questionId, question.answerBody)
+        : await submitAnswer(questionId, question.answerBody);
+
       if (result.error) {
         alert(`Error: ${result.error}`);
         setQuestions(questions);
@@ -57,6 +79,16 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
       }
 
       await loadQuestions();
+      if (question.type === "race") {
+        const data = await getRaceQuestionsForCoach();
+        setRaceQuestions(
+          data.map((q) => ({
+            ...q,
+            answerBody: "",
+            isSubmitting: false,
+          }))
+        );
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to submit answer");
       setQuestions(questions);
@@ -133,29 +165,59 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
         </div>
       )}
 
-      {/* Stats */}
-      <div className="mb-8 flex gap-4">
-        <div className="rounded-xl border border-zinc-200 bg-white p-4">
-          <p className="text-xs font-medium text-zinc-600">Visible Items</p>
-          <p className="mt-1 text-2xl font-bold text-zinc-900">{questions.length}</p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4">
-          <p className="text-xs font-medium text-zinc-600">Unanswered Athlete Questions</p>
-          <p className="mt-1 text-2xl font-bold text-amber-600">{unansweredCount}</p>
-        </div>
+      {/* Tabs */}
+      <div className="mb-6 flex gap-2 border-b border-zinc-200 pb-3">
+        <button
+          onClick={() => setActiveTab("community")}
+          className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+            activeTab === "community"
+              ? "bg-zinc-900 text-white"
+              : "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+          }`}
+        >
+          Community Questions
+        </button>
+        <button
+          onClick={() => setActiveTab("race")}
+          className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+            activeTab === "race"
+              ? "bg-zinc-900 text-white"
+              : "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+          }`}
+        >
+          Race Questions
+        </button>
       </div>
+
+      {/* Stats */}
+      {activeTab === "community" && (
+        <div className="mb-8 flex gap-4">
+          <div className="rounded-xl border border-zinc-200 bg-white p-4">
+            <p className="text-xs font-medium text-zinc-600">Visible Items</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900">{questions.length}</p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 bg-white p-4">
+            <p className="text-xs font-medium text-zinc-600">Unanswered Athlete Questions</p>
+            <p className="mt-1 text-2xl font-bold text-amber-600">{unansweredCount}</p>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex min-h-[40vh] items-center justify-center">
           <p className="text-zinc-500">Loading questions...</p>
         </div>
-      ) : questions.length === 0 ? (
+      ) : activeTab === "community" && questions.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center">
-          <p className="text-zinc-500">No questions yet. Check back soon!</p>
+          <p className="text-zinc-500">No community questions yet. Check back soon!</p>
+        </div>
+      ) : activeTab === "race" && raceQuestions.length === 0 ? (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center">
+          <p className="text-zinc-500">No race questions for your completed races yet. Check back soon!</p>
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          {isInTutorial && (
+          {isInTutorial && activeTab === "community" && (
             <TutorialInfoBox
               title="Two Types of Content"
               description="Community questions are from your athletes—answer them to build knowledge across the platform. Coach FAQ items are admin-curated guidance to help you use the platform effectively."
@@ -164,7 +226,7 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
               showNext={false}
             />
           )}
-          {questions.map((question) => {
+          {(activeTab === "community" ? questions : raceQuestions).map((question) => {
             const hasAnswered = question.answers.some((a) => a.submitted_by === currentUserId);
             const canAnswer = question.answer_count < 3 && !hasAnswered;
 

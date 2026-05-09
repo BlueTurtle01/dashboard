@@ -5,34 +5,79 @@ import {
   getQuestions,
   submitQuestion,
   markKbNotificationsRead,
+  getRaceQuestionsForAthlete,
+  submitRaceQuestion,
   type QuestionWithAnswers,
 } from "@/lib/actions/knowledge-base";
+import { createClient } from "@/lib/supabase/client";
 
-type AthleteTab = "community" | "faq";
+type AthleteTab = "community" | "faq" | "race";
+
+type Race = {
+  id: string;
+  name: string;
+};
 
 export default function AthleteKnowledgeBase() {
+  const supabase = createClient();
+
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
+  const [raceQuestions, setRaceQuestions] = useState<QuestionWithAnswers[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalBody, setModalBody] = useState("");
+  const [selectedRaceId, setSelectedRaceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<AthleteTab>("community");
+  const [availableRaces, setAvailableRaces] = useState<Race[]>([]);
 
   useEffect(() => {
-    void loadQuestions();
-    void markKbNotificationsRead();
+    void loadData();
   }, []);
 
-  async function loadQuestions() {
+  async function loadData() {
     try {
       setLoading(true);
-      const data = await getQuestions();
-      setQuestions(data);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile } = await supabase
+        .from("athlete_profiles")
+        .select("selected_event_id, selected_preparation_race_ids")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (profile?.selected_event_id || profile?.selected_preparation_race_ids?.length) {
+        const raceIds = new Set<string>();
+        if (profile?.selected_event_id) raceIds.add(profile.selected_event_id);
+        if (profile?.selected_preparation_race_ids?.length) {
+          profile.selected_preparation_race_ids.forEach((id: string) => raceIds.add(id));
+        }
+
+        if (raceIds.size > 0) {
+          const { data: races } = await supabase
+            .from("races")
+            .select("id, name")
+            .in("id", Array.from(raceIds))
+            .order("name");
+
+          setAvailableRaces((races ?? []) as Race[]);
+        }
+      }
+
+      const [communityData, raceData] = await Promise.all([
+        getQuestions(),
+        getRaceQuestionsForAthlete(),
+      ]);
+      setQuestions(communityData);
+      setRaceQuestions(raceData);
+      void markKbNotificationsRead();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load questions");
+      setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
       setLoading(false);
     }
@@ -44,16 +89,28 @@ export default function AthleteKnowledgeBase() {
       return;
     }
 
+    if (activeTab === "race" && !selectedRaceId) {
+      alert("Please select a race");
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const result = await submitQuestion(modalTitle, modalBody);
+      let result;
+      if (activeTab === "race") {
+        result = await submitRaceQuestion(modalTitle, modalBody, selectedRaceId);
+      } else {
+        result = await submitQuestion(modalTitle, modalBody);
+      }
+
       if (result.error) {
         alert(`Error: ${result.error}`);
       } else {
         setModalTitle("");
         setModalBody("");
+        setSelectedRaceId("");
         setShowModal(false);
-        await loadQuestions();
+        await loadData();
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to submit question");
@@ -62,9 +119,19 @@ export default function AthleteKnowledgeBase() {
     }
   }
 
-  const filteredQuestions = questions.filter((q) => {
-    const typeMatch = activeTab === "faq" ? q.type === "faq" : q.type !== "faq";
-    if (!typeMatch) return false;
+  const displayQuestions = activeTab === "race" ? raceQuestions : questions;
+  const filteredQuestions = displayQuestions.filter((q) => {
+    if (activeTab === "race") {
+      // Race questions only
+      if (q.type !== "race") return false;
+    } else if (activeTab === "faq") {
+      // FAQ only
+      if (q.type !== "faq") return false;
+    } else {
+      // Community questions (not race)
+      if (q.type !== "community") return false;
+    }
+
     if (!search) return true;
     const searchLower = search.toLowerCase();
     return q.title.toLowerCase().includes(searchLower) || q.body.toLowerCase().includes(searchLower);
@@ -115,6 +182,16 @@ export default function AthleteKnowledgeBase() {
           Community Questions
         </button>
         <button
+          onClick={() => setActiveTab("race")}
+          className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+            activeTab === "race"
+              ? "bg-zinc-900 text-white"
+              : "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+          }`}
+        >
+          Race Questions
+        </button>
+        <button
           onClick={() => setActiveTab("faq")}
           className={`rounded-xl px-4 py-2 text-sm font-semibold ${
             activeTab === "faq"
@@ -141,6 +218,12 @@ export default function AthleteKnowledgeBase() {
           <p className="text-zinc-500">
             {activeTab === "faq"
               ? "No FAQs available yet. Check back soon!"
+              : activeTab === "race"
+              ? availableRaces.length === 0
+                ? "You haven't selected any goal races or preparation races yet. Update your profile to ask race questions."
+                : raceQuestions.length === 0
+                ? "No race questions yet. Be the first to ask one!"
+                : "No questions match your search."
               : questions.length === 0
               ? "No questions yet. Be the first to ask one!"
               : "No questions match your search."}
@@ -202,10 +285,35 @@ export default function AthleteKnowledgeBase() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="mb-1 text-lg font-semibold text-zinc-900">Ask a Question</h2>
+            <h2 className="mb-1 text-lg font-semibold text-zinc-900">
+              {activeTab === "race" ? "Ask a Race Question" : "Ask a Question"}
+            </h2>
             <p className="mb-5 text-sm text-zinc-500">
-              Share your question with our coaching team. They will provide answers that might help other athletes too.
+              {activeTab === "race"
+                ? "Ask coaches about a specific race. Only coaches who have completed the race can answer."
+                : "Share your question with our coaching team. They will provide answers that might help other athletes too."}
             </p>
+
+            {activeTab === "race" && (
+              <div className="mb-4">
+                <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="raceSelect">
+                  Which race? <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="raceSelect"
+                  value={selectedRaceId}
+                  onChange={(e) => setSelectedRaceId(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                >
+                  <option value="">Select a race...</option>
+                  {availableRaces.map((race) => (
+                    <option key={race.id} value={race.id}>
+                      {race.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="mb-4">
               <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="questionTitle">
@@ -216,7 +324,7 @@ export default function AthleteKnowledgeBase() {
                 type="text"
                 value={modalTitle}
                 onChange={(e) => setModalTitle(e.target.value)}
-                placeholder="e.g., How should I train in hot weather?"
+                placeholder={activeTab === "race" ? "e.g., How should I prepare for the heat?" : "e.g., How should I train in hot weather?"}
                 className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
               />
             </div>
@@ -241,6 +349,7 @@ export default function AthleteKnowledgeBase() {
                   setShowModal(false);
                   setModalTitle("");
                   setModalBody("");
+                  setSelectedRaceId("");
                 }}
                 disabled={submitting}
                 className="flex-1 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
@@ -249,7 +358,7 @@ export default function AthleteKnowledgeBase() {
               </button>
               <button
                 onClick={() => void handleSubmitQuestion()}
-                disabled={!modalTitle.trim() || submitting}
+                disabled={!modalTitle.trim() || (activeTab === "race" && !selectedRaceId) || submitting}
                 className="flex-1 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
               >
                 {submitting ? "Submitting..." : "Submit Question"}
