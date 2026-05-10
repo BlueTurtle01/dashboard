@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getFaqQuestionsForAdmin,
+  getRaceQuestionsForAdmin,
   submitFaqQuestion,
   updateFaqQuestion,
   updateQuestionAndClearFlag,
+  deleteRaceQuestion,
+  updateRaceQuestion,
   type FlaggedQuestionWithDetails,
   type KbQuestionAudience,
   type QuestionWithAnswers,
 } from "@/lib/actions/knowledge-base";
+import { createClient } from "@/lib/supabase/client";
 
 type EditingQuestion = {
   id: string;
@@ -24,6 +28,18 @@ type EditingFaq = {
   audience: KbQuestionAudience;
 };
 
+type EditingRaceQuestion = {
+  id: string;
+  title: string;
+  body: string;
+  race_id: string | null;
+};
+
+type Race = {
+  id: string;
+  name: string;
+};
+
 export default function AdminKbClient({
   initialFlaggedQuestions,
   initialFaqQuestions,
@@ -31,20 +47,43 @@ export default function AdminKbClient({
   initialFlaggedQuestions: FlaggedQuestionWithDetails[];
   initialFaqQuestions: QuestionWithAnswers[];
 }) {
+  const supabase = createClient();
   const [flaggedQuestions, setFlaggedQuestions] = useState<FlaggedQuestionWithDetails[]>(
     initialFlaggedQuestions
   );
   const [faqQuestions, setFaqQuestions] = useState<QuestionWithAnswers[]>(initialFaqQuestions);
+  const [raceQuestions, setRaceQuestions] = useState<QuestionWithAnswers[]>([]);
+  const [allRaces, setAllRaces] = useState<Race[]>([]);
   const [editingQuestion, setEditingQuestion] = useState<EditingQuestion | null>(null);
   const [editingFaq, setEditingFaq] = useState<EditingFaq | null>(null);
+  const [editingRaceQuestion, setEditingRaceQuestion] = useState<EditingRaceQuestion | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [faqSubmitting, setFaqSubmitting] = useState(false);
   const [faqEditSubmitting, setFaqEditSubmitting] = useState(false);
+  const [raceEditSubmitting, setRaceEditSubmitting] = useState(false);
+  const [raceDeleteSubmitting, setRaceDeleteSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [faqTitle, setFaqTitle] = useState("");
   const [faqAnswer, setFaqAnswer] = useState("");
   const [faqAudience, setFaqAudience] = useState<KbQuestionAudience>("athlete");
   const [markAsFaq, setMarkAsFaq] = useState(true);
+
+  useEffect(() => {
+    void loadRaceQuestionsAndRaces();
+  }, []);
+
+  async function loadRaceQuestionsAndRaces() {
+    try {
+      const [raceQuestionsData, racesData] = await Promise.all([
+        getRaceQuestionsForAdmin(),
+        supabase.from("races").select("id, name").order("name"),
+      ]);
+      setRaceQuestions(raceQuestionsData);
+      setAllRaces((racesData.data ?? []) as Race[]);
+    } catch (err) {
+      console.error("Failed to load race data:", err);
+    }
+  }
 
   async function refreshFaqs() {
     const faqs = await getFaqQuestionsForAdmin();
@@ -143,6 +182,55 @@ export default function AdminKbClient({
       setError(err instanceof Error ? err.message : "Failed to update question");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSubmitRaceQuestionEdit() {
+    if (!editingRaceQuestion) return;
+
+    setRaceEditSubmitting(true);
+    setError(null);
+
+    try {
+      const result = await updateRaceQuestion(
+        editingRaceQuestion.id,
+        editingRaceQuestion.title,
+        editingRaceQuestion.body,
+        editingRaceQuestion.race_id
+      );
+
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setEditingRaceQuestion(null);
+        await loadRaceQuestionsAndRaces();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update race question");
+    } finally {
+      setRaceEditSubmitting(false);
+    }
+  }
+
+  async function handleDeleteRaceQuestion() {
+    if (!editingRaceQuestion) return;
+
+    setRaceDeleteSubmitting(true);
+    setError(null);
+
+    try {
+      const result = await deleteRaceQuestion(editingRaceQuestion.id);
+
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setRaceQuestions(raceQuestions.filter((q) => q.id !== editingRaceQuestion.id));
+        setEditingRaceQuestion(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete race question");
+    } finally {
+      setRaceDeleteSubmitting(false);
     }
   }
 
@@ -362,6 +450,85 @@ export default function AdminKbClient({
         </div>
       )}
 
+      <div className="mb-4 mt-10">
+        <h2 className="text-lg font-semibold text-zinc-900">Race Questions</h2>
+        <p className="mt-1 text-sm text-zinc-500">Review and manage race-specific questions from athletes.</p>
+      </div>
+
+      {raceQuestions.length === 0 ? (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center">
+          <p className="text-zinc-500">No race questions at this time.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {raceQuestions.map((question) => (
+            <div key={question.id} className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+              {/* Question Header */}
+              <div className="border-b border-zinc-100 px-6 py-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-semibold text-zinc-900">{question.title}</h2>
+                      {question.race_name && (
+                        <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                          {question.race_name}
+                        </span>
+                      )}
+                    </div>
+                    {question.body.trim() !== question.title.trim() && (
+                      <p className="text-sm text-zinc-600">{question.body}</p>
+                    )}
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700">
+                    {question.answer_count} {question.answer_count === 1 ? "answer" : "answers"}
+                  </span>
+                </div>
+                <p className="mt-3 text-xs text-zinc-400">
+                  Asked by {question.submitted_by_name} · {new Date(question.created_at).toLocaleDateString()}
+                </p>
+              </div>
+
+              {/* Answers */}
+              {question.answers.length > 0 && (
+                <div className="border-b border-zinc-100 px-6 py-5">
+                  <h3 className="mb-3 text-sm font-semibold text-zinc-700">Answers ({question.answers.length})</h3>
+                  <div className="space-y-3">
+                    {question.answers.map((answer) => (
+                      <div key={answer.id} className="rounded-lg border border-green-100 bg-green-50 p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-zinc-900">{answer.submitted_by_name}</p>
+                          <p className="text-xs text-zinc-500">
+                            {new Date(answer.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <p className="mt-2 text-sm text-zinc-700">{answer.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="px-6 py-4">
+                <button
+                  onClick={() =>
+                    setEditingRaceQuestion({
+                      id: question.id,
+                      title: question.title,
+                      body: question.body,
+                      race_id: question.race_id ?? null,
+                    })
+                  }
+                  className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Edit FAQ Modal */}
       {editingFaq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -437,7 +604,7 @@ export default function AdminKbClient({
         </div>
       )}
 
-      {/* Edit Modal */}
+      {/* Edit Question Modal */}
       {editingQuestion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
@@ -486,6 +653,96 @@ export default function AdminKbClient({
                 className="flex-1 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
               >
                 {submitting ? "Submitting..." : "Submit & Clear Flag"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Race Question Modal */}
+      {editingRaceQuestion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="mb-1 text-lg font-semibold text-zinc-900">Edit Race Question</h2>
+            <p className="mb-6 text-sm text-zinc-500">
+              Update the question title, body, and associated race.
+            </p>
+
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="editRaceId">
+                Race
+              </label>
+              <select
+                id="editRaceId"
+                value={editingRaceQuestion.race_id ?? ""}
+                onChange={(e) =>
+                  setEditingRaceQuestion({ ...editingRaceQuestion, race_id: e.target.value || null })
+                }
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                disabled={raceEditSubmitting || raceDeleteSubmitting}
+              >
+                <option value="">Select a race...</option>
+                {allRaces.map((race) => (
+                  <option key={race.id} value={race.id}>
+                    {race.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="editRaceTitle">
+                Title
+              </label>
+              <input
+                id="editRaceTitle"
+                type="text"
+                value={editingRaceQuestion.title}
+                onChange={(e) =>
+                  setEditingRaceQuestion({ ...editingRaceQuestion, title: e.target.value })
+                }
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                disabled={raceEditSubmitting || raceDeleteSubmitting}
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="editRaceBody">
+                Body
+              </label>
+              <textarea
+                id="editRaceBody"
+                value={editingRaceQuestion.body}
+                onChange={(e) =>
+                  setEditingRaceQuestion({ ...editingRaceQuestion, body: e.target.value })
+                }
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                rows={5}
+                disabled={raceEditSubmitting || raceDeleteSubmitting}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEditingRaceQuestion(null)}
+                disabled={raceEditSubmitting || raceDeleteSubmitting}
+                className="flex-1 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleDeleteRaceQuestion()}
+                disabled={raceDeleteSubmitting || raceEditSubmitting}
+                className="flex-1 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                {raceDeleteSubmitting ? "Deleting..." : "Delete"}
+              </button>
+              <button
+                onClick={() => void handleSubmitRaceQuestionEdit()}
+                disabled={!editingRaceQuestion.title.trim() || !editingRaceQuestion.body.trim() || raceEditSubmitting || raceDeleteSubmitting}
+                className="flex-1 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {raceEditSubmitting ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>
