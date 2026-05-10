@@ -160,7 +160,7 @@ export default function AthleteKnowledgeBase() {
           <h1 className="mb-1 text-2xl font-bold text-zinc-900">Knowledge Base</h1>
           <p className="text-sm text-zinc-500">Find answers to common questions about your training.</p>
         </div>
-        {activeTab === "community" && (
+        {(activeTab === "community" || activeTab === "race") && (
           <button
             onClick={() => setShowModal(true)}
             className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700"
