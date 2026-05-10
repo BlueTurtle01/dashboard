@@ -830,7 +830,7 @@ export async function updateRaceQuestion(
   questionId: string,
   title: string,
   body: string,
-  raceId: string
+  raceId: string | null
 ): Promise<{ error?: string }> {
   const { supabase } = await requireAdmin();
 
