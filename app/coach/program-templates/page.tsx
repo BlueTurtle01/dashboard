@@ -988,21 +988,12 @@ function TemplatesPageContent() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/coach/program-templates/create"
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-            >
-              Create Public Template
-            </Link>
-
-            <Link
-              href={athleteId ? `/coach?athleteId=${athleteId}` : "/coach"}
-              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-100"
-            >
-              Back to Coach
-            </Link>
-          </div>
+          <Link
+            href="/coach/program-templates/create"
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          >
+            Create Public Template
+          </Link>
         </div>
 
         {tutorial === 'programs' && (

@@ -91,6 +91,7 @@ type ProgramTemplateSessionRow = {
   name: string;
   description: string | null;
   duration: string | null;
+  duration_minutes: number | null;
   intensity: string | null;
   is_key_session: boolean;
   session_template_id: string | null;
@@ -243,6 +244,15 @@ function getSingleSessionTemplateRelation(value: SessionTemplateRelation) {
 
 function getSessionDistanceKm(session: ProgramTemplateSessionRow): number | null {
   return getSingleSessionTemplateRelation(session.session_templates)?.distance_km ?? session.distance_km ?? null;
+}
+
+function getSessionDurationMinutes(session: ProgramTemplateSessionRow): number | null {
+  return session.duration_minutes ?? parseDurationToMinutes(session.duration);
+}
+
+function getSessionDurationDisplay(session: ProgramTemplateSessionRow) {
+  const minutes = getSessionDurationMinutes(session);
+  return minutes != null ? formatMinutes(minutes) : "";
 }
 
 function getSessionTemplateType(session: ProgramTemplateSessionRow): string {
@@ -1107,6 +1117,7 @@ export default function ViewProgramTemplatePage() {
             name,
             description,
             duration,
+            duration_minutes,
             intensity,
             is_key_session,
             session_template_id,
@@ -1682,7 +1693,9 @@ export default function ViewProgramTemplatePage() {
                 // Build sessions with a temporary _isLong marker for day assignment
                 const built = weekSessions.map((session, index) => {
                   const { scalar, mode } = getScalarForSession(session, athleteProfile);
-                  const scaledDuration = scaleMinutes(session.duration, scalar);
+                  const durationMinutes = getSessionDurationMinutes(session);
+                  const durationDisplay = getSessionDurationDisplay(session);
+                  const scaledDuration = scaleMinutes(durationDisplay, scalar);
                   const scaledDistance = scaleKm(getSessionDistanceKm(session), scalar);
                   const effectiveScalar = mode === "none" ? 1 : scalar;
                   const st = Array.isArray(session.session_templates)
@@ -1698,13 +1711,13 @@ export default function ViewProgramTemplatePage() {
                     name: session.name,
                     description: session.description ?? "",
                     tags: [],
-                    duration: session.duration
-                      ? scaledDuration.scaledDisplay || session.duration
+                    duration: durationMinutes != null
+                      ? scaledDuration.scaledDisplay || durationDisplay
                       : "",
                     distance: scaledDistance.scaledDisplay || "",
                     intensity: session.intensity ?? "",
                     isKeySession: session.is_key_session,
-                    originalDuration: session.duration ?? "",
+                    originalDuration: durationDisplay,
                     originalDistance: scaledDistance.originalKm != null
                       ? formatKm(scaledDistance.originalKm)
                       : "",
@@ -2229,7 +2242,9 @@ export default function ViewProgramTemplatePage() {
                     {!isCollapsed && <div className="space-y-4">
                       {weekSessions.map((session) => {
                         const { scalar, mode } = getScalarForSession(session, athleteProfile);
-                        const scaledDuration = scaleMinutes(session.duration, scalar);
+                        const durationMinutes = getSessionDurationMinutes(session);
+                        const durationDisplay = getSessionDurationDisplay(session);
+                        const scaledDuration = scaleMinutes(durationDisplay, scalar);
                         const scaledDistance = scaleKm(getSessionDistanceKm(session), scalar);
                         const effectiveScalar = mode === "none" ? 1 : scalar;
                         const distanceKm = getSessionDistanceKm(session);
@@ -2267,14 +2282,14 @@ export default function ViewProgramTemplatePage() {
 
                             {/* Compact stat strip */}
                             <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-zinc-700">
-                              {session.duration ? (
+                              {durationMinutes != null ? (
                                 <span>
                                   <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mr-1">Duration</span>
                                   {isGymSession || !athleteProfile
-                                    ? session.duration
-                                    : scaledDuration.scaledDisplay || session.duration}
-                                  {!isGymSession && athleteProfile && scaledDuration.scaledDisplay && scaledDuration.scaledDisplay !== session.duration
-                                    ? <span className="ml-1 text-xs text-zinc-400">(was {session.duration})</span>
+                                    ? durationDisplay
+                                    : scaledDuration.scaledDisplay || durationDisplay}
+                                  {!isGymSession && athleteProfile && scaledDuration.scaledDisplay && scaledDuration.scaledDisplay !== durationDisplay
+                                    ? <span className="ml-1 text-xs text-zinc-400">(was {durationDisplay})</span>
                                     : null}
                                 </span>
                               ) : null}

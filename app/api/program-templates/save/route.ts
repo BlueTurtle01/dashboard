@@ -33,6 +33,7 @@ type SavePayload = {
         name?: string;
         description?: string;
         duration?: string;
+        durationMinutes?: string | number;
         intensity?: string;
         isKeySession?: boolean;
         sessionLibraryId?: string;
@@ -187,7 +188,8 @@ export async function POST(req: Request) {
           type: session.type?.trim() || "Easy",
           name: session.name?.trim() || `Week ${week.weekNumber} Session ${sessionSortOrder}`,
           description: session.description?.trim() || null,
-          duration: session.duration?.trim() || null,
+          duration: null,
+          duration_minutes: parseNullableInteger(String(session.durationMinutes ?? session.duration ?? "")),
           intensity: session.intensity?.trim() || null,
           is_key_session: Boolean(session.isKeySession),
           session_library_id: session.sessionLibraryId?.trim() || null,

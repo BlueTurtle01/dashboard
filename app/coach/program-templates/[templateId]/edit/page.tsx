@@ -60,6 +60,7 @@ type ProgramTemplateSessionRow = {
   name: string;
   description: string | null;
   duration: string | null;
+  duration_minutes: number | null;
   intensity: string | null;
   is_key_session: boolean;
   session_template_id: string | null;
@@ -290,6 +291,46 @@ function parseSlotNotes(notes: string): { duration?: string; intensity?: string;
     else if (key === "Set Duration") result.setDurationMinutes = value;
   }
   return result;
+}
+
+function getDigitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function getDurationMinutesInput(value: string | null | undefined) {
+  if (!value) return "";
+  const match = value.match(/\d+/);
+  return match ? match[0] : "";
+}
+
+function parseDurationMinutesForSave(value: string) {
+  const minutes = getDigitsOnly(value);
+  return minutes ? Number(minutes) : null;
+}
+
+function sessionRequiresHills(session: EditableSession) {
+  const haystack = [
+    session.type,
+    session.name,
+    session.description,
+    session.activity,
+    session.subtype,
+    session.terrain,
+    session.reason,
+    ...(session.tags ?? []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    haystack.includes("hill") ||
+    haystack.includes("hilly") ||
+    haystack.includes("mountain") ||
+    haystack.includes("elevation") ||
+    haystack.includes("vert") ||
+    Number(session.elevation || 0) > 0
+  );
 }
 
 function makeLocalId(prefix: string) {
@@ -613,7 +654,9 @@ function mapToForm(
             type: session.type,
             name: session.name,
             description: session.description ?? "",
-            duration: session.duration ?? "",
+            duration: session.duration_minutes != null
+              ? String(session.duration_minutes)
+              : getDurationMinutesInput(session.duration),
             intensity: session.intensity ?? "",
             isKeySession: session.is_key_session,
             sessionTemplateId: session.session_template_id ?? "",
@@ -830,6 +873,7 @@ export default function EditProgramTemplatePage() {
             name,
             description,
             duration,
+            duration_minutes,
             intensity,
             is_key_session,
             session_template_id,
@@ -1074,7 +1118,7 @@ export default function EditProgramTemplatePage() {
               return parts.join(" · ") || `Session ${nextSortOrder}`;
             })(),
             description: formData?.description ?? "",
-            duration: formData?.durationMinutes ? `${formData.durationMinutes} min` : "",
+            duration: formData?.durationMinutes ? getDigitsOnly(formData.durationMinutes) : "",
             intensity: formData?.targetIntensity ?? "",
             isKeySession: false,
             sessionTemplateId: "",
@@ -1280,7 +1324,7 @@ export default function EditProgramTemplatePage() {
       min_longest_recent_session_minutes: form.minLongestRecentSessionMinutes.trim() ? Number(form.minLongestRecentSessionMinutes) : null,
       min_training_consistency_weeks: form.minTrainingConsistencyWeeks.trim() ? Number(form.minTrainingConsistencyWeeks) : null,
       min_back_to_back_days: form.minBackToBackDays.trim() ? Number(form.minBackToBackDays) : null,
-      requires_hills: form.requiresHills,
+      requires_hills: form.weeks.some((w) => w.sessions.some(sessionRequiresHills)),
       requires_gym: form.weeks.some((w) => w.sessions.some((s) => s.type === "Gym")),
       requires_load_carriage: form.requiresLoadCarriage,
       requires_heat_acclimation: form.requiresHeatAcclimation,
@@ -1424,7 +1468,8 @@ export default function EditProgramTemplatePage() {
           type: session.type,
           name: session.name || `Week ${week.weekNumber} Session ${sessionIndex + 1}`,
           description: session.description || null,
-          duration: session.duration || null,
+          duration: null,
+          duration_minutes: parseDurationMinutesForSave(session.duration),
           intensity: session.intensity || null,
           is_key_session: session.isKeySession,
           session_template_id: session.sessionTemplateId.trim() || null,
@@ -1701,7 +1746,6 @@ export default function EditProgramTemplatePage() {
               ["Featured", form.isFeatured, (value: boolean) => updateForm("isFeatured", value)],
               ["Personalised", form.isPersonalised, (value: boolean) => updateForm("isPersonalised", value)],
               ["Active", form.isActive, (value: boolean) => updateForm("isActive", value)],
-              ["Requires hills", form.requiresHills, (value: boolean) => updateForm("requiresHills", value)],
               ["Requires load carriage", form.requiresLoadCarriage, (value: boolean) => updateForm("requiresLoadCarriage", value)],
               ["Requires heat acclimation", form.requiresHeatAcclimation, (value: boolean) => updateForm("requiresHeatAcclimation", value)],
             ].map(([label, checked, onChange]) => (
@@ -2036,16 +2080,19 @@ export default function EditProgramTemplatePage() {
 
                               {session.type !== "Intervals" && session.type !== "Gym" && (
                                 <label className="text-sm font-medium text-zinc-700">
-                                  Duration
+                                  Duration (Mintes)
                                   <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
                                     value={session.duration}
                                     onChange={(e) =>
                                       updateSession(week.localId, session.localId, (current) => ({
                                         ...current,
-                                        duration: e.target.value,
+                                        duration: getDigitsOnly(e.target.value),
                                       }))
                                     }
-                                    placeholder="e.g. 45 min"
+                                    placeholder="e.g. 45"
                                     className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
                                   />
                                 </label>

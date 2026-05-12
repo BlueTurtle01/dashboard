@@ -22,7 +22,6 @@ export default function SessionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [showCircleTooltip, setShowCircleTooltip] = useState(true);
 
   // Form state for selected session
   const [perceivedEffort, setPerceivedEffort] = useState<number | null>(null);
@@ -201,6 +200,55 @@ export default function SessionsPage() {
     }
   };
 
+  const handleRemoveCompletion = async (sessionId: string) => {
+    setSubmitting(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return;
+
+      const planDataResult = await supabase
+        .from("athlete_plans")
+        .select("id")
+        .eq("athlete_user_id", user.id)
+        .eq("status", "active")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!planDataResult.data) return;
+
+      const { error: deleteError } = await supabase
+        .from("session_completions")
+        .delete()
+        .eq("athlete_user_id", user.id)
+        .eq("plan_id", planDataResult.data.id)
+        .eq("session_id", sessionId);
+
+      if (deleteError) {
+        setError("Failed to unlog session");
+        return;
+      }
+
+      setCompletions((current) => {
+        const next = new Map(current);
+        next.delete(sessionId);
+        return next;
+      });
+
+      if (selectedSessionId === sessionId) {
+        setSelectedSessionId(null);
+      }
+
+      setError(null);
+    } catch (err) {
+      setError("An error occurred while updating the session");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
@@ -355,10 +403,9 @@ export default function SessionsPage() {
         )}
 
         <div className="space-y-4">
-          {sessionGroups.map((group, groupIndex) => {
+          {sessionGroups.map((group) => {
             const mainSession = group.mainSession;
             const alternativeSession = group.alternativeSession;
-            const isFirstIncomplete = groupIndex === 0 && !completions.has(mainSession.id) && showCircleTooltip;
 
             return (
               <div key={mainSession.id} className="space-y-2">
@@ -368,7 +415,11 @@ export default function SessionsPage() {
                   isCompleted={completions.has(mainSession.id)}
                   completion={completions.get(mainSession.id)}
                   isSelected={selectedSessionId === mainSession.id}
-                  onSelectToggle={() => setSelectedSessionId(selectedSessionId === mainSession.id ? null : mainSession.id)}
+                  onSelectToggle={() =>
+                    completions.has(mainSession.id)
+                      ? void handleRemoveCompletion(mainSession.id)
+                      : setSelectedSessionId(selectedSessionId === mainSession.id ? null : mainSession.id)
+                  }
                   getSessionColor={getSessionColor}
                   isSubmitting={submitting}
                   perceivedEffort={perceivedEffort}
@@ -377,8 +428,6 @@ export default function SessionsPage() {
                   setNotes={setNotes}
                   onLogCompletion={() => handleLogCompletion(mainSession.id, alternativeSession?.id)}
                   alternativeSessionId={alternativeSession?.id}
-                  showTooltip={isFirstIncomplete}
-                  onDismissTooltip={() => setShowCircleTooltip(false)}
                 />
 
                 {/* Alternative session card */}
@@ -388,7 +437,11 @@ export default function SessionsPage() {
                     isCompleted={completions.has(alternativeSession.id)}
                     completion={completions.get(alternativeSession.id)}
                     isSelected={selectedSessionId === alternativeSession.id}
-                    onSelectToggle={() => setSelectedSessionId(selectedSessionId === alternativeSession.id ? null : alternativeSession.id)}
+                    onSelectToggle={() =>
+                      completions.has(alternativeSession.id)
+                        ? void handleRemoveCompletion(alternativeSession.id)
+                        : setSelectedSessionId(selectedSessionId === alternativeSession.id ? null : alternativeSession.id)
+                    }
                     getSessionColor={getSessionColor}
                     isSubmitting={submitting}
                     perceivedEffort={perceivedEffort}
@@ -424,8 +477,6 @@ interface SessionCardProps {
   onLogCompletion: () => void;
   alternativeSessionId?: string;
   isAlternative?: boolean;
-  showTooltip?: boolean;
-  onDismissTooltip?: () => void;
 }
 
 function SessionCard({
@@ -443,9 +494,10 @@ function SessionCard({
   onLogCompletion,
   alternativeSessionId,
   isAlternative = false,
-  showTooltip = false,
-  onDismissTooltip = () => {},
 }: SessionCardProps) {
+  const showTooltip = false;
+  const onDismissTooltip = () => {};
+
   return (
     <div
       className={`rounded-2xl border bg-white p-4 shadow-sm hover:border-zinc-300 transition-colors ${
@@ -456,6 +508,8 @@ function SessionCard({
         <div className="pt-1 relative group">
           <button
             onClick={onSelectToggle}
+            disabled={isSubmitting}
+            aria-label={isCompleted ? "Remove session completion" : "Log session completion"}
             className={`flex items-center justify-center w-6 h-6 rounded-full border-2 transition-colors ${
               isCompleted
                 ? "bg-emerald-100 border-emerald-600"
@@ -467,7 +521,7 @@ function SessionCard({
           {/* Hover tooltip */}
           <div className="absolute left-10 top-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
             <div className="bg-slate-900 text-white text-xs px-2 py-1 rounded-md">
-              Click to mark complete
+              {isCompleted ? "Click to unlog session" : "Click to mark complete"}
             </div>
             <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-0 h-0 border-4 border-transparent border-r-slate-900"></div>
           </div>

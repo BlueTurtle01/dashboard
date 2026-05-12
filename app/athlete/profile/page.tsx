@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { TutorialProvider, useTutorial } from "@/lib/context/TutorialContext";
@@ -1057,7 +1056,7 @@ function AthleteProfileContent() {
   return (
     <main className="min-h-screen">
       <div className="mx-auto max-w-5xl space-y-8 px-6 py-12" data-tour="athlete-profile-form">
-        <div className="flex items-end justify-between">
+        <div className="flex items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Athlete Intake</h1>
             <p className="mt-2 text-zinc-600">
@@ -1065,12 +1064,14 @@ function AthleteProfileContent() {
             </p>
           </div>
 
-          <Link
-            href="/athlete"
-            className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-100"
+          <button
+            type="button"
+            onClick={() => void handleSendToCoach()}
+            disabled={isSendingToCoach || isSaving}
+            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Back to Plan
-          </Link>
+            {isSendingToCoach ? "Sending..." : "Send to Coach"}
+          </button>
         </div>
 
         {(() => {
@@ -2473,15 +2474,6 @@ function AthleteProfileContent() {
               className="rounded-xl bg-zinc-900 px-6 py-3 text-sm font-semibold text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? "Saving..." : "Save Profile"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void handleSendToCoach()}
-              disabled={isSendingToCoach || isSaving}
-              className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSendingToCoach ? "Sending..." : "Send to Coach"}
             </button>
           </div>
         </div>

@@ -26,6 +26,10 @@ type PlanCard = {
   gymEquipment: string[];
 };
 
+function formatDurationMinutes(value: number | null | undefined) {
+  return value != null ? `${value} min` : "";
+}
+
 export default function AthleteProgramLibrary() {
   const router = useRouter();
   const [cards, setCards] = useState<PlanCard[]>([]);
@@ -248,7 +252,7 @@ export default function AthleteProgramLibrary() {
     const { data: templateSessions } = weekIds.length > 0
       ? await supabase
           .from("program_template_sessions")
-          .select("id, program_template_week_id, day_label, sort_order, type, name, description, duration, intensity, is_key_session, activity, subtype, distance_km, terrain, elevation_gain_meters, pack_weight_kg, strides, warmup_minutes, cooldown_minutes, interval_reps, interval_duration, session_template_id")
+          .select("id, program_template_week_id, day_label, sort_order, type, name, description, duration, duration_minutes, intensity, is_key_session, activity, subtype, distance_km, terrain, elevation_gain_meters, pack_weight_kg, strides, warmup_minutes, cooldown_minutes, interval_reps, interval_duration, session_template_id")
           .in("program_template_week_id", weekIds)
           .order("sort_order")
       : { data: [] };
@@ -387,7 +391,7 @@ export default function AthleteProgramLibrary() {
         name: (s.name as string) ?? "",
         description: (s.description as string) ?? "",
         tags: [],
-        duration: (s.duration as string) ?? "",
+        duration: formatDurationMinutes(s.duration_minutes as number | null) || (s.duration as string) || "",
         intensity: (s.intensity as string) ?? "",
         isKeySession: (s.is_key_session as boolean) ?? false,
         exercises,
