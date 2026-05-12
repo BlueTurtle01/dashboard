@@ -18,12 +18,20 @@ type QuestionUI = QuestionWithAnswers & {
   isSubmitting?: boolean;
 };
 
-type CoachTab = "community" | "race";
+type CoachTab = "community" | "faq" | "race";
 
-export default function CoachKbClient({ initialQuestions }: { initialQuestions: QuestionWithAnswers[] }) {
+type CoachKbClientProps = {
+  initialQuestions: QuestionWithAnswers[];
+  initialCoachFaqQuestions: QuestionWithAnswers[];
+};
+
+export default function CoachKbClient({ initialQuestions, initialCoachFaqQuestions }: CoachKbClientProps) {
   const { isInTutorial } = useTutorial();
   const [questions, setQuestions] = useState<QuestionUI[]>(
     initialQuestions.map((q) => ({ ...q, answerBody: "", isSubmitting: false }))
+  );
+  const [faqQuestions, setFaqQuestions] = useState<QuestionUI[]>(
+    initialCoachFaqQuestions.map((q) => ({ ...q, answerBody: "", isSubmitting: false }))
   );
   const [raceQuestions, setRaceQuestions] = useState<QuestionUI[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,7 +64,7 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
   }, []);
 
   async function handleSubmitAnswer(questionId: string) {
-    const questionsToSearch = activeTab === "race" ? raceQuestions : questions;
+    const questionsToSearch = activeTab === "race" ? raceQuestions : activeTab === "faq" ? faqQuestions : questions;
     const question = questionsToSearch.find((q) => q.id === questionId);
     if (!question?.answerBody?.trim()) {
       alert("Please enter an answer");
@@ -68,6 +76,8 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
     );
     if (activeTab === "race") {
       setRaceQuestions(updated);
+    } else if (activeTab === "faq") {
+      setFaqQuestions(updated);
     } else {
       setQuestions(updated);
     }
@@ -81,6 +91,8 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
         alert(`Error: ${result.error}`);
         if (activeTab === "race") {
           setRaceQuestions(raceQuestions);
+        } else if (activeTab === "faq") {
+          setFaqQuestions(faqQuestions);
         } else {
           setQuestions(questions);
         }
@@ -102,6 +114,8 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
       alert(err instanceof Error ? err.message : "Failed to submit answer");
       if (activeTab === "race") {
         setRaceQuestions(raceQuestions);
+      } else if (activeTab === "faq") {
+        setFaqQuestions(faqQuestions);
       } else {
         setQuestions(questions);
       }
@@ -170,7 +184,7 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
         <div className="mb-8">
           <TutorialInfoBox
             title="Help the Community & Learn"
-            description="View public questions from all athletes across the platform and answer them to help everyone. You'll also find a Coach FAQ section with guidance on using the platform."
+            description="View public questions from all athletes and answer them to help everyone. You'll also find a Coach FAQ tab with guidance on using the platform, and race-specific questions from past events."
             step={1}
             totalSteps={2}
             showNext={false}
@@ -189,6 +203,16 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
           }`}
         >
           Community Questions
+        </button>
+        <button
+          onClick={() => setActiveTab("faq")}
+          className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+            activeTab === "faq"
+              ? "bg-zinc-900 text-white"
+              : "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+          }`}
+        >
+          Coach FAQ
         </button>
         <button
           onClick={() => setActiveTab("race")}
@@ -224,22 +248,28 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center">
           <p className="text-zinc-500">No community questions yet. Check back soon!</p>
         </div>
+      ) : activeTab === "faq" && faqQuestions.length === 0 ? (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center">
+          <p className="text-zinc-500">No coach FAQs available yet. Check back soon!</p>
+        </div>
       ) : activeTab === "race" && raceQuestions.length === 0 ? (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center">
           <p className="text-zinc-500">No race questions for your completed races yet. Check back soon!</p>
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          {isInTutorial && activeTab === "community" && (
+          {isInTutorial && (activeTab === "community" || activeTab === "faq") && (
             <TutorialInfoBox
-              title="Two Types of Content"
-              description="Community questions are from your athletes—answer them to build knowledge across the platform. Coach FAQ items are admin-curated guidance to help you use the platform effectively."
+              title="Community vs FAQ"
+              description={activeTab === "community"
+                ? "Community questions are from your athletes—answer them to build knowledge across the platform."
+                : "Coach FAQ items are admin-curated guidance to help you use the platform effectively. You can read and reference them, but only admins can edit."}
               step={2}
               totalSteps={2}
               showNext={false}
             />
           )}
-          {(activeTab === "community" ? questions : raceQuestions).map((question) => {
+          {(activeTab === "community" ? questions : activeTab === "faq" ? faqQuestions : raceQuestions).map((question) => {
             const hasAnswered = question.answers.some((a) => a.submitted_by === currentUserId);
             const canAnswer = question.answer_count < 3 && !hasAnswered;
 
@@ -331,6 +361,11 @@ export default function CoachKbClient({ initialQuestions }: { initialQuestions: 
                               q.id === question.id ? { ...q, answerBody: e.target.value } : q
                             );
                             setRaceQuestions(updated);
+                          } else if (activeTab === "faq") {
+                            const updated = faqQuestions.map((q) =>
+                              q.id === question.id ? { ...q, answerBody: e.target.value } : q
+                            );
+                            setFaqQuestions(updated);
                           } else {
                             const updated = questions.map((q) =>
                               q.id === question.id ? { ...q, answerBody: e.target.value } : q

@@ -205,7 +205,7 @@ export async function getQuestionsForCoach(): Promise<QuestionWithAnswers[]> {
   const { data: questions, error } = await supabase
     .from("kb_questions")
     .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at")
-    .or("type.eq.community,and(type.eq.faq,audience.eq.coach)");
+    .eq("type", "community");
 
   if (error) throw new Error(error.message);
 
@@ -482,6 +482,46 @@ export async function updateFaqQuestion(
   }
 
   return {};
+}
+
+export async function getCoachFaqQuestions(): Promise<QuestionWithAnswers[]> {
+  const { supabase } = await requireCoachKnowledgeBaseAccess();
+
+  const { data: questions, error } = await supabase
+    .from("kb_questions")
+    .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at")
+    .eq("type", "faq")
+    .eq("audience", "coach")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  const questionIds = (questions ?? []).map((q) => q.id);
+
+  let answersData: KbAnswer[] = [];
+  if (questionIds.length > 0) {
+    const { data, error: answersError } = await supabase
+      .from("kb_answers")
+      .select("id, question_id, body, submitted_by, submitted_by_name, created_at")
+      .in("question_id", questionIds)
+      .order("created_at");
+
+    if (answersError) throw new Error(answersError.message);
+    answersData = data ?? [];
+  }
+
+  const answersByQuestionId = new Map<string, KbAnswer[]>();
+  for (const answer of answersData) {
+    const arr = answersByQuestionId.get(answer.question_id) ?? [];
+    arr.push(answer);
+    answersByQuestionId.set(answer.question_id, arr);
+  }
+
+  return (questions ?? []).map((q) => ({
+    ...q,
+    answers: answersByQuestionId.get(q.id) ?? [],
+    answer_count: (answersByQuestionId.get(q.id) ?? []).length,
+  }));
 }
 
 export async function getFaqQuestionsForAdmin(): Promise<QuestionWithAnswers[]> {

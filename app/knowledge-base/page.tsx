@@ -5,6 +5,7 @@ import {
   getFaqQuestionsForAdmin,
   getFlaggedQuestions,
   getQuestionsForCoach,
+  getCoachFaqQuestions,
 } from "@/lib/actions/knowledge-base";
 import KnowledgeBaseClient from "./KnowledgeBaseClient";
 
@@ -41,8 +42,9 @@ export default async function KnowledgeBasePage() {
     redirect("/support");
   }
 
-  const [initialCoachQuestions, initialFlaggedQuestions, initialFaqQuestions] = await Promise.all([
+  const [initialCoachQuestions, initialCoachFaqQuestions, initialFlaggedQuestions, initialFaqQuestions] = await Promise.all([
     canViewCoachKb ? getQuestionsForCoach() : Promise.resolve([]),
+    canViewCoachKb ? getCoachFaqQuestions() : Promise.resolve([]),
     canViewAdminKb ? getFlaggedQuestions() : Promise.resolve([]),
     canViewAdminKb ? getFaqQuestionsForAdmin() : Promise.resolve([]),
   ]);
@@ -53,6 +55,7 @@ export default async function KnowledgeBasePage() {
       canViewCoachKb={canViewCoachKb}
       canViewAdminKb={canViewAdminKb}
       initialCoachQuestions={initialCoachQuestions}
+      initialCoachFaqQuestions={initialCoachFaqQuestions}
       initialFlaggedQuestions={initialFlaggedQuestions}
       initialFaqQuestions={initialFaqQuestions}
     />

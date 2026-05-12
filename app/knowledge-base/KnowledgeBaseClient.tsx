@@ -18,6 +18,7 @@ type KnowledgeBaseClientProps = {
   canViewCoachKb: boolean;
   canViewAdminKb: boolean;
   initialCoachQuestions: QuestionWithAnswers[];
+  initialCoachFaqQuestions: QuestionWithAnswers[];
   initialFlaggedQuestions: FlaggedQuestionWithDetails[];
   initialFaqQuestions: QuestionWithAnswers[];
 };
@@ -27,6 +28,7 @@ function KnowledgeBaseClientContent({
   canViewCoachKb,
   canViewAdminKb,
   initialCoachQuestions,
+  initialCoachFaqQuestions,
   initialFlaggedQuestions,
   initialFaqQuestions,
 }: KnowledgeBaseClientProps) {
@@ -78,7 +80,7 @@ function KnowledgeBaseClientContent({
 
       {activeTab === "athlete" && canViewAthleteKb && <AthleteKnowledgeBase />}
       {activeTab === "coach" && canViewCoachKb && (
-        <CoachKbClient initialQuestions={initialCoachQuestions} />
+        <CoachKbClient initialQuestions={initialCoachQuestions} initialCoachFaqQuestions={initialCoachFaqQuestions} />
       )}
       {activeTab === "admin" && canViewAdminKb && (
         <AdminKbClient
