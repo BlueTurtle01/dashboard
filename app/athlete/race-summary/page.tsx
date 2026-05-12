@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GeneratedPlan, PlanSession } from "@/lib/planner/types";
+import { SEGMENT_EXPLANATIONS } from "@/lib/constants/segment-explanations";
 
 type RaceData = {
   id: string;
@@ -17,12 +18,19 @@ type SegmentTag = {
   end_km: number;
 };
 
+type MatchedSession = {
+  sessionName: string;
+  sessionType: string;
+  weeks: number[];
+  isKeySession: boolean;
+  terrain?: string;
+  elevationGainMeters?: number;
+  packWeightKg?: number;
+  trainingPhases: string[];
+};
+
 type SegmentStrategy = SegmentTag & {
-  matchingSessionsWithWeeks: {
-    sessionName: string;
-    sessionType: string;
-    weeks: number[];
-  }[];
+  matchingSessionsWithWeeks: MatchedSession[];
 };
 
 type TemplateWithAimTags = {
@@ -142,7 +150,7 @@ export default function RaceSummaryPage() {
             .eq("id", planData.id);
         }
 
-        // Fetch race details - try without eq filter first to debug
+        // Fetch race details
         const { data: races, error: raceError } = await supabase
           .from("races")
           .select("*")
@@ -185,7 +193,11 @@ export default function RaceSummaryPage() {
 
         // Match sessions to segments
         const strategies = (segmentTags || []).map((segment) => {
-          const matchingSessionsWithWeeks = findMatchingSessionsForSegment(loadedPlan, segment.tag, templates);
+          const matchingSessionsWithWeeks = findMatchingSessionsForSegment(
+            loadedPlan,
+            segment.tag,
+            templates
+          );
           return {
             ...segment,
             matchingSessionsWithWeeks,
@@ -208,12 +220,27 @@ export default function RaceSummaryPage() {
     segmentTag: string,
     templates: Map<string, TemplateWithAimTags>
   ) => {
-    const matchingByName = new Map<string, { sessionType: string; weeks: number[] }>();
+    const matchingByName = new Map<
+      string,
+      {
+        sessionType: string;
+        weeks: number[];
+        isKeySession: boolean;
+        terrain?: string;
+        elevationGainMeters?: number;
+        packWeightKg?: number;
+        trainingPhases: string[];
+      }
+    >();
 
     plan.weeks.forEach((week) => {
       week.sessions.forEach((session) => {
         const sessionType = (session as any).type;
         const templateId = (session as any).sourceSessionTemplateId;
+        const isKeySession = (session as any).isKeySession ?? false;
+        const terrain = (session as any).terrain;
+        const elevationGainMeters = (session as any).elevationGainMeters;
+        const packWeightKg = (session as any).packWeightKg;
 
         let sessionAimTags: string[] = [];
 
@@ -230,9 +257,23 @@ export default function RaceSummaryPage() {
         if (sessionAimTags.includes(segmentTag)) {
           const key = session.name;
           if (!matchingByName.has(key)) {
-            matchingByName.set(key, { sessionType, weeks: [] });
+            matchingByName.set(key, {
+              sessionType,
+              weeks: [],
+              isKeySession,
+              terrain,
+              elevationGainMeters,
+              packWeightKg,
+              trainingPhases: [],
+            });
           }
-          matchingByName.get(key)!.weeks.push(week.weekNumber);
+          const entry = matchingByName.get(key)!;
+          entry.weeks.push(week.weekNumber);
+
+          const phase = week.trainingPurpose || week.phase;
+          if (phase && !entry.trainingPhases.includes(phase)) {
+            entry.trainingPhases.push(phase);
+          }
         }
       });
     });
@@ -241,13 +282,43 @@ export default function RaceSummaryPage() {
       sessionName,
       sessionType: data.sessionType,
       weeks: Array.from(new Set(data.weeks)).sort((a, b) => a - b),
+      isKeySession: data.isKeySession,
+      terrain: data.terrain,
+      elevationGainMeters: data.elevationGainMeters,
+      packWeightKg: data.packWeightKg,
+      trainingPhases: data.trainingPhases,
     }));
+  };
+
+  const getSegmentExplanation = (tag: string) => {
+    return SEGMENT_EXPLANATIONS[tag];
+  };
+
+  const getPhaseLabel = (phase: string): string => {
+    if (phase.toLowerCase().includes("base")) return "Base";
+    if (phase.toLowerCase().includes("build")) return "Build";
+    if (phase.toLowerCase().includes("peak")) return "Peak";
+    if (phase.toLowerCase().includes("taper")) return "Taper";
+    if (phase.toLowerCase().includes("recovery")) return "Recovery";
+    if (phase.toLowerCase().includes("race")) return "Race Week";
+    return phase;
+  };
+
+  const getPhaseColor = (phase: string): string => {
+    const normalized = phase.toLowerCase();
+    if (normalized.includes("base")) return "bg-blue-100 text-blue-700";
+    if (normalized.includes("build")) return "bg-orange-100 text-orange-700";
+    if (normalized.includes("peak")) return "bg-red-100 text-red-700";
+    if (normalized.includes("taper")) return "bg-purple-100 text-purple-700";
+    if (normalized.includes("recovery")) return "bg-emerald-100 text-emerald-700";
+    if (normalized.includes("race")) return "bg-rose-100 text-rose-700";
+    return "bg-zinc-100 text-zinc-700";
   };
 
   if (loading) {
     return (
       <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-4xl">
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <p className="text-sm text-zinc-600">Loading race summary…</p>
           </div>
@@ -259,7 +330,7 @@ export default function RaceSummaryPage() {
   if (error || !plan || !raceData) {
     return (
       <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-4xl">
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
             <p className="text-red-700">{error || "Failed to load race summary"}</p>
           </div>
@@ -268,15 +339,16 @@ export default function RaceSummaryPage() {
     );
   }
 
+  const uniqueSegmentTags = raceSegments.map((s) => s.tag);
+  const hasSegments = raceSegments.length > 0;
+
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-4xl space-y-6">
         {/* Race Header */}
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h1 className="text-2xl font-bold">{raceData.name}</h1>
-          {raceData.location && (
-            <p className="mt-1 text-sm text-zinc-600">{raceData.location}</p>
-          )}
+          {raceData.location && <p className="mt-1 text-sm text-zinc-600">{raceData.location}</p>}
 
           {raceData.distance_km && (
             <div className="mt-6">
@@ -288,78 +360,158 @@ export default function RaceSummaryPage() {
 
         {/* Race Segments and Coach Strategy */}
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-zinc-900">Race Segments & Training Strategy</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">Your Training Strategy</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Here's how your coach is preparing you for each segment of the race:
+            Your coach has designed your plan to address the specific demands of each section of the race.
           </p>
 
-          {raceSegments.length === 0 ? (
+          {!hasSegments ? (
             <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-              <p className="text-sm text-zinc-600">No race segments with training focuses have been assigned yet.</p>
+              <p className="text-sm text-zinc-600">
+                No race segments with training focuses have been assigned yet.
+              </p>
             </div>
           ) : (
-            <div className="mt-6 space-y-4">
-              {raceSegments.map((segment, index) => (
-                <div key={index} className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                  {/* Segment Header */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {segment.start_km}–{segment.end_km} km
-                      </p>
-                      <span className="mt-2 inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-900">
-                        {segment.tag}
-                      </span>
-                    </div>
-                  </div>
+            <>
+              {/* Race Overview Summary */}
+              <div className="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <p className="text-sm text-blue-900">
+                  <span className="font-semibold">Race overview:</span> Your plan addresses{" "}
+                  <span className="font-semibold">{uniqueSegmentTags.length} training focus{uniqueSegmentTags.length !== 1 ? "es" : ""}</span>
+                  {uniqueSegmentTags.length > 0 && (
+                    <>
+                      {" "}
+                      —{" "}
+                      {uniqueSegmentTags
+                        .map((tag) => getSegmentExplanation(tag)?.displayName || tag)
+                        .join(", ")}
+                    </>
+                  )}
+                </p>
+              </div>
 
-                  {/* Coach's Strategy */}
-                  {segment.matchingSessionsWithWeeks.length > 0 ? (
-                    <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-3">
-                      <p className="text-sm text-zinc-700">
-                        The coach has included{" "}
-                        <strong>
-                          {segment.matchingSessionsWithWeeks
-                            .map(
-                              (s) =>
-                                `${s.sessionType.toLowerCase()} sessions`
-                            )
-                            .join(" and ")}
-                        </strong>{" "}
-                        on weeks{" "}
-                        <strong>
-                          {segment.matchingSessionsWithWeeks
-                            .flatMap((s) => s.weeks)
-                            .filter((v, i, a) => a.indexOf(v) === i)
-                            .sort((a, b) => a - b)
-                            .join(", ")}
-                        </strong>{" "}
-                        to train you for the {segment.tag.replace(/-/g, " ")} section.
-                      </p>
+              {/* Segment Cards */}
+              <div className="mt-6 space-y-5">
+                {raceSegments.map((segment, index) => {
+                  const explanation = getSegmentExplanation(segment.tag);
+                  return (
+                    <div key={index} className="rounded-xl border border-zinc-200 bg-white p-5">
+                      {/* Segment Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-zinc-600">
+                            {segment.start_km}–{segment.end_km} km
+                          </p>
+                          <h3 className="mt-2 text-lg font-semibold text-zinc-900">
+                            {explanation?.displayName || segment.tag}
+                          </h3>
+                        </div>
+                      </div>
 
-                      {segment.matchingSessionsWithWeeks.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          {segment.matchingSessionsWithWeeks.map((session, sIdx) => (
-                            <div key={sIdx} className="text-xs text-zinc-600">
-                              <span className="font-semibold">{session.sessionName}</span>
-                              {session.weeks.length > 0 && (
-                                <span className="text-zinc-500"> — weeks {session.weeks.join(", ")}</span>
-                              )}
-                            </div>
-                          ))}
+                      {/* Course Context */}
+                      {explanation && (
+                        <div className="mt-4 space-y-3">
+                          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
+                              What this means for the race
+                            </p>
+                            <p className="mt-2 text-sm text-zinc-700">{explanation.courseContext}</p>
+                          </div>
+
+                          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
+                              How your coach is preparing you
+                            </p>
+                            <p className="mt-2 text-sm text-zinc-700">{explanation.trainingRationale}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sessions */}
+                      {segment.matchingSessionsWithWeeks.length > 0 ? (
+                        <div className="mt-4">
+                          <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
+                            Sessions for this section
+                          </p>
+                          <div className="mt-3 space-y-2">
+                            {segment.matchingSessionsWithWeeks.map((session, sIdx) => (
+                              <div
+                                key={sIdx}
+                                className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm"
+                              >
+                                <div className="flex items-start gap-2">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-zinc-900">
+                                        {session.sessionName}
+                                      </span>
+                                      {session.isKeySession && (
+                                        <span className="text-lg">★</span>
+                                      )}
+                                    </div>
+
+                                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                                      <span className="inline-block rounded-full bg-zinc-300 px-2 py-0.5 text-xs font-medium text-zinc-900">
+                                        {session.sessionType}
+                                      </span>
+
+                                      {session.trainingPhases.length > 0 && (
+                                        <>
+                                          {session.trainingPhases.map((phase, pIdx) => (
+                                            <span
+                                              key={pIdx}
+                                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getPhaseColor(phase)}`}
+                                            >
+                                              {getPhaseLabel(phase)}
+                                            </span>
+                                          ))}
+                                        </>
+                                      )}
+                                    </div>
+
+                                    {/* Session Details */}
+                                    <div className="mt-2 space-y-1 text-xs text-zinc-600">
+                                      {session.weeks.length > 0 && (
+                                        <p>
+                                          <span className="font-medium">Weeks:</span> {session.weeks.join(", ")}
+                                        </p>
+                                      )}
+                                      {session.terrain && (
+                                        <p>
+                                          <span className="font-medium">Terrain:</span>{" "}
+                                          {session.terrain.charAt(0).toUpperCase() + session.terrain.slice(1)}
+                                        </p>
+                                      )}
+                                      {session.elevationGainMeters && (
+                                        <p>
+                                          <span className="font-medium">Elevation:</span> +{session.elevationGainMeters}m
+                                        </p>
+                                      )}
+                                      {session.packWeightKg && (
+                                        <p>
+                                          <span className="font-medium">Pack weight:</span> {session.packWeightKg}kg
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                          <p className="text-sm text-zinc-600">
+                            No specific training sessions have been assigned to this segment. Your coach may address
+                            this through other training elements.
+                          </p>
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-3">
-                      <p className="text-sm text-zinc-500">
-                        No specific training sessions have been assigned to this segment yet. Your coach may address this through run training.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>
