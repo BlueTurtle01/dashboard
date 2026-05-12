@@ -229,12 +229,28 @@ export default function RaceSummaryPage() {
           });
         }
 
-        const elevationProfile = metaMap.get("elevation_profile") as ElevationProfile | undefined;
-        const sustainedSegmentsData = metaMap.get("sustained_segments");
+        // Parse JSON data - meta_value might be stored as string or object
+        const parseJsonData = (data: unknown): unknown => {
+          if (typeof data === "string") {
+            try {
+              return JSON.parse(data);
+            } catch (e) {
+              console.error("Failed to parse JSON:", e);
+              return data;
+            }
+          }
+          return data;
+        };
+
+        const elevationProfileData = parseJsonData(metaMap.get("elevation_profile"));
+        const elevationProfile = elevationProfileData as ElevationProfile | undefined;
+
+        const sustainedSegmentsData = parseJsonData(metaMap.get("sustained_segments"));
         const sustainedSegments = Array.isArray(sustainedSegmentsData)
           ? (sustainedSegmentsData as SustainedSegment[])
           : undefined;
-        const segmentTrainingNotesData = metaMap.get("segment_training_notes");
+
+        const segmentTrainingNotesData = parseJsonData(metaMap.get("segment_training_notes"));
         const segmentTrainingNotes = Array.isArray(segmentTrainingNotesData)
           ? (segmentTrainingNotesData as SegmentNote[])
           : undefined;
