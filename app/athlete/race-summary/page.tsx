@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GeneratedPlan, PlanSession } from "@/lib/planner/types";
 import { SEGMENT_EXPLANATIONS } from "@/lib/constants/segment-explanations";
+import { normalizeTag } from "@/lib/constants/race-segment-tags";
 
 type ElevationProfile = {
   points: { distanceKm: number; elevationM: number }[];
@@ -60,7 +61,7 @@ type MatchedSession = {
 type SegmentStrategy = {
   start_km: number;
   end_km: number;
-  tag?: string;
+  tag?: string | null;
   matchingSessionsWithWeeks: MatchedSession[];
   sustainedSegment?: SustainedSegment;
   segmentNote?: SegmentNote;
@@ -283,26 +284,24 @@ export default function RaceSummaryPage() {
         }
 
         // Build strategies from sustained segments (primary source of truth)
-        // Then match training focus tags and sessions to them
-        const segmentTagMap = new Map<string, string>();
-        (segmentTags || []).forEach((tag) => {
-          // Create a key based on km range for matching
-          const key = `${tag.start_km}-${tag.end_km}`;
-          segmentTagMap.set(key, tag.tag);
-        });
-
+        // Then match training focus tags and sessions to them, normalizing tags
         const strategies = (sustainedSegments || []).map((sustained) => {
-          // Find matching training focus tag
+          // Find matching training focus tag from race_segment_tags
           const matchingTag = (segmentTags || []).find(
             (tag) =>
               tag.start_km <= sustained.startKm &&
               tag.end_km >= sustained.endKm
           );
 
-          const matchingSessionsWithWeeks = matchingTag
+          // Normalize the tag to canonical form
+          const canonicalTag = matchingTag
+            ? normalizeTag(matchingTag.tag)
+            : null;
+
+          const matchingSessionsWithWeeks = canonicalTag
             ? findMatchingSessionsForSegment(
                 loadedPlan,
-                matchingTag.tag,
+                canonicalTag,
                 templates
               )
             : [];
@@ -316,7 +315,7 @@ export default function RaceSummaryPage() {
           return {
             start_km: sustained.startKm,
             end_km: sustained.endKm,
-            tag: matchingTag?.tag,
+            tag: canonicalTag,
             matchingSessionsWithWeeks,
             sustainedSegment: sustained,
             segmentNote,
