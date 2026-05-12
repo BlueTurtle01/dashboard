@@ -5,6 +5,33 @@ import { createClient } from "@/lib/supabase/client";
 import { GeneratedPlan, PlanSession } from "@/lib/planner/types";
 import { SEGMENT_EXPLANATIONS } from "@/lib/constants/segment-explanations";
 
+type ElevationProfile = {
+  points: { distanceKm: number; elevationM: number }[];
+  totalDistanceKm: number;
+  totalAscentM: number;
+  totalDescentM: number;
+  minElevationM: number;
+  maxElevationM: number;
+  avgGradientPct: number;
+  maxGradientPct: number;
+};
+
+type SustainedSegment = {
+  startKm: number;
+  endKm: number;
+  lengthKm: number;
+  avgGradient: number;
+  totalElevationM: number;
+  type: "climb" | "descent" | "flat";
+};
+
+type SegmentNote = {
+  start_km: number;
+  end_km: number;
+  note: string;
+  trainingFocus?: string[];
+};
+
 type RaceData = {
   id: string;
   name: string;
@@ -14,9 +41,9 @@ type RaceData = {
   elevation_loss_m: number | null;
   terrain_type: string | null;
   surface_tags: string[] | null;
-  grade_distribution_json?: Record<string, unknown> | null;
-  known_difficult_sections_json?: Record<string, unknown> | null;
-  surface_breakdown_json?: Record<string, unknown> | null;
+  elevationProfile?: ElevationProfile | null;
+  sustainedSegments?: SustainedSegment[] | null;
+  segmentTrainingNotes?: SegmentNote[] | null;
 };
 
 type SegmentTag = {
@@ -38,12 +65,19 @@ type MatchedSession = {
 
 type SegmentStrategy = SegmentTag & {
   matchingSessionsWithWeeks: MatchedSession[];
+  sustainedSegment?: SustainedSegment;
+  segmentNote?: SegmentNote;
 };
 
 type TemplateWithAimTags = {
   id: string;
   name: string;
   aim_tags: string[];
+};
+
+type RacesMeta = {
+  meta_key: string;
+  meta_value: unknown;
 };
 
 export default function RaceSummaryPage() {
@@ -157,11 +191,11 @@ export default function RaceSummaryPage() {
             .eq("id", planData.id);
         }
 
-        // Fetch race details with elevation and terrain data
+        // Fetch race details
         const { data: races, error: raceError } = await supabase
           .from("races")
           .select(
-            "id, name, location, distance_km, elevation_gain_m, elevation_loss_m, terrain_type, surface_tags, grade_distribution_json, known_difficult_sections_json, surface_breakdown_json"
+            "id, name, location, distance_km, elevation_gain_m, elevation_loss_m, terrain_type, surface_tags"
           )
           .match({ id: raceId });
 
@@ -180,6 +214,28 @@ export default function RaceSummaryPage() {
           return;
         }
 
+        // Fetch elevation profile and segment data from races_meta
+        const { data: racesMetaData, error: metaError } = await supabase
+          .from("races_meta")
+          .select("meta_key, meta_value")
+          .eq("race_id", raceId)
+          .in("meta_key", [
+            "elevation_profile",
+            "sustained_segments",
+            "segment_training_notes",
+          ]);
+
+        const metaMap = new Map<string, unknown>();
+        if (!metaError && racesMetaData) {
+          racesMetaData.forEach((meta: RacesMeta) => {
+            metaMap.set(meta.meta_key, meta.meta_value);
+          });
+        }
+
+        const elevationProfile = metaMap.get("elevation_profile") as ElevationProfile | undefined;
+        const sustainedSegments = metaMap.get("sustained_segments") as SustainedSegment[] | undefined;
+        const segmentTrainingNotes = metaMap.get("segment_training_notes") as SegmentNote[] | undefined;
+
         setRaceData({
           id: raceRecord.id,
           name: raceRecord.name,
@@ -189,9 +245,9 @@ export default function RaceSummaryPage() {
           elevation_loss_m: raceRecord.elevation_loss_m,
           terrain_type: raceRecord.terrain_type,
           surface_tags: raceRecord.surface_tags,
-          grade_distribution_json: raceRecord.grade_distribution_json,
-          known_difficult_sections_json: raceRecord.known_difficult_sections_json,
-          surface_breakdown_json: raceRecord.surface_breakdown_json,
+          elevationProfile,
+          sustainedSegments,
+          segmentTrainingNotes,
         });
 
         // Fetch race segment tags
@@ -207,16 +263,32 @@ export default function RaceSummaryPage() {
           return;
         }
 
-        // Match sessions to segments
+        // Match sessions to segments and attach sustained segment data
         const strategies = (segmentTags || []).map((segment) => {
           const matchingSessionsWithWeeks = findMatchingSessionsForSegment(
             loadedPlan,
             segment.tag,
             templates
           );
+
+          // Find corresponding sustained segment and training note
+          const sustainedSegment = sustainedSegments?.find(
+            (s) =>
+              s.startKm <= segment.start_km &&
+              s.endKm >= segment.end_km
+          );
+
+          const segmentNote = segmentTrainingNotes?.find(
+            (n) =>
+              n.start_km <= segment.start_km &&
+              n.end_km >= segment.end_km
+          );
+
           return {
             ...segment,
             matchingSessionsWithWeeks,
+            sustainedSegment,
+            segmentNote,
           };
         });
 
@@ -310,39 +382,25 @@ export default function RaceSummaryPage() {
     return SEGMENT_EXPLANATIONS[tag];
   };
 
-  const getSegmentDetails = (segment: SegmentStrategy) => {
-    if (!raceData?.known_difficult_sections_json) return null;
-
-    const sections = (raceData.known_difficult_sections_json as any)?.sections || [];
-    const matchingSection = sections.find(
-      (s: any) =>
-        s.start_km <= segment.start_km &&
-        s.end_km >= segment.end_km
-    );
-
-    return matchingSection || null;
-  };
-
   const getTerrainDescription = (segment: SegmentStrategy): string => {
-    const details = getSegmentDetails(segment);
-    const distanceKm = segment.end_km - segment.start_km;
-    let description = `${distanceKm}km section`;
-
-    if (details?.terrain_type) {
-      description += ` on ${details.terrain_type}`;
+    const sustained = segment.sustainedSegment;
+    if (!sustained) {
+      const distanceKm = segment.end_km - segment.start_km;
+      return `${distanceKm}km section`;
     }
 
-    if (details?.total_elevation_m) {
-      const elevation = details.total_elevation_m;
-      if (elevation > 0) {
-        description += `, +${elevation}m elevation`;
-      } else if (elevation < 0) {
-        description += `, −${Math.abs(elevation)}m descent`;
-      }
+    let description = `${sustained.lengthKm}km section`;
+
+    if (sustained.type === "climb") {
+      description += ` climbing ${sustained.totalElevationM}m`;
+    } else if (sustained.type === "descent") {
+      description += ` descending ${Math.abs(sustained.totalElevationM)}m`;
+    } else {
+      description += " on flat terrain";
     }
 
-    if (details?.avg_gradient && Math.abs(details.avg_gradient) > 0.5) {
-      description += ` (avg ${details.avg_gradient.toFixed(1)}% gradient)`;
+    if (sustained.avgGradient) {
+      description += ` (avg ${sustained.avgGradient.toFixed(1)}% gradient)`;
     }
 
     return description;
@@ -356,14 +414,17 @@ export default function RaceSummaryPage() {
     const explanation = SEGMENT_EXPLANATIONS[tag];
     if (!explanation) return "";
 
-    const details = getSegmentDetails(segment);
+    const sustained = segment.sustainedSegment;
+    const note = segment.segmentNote;
     const hasSessions = sessions.length > 0;
 
-    // Build detailed reasoning based on terrain + elevation
     let rationale = explanation.trainingRationale;
 
-    if (details?.terrain_type && hasSessions) {
-      const terrainText = details.terrain_type.toLowerCase().replace(/_/g, " ");
+    // Add specific context from sustained segment and training note
+    if (sustained && hasSessions) {
+      const terrainText = sustained.type === "climb" ? "climbing" : sustained.type === "descent" ? "descent" : "flat";
+      const elevationText = sustained.totalElevationM > 0 ? `+${sustained.totalElevationM}m` : `${sustained.totalElevationM}m`;
+
       const sessionDetails = sessions
         .map((s) => {
           const details: string[] = [];
@@ -375,8 +436,10 @@ export default function RaceSummaryPage() {
         .filter(Boolean);
 
       if (sessionDetails.length > 0) {
-        rationale += ` Since this segment is ${terrainText}, your coach has prioritized sessions with: ${sessionDetails.join("; ")}. This specific combination builds both the terrain-specific footwork and the elevation endurance you'll need.`;
+        rationale += ` This segment is ${sustained.lengthKm}km of ${terrainText} with ${elevationText} and ${sustained.avgGradient.toFixed(1)}% average gradient. Your coach has prioritized sessions with: ${sessionDetails.join("; ")}. This specific combination builds both the terrain-specific footwork and the elevation endurance you'll need for these conditions.`;
       }
+    } else if (note && hasSessions) {
+      rationale += ` ${note.note}`;
     }
 
     return rationale;
@@ -445,24 +508,22 @@ export default function RaceSummaryPage() {
                 <p className="mt-1 text-lg font-semibold text-zinc-900">{raceData.distance_km} km</p>
               </div>
             )}
-            {raceData.elevation_gain_m && (
+            {raceData.elevationProfile?.totalAscentM && (
               <div>
                 <p className="text-xs text-zinc-500">Total Ascent</p>
-                <p className="mt-1 text-lg font-semibold text-zinc-900">+{raceData.elevation_gain_m}m</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900">+{raceData.elevationProfile.totalAscentM}m</p>
               </div>
             )}
-            {raceData.elevation_loss_m && (
+            {raceData.elevationProfile?.totalDescentM && (
               <div>
                 <p className="text-xs text-zinc-500">Total Descent</p>
-                <p className="mt-1 text-lg font-semibold text-zinc-900">−{raceData.elevation_loss_m}m</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900">−{raceData.elevationProfile.totalDescentM}m</p>
               </div>
             )}
-            {raceData.terrain_type && (
+            {raceData.elevationProfile?.avgGradientPct && (
               <div>
-                <p className="text-xs text-zinc-500">Terrain</p>
-                <p className="mt-1 text-lg font-semibold text-zinc-900 capitalize">
-                  {raceData.terrain_type.replace(/_/g, " ")}
-                </p>
+                <p className="text-xs text-zinc-500">Avg Gradient</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900">{raceData.elevationProfile.avgGradientPct.toFixed(1)}%</p>
               </div>
             )}
           </div>
