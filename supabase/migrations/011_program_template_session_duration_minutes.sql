@@ -6,3 +6,7 @@ SET duration_minutes = NULLIF(substring(duration FROM '\d+'), '')::integer
 WHERE duration_minutes IS NULL
   AND duration IS NOT NULL
   AND duration ~ '\d+';
+
+UPDATE public.program_template_sessions
+SET duration = NULL
+WHERE duration_minutes IS NOT NULL;

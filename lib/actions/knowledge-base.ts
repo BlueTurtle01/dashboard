@@ -205,7 +205,7 @@ export async function getQuestionsForCoach(): Promise<QuestionWithAnswers[]> {
   const { data: questions, error } = await supabase
     .from("kb_questions")
     .select("id, title, body, type, audience, submitted_by, submitted_by_name, created_at")
-    .or("type.eq.community,audience.eq.coach");
+    .or("type.eq.community,and(type.eq.faq,audience.eq.coach)");
 
   if (error) throw new Error(error.message);
 
