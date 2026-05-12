@@ -46,12 +46,6 @@ type RaceData = {
   segmentTrainingNotes?: SegmentNote[] | null;
 };
 
-type SegmentTag = {
-  tag: string;
-  start_km: number;
-  end_km: number;
-};
-
 type MatchedSession = {
   sessionName: string;
   sessionType: string;
@@ -63,7 +57,10 @@ type MatchedSession = {
   trainingPhases: string[];
 };
 
-type SegmentStrategy = SegmentTag & {
+type SegmentStrategy = {
+  start_km: number;
+  end_km: number;
+  tag?: string;
   matchingSessionsWithWeeks: MatchedSession[];
   sustainedSegment?: SustainedSegment;
   segmentNote?: SegmentNote;
@@ -269,31 +266,43 @@ export default function RaceSummaryPage() {
           return;
         }
 
-        // Match sessions to segments and attach sustained segment data
-        const strategies = (segmentTags || []).map((segment) => {
-          const matchingSessionsWithWeeks = findMatchingSessionsForSegment(
-            loadedPlan,
-            segment.tag,
-            templates
+        // Build strategies from sustained segments (primary source of truth)
+        // Then match training focus tags and sessions to them
+        const segmentTagMap = new Map<string, string>();
+        (segmentTags || []).forEach((tag) => {
+          // Create a key based on km range for matching
+          const key = `${tag.start_km}-${tag.end_km}`;
+          segmentTagMap.set(key, tag.tag);
+        });
+
+        const strategies = (sustainedSegments || []).map((sustained) => {
+          // Find matching training focus tag
+          const matchingTag = (segmentTags || []).find(
+            (tag) =>
+              tag.start_km <= sustained.startKm &&
+              tag.end_km >= sustained.endKm
           );
 
-          // Find corresponding sustained segment and training note
-          const sustainedSegment = sustainedSegments?.find(
-            (s) =>
-              s.startKm <= segment.start_km &&
-              s.endKm >= segment.end_km
-          );
+          const matchingSessionsWithWeeks = matchingTag
+            ? findMatchingSessionsForSegment(
+                loadedPlan,
+                matchingTag.tag,
+                templates
+              )
+            : [];
 
           const segmentNote = segmentTrainingNotes?.find(
             (n) =>
-              n.start_km <= segment.start_km &&
-              n.end_km >= segment.end_km
+              n.start_km <= sustained.startKm &&
+              n.end_km >= sustained.endKm
           );
 
           return {
-            ...segment,
+            start_km: sustained.startKm,
+            end_km: sustained.endKm,
+            tag: matchingTag?.tag,
             matchingSessionsWithWeeks,
-            sustainedSegment,
+            sustainedSegment: sustained,
             segmentNote,
           };
         });
@@ -496,7 +505,7 @@ export default function RaceSummaryPage() {
     );
   }
 
-  const uniqueSegmentTags = raceSegments.map((s) => s.tag);
+  const uniqueSegmentTags = Array.from(new Set(raceSegments.map((s) => s.tag).filter((tag) => tag !== undefined) as string[]));
   const hasSegments = raceSegments.length > 0;
 
   return (
@@ -570,7 +579,14 @@ export default function RaceSummaryPage() {
               {/* Segment Cards */}
               <div className="mt-6 space-y-5">
                 {raceSegments.map((segment, index) => {
-                  const explanation = getSegmentExplanation(segment.tag);
+                  const explanation = segment.tag ? getSegmentExplanation(segment.tag) : undefined;
+                  const segmentTypeLabel = segment.sustainedSegment
+                    ? segment.sustainedSegment.type === "climb"
+                      ? "Climbing"
+                      : segment.sustainedSegment.type === "descent"
+                      ? "Descent"
+                      : "Flat"
+                    : "Segment";
                   return (
                     <div key={index} className="rounded-xl border border-zinc-200 bg-white p-5">
                       {/* Segment Header */}
@@ -580,38 +596,44 @@ export default function RaceSummaryPage() {
                             {segment.start_km}–{segment.end_km} km
                           </p>
                           <h3 className="mt-2 text-lg font-semibold text-zinc-900">
-                            {explanation?.displayName || segment.tag}
+                            {explanation?.displayName || segment.tag || segmentTypeLabel}
                           </h3>
                         </div>
                       </div>
 
                       {/* Course Context with Terrain Details */}
-                      {explanation && (
-                        <div className="mt-4 space-y-3">
-                          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
-                              What this section demands
-                            </p>
+                      <div className="mt-4 space-y-3">
+                        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                          <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
+                            {explanation ? "What this section demands" : "Segment characteristics"}
+                          </p>
+                          {explanation && (
                             <p className="mt-2 text-sm text-zinc-700">{explanation.courseContext}</p>
-                            <p className="mt-2 text-xs text-zinc-600">
-                              <span className="font-medium">Segment specifics:</span> {getTerrainDescription(segment)}
-                            </p>
-                          </div>
+                          )}
+                          <p className="mt-2 text-xs text-zinc-600">
+                            <span className="font-medium">Segment specifics:</span> {getTerrainDescription(segment)}
+                          </p>
+                        </div>
 
+                        {(explanation || segment.matchingSessionsWithWeeks.length > 0) && (
                           <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
                             <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
                               How your coach is preparing you
                             </p>
                             <p className="mt-2 text-sm text-zinc-700">
-                              {getTrainingRationaleWithDetails(
-                                segment.tag,
-                                segment,
-                                segment.matchingSessionsWithWeeks
-                              )}
+                              {explanation && segment.tag
+                                ? getTrainingRationaleWithDetails(
+                                    segment.tag,
+                                    segment,
+                                    segment.matchingSessionsWithWeeks
+                                  )
+                                : segment.matchingSessionsWithWeeks.length > 0
+                                ? "Sessions have been assigned to this segment to address its specific demands."
+                                : ""}
                             </p>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
 
                       {/* Sessions */}
                       {segment.matchingSessionsWithWeeks.length > 0 ? (
