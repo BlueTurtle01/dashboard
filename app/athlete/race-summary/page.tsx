@@ -233,8 +233,14 @@ export default function RaceSummaryPage() {
         }
 
         const elevationProfile = metaMap.get("elevation_profile") as ElevationProfile | undefined;
-        const sustainedSegments = metaMap.get("sustained_segments") as SustainedSegment[] | undefined;
-        const segmentTrainingNotes = metaMap.get("segment_training_notes") as SegmentNote[] | undefined;
+        const sustainedSegmentsData = metaMap.get("sustained_segments");
+        const sustainedSegments = Array.isArray(sustainedSegmentsData)
+          ? (sustainedSegmentsData as SustainedSegment[])
+          : undefined;
+        const segmentTrainingNotesData = metaMap.get("segment_training_notes");
+        const segmentTrainingNotes = Array.isArray(segmentTrainingNotesData)
+          ? (segmentTrainingNotesData as SegmentNote[])
+          : undefined;
 
         setRaceData({
           id: raceRecord.id,
