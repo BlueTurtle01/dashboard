@@ -10,6 +10,13 @@ type RaceData = {
   name: string;
   location: string | null;
   distance_km: number | null;
+  elevation_gain_m: number | null;
+  elevation_loss_m: number | null;
+  terrain_type: string | null;
+  surface_tags: string[] | null;
+  grade_distribution_json?: Record<string, unknown> | null;
+  known_difficult_sections_json?: Record<string, unknown> | null;
+  surface_breakdown_json?: Record<string, unknown> | null;
 };
 
 type SegmentTag = {
@@ -150,10 +157,12 @@ export default function RaceSummaryPage() {
             .eq("id", planData.id);
         }
 
-        // Fetch race details
+        // Fetch race details with elevation and terrain data
         const { data: races, error: raceError } = await supabase
           .from("races")
-          .select("*")
+          .select(
+            "id, name, location, distance_km, elevation_gain_m, elevation_loss_m, terrain_type, surface_tags, grade_distribution_json, known_difficult_sections_json, surface_breakdown_json"
+          )
           .match({ id: raceId });
 
         if (raceError) {
@@ -176,6 +185,13 @@ export default function RaceSummaryPage() {
           name: raceRecord.name,
           location: raceRecord.location,
           distance_km: raceRecord.distance_km,
+          elevation_gain_m: raceRecord.elevation_gain_m,
+          elevation_loss_m: raceRecord.elevation_loss_m,
+          terrain_type: raceRecord.terrain_type,
+          surface_tags: raceRecord.surface_tags,
+          grade_distribution_json: raceRecord.grade_distribution_json,
+          known_difficult_sections_json: raceRecord.known_difficult_sections_json,
+          surface_breakdown_json: raceRecord.surface_breakdown_json,
         });
 
         // Fetch race segment tags
@@ -294,6 +310,78 @@ export default function RaceSummaryPage() {
     return SEGMENT_EXPLANATIONS[tag];
   };
 
+  const getSegmentDetails = (segment: SegmentStrategy) => {
+    if (!raceData?.known_difficult_sections_json) return null;
+
+    const sections = (raceData.known_difficult_sections_json as any)?.sections || [];
+    const matchingSection = sections.find(
+      (s: any) =>
+        s.start_km <= segment.start_km &&
+        s.end_km >= segment.end_km
+    );
+
+    return matchingSection || null;
+  };
+
+  const getTerrainDescription = (segment: SegmentStrategy): string => {
+    const details = getSegmentDetails(segment);
+    const distanceKm = segment.end_km - segment.start_km;
+    let description = `${distanceKm}km section`;
+
+    if (details?.terrain_type) {
+      description += ` on ${details.terrain_type}`;
+    }
+
+    if (details?.total_elevation_m) {
+      const elevation = details.total_elevation_m;
+      if (elevation > 0) {
+        description += `, +${elevation}m elevation`;
+      } else if (elevation < 0) {
+        description += `, −${Math.abs(elevation)}m descent`;
+      }
+    }
+
+    if (details?.avg_gradient && Math.abs(details.avg_gradient) > 0.5) {
+      description += ` (avg ${details.avg_gradient.toFixed(1)}% gradient)`;
+    }
+
+    return description;
+  };
+
+  const getTrainingRationaleWithDetails = (
+    tag: string,
+    segment: SegmentStrategy,
+    sessions: MatchedSession[]
+  ): string => {
+    const explanation = SEGMENT_EXPLANATIONS[tag];
+    if (!explanation) return "";
+
+    const details = getSegmentDetails(segment);
+    const hasSessions = sessions.length > 0;
+
+    // Build detailed reasoning based on terrain + elevation
+    let rationale = explanation.trainingRationale;
+
+    if (details?.terrain_type && hasSessions) {
+      const terrainText = details.terrain_type.toLowerCase().replace(/_/g, " ");
+      const sessionDetails = sessions
+        .map((s) => {
+          const details: string[] = [];
+          if (s.terrain) details.push(`${s.terrain} running`);
+          if (s.elevationGainMeters) details.push(`${s.elevationGainMeters}m elevation`);
+          if (s.packWeightKg) details.push(`${s.packWeightKg}kg load`);
+          return details.join(" + ");
+        })
+        .filter(Boolean);
+
+      if (sessionDetails.length > 0) {
+        rationale += ` Since this segment is ${terrainText}, your coach has prioritized sessions with: ${sessionDetails.join("; ")}. This specific combination builds both the terrain-specific footwork and the elevation endurance you'll need.`;
+      }
+    }
+
+    return rationale;
+  };
+
   const getPhaseLabel = (phase: string): string => {
     if (phase.toLowerCase().includes("base")) return "Base";
     if (phase.toLowerCase().includes("build")) return "Build";
@@ -350,12 +438,34 @@ export default function RaceSummaryPage() {
           <h1 className="text-2xl font-bold">{raceData.name}</h1>
           {raceData.location && <p className="mt-1 text-sm text-zinc-600">{raceData.location}</p>}
 
-          {raceData.distance_km && (
-            <div className="mt-6">
-              <p className="text-xs text-zinc-500">Distance</p>
-              <p className="mt-1 text-lg font-semibold text-zinc-900">{raceData.distance_km} km</p>
-            </div>
-          )}
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {raceData.distance_km && (
+              <div>
+                <p className="text-xs text-zinc-500">Distance</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900">{raceData.distance_km} km</p>
+              </div>
+            )}
+            {raceData.elevation_gain_m && (
+              <div>
+                <p className="text-xs text-zinc-500">Total Ascent</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900">+{raceData.elevation_gain_m}m</p>
+              </div>
+            )}
+            {raceData.elevation_loss_m && (
+              <div>
+                <p className="text-xs text-zinc-500">Total Descent</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900">−{raceData.elevation_loss_m}m</p>
+              </div>
+            )}
+            {raceData.terrain_type && (
+              <div>
+                <p className="text-xs text-zinc-500">Terrain</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-900 capitalize">
+                  {raceData.terrain_type.replace(/_/g, " ")}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Race Segments and Coach Strategy */}
@@ -408,21 +518,30 @@ export default function RaceSummaryPage() {
                         </div>
                       </div>
 
-                      {/* Course Context */}
+                      {/* Course Context with Terrain Details */}
                       {explanation && (
                         <div className="mt-4 space-y-3">
                           <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
                             <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
-                              What this means for the race
+                              What this section demands
                             </p>
                             <p className="mt-2 text-sm text-zinc-700">{explanation.courseContext}</p>
+                            <p className="mt-2 text-xs text-zinc-600">
+                              <span className="font-medium">Segment specifics:</span> {getTerrainDescription(segment)}
+                            </p>
                           </div>
 
                           <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
                             <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
                               How your coach is preparing you
                             </p>
-                            <p className="mt-2 text-sm text-zinc-700">{explanation.trainingRationale}</p>
+                            <p className="mt-2 text-sm text-zinc-700">
+                              {getTrainingRationaleWithDetails(
+                                segment.tag,
+                                segment,
+                                segment.matchingSessionsWithWeeks
+                              )}
+                            </p>
                           </div>
                         </div>
                       )}
