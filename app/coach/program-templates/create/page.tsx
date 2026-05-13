@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type TemplateForm = {
+  raceName: string;
   description: string;
   startingFitness: string;
   eventGoal: string;
@@ -22,6 +23,14 @@ type TemplateForm = {
   requiresLoadCarriage: boolean;
   requiresHeatAcclimation: boolean;
   suitableRaceGoals: string[];
+};
+
+type RaceRow = {
+  id: string;
+  name: string;
+  distance_km: number | null;
+  terrain_type: string | null;
+  climate_type: string | null;
 };
 
 const RACE_GOAL_OPTIONS = [
@@ -70,6 +79,7 @@ function slugify(value: string) {
 
 function buildAutoName(form: TemplateForm): string {
   const parts: string[] = [];
+  if (form.raceName.trim()) parts.push(form.raceName.trim());
   if (form.startingFitness) parts.push(FITNESS_LABELS[form.startingFitness] ?? form.startingFitness);
   if (form.distance) parts.push(form.distance);
   if (form.eventGoal) {
@@ -79,8 +89,9 @@ function buildAutoName(form: TemplateForm): string {
   return parts.join(" · ");
 }
 
-function buildInitialForm(): TemplateForm {
+function buildInitialForm(raceName = ""): TemplateForm {
   return {
+    raceName,
     description: "",
     startingFitness: "novice",
     eventGoal: "",
@@ -105,15 +116,74 @@ export default function NewProgramTemplatePage() {
   const searchParams = useSearchParams();
   const visibilityParam = (searchParams.get("visibility") || "").trim().toLowerCase();
   const isPublicTemplate = visibilityParam === "public";
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+  const initialRaceName = (
+    searchParams.get("raceName") ||
+    searchParams.get("race_name") ||
+    searchParams.get("race") ||
+    ""
+  ).trim();
 
-  const [form, setForm] = useState<TemplateForm>(buildInitialForm);
+  const [form, setForm] = useState<TemplateForm>(() => buildInitialForm(initialRaceName));
+  const [races, setRaces] = useState<RaceRow[]>([]);
+  const [raceSearchQuery, setRaceSearchQuery] = useState(initialRaceName);
+  const [isLoadingRaces, setIsLoadingRaces] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
 
   const pageTitle = isPublicTemplate ? "Create Public Programme Template" : "Create Programme Template";
 
   const autoName = useMemo(() => buildAutoName(form), [form]);
+
+  const filteredRaces = useMemo(() => {
+    const query = raceSearchQuery.trim().toLowerCase();
+    if (query.length < 2) return [];
+
+    return races
+      .filter((race) =>
+        [
+          race.name,
+          race.distance_km ? `${race.distance_km}km` : "",
+          race.terrain_type,
+          race.climate_type,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(query)
+      )
+      .slice(0, 8);
+  }, [raceSearchQuery, races]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRaces() {
+      setIsLoadingRaces(true);
+
+      const { data, error } = await supabase
+        .from("races")
+        .select("id, name, distance_km, terrain_type, climate_type")
+        .order("name");
+
+      if (!isMounted) return;
+
+      if (error) {
+        setStatusMessage(`Could not load races: ${error.message}`);
+        setRaces([]);
+      } else {
+        setRaces((data ?? []) as RaceRow[]);
+      }
+
+      setIsLoadingRaces(false);
+    }
+
+    void loadRaces();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase]);
 
   function updateForm<K extends keyof TemplateForm>(key: K, value: TemplateForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -135,7 +205,7 @@ export default function NewProgramTemplatePage() {
     const name = autoName.trim();
     if (!name) {
       setIsSaving(false);
-      setStatusMessage("Please select at least a fitness level, distance, or goal to generate a template name.");
+      setStatusMessage("Please select at least a race, fitness level, distance, or goal to generate a template name.");
       return;
     }
 
@@ -241,6 +311,63 @@ export default function NewProgramTemplatePage() {
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-semibold text-zinc-900">Core details</h2>
             <div className="grid gap-4 md:grid-cols-2">
+              <label className="text-sm font-medium text-zinc-700 md:col-span-2">
+                Race
+                <input
+                  type="text"
+                  value={raceSearchQuery}
+                  onChange={(e) => setRaceSearchQuery(e.target.value)}
+                  placeholder={isLoadingRaces ? "Loading races..." : "Search races by name, terrain, or climate"}
+                  className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                />
+                {form.raceName ? (
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                    <span className="font-medium">Selected: {form.raceName}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateForm("raceName", "");
+                        setRaceSearchQuery("");
+                      }}
+                      className="text-xs font-semibold text-emerald-800 underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                ) : null}
+                {raceSearchQuery.trim().length >= 2 && filteredRaces.length > 0 ? (
+                  <div className="mt-2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+                    {filteredRaces.map((race) => {
+                      const details = [
+                        race.distance_km ? `${race.distance_km}km` : "",
+                        race.terrain_type,
+                        race.climate_type,
+                      ].filter(Boolean);
+
+                      return (
+                        <button
+                          key={race.id}
+                          type="button"
+                          onClick={() => {
+                            updateForm("raceName", race.name);
+                            setRaceSearchQuery(race.name);
+                          }}
+                          className="block w-full border-b border-zinc-100 px-4 py-3 text-left text-sm last:border-b-0 hover:bg-zinc-50"
+                        >
+                          <span className="block font-semibold text-zinc-900">{race.name}</span>
+                          {details.length > 0 ? (
+                            <span className="mt-1 block text-xs text-zinc-500">{details.join(" · ")}</span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                {raceSearchQuery.trim().length >= 2 && !isLoadingRaces && filteredRaces.length === 0 ? (
+                  <p className="mt-2 text-xs text-zinc-500">No matching races found.</p>
+                ) : null}
+              </label>
+
               <label className="text-sm font-medium text-zinc-700 md:col-span-2">
                 Description
                 <textarea
