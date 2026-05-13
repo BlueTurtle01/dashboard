@@ -32,6 +32,14 @@ type ProgramTemplateRow = {
   suitable_race_goals: string[] | null;
 };
 
+type RaceRow = {
+  id: string;
+  name: string;
+  distance_km: number | null;
+  terrain_type: string | null;
+  climate_type: string | null;
+};
+
 type ProgramTemplateWeekRow = {
   id: string;
   program_template_id: string;
@@ -184,6 +192,7 @@ type EditableWeek = {
 };
 
 type TemplateForm = {
+  raceName: string;
   name: string;
   slug: string;
   description: string;
@@ -374,12 +383,14 @@ const FITNESS_LABELS: Record<string, string> = {
 };
 
 function buildAutoName(
+  raceName: string,
   startingFitness: string,
   distance: string,
   eventGoal: string,
   weeks: EditableWeek[],
 ): string {
   const parts: string[] = [];
+  if (raceName.trim()) parts.push(raceName.trim());
   if (startingFitness) parts.push(FITNESS_LABELS[startingFitness] ?? startingFitness);
   if (distance) parts.push(distance);
   if (eventGoal) {
@@ -398,6 +409,29 @@ function buildAutoName(
     parts.push(daysLabel);
   }
   return parts.join(" · ");
+}
+
+function extractRaceNameFromTemplateName(template: ProgramTemplateRow) {
+  const parts = template.name
+    .split(/\s*(?:Â·|·)\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const generatedTokens = new Set([
+    ...Object.values(FITNESS_LABELS),
+    ...DISTANCE_OPTIONS.map((option) => option.value).filter(Boolean),
+    ...RACE_GOAL_OPTIONS.map((option) => option.label),
+  ]);
+
+  const firstGeneratedIndex = parts.findIndex((part) =>
+    generatedTokens.has(part) || /^\d+wk$/i.test(part) || /^\d+(?:-\d+)?d\/wk$/i.test(part)
+  );
+
+  if (firstGeneratedIndex <= 0) {
+    return "";
+  }
+
+  return parts.slice(0, firstGeneratedIndex).join(" · ");
 }
 
 function slugify(value: string) {
@@ -609,6 +643,7 @@ function mapToForm(
   }
 
   return {
+    raceName: extractRaceNameFromTemplateName(template),
     name: template.name,
     slug: template.slug,
     description: template.description ?? "",
@@ -767,9 +802,32 @@ export default function EditProgramTemplatePage() {
   const [sessionTemplateResults, setSessionTemplateResults] = useState<SessionTemplateRow[]>([]);
   const [pendingSessionReason, setPendingSessionReason] = useState("");
   const [searchingTemplates, setSearchingTemplates] = useState(false);
+  const [races, setRaces] = useState<RaceRow[]>([]);
+  const [raceSearchQuery, setRaceSearchQuery] = useState("");
+  const [isLoadingRaces, setIsLoadingRaces] = useState(true);
 
   const [collapsedWeekLocalIds, setCollapsedWeekLocalIds] = useState<Record<string, boolean>>({});
   const [creatingBlankSessionWeekId, setCreatingBlankSessionWeekId] = useState<string | null>(null);
+
+  const filteredRaces = useMemo(() => {
+    const query = raceSearchQuery.trim().toLowerCase();
+    if (query.length < 2) return [];
+
+    return races
+      .filter((race) =>
+        [
+          race.name,
+          race.distance_km ? `${race.distance_km}km` : "",
+          race.terrain_type,
+          race.climate_type,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(query)
+      )
+      .slice(0, 8);
+  }, [raceSearchQuery, races]);
 
   useEffect(() => {
     let cancelled = false;
@@ -924,7 +982,9 @@ export default function EditProgramTemplatePage() {
         sessionRows = (sessionData ?? []) as ProgramTemplateSessionRow[];
       }
 
-      setForm(mapToForm(templateData as ProgramTemplateRow, typedWeeks, sessionRows, exerciseMap));
+      const nextForm = mapToForm(templateData as ProgramTemplateRow, typedWeeks, sessionRows, exerciseMap);
+      setForm(nextForm);
+      setRaceSearchQuery(nextForm.raceName);
       setIsLoading(false);
     }
 
@@ -934,6 +994,36 @@ export default function EditProgramTemplatePage() {
       cancelled = true;
     };
   }, [templateId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRaces() {
+      setIsLoadingRaces(true);
+
+      const { data, error } = await supabase
+        .from("races")
+        .select("id, name, distance_km, terrain_type, climate_type")
+        .order("name");
+
+      if (cancelled) return;
+
+      if (error) {
+        setStatusMessage(`Could not load races: ${error.message}`);
+        setRaces([]);
+      } else {
+        setRaces((data ?? []) as RaceRow[]);
+      }
+
+      setIsLoadingRaces(false);
+    }
+
+    void loadRaces();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!pendingSessionSlot) {
@@ -1297,7 +1387,7 @@ export default function EditProgramTemplatePage() {
     setIsSaving(true);
     setStatusMessage("");
 
-    const derivedName = buildAutoName(form.startingFitness, form.distance, form.eventGoal, form.weeks);
+    const derivedName = buildAutoName(form.raceName, form.startingFitness, form.distance, form.eventGoal, form.weeks);
     const finalName = derivedName || form.name.trim() || "Untitled Template";
 
     // Derive plan length from actual week count (min 1 to satisfy check constraint)
@@ -1682,13 +1772,70 @@ export default function EditProgramTemplatePage() {
           <div className="mb-5 rounded-2xl border border-zinc-200 bg-zinc-50 px-5 py-4">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Template name (auto-generated)</p>
             <p className="mt-1 text-lg font-semibold text-zinc-900">
-              {buildAutoName(form.startingFitness, form.distance, form.eventGoal, form.weeks) ||
+              {buildAutoName(form.raceName, form.startingFitness, form.distance, form.eventGoal, form.weeks) ||
                 <span className="font-normal italic text-zinc-400">Will be generated from settings and weeks</span>}
             </p>
             <p className="mt-1 text-xs text-zinc-500">Updates automatically when you change settings or add/remove weeks. Saved on each Save.</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium text-zinc-700 md:col-span-2">
+              Race
+              <input
+                type="text"
+                value={raceSearchQuery}
+                onChange={(e) => setRaceSearchQuery(e.target.value)}
+                placeholder={isLoadingRaces ? "Loading races..." : "Search races by name, terrain, or climate"}
+                className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+              />
+              {form.raceName ? (
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                  <span className="font-medium">Selected: {form.raceName}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateForm("raceName", "");
+                      setRaceSearchQuery("");
+                    }}
+                    className="text-xs font-semibold text-emerald-800 underline"
+                  >
+                    Clear
+                  </button>
+                </div>
+              ) : null}
+              {raceSearchQuery.trim().length >= 2 && filteredRaces.length > 0 ? (
+                <div className="mt-2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+                  {filteredRaces.map((race) => {
+                    const details = [
+                      race.distance_km ? `${race.distance_km}km` : "",
+                      race.terrain_type,
+                      race.climate_type,
+                    ].filter(Boolean);
+
+                    return (
+                      <button
+                        key={race.id}
+                        type="button"
+                        onClick={() => {
+                          updateForm("raceName", race.name);
+                          setRaceSearchQuery(race.name);
+                        }}
+                        className="block w-full border-b border-zinc-100 px-4 py-3 text-left text-sm last:border-b-0 hover:bg-zinc-50"
+                      >
+                        <span className="block font-semibold text-zinc-900">{race.name}</span>
+                        {details.length > 0 ? (
+                          <span className="mt-1 block text-xs text-zinc-500">{details.join(" · ")}</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {raceSearchQuery.trim().length >= 2 && !isLoadingRaces && filteredRaces.length === 0 ? (
+                <p className="mt-2 text-xs text-zinc-500">No matching races found.</p>
+              ) : null}
+            </label>
+
             <label className="text-sm font-medium text-zinc-700 md:col-span-2">
               Description
               <textarea
