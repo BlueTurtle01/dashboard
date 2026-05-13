@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GeneratedPlan, PlanSession } from "@/lib/planner/types";
-import { SEGMENT_EXPLANATIONS } from "@/lib/constants/segment-explanations";
-import { normalizeTag } from "@/lib/constants/race-segment-tags";
 
 type ElevationProfile = {
   points: { distanceKm: number; elevationM: number }[];
@@ -58,10 +56,17 @@ type MatchedSession = {
   trainingPhases: string[];
 };
 
+type TrainingFocusTag = {
+  tag: string;
+  label: string;
+  category: string;
+  plan_response: string;
+};
+
 type SegmentStrategy = {
   start_km: number;
   end_km: number;
-  tag?: string | null;
+  trainingFocusTag?: TrainingFocusTag | null;
   matchingSessionsWithWeeks: MatchedSession[];
   sustainedSegment?: SustainedSegment;
   segmentNote?: SegmentNote;
@@ -85,6 +90,7 @@ export default function RaceSummaryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [templateMap, setTemplateMap] = useState<Map<string, TemplateWithAimTags>>(new Map());
+  const [tagDefinitions, setTagDefinitions] = useState<Map<string, TrainingFocusTag>>(new Map());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -270,10 +276,23 @@ export default function RaceSummaryPage() {
           segmentTrainingNotes,
         });
 
-        // Fetch race segment tags
+        // Fetch all training focus tags for reference
+        const { data: allTags, error: tagsError } = await supabase
+          .from("training_focus_tags")
+          .select("tag, label, category, plan_response");
+
+        const tagsMap = new Map<string, TrainingFocusTag>();
+        if (!tagsError && allTags) {
+          (allTags as TrainingFocusTag[]).forEach((tag) => {
+            tagsMap.set(tag.tag, tag);
+          });
+        }
+        setTagDefinitions(tagsMap);
+
+        // Fetch race segment tags with training focus tag details
         const { data: segmentTags, error: segmentsError } = await supabase
           .from("race_segment_tags")
-          .select("tag, start_km, end_km")
+          .select("training_focus_tag, start_km, end_km")
           .eq("race_id", raceId)
           .order("start_km", { ascending: true });
 
@@ -284,24 +303,24 @@ export default function RaceSummaryPage() {
         }
 
         // Build strategies from sustained segments (primary source of truth)
-        // Then match training focus tags and sessions to them, normalizing tags
+        // Then match training focus tags and sessions to them
         const strategies = (sustainedSegments || []).map((sustained) => {
           // Find matching training focus tag from race_segment_tags
-          const matchingTag = (segmentTags || []).find(
-            (tag) =>
+          const matchingTagRow = (segmentTags || []).find(
+            (tag: any) =>
               tag.start_km <= sustained.startKm &&
               tag.end_km >= sustained.endKm
           );
 
-          // Normalize the tag to canonical form
-          const canonicalTag = matchingTag
-            ? normalizeTag(matchingTag.tag)
+          // Get the full tag definition from our map
+          const trainingFocusTag = matchingTagRow
+            ? tagsMap.get(matchingTagRow.training_focus_tag) || null
             : null;
 
-          const matchingSessionsWithWeeks = canonicalTag
+          const matchingSessionsWithWeeks = trainingFocusTag
             ? findMatchingSessionsForSegment(
                 loadedPlan,
-                canonicalTag,
+                trainingFocusTag.tag,
                 templates
               )
             : [];
@@ -315,7 +334,7 @@ export default function RaceSummaryPage() {
           return {
             start_km: sustained.startKm,
             end_km: sustained.endKm,
-            tag: canonicalTag,
+            trainingFocusTag,
             matchingSessionsWithWeeks,
             sustainedSegment: sustained,
             segmentNote,
@@ -408,9 +427,6 @@ export default function RaceSummaryPage() {
     }));
   };
 
-  const getSegmentExplanation = (tag: string) => {
-    return SEGMENT_EXPLANATIONS[tag];
-  };
 
   const getTerrainDescription = (segment: SegmentStrategy): string => {
     const sustained = segment.sustainedSegment;
@@ -437,18 +453,17 @@ export default function RaceSummaryPage() {
   };
 
   const getTrainingRationaleWithDetails = (
-    tag: string,
+    trainingFocusTag: TrainingFocusTag,
     segment: SegmentStrategy,
     sessions: MatchedSession[]
   ): string => {
-    const explanation = SEGMENT_EXPLANATIONS[tag];
-    if (!explanation) return "";
+    if (!trainingFocusTag) return "";
 
     const sustained = segment.sustainedSegment;
     const note = segment.segmentNote;
     const hasSessions = sessions.length > 0;
 
-    let rationale = explanation.trainingRationale;
+    let rationale = trainingFocusTag.plan_response || "";
 
     // Add specific context from sustained segment and training note
     if (sustained && hasSessions) {
@@ -520,7 +535,7 @@ export default function RaceSummaryPage() {
     );
   }
 
-  const uniqueSegmentTags = Array.from(new Set(raceSegments.map((s) => s.tag).filter((tag) => tag !== undefined) as string[]));
+  const uniqueSegmentTags = Array.from(new Set(raceSegments.map((s) => s.trainingFocusTag?.tag).filter((tag) => tag !== undefined) as string[]));
   const hasSegments = raceSegments.length > 0;
 
   return (
@@ -584,7 +599,7 @@ export default function RaceSummaryPage() {
                       {" "}
                       —{" "}
                       {uniqueSegmentTags
-                        .map((tag) => getSegmentExplanation(tag)?.displayName || tag)
+                        .map((tag) => tagDefinitions.get(tag)?.label || tag)
                         .join(", ")}
                     </>
                   )}
@@ -594,7 +609,6 @@ export default function RaceSummaryPage() {
               {/* Segment Cards */}
               <div className="mt-6 space-y-5">
                 {raceSegments.map((segment, index) => {
-                  const explanation = segment.tag ? getSegmentExplanation(segment.tag) : undefined;
                   const segmentTypeLabel = segment.sustainedSegment
                     ? segment.sustainedSegment.type === "climb"
                       ? "Climbing"
@@ -611,7 +625,7 @@ export default function RaceSummaryPage() {
                             {segment.start_km}–{segment.end_km} km
                           </p>
                           <h3 className="mt-2 text-lg font-semibold text-zinc-900">
-                            {explanation?.displayName || segment.tag || segmentTypeLabel}
+                            {segment.trainingFocusTag?.label || segmentTypeLabel}
                           </h3>
                         </div>
                       </div>
@@ -620,25 +634,22 @@ export default function RaceSummaryPage() {
                       <div className="mt-4 space-y-3">
                         <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
                           <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
-                            {explanation ? "What this section demands" : "Segment characteristics"}
+                            Segment characteristics
                           </p>
-                          {explanation && (
-                            <p className="mt-2 text-sm text-zinc-700">{explanation.courseContext}</p>
-                          )}
                           <p className="mt-2 text-xs text-zinc-600">
                             <span className="font-medium">Segment specifics:</span> {getTerrainDescription(segment)}
                           </p>
                         </div>
 
-                        {(explanation || segment.matchingSessionsWithWeeks.length > 0) && (
+                        {(segment.trainingFocusTag || segment.matchingSessionsWithWeeks.length > 0) && (
                           <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
                             <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">
                               How your coach is preparing you
                             </p>
                             <p className="mt-2 text-sm text-zinc-700">
-                              {explanation && segment.tag
+                              {segment.trainingFocusTag
                                 ? getTrainingRationaleWithDetails(
-                                    segment.tag,
+                                    segment.trainingFocusTag,
                                     segment,
                                     segment.matchingSessionsWithWeeks
                                   )
