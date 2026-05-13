@@ -61,6 +61,7 @@ type TrainingFocusTag = {
   label: string;
   category: string;
   plan_response: string;
+  tag_type?: 'training' | 'segment' | 'both';
 };
 
 type SegmentStrategy = {
@@ -279,7 +280,7 @@ export default function RaceSummaryPage() {
         // Fetch all training focus tags for reference
         const { data: allTags, error: tagsError } = await supabase
           .from("training_focus_tags")
-          .select("tag, label, category, plan_response");
+          .select("tag, label, category, plan_response, tag_type");
 
         const tagsMap = new Map<string, TrainingFocusTag>();
         if (!tagsError && allTags) {
