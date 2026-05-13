@@ -220,6 +220,11 @@ type PendingTemplateSessionSlot = {
   weekLocalId: string;
 };
 
+type EditingSessionSlot = {
+  weekLocalId: string;
+  sessionLocalId: string;
+};
+
 type WeekTemplateSlotRow = {
   id: string;
   slot_name: string;
@@ -315,6 +320,77 @@ function getDurationMinutesInput(value: string | null | undefined) {
 function parseDurationMinutesForSave(value: string) {
   const minutes = getDigitsOnly(value);
   return minutes ? Number(minutes) : null;
+}
+
+function buildSessionNameFromFormData(formData: UnifiedSessionFormData, fallbackName: string) {
+  const parts: string[] = [];
+  if (formData.activity) parts.push(formatOptionLabel(formData.activity));
+  if (formData.targetIntensity) parts.push(formData.targetIntensity);
+  if (formData.subtype) parts.push(formatOptionLabel(formData.subtype));
+  if (formData.distanceKm) parts.push(`${formData.distanceKm}km`);
+  else if (formData.durationMinutes) parts.push(`${formData.durationMinutes}min`);
+  return parts.join(" - ") || fallbackName;
+}
+
+function mapSessionToUnifiedFormData(session: EditableSession): Partial<UnifiedSessionFormData> {
+  return {
+    description: session.description,
+    activity: session.activity ?? "",
+    subtype: session.subtype ?? "",
+    durationMinutes: getDigitsOnly(session.duration),
+    distanceKm: session.distanceKm ?? "",
+    targetIntensity: session.intensity,
+    terrain: session.terrain || "any",
+    elevation: session.elevation ?? "",
+    packWeightKg: session.packWeightKg ?? "",
+    strides: session.strides ?? "",
+    warmUpMinutes: session.warmUpMinutes ?? "",
+    coolDownMinutes: session.coolDownMinutes ?? "",
+    intervalReps: session.intervalReps ?? "",
+    intervalDuration: session.intervalDuration ?? "",
+    timeOfDay: session.runTimeType || "any",
+    sets: session.numSets,
+    setDurationSeconds: session.setDurationMinutes && !Number.isNaN(Number.parseFloat(session.setDurationMinutes))
+      ? String(Math.round(Number.parseFloat(session.setDurationMinutes) * 60))
+      : "",
+    reason: session.reason ?? "",
+    tags: session.tags ?? [],
+    sourceSessionTemplateId: session.sessionTemplateId || undefined,
+  };
+}
+
+function applyUnifiedFormDataToSession(
+  session: EditableSession,
+  formData: UnifiedSessionFormData,
+): EditableSession {
+  const setDurationMinutes = formData.setDurationSeconds
+    ? String(Number.parseInt(formData.setDurationSeconds, 10) / 60)
+    : "";
+
+  return {
+    ...session,
+    type: formData.subtype ? formatOptionLabel(formData.subtype) : session.type,
+    name: buildSessionNameFromFormData(formData, session.name || `Session ${session.sortOrder}`),
+    description: formData.description,
+    duration: formData.durationMinutes ? getDigitsOnly(formData.durationMinutes) : "",
+    intensity: formData.targetIntensity,
+    runTimeType: formData.timeOfDay || "any",
+    numSets: formData.sets,
+    setDurationMinutes,
+    activity: formData.activity,
+    subtype: formData.subtype,
+    distanceKm: formData.distanceKm,
+    terrain: formData.terrain,
+    elevation: formData.elevation,
+    packWeightKg: formData.packWeightKg,
+    strides: formData.strides,
+    warmUpMinutes: formData.warmUpMinutes,
+    coolDownMinutes: formData.coolDownMinutes,
+    intervalReps: formData.intervalReps,
+    intervalDuration: formData.intervalDuration,
+    reason: formData.reason,
+    tags: formData.tags,
+  };
 }
 
 function sessionRequiresHills(session: EditableSession) {
@@ -808,6 +884,7 @@ export default function EditProgramTemplatePage() {
 
   const [collapsedWeekLocalIds, setCollapsedWeekLocalIds] = useState<Record<string, boolean>>({});
   const [creatingBlankSessionWeekId, setCreatingBlankSessionWeekId] = useState<string | null>(null);
+  const [editingSessionSlot, setEditingSessionSlot] = useState<EditingSessionSlot | null>(null);
 
   const filteredRaces = useMemo(() => {
     const query = raceSearchQuery.trim().toLowerCase();
@@ -1244,6 +1321,18 @@ export default function EditProgramTemplatePage() {
   function handleCreateBlankSessionFromForm(weekLocalId: string, formData: UnifiedSessionFormData) {
     addBlankSession(weekLocalId, formData);
     setCreatingBlankSessionWeekId(null);
+  }
+
+  function handleUpdateSessionFromForm(
+    weekLocalId: string,
+    sessionLocalId: string,
+    formData: UnifiedSessionFormData,
+  ) {
+    updateSession(weekLocalId, sessionLocalId, (session) =>
+      applyUnifiedFormDataToSession(session, formData),
+    );
+    setEditingSessionSlot(null);
+    showTemporaryStatus("Session updated.", 1500);
   }
 
   async function openTemplateSessionPicker(weekLocalId: string, sessionType: "gym" | "functional" | "mobility") {
@@ -2171,14 +2260,46 @@ export default function EditProgramTemplatePage() {
                           <div key={session.localId} className="rounded-2xl border border-zinc-200 bg-white p-4">
                             <div className="mb-4 flex items-center justify-between gap-4">
                               <h4 className="text-base font-semibold">{session.name || "Untitled Session"}</h4>
-                              <button
-                                type="button"
-                                onClick={() => removeSession(week.localId, session.localId)}
-                                className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
-                              >
-                                Remove Session
-                              </button>
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingSessionSlot({ weekLocalId: week.localId, sessionLocalId: session.localId })}
+                                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
+                                >
+                                  Edit Session
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeSession(week.localId, session.localId)}
+                                  className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
+                                >
+                                  Remove Session
+                                </button>
+                              </div>
                             </div>
+
+                            {editingSessionSlot?.weekLocalId === week.localId &&
+                            editingSessionSlot.sessionLocalId === session.localId ? (
+                              <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                                <div className="mb-4">
+                                  <h5 className="text-base font-semibold text-zinc-900">Edit Session</h5>
+                                  <p className="mt-1 text-sm text-zinc-600">
+                                    Update this session using the same fields shown when adding a session.
+                                  </p>
+                                </div>
+
+                                <UnifiedSessionForm
+                                  key={session.localId}
+                                  initialData={mapSessionToUnifiedFormData(session)}
+                                  onSave={(formData) =>
+                                    handleUpdateSessionFromForm(week.localId, session.localId, formData)
+                                  }
+                                  onCancel={() => setEditingSessionSlot(null)}
+                                  submitButtonLabel="Update Session"
+                                  progressiveReveal
+                                />
+                              </div>
+                            ) : null}
 
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                               <label className="text-sm font-medium text-zinc-700">
@@ -2227,7 +2348,7 @@ export default function EditProgramTemplatePage() {
 
                               {session.type !== "Intervals" && session.type !== "Gym" && (
                                 <label className="text-sm font-medium text-zinc-700">
-                                  Duration (Mintes)
+                                  Duration (Minutes)
                                   <input
                                     type="text"
                                     inputMode="numeric"
