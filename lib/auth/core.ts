@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import type { AppRole } from "@/lib/types/auth";
 
+export type { AppRole };
+
 /**
  * Get the currently authenticated user, or null if not logged in
  */
