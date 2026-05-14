@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminClient, getAllAuthUsers } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
 async function isAdmin(supabase: any, userId: string): Promise<boolean> {
@@ -121,16 +121,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: rolesError.message }, { status: 500 });
     }
 
-    // Get user emails from auth.users table
-    const adminClient = createAdminClient();
-    const { data: authUsers, error: authError } = await adminClient
-      .from('auth.users')
-      .select('id, email, created_at');
-
-    if (authError) {
-      console.error('Error fetching auth users:', authError);
-      return NextResponse.json({ error: authError.message }, { status: 500 });
-    }
+    // Get user emails using Admin Auth API
+    const authUsers = await getAllAuthUsers();
 
     // Get athlete profiles for names
     const { data: profiles } = await supabase
@@ -139,7 +131,7 @@ export async function GET(req: Request) {
 
     // Combine data
     const usersMap = new Map();
-    (authUsers as any[])?.forEach((authUser: any) => {
+    authUsers.forEach((authUser: any) => {
       usersMap.set(authUser.id, {
         id: authUser.id,
         email: authUser.email,

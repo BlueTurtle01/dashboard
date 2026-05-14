@@ -15,3 +15,25 @@ export function createAdminClient() {
     },
   });
 }
+
+export async function getAllAuthUsers() {
+  const adminClient = createAdminClient();
+  const users = [];
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await adminClient.auth.admin.listUsers({
+      perPage: 1000,
+      page,
+    });
+
+    if (error) throw new Error(error.message);
+
+    users.push(...(data?.users || []));
+    hasMore = (data?.users?.length || 0) === 1000;
+    page++;
+  }
+
+  return users;
+}

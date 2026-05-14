@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAllAuthUsers } from "@/lib/supabase/admin";
 
 export async function GET() {
   const supabase = await createClient();
@@ -23,13 +23,14 @@ export async function GET() {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  const adminClient = createAdminClient();
-  const { data, error } = await adminClient.auth.admin.listUsers();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    const authUsers = await getAllAuthUsers();
+    const users = authUsers.map((u) => ({ id: u.id, email: u.email ?? null }));
+    return NextResponse.json({ users });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Database error finding users" },
+      { status: 500 }
+    );
   }
-
-  const users = (data?.users ?? []).map((u) => ({ id: u.id, email: u.email ?? null }));
-  return NextResponse.json({ users });
 }
