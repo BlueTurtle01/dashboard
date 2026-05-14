@@ -27,7 +27,10 @@ type ProductAccessWithProduct = {
   products?: { race_id?: string | null } | { race_id?: string | null }[] | null;
 };
 
-function getNestedProductRaceId(access: ProductAccessWithProduct | null | undefined) {
+function getNestedProductRaceId(accessValue: unknown) {
+  const access = Array.isArray(accessValue)
+    ? (accessValue[0] as ProductAccessWithProduct | undefined)
+    : (accessValue as ProductAccessWithProduct | null | undefined);
   const product = Array.isArray(access?.products) ? access?.products[0] : access?.products;
   return product?.race_id ?? null;
 }
@@ -75,7 +78,7 @@ export default function RacePage() {
 
       let raceId =
         enrollment?.race_id ??
-        getNestedProductRaceId(enrollment?.product_access as ProductAccessWithProduct | null);
+        getNestedProductRaceId(enrollment?.product_access);
 
       if (!raceId) {
         const { data: plan } = await supabase
