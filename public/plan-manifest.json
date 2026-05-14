@@ -1,0 +1,33 @@
+{
+  "name": "My Plan",
+  "short_name": "My Plan",
+  "description": "Your personalized training plan",
+  "start_url": "/plan",
+  "scope": "/plan",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#09090b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-540x720.png",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}

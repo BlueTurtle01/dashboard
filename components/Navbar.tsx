@@ -58,6 +58,12 @@ export default async function Navbar() {
   const isAthlete = roles.includes("athlete");
   const isSoloPlanHolder = roles.includes("solo_plan_holder");
 
+  // Hide navbar for solo plan holders (they use PWA shell instead)
+  const isSoloPlanHolderOnly = !isActualAdmin && !isAdmin && !isCoach && !isAthlete && isSoloPlanHolder;
+  if (isSoloPlanHolderOnly) {
+    return null;
+  }
+
   // Load nav permissions for non-admin roles
   let allowedNavItems = new Set<string>();
   if (!isAdmin && user) {

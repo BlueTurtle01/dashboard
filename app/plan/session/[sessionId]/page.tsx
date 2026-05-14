@@ -178,7 +178,7 @@ export default function SessionDetailPage() {
       <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
         <div className="mx-auto max-w-2xl space-y-4">
           <Link
-            href="/athlete"
+            href="/plan"
             className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900"
           >
             ← Back to plan
@@ -198,7 +198,7 @@ export default function SessionDetailPage() {
     <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
       <div className="mx-auto max-w-2xl space-y-6">
         <Link
-          href="/athlete"
+          href="/plan"
           className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900"
         >
           ← Back to plan
