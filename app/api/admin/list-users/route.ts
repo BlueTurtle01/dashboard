@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getAllAuthUsers } from "@/lib/supabase/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET() {
   const supabase = await createClient();
@@ -24,8 +24,16 @@ export async function GET() {
   }
 
   try {
-    const authUsers = await getAllAuthUsers();
-    const users = authUsers.map((u) => ({ id: u.id, email: u.email ?? null }));
+    const adminClient = createAdminClient();
+    const { data: dbUsers, error: dbError } = await adminClient
+      .from("users")
+      .select("id, email");
+
+    if (dbError) {
+      return NextResponse.json({ error: dbError.message }, { status: 500 });
+    }
+
+    const users = (dbUsers ?? []).map((u) => ({ id: u.id, email: u.email ?? null }));
     return NextResponse.json({ users });
   } catch (err) {
     return NextResponse.json(

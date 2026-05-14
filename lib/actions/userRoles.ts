@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient, getAllAuthUsers } from "@/lib/supabase/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { AppRole, requireAdminOrThrow } from "@/lib/auth/get-current-user";
 
 const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder"];
@@ -24,10 +24,16 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
 
   const adminClient = createAdminClient();
 
-  // Get auth users using Admin API
+  // Query public.users table (synced from auth.users)
   let users;
   try {
-    users = await getAllAuthUsers();
+    const result = await adminClient
+      .from("users")
+      .select("id, email");
+    if (result.error) {
+      throw new Error(`users query error: ${result.error.message}`);
+    }
+    users = result.data ?? [];
   } catch (err) {
     throw new Error(`Failed to list users: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -65,15 +71,14 @@ export async function getUserById(userId: string): Promise<UserDetail> {
 
   const adminClient = createAdminClient();
 
-  // Get all auth users and find the one we need
-  let allUsers;
-  try {
-    allUsers = await getAllAuthUsers();
-  } catch (err) {
-    throw new Error(`Failed to fetch users: ${err instanceof Error ? err.message : String(err)}`);
-  }
+  // Query public.users table (synced from auth.users)
+  const { data: userData, error: userError } = await adminClient
+    .from("users")
+    .select("id, email, phone, created_at, last_sign_in_at, email_confirmed_at")
+    .eq("id", userId)
+    .maybeSingle();
 
-  const userData = allUsers.find((u: any) => u.id === userId);
+  if (userError) throw new Error(userError.message);
   if (!userData) throw new Error("User not found");
 
   // Use admin client to bypass RLS on user_roles table

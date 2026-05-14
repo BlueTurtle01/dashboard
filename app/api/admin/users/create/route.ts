@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient, getAllAuthUsers } from '@/lib/supabase/admin';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
 async function isAdmin(supabase: any, userId: string): Promise<boolean> {
@@ -111,8 +111,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    const adminClient = createAdminClient();
+
     // Get all users with their roles
-    const { data: allRoles, error: rolesError } = await supabase
+    const { data: allRoles, error: rolesError } = await adminClient
       .from('user_roles')
       .select('user_id, role')
       .order('user_id');
@@ -121,8 +123,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: rolesError.message }, { status: 500 });
     }
 
-    // Get user emails using Admin Auth API
-    const authUsers = await getAllAuthUsers();
+    // Get users from public.users table (synced from auth.users)
+    const { data: dbUsers, error: usersError } = await adminClient
+      .from('users')
+      .select('id, email, created_at');
+
+    if (usersError) {
+      return NextResponse.json({ error: usersError.message }, { status: 500 });
+    }
 
     // Get athlete profiles for names
     const { data: profiles } = await supabase
@@ -131,11 +139,11 @@ export async function GET(req: Request) {
 
     // Combine data
     const usersMap = new Map();
-    authUsers.forEach((authUser: any) => {
-      usersMap.set(authUser.id, {
-        id: authUser.id,
-        email: authUser.email,
-        createdAt: authUser.created_at,
+    (dbUsers ?? []).forEach((dbUser: any) => {
+      usersMap.set(dbUser.id, {
+        id: dbUser.id,
+        email: dbUser.email,
+        createdAt: dbUser.created_at,
         roles: [],
         fullName: null,
       });
