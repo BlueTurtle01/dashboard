@@ -17,7 +17,7 @@ export async function createClient() {
                 ...options,
                 maxAge: options?.maxAge,
                 secure: options?.secure ?? true,
-                sameSite: options?.sameSite ?? 'Lax',
+                sameSite: options?.sameSite ?? 'lax',
                 path: options?.path ?? '/',
               });
             });
