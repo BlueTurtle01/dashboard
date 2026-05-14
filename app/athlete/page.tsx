@@ -660,7 +660,7 @@ function SessionCard({
                 {details.map(({ label, value, format }) => (
                   <div key={label} className="text-xs">
                     <p className="font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-                    <p className="text-zinc-700 capitalize">{format ? format(value) : value}</p>
+                    <p className="text-zinc-700 capitalize">{format && value !== undefined ? format(value) : value}</p>
                   </div>
                 ))}
               </div>
