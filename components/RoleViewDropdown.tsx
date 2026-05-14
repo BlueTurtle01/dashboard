@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { AppRole } from "@/lib/auth/get-current-user";
+import type { AppRole } from "@/lib/types/auth";
 
 const ROLE_LABELS: Record<AppRole, string> = {
   admin: "Admin",
