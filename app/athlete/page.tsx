@@ -641,16 +641,16 @@ function SessionCard({
             const details = [
               { label: "Session Type", value: session.subtype },
               { label: "Terrain", value: session.terrain },
-              { label: "Elevation Gain", value: session.elevationGainMeters, format: (value: string | number) => `${value}m` },
-              { label: "Pack Weight", value: session.packWeightKg, format: (value: string | number) => `${value}kg` },
+              { label: "Elevation Gain", value: session.elevationGainMeters, format: (value: unknown) => `${value}m` },
+              { label: "Pack Weight", value: session.packWeightKg, format: (value: unknown) => `${value}kg` },
               { label: "Strides", value: session.strides },
-              { label: "Warm-up", value: session.warmupMinutes, format: (value: string | number) => `${value} min` },
-              { label: "Cool-down", value: session.cooldownMinutes, format: (value: string | number) => `${value} min` },
-              { label: "Intervals", value: session.intervalReps, format: (value: string | number) => `${value} sets` },
+              { label: "Warm-up", value: session.warmupMinutes, format: (value: unknown) => `${value} min` },
+              { label: "Cool-down", value: session.cooldownMinutes, format: (value: unknown) => `${value} min` },
+              { label: "Intervals", value: session.intervalReps, format: (value: unknown) => `${value} sets` },
               { label: "Interval Duration", value: session.intervalDuration },
-              { label: "Rest Between Sets", value: session.intervalRestSeconds, format: (value: string | number) => `${value}s` },
-              { label: "Time Up", value: session.timeUpSeconds, format: (value: string | number) => `${value}s` },
-              { label: "Time Down", value: session.timeDownSeconds, format: (value: string | number) => `${value}s` },
+              { label: "Rest Between Sets", value: session.intervalRestSeconds, format: (value: unknown) => `${value}s` },
+              { label: "Time Up", value: session.timeUpSeconds, format: (value: unknown) => `${value}s` },
+              { label: "Time Down", value: session.timeDownSeconds, format: (value: unknown) => `${value}s` },
             ].filter(({ value }) => value);
 
             if (details.length === 0) return null;
