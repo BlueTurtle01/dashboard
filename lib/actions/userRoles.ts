@@ -23,14 +23,30 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
   await requireAdminOrThrow();
 
   const adminClient = createAdminClient();
-  const { data, error } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-  if (error) throw new Error(error.message);
+  let users;
+  try {
+    const result = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    if (result.error) {
+      throw new Error(`Auth listUsers error: ${result.error.message}`);
+    }
+    users = result.data.users;
+  } catch (err) {
+    throw new Error(`Failed to list users: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // Use admin client to bypass RLS on user_roles table
-  const { data: roleRows, error: rolesError } = await adminClient
-    .from("user_roles")
-    .select("user_id, role");
-  if (rolesError) throw new Error(rolesError.message);
+  let roleRows;
+  try {
+    const result = await adminClient
+      .from("user_roles")
+      .select("user_id, role");
+    if (result.error) {
+      throw new Error(`user_roles query error: ${result.error.message}`);
+    }
+    roleRows = result.data;
+  } catch (err) {
+    throw new Error(`Failed to load user roles: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   const rolesByUser: Record<string, AppRole[]> = {};
   for (const row of roleRows ?? []) {
@@ -39,7 +55,7 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
     rolesByUser[row.user_id].push(row.role as AppRole);
   }
 
-  return (data.users ?? []).map((u) => ({
+  return (users ?? []).map((u) => ({
     id: u.id,
     email: u.email ?? "(no email)",
     roles: rolesByUser[u.id] ?? [],
