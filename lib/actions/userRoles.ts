@@ -24,23 +24,17 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
 
   const adminClient = createAdminClient();
 
-  // Try to get users from auth.users table instead of listUsers API
+  // Query auth.users table directly (more reliable than listUsers API)
   let users;
   try {
     const result = await adminClient
       .from("auth.users")
-      .select("id, email");
+      .select("id, email, created_at, last_sign_in_at, email_confirmed_at, phone");
 
     if (result.error) {
-      // Fallback to listUsers API if auth.users doesn't work
-      const apiResult = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-      if (apiResult.error) {
-        throw new Error(`Auth listUsers error: ${apiResult.error.message}`);
-      }
-      users = apiResult.data.users;
-    } else {
-      users = result.data ?? [];
+      throw new Error(`auth.users query error: ${result.error.message}`);
     }
+    users = result.data ?? [];
   } catch (err) {
     throw new Error(`Failed to list users: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -77,10 +71,16 @@ export async function getUserById(userId: string): Promise<UserDetail> {
   await requireAdminOrThrow();
 
   const adminClient = createAdminClient();
-  const { data, error } = await adminClient.auth.admin.getUserById(userId);
-  if (error) throw new Error(error.message);
 
-  const { user } = data;
+  // Query auth.users table directly
+  const { data: userData, error: userError } = await adminClient
+    .from("auth.users")
+    .select("id, email, phone, created_at, last_sign_in_at, email_confirmed_at")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userError) throw new Error(userError.message);
+  if (!userData) throw new Error("User not found");
 
   // Use admin client to bypass RLS on user_roles table
   const { data: roleRows, error: rolesError } = await adminClient
@@ -90,12 +90,12 @@ export async function getUserById(userId: string): Promise<UserDetail> {
   if (rolesError) throw new Error(rolesError.message);
 
   return {
-    id: user.id,
-    email: user.email ?? "(no email)",
-    phone: user.phone ?? null,
-    created_at: user.created_at,
-    last_sign_in_at: user.last_sign_in_at ?? null,
-    email_confirmed_at: user.email_confirmed_at ?? null,
+    id: userData.id,
+    email: userData.email ?? "(no email)",
+    phone: userData.phone ?? null,
+    created_at: userData.created_at,
+    last_sign_in_at: userData.last_sign_in_at ?? null,
+    email_confirmed_at: userData.email_confirmed_at ?? null,
     roles: (roleRows ?? [])
       .map((r) => r.role as AppRole)
       .filter((r) => ALL_ROLES.includes(r)),
