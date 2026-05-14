@@ -1,9 +1,38 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export type Race = {
   id: string;
+  slug: string;
   name: string;
   location: string | null;
   distance_km: number | null;
   terrain_type: string | null;
+};
+
+export type RaceReview = {
+  id: string;
+  race_slug: string;
+  reviewer_name: string | null;
+  drinks_station_rating: number;
+  support_level_rating: number;
+  race_organisation_rating: number;
+  created_at: string;
+  drinks_station_notes: string | null;
+  support_level_notes: string | null;
+  race_organisation_notes: string | null;
+  general_review: string | null;
+  strava_athlete_name: string | null;
+  is_verified: boolean;
+  start_finish_logistics_rating: number | null;
+  start_finish_logistics_notes: string | null;
+  course_marking_rating: number | null;
+  course_marking_notes: string | null;
+  toilets_facilities_rating: number | null;
+  toilets_facilities_notes: string | null;
+  atmosphere_rating: number | null;
+  atmosphere_notes: string | null;
+  value_for_money_rating: number | null;
+  value_for_money_notes: string | null;
 };
 
 type ProductAccessWithProduct = {
@@ -25,7 +54,7 @@ function getNestedProductRaceId(accessValue: unknown) {
   return product?.race_id ?? null;
 }
 
-export async function getLinkedRaceId(supabase: any, userId: string) {
+export async function getLinkedRaceId(supabase: SupabaseClient, userId: string) {
   const { data: enrollment } = await supabase
     .from("plan_enrollments")
     .select(
@@ -105,15 +134,55 @@ export async function getLinkedRaceId(supabase: any, userId: string) {
   return raceId ?? null;
 }
 
-export async function getLinkedRace(supabase: any, userId: string): Promise<Race | null> {
+export async function getLinkedRace(supabase: SupabaseClient, userId: string): Promise<Race | null> {
   const raceId = await getLinkedRaceId(supabase, userId);
   if (!raceId) return null;
 
   const { data } = await supabase
     .from("races")
-    .select("id, name, location, distance_km, terrain_type")
+    .select("id, slug, name, location, distance_km, terrain_type")
     .eq("id", raceId)
     .maybeSingle();
 
   return (data as Race | null) ?? null;
+}
+
+export async function getRaceReviews(supabase: SupabaseClient, raceSlug: string): Promise<RaceReview[]> {
+  const { data, error } = await supabase
+    .from("race_reviews")
+    .select(
+      `
+      id,
+      race_slug,
+      reviewer_name,
+      drinks_station_rating,
+      support_level_rating,
+      race_organisation_rating,
+      created_at,
+      drinks_station_notes,
+      support_level_notes,
+      race_organisation_notes,
+      general_review,
+      strava_athlete_name,
+      is_verified,
+      start_finish_logistics_rating,
+      start_finish_logistics_notes,
+      course_marking_rating,
+      course_marking_notes,
+      toilets_facilities_rating,
+      toilets_facilities_notes,
+      atmosphere_rating,
+      atmosphere_notes,
+      value_for_money_rating,
+      value_for_money_notes
+    `
+    )
+    .eq("race_slug", raceSlug)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as RaceReview[];
 }
