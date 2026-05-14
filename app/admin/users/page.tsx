@@ -16,6 +16,7 @@ export default async function AdminUsersPage() {
     users = await listUsersWithRoles();
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Unknown error";
+    console.error("Error loading users:", err);
     users = [];
   }
 
@@ -28,7 +29,12 @@ export default async function AdminUsersPage() {
         </p>
 
         {loadError ? (
-          <p style={errorStyle}>{loadError}</p>
+          <div style={errorStyle}>
+            <p><strong>Error loading users:</strong></p>
+            <p style={{ fontFamily: "monospace", marginTop: "8px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {loadError}
+            </p>
+          </div>
         ) : (
           <UserRolesTable users={users} />
         )}

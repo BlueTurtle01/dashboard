@@ -59,8 +59,8 @@ export default async function Navbar() {
   const isSoloPlanHolder = roles.includes("solo_plan_holder");
 
   // Hide navbar for solo plan holders (they use PWA shell instead)
-  const isSoloPlanHolderOnly = !isActualAdmin && !isAdmin && !isCoach && !isAthlete && isSoloPlanHolder;
-  if (isSoloPlanHolderOnly) {
+  // Only hide if: user is NOT an actual admin AND their role is ONLY solo_plan_holder
+  if (!isActualAdmin && actualRoles.length === 1 && actualRoles[0] === "solo_plan_holder") {
     return null;
   }
 

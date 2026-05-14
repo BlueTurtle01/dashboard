@@ -26,8 +26,8 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
   const { data, error } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
   if (error) throw new Error(error.message);
 
-  const supabase = await createClient();
-  const { data: roleRows, error: rolesError } = await supabase
+  // Use admin client to bypass RLS on user_roles table
+  const { data: roleRows, error: rolesError } = await adminClient
     .from("user_roles")
     .select("user_id, role");
   if (rolesError) throw new Error(rolesError.message);
@@ -55,8 +55,8 @@ export async function getUserById(userId: string): Promise<UserDetail> {
 
   const { user } = data;
 
-  const supabase = await createClient();
-  const { data: roleRows, error: rolesError } = await supabase
+  // Use admin client to bypass RLS on user_roles table
+  const { data: roleRows, error: rolesError } = await adminClient
     .from("user_roles")
     .select("role")
     .eq("user_id", userId);
@@ -77,10 +77,10 @@ export async function getUserById(userId: string): Promise<UserDetail> {
 
 export async function saveUserRoles(userId: string, roles: AppRole[]) {
   await requireAdminOrThrow();
-  const supabase = await createClient();
+  const adminClient = createAdminClient();
 
   // Delete existing roles for this user
-  const { error: deleteError } = await supabase
+  const { error: deleteError } = await adminClient
     .from("user_roles")
     .delete()
     .eq("user_id", userId);
@@ -88,7 +88,7 @@ export async function saveUserRoles(userId: string, roles: AppRole[]) {
 
   if (roles.length === 0) return;
 
-  const { error: insertError } = await supabase.from("user_roles").insert(
+  const { error: insertError } = await adminClient.from("user_roles").insert(
     roles.map((role) => ({ user_id: userId, role }))
   );
   if (insertError) throw new Error(insertError.message);
