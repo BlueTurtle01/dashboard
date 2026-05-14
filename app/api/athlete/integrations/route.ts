@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 
 export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const provider = searchParams.get('provider') || 'strava';
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
@@ -14,7 +16,7 @@ export async function GET(req: Request) {
       .from('athlete_integrations')
       .select('*')
       .eq('user_id', user.id)
-      .eq('provider', 'strava')
+      .eq('provider', provider)
       .single();
 
     if (error && error.code !== 'PGRST116') {

@@ -25,6 +25,7 @@ export default function SessionDetailPage() {
   const [exerciseMedia, setExerciseMedia] = useState<Map<string, { photoUrl: string | null; videoUrl: string | null }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [calendarSending, setCalendarSending] = useState(false);
 
   useEffect(() => {
     const fetchSessionDetails = async () => {
@@ -140,6 +141,28 @@ export default function SessionDetailPage() {
     return colors[type] || { bg: "bg-zinc-100", text: "text-zinc-700" };
   };
 
+  async function sendToGoogleCalendar() {
+    try {
+      setCalendarSending(true);
+      setError(null);
+
+      const response = await fetch("/api/google-calendar/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "single", sessionId }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "Could not send session to Google Calendar");
+
+      alert("Session sent to Google Calendar.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCalendarSending(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
@@ -187,8 +210,18 @@ export default function SessionDetailPage() {
               <h1 className="text-3xl font-bold text-zinc-900">{session.name}</h1>
               <p className="mt-2 text-zinc-600">{session.dayLabel}</p>
             </div>
-            <div className={`px-4 py-2 rounded-xl font-semibold ${color.bg} ${color.text}`}>
-              {session.type}
+            <div className="flex flex-col items-end gap-3">
+              <div className={`px-4 py-2 rounded-xl font-semibold ${color.bg} ${color.text}`}>
+                {session.type}
+              </div>
+              <button
+                type="button"
+                onClick={() => void sendToGoogleCalendar()}
+                disabled={calendarSending}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+              >
+                {calendarSending ? "Sending..." : "Send to Google Calendar"}
+              </button>
             </div>
           </div>
         </div>

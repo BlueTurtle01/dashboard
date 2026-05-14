@@ -22,6 +22,7 @@ export default function SessionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [calendarSubmitting, setCalendarSubmitting] = useState<string | null>(null);
 
   // Form state for selected session
   const [perceivedEffort, setPerceivedEffort] = useState<number | null>(null);
@@ -249,6 +250,29 @@ export default function SessionsPage() {
     }
   };
 
+  const sendSessionsToCalendar = async (input: { sessionId?: string; mode?: "single" | "all" }) => {
+    try {
+      setCalendarSubmitting(input.mode === "all" ? "all" : input.sessionId ?? null);
+      setError(null);
+
+      const response = await fetch("/api/google-calendar/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "Could not send to Google Calendar");
+
+      const failedText = data.failedCount ? ` (${data.failedCount} failed)` : "";
+      alert(`Sent ${data.createdCount} session${data.createdCount === 1 ? "" : "s"} to Google Calendar${failedText}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCalendarSubmitting(null);
+    }
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
@@ -379,6 +403,13 @@ export default function SessionsPage() {
             </div>
             <div className="flex gap-2">
               <button
+                onClick={() => void sendSessionsToCalendar({ mode: "all" })}
+                disabled={calendarSubmitting !== null}
+                className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {calendarSubmitting === "all" ? "Sending..." : "Send All to Calendar"}
+              </button>
+              <button
                 onClick={() => setDisplayWeekIndex(Math.max(0, displayWeekIndex - 1))}
                 disabled={displayWeekIndex === 0}
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -428,6 +459,8 @@ export default function SessionsPage() {
                   setNotes={setNotes}
                   onLogCompletion={() => handleLogCompletion(mainSession.id, alternativeSession?.id)}
                   alternativeSessionId={alternativeSession?.id}
+                  onSendToCalendar={() => sendSessionsToCalendar({ mode: "single", sessionId: mainSession.id })}
+                  isSendingToCalendar={calendarSubmitting === mainSession.id}
                 />
 
                 {/* Alternative session card */}
@@ -451,6 +484,8 @@ export default function SessionsPage() {
                     onLogCompletion={() => handleLogCompletion(alternativeSession.id, mainSession.id)}
                     alternativeSessionId={mainSession.id}
                     isAlternative={true}
+                    onSendToCalendar={() => sendSessionsToCalendar({ mode: "single", sessionId: alternativeSession.id })}
+                    isSendingToCalendar={calendarSubmitting === alternativeSession.id}
                   />
                 )}
               </div>
@@ -477,6 +512,8 @@ interface SessionCardProps {
   onLogCompletion: () => void;
   alternativeSessionId?: string;
   isAlternative?: boolean;
+  onSendToCalendar: () => void;
+  isSendingToCalendar: boolean;
 }
 
 function SessionCard({
@@ -494,6 +531,8 @@ function SessionCard({
   onLogCompletion,
   alternativeSessionId,
   isAlternative = false,
+  onSendToCalendar,
+  isSendingToCalendar,
 }: SessionCardProps) {
   const showTooltip = false;
   const onDismissTooltip = () => {};
@@ -555,6 +594,17 @@ function SessionCard({
             </span>
             {session.isKeySession && <span className="text-xs font-semibold px-2 py-1 rounded bg-amber-100 text-amber-900">Key</span>}
             {isAlternative && <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-100 text-blue-900">Alternative</span>}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onSendToCalendar}
+              disabled={isSendingToCalendar}
+              className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+            >
+              {isSendingToCalendar ? "Sending..." : "Send to Google Calendar"}
+            </button>
           </div>
 
           <p className="text-sm text-zinc-600 mt-1">

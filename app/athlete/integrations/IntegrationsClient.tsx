@@ -3,6 +3,7 @@
 import { TutorialProvider, useTutorial } from "@/lib/context/TutorialContext";
 import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
 import StravaIntegration from "./StravaIntegration";
+import GoogleCalendarIntegration from "./GoogleCalendarIntegration";
 
 function IntegrationsContent() {
   const { isInTutorial } = useTutorial();
@@ -25,7 +26,13 @@ function IntegrationsContent() {
         <h1 className="text-3xl font-bold mb-2">Integrations</h1>
         <p className="text-gray-600 mb-8">Manage your connected services and activity syncing.</p>
 
+        <div className="space-y-6">
+          <GoogleCalendarIntegration />
+        </div>
+
+        <div className="mt-6">
         <StravaIntegration />
+        </div>
       </div>
     </div>
   );
