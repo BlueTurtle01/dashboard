@@ -23,13 +23,24 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
   await requireAdminOrThrow();
 
   const adminClient = createAdminClient();
+
+  // Try to get users from auth.users table instead of listUsers API
   let users;
   try {
-    const result = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    const result = await adminClient
+      .from("auth.users")
+      .select("id, email");
+
     if (result.error) {
-      throw new Error(`Auth listUsers error: ${result.error.message}`);
+      // Fallback to listUsers API if auth.users doesn't work
+      const apiResult = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+      if (apiResult.error) {
+        throw new Error(`Auth listUsers error: ${apiResult.error.message}`);
+      }
+      users = apiResult.data.users;
+    } else {
+      users = result.data ?? [];
     }
-    users = result.data.users;
   } catch (err) {
     throw new Error(`Failed to list users: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -55,7 +66,7 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
     rolesByUser[row.user_id].push(row.role as AppRole);
   }
 
-  return (users ?? []).map((u) => ({
+  return (users ?? []).map((u: any) => ({
     id: u.id,
     email: u.email ?? "(no email)",
     roles: rolesByUser[u.id] ?? [],
