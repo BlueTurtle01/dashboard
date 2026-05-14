@@ -277,6 +277,15 @@ export default function AdminSoloPlanPage() {
       // Create a new athlete_plan from the template with sessions
       const assignmentDate = new Date().toISOString();
       const planJson = generatePlanFromTemplate(selectedTemplate, weekData || [], allSessions, assignmentDate);
+      const { data: productData } = await supabase
+        .from("products")
+        .select("id, race_id")
+        .eq("template_id", formData.templateId)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      const linkedProductId = productData?.id ?? null;
+      const linkedRaceId = productData?.race_id ?? null;
 
       const { data: planData, error: planError } = await supabase
         .from("athlete_plans")
@@ -286,7 +295,7 @@ export default function AdminSoloPlanPage() {
           status: "active",
           name: selectedTemplate.name,
           coach_user_id: null,
-          event_id: null,
+          event_id: linkedRaceId,
           source_program_template_id: formData.templateId,
         })
         .select("id, event_id")
@@ -302,7 +311,7 @@ export default function AdminSoloPlanPage() {
         .from("user_product_access")
         .insert({
           user_id: formData.athleteUserId,
-          product_id: null,
+          product_id: linkedProductId,
           product_code: "solo_16_week_plan",
           status: "active",
           starts_at: assignmentDate,
@@ -324,7 +333,7 @@ export default function AdminSoloPlanPage() {
           product_access_id: accessData.id,
           athlete_plan_id: planData.id,
           source_program_template_id: formData.templateId,
-          race_id: planData.event_id ?? null,
+          race_id: planData.event_id ?? linkedRaceId,
           coach_user_id: null,
           status: "active",
           coaching_level: "none",

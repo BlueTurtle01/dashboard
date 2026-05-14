@@ -65,20 +65,6 @@ export async function userHasPlanAppAccess(supabase: any, userId: string): Promi
   ]);
 }
 
-export async function getProductIdByCode(
-  supabase: any,
-  code: ProductCode
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("products")
-    .select("id")
-    .eq("code", code)
-    .maybeSingle();
-
-  if (error || !data?.id) return null;
-  return data.id as string;
-}
-
 export function getDefaultRouteForAccess(options: {
   roles: string[];
   hasPlanAccess?: boolean;

@@ -27,6 +27,12 @@ type ProductAccessWithProduct = {
   products?: { race_id?: string | null } | { race_id?: string | null }[] | null;
 };
 
+type PlanRaceLink = {
+  event_id: string | null;
+  source_program_template_id: string | null;
+  plan_json?: Record<string, unknown> | null;
+};
+
 function getNestedProductRaceId(accessValue: unknown) {
   const access = Array.isArray(accessValue)
     ? (accessValue[0] as ProductAccessWithProduct | undefined)
@@ -62,6 +68,7 @@ export default function RacePage() {
           `
           race_id,
           athlete_plan_id,
+          source_program_template_id,
           product_access:user_product_access (
             product_id,
             products:product_id (
@@ -80,17 +87,48 @@ export default function RacePage() {
         enrollment?.race_id ??
         getNestedProductRaceId(enrollment?.product_access);
 
+      let activePlan: PlanRaceLink | null = null;
+
       if (!raceId) {
         const { data: plan } = await supabase
           .from("athlete_plans")
-          .select("event_id")
+          .select("event_id, source_program_template_id, plan_json")
           .eq("athlete_user_id", user.id)
           .eq("status", "active")
           .order("updated_at", { ascending: false })
           .limit(1)
           .maybeSingle();
 
-        raceId = plan?.event_id ?? null;
+        activePlan = (plan as PlanRaceLink | null) ?? null;
+        raceId = activePlan?.event_id ?? null;
+      }
+
+      if (!raceId && enrollment?.athlete_plan_id) {
+        const { data: plan } = await supabase
+          .from("athlete_plans")
+          .select("event_id, source_program_template_id, plan_json")
+          .eq("id", enrollment.athlete_plan_id)
+          .maybeSingle();
+
+        activePlan = (plan as PlanRaceLink | null) ?? activePlan;
+        raceId = activePlan?.event_id ?? null;
+      }
+
+      const sourceTemplateId =
+        enrollment?.source_program_template_id ??
+        activePlan?.source_program_template_id ??
+        ((activePlan?.plan_json?.templateId as string | undefined) ?? null);
+
+      if (!raceId && sourceTemplateId) {
+        const { data: product } = await supabase
+          .from("products")
+          .select("race_id")
+          .eq("template_id", sourceTemplateId)
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+
+        raceId = product?.race_id ?? null;
       }
 
       if (!raceId) {
