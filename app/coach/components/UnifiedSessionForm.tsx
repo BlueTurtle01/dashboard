@@ -84,11 +84,13 @@ interface UnifiedSessionFormProps {
   initialData?: Partial<UnifiedSessionFormData>;
   generatedNamePreview?: string;
   loadingGeneratedNumber?: boolean;
+  distanceUnit?: "km" | "mi";
   onSave: (data: UnifiedSessionFormData) => void;
   onCancel: () => void;
   isSaving?: boolean;
   submitButtonLabel?: string;
   progressiveReveal?: boolean;
+  hideDescription?: boolean;
 }
 
 const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
@@ -137,6 +139,15 @@ const terrainOptions = [
   "any",
 ] as const;
 
+const elevationOptions = [
+  { value: "", label: "— select elevation —" },
+  { value: "0", label: "Flat / none" },
+  { value: "100", label: "Rolling / light climb" },
+  { value: "250", label: "Hilly" },
+  { value: "500", label: "Steep" },
+  { value: "1000", label: "Mountainous / very steep" },
+];
+
 const timeOfDayOptions = [
   "any",
   "morning",
@@ -153,12 +164,16 @@ function formatLabel(value: string | null | undefined) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function buildSessionName(activity: string, subtype: string, intensity: string, durationMinutes: string, distanceKm: string): string {
+function getDistanceUnitSuffix(unit: "km" | "mi") {
+  return unit === "mi" ? "mi" : "km";
+}
+
+function buildSessionName(activity: string, subtype: string, intensity: string, durationMinutes: string, distanceKm: string, distanceUnit: "km" | "mi"): string {
   const parts: string[] = [];
   if (activity) parts.push(formatLabel(activity));
   if (intensity) parts.push(formatLabel(intensity));
   if (subtype) parts.push(formatLabel(subtype));
-  if (distanceKm) parts.push(`${distanceKm}km`);
+  if (distanceKm) parts.push(`${distanceKm}${getDistanceUnitSuffix(distanceUnit)}`);
   else if (durationMinutes) parts.push(`${durationMinutes}min`);
   return parts.join(" · ");
 }
@@ -217,11 +232,13 @@ export function UnifiedSessionForm({
   initialData,
   generatedNamePreview,
   loadingGeneratedNumber = false,
+  distanceUnit = "km",
   onSave,
   onCancel,
   isSaving = false,
   submitButtonLabel = "Save",
   progressiveReveal = false,
+  hideDescription = false,
 }: UnifiedSessionFormProps) {
   const [form, setForm] = useState<UnifiedSessionFormData>(
     initialData ? { ...createEmptyForm(), ...initialData } : createEmptyForm()
@@ -457,8 +474,8 @@ export function UnifiedSessionForm({
   }, [form.activity, form.subtype, fieldConfigMap]);
 
   const autoName = useMemo(
-    () => buildSessionName(form.activity, form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm),
-    [form.activity, form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm],
+    () => buildSessionName(form.activity, form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm, distanceUnit),
+    [form.activity, form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm, distanceUnit],
   );
 
   function updateForm<K extends keyof UnifiedSessionFormData>(
@@ -566,15 +583,17 @@ export function UnifiedSessionForm({
       )}
 
       {subtypeChosen ? (<>
-      <label className="block">
-        <span className="mb-1 block text-sm font-semibold text-zinc-900">Description</span>
-        <textarea
-          className="min-h-[90px] w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
-          value={form.description}
-          onChange={(e) => updateForm("description", e.target.value)}
-          placeholder="Short description of the session"
-        />
-      </label>
+      {!hideDescription ? (
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold text-zinc-900">Description</span>
+          <textarea
+            className="min-h-[90px] w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+            value={form.description}
+            onChange={(e) => updateForm("description", e.target.value)}
+            placeholder="Short description of the session"
+          />
+        </label>
+      ) : null}
 
       <label className="block">
         <span className="mb-1 block text-sm font-semibold text-zinc-900">Reason</span>
@@ -606,7 +625,7 @@ export function UnifiedSessionForm({
         {fieldVis.show_distance ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
-              Distance (km)
+              Distance ({getDistanceUnitSuffix(distanceUnit)})
             </span>
             <input
               type="number"
@@ -764,12 +783,20 @@ export function UnifiedSessionForm({
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
               Elevation / Steepness
             </span>
-            <input
+            <select
               className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
               value={form.elevation}
               onChange={(e) => updateForm("elevation", e.target.value)}
-              placeholder="e.g. Hilly, steep, rolling"
-            />
+            >
+              {elevationOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+              {form.elevation && !elevationOptions.some((option) => option.value === form.elevation) ? (
+                <option value={form.elevation}>{form.elevation}</option>
+              ) : null}
+            </select>
           </label>
         ) : null}
 

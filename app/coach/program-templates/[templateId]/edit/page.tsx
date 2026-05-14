@@ -235,6 +235,10 @@ type WeekTemplateSlotRow = {
   session_templates: SessionTemplateRow | null;
 };
 
+type DistanceUnit = "km" | "mi";
+
+const KM_PER_MILE = 1.609344;
+
 const weekdayQuickAddOptions = [
   { label: "Mon", dayNumber: 1 },
   { label: "Tue", dayNumber: 2 },
@@ -264,6 +268,15 @@ const sessionTypeOptions = [
 const runTimeTypeOptions = ["any", "morning", "afternoon", "evening"];
 
 const terrainOptions = ["road", "trail", "mixed", "sand", "treadmill", "stairs", "indoor", "water", "any"];
+
+const elevationOptions = [
+  { value: "", label: "— select elevation —" },
+  { value: "0", label: "Flat / none" },
+  { value: "100", label: "Rolling / light climb" },
+  { value: "250", label: "Hilly" },
+  { value: "500", label: "Steep" },
+  { value: "1000", label: "Mountainous / very steep" },
+];
 
 const warmUpOptions = ["", "5", "10", "15", "20"];
 
@@ -322,12 +335,64 @@ function parseDurationMinutesForSave(value: string) {
   return minutes ? Number(minutes) : null;
 }
 
-function buildSessionNameFromFormData(formData: UnifiedSessionFormData, fallbackName: string) {
+function getDistanceUnitSuffix(unit: DistanceUnit) {
+  return unit === "mi" ? "mi" : "km";
+}
+
+function formatDistanceInput(value: number) {
+  return Number(value.toFixed(2)).toString();
+}
+
+function convertDistanceInput(value: string | undefined, from: DistanceUnit, to: DistanceUnit) {
+  if (!value || from === to) return value ?? "";
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return value;
+  const converted = from === "km" ? parsed / KM_PER_MILE : parsed * KM_PER_MILE;
+  return formatDistanceInput(converted);
+}
+
+function convertKmToDisplayDistance(value: number | null | undefined, unit: DistanceUnit) {
+  if (value == null) return "";
+  return formatDistanceInput(unit === "km" ? value : value / KM_PER_MILE);
+}
+
+function parseDisplayDistanceToKm(value: string | undefined, unit: DistanceUnit) {
+  if (!value) return null;
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return null;
+  const km = unit === "km" ? parsed : parsed * KM_PER_MILE;
+  return Math.round(km * 1000) / 1000;
+}
+
+function formatDistanceLabelFromKm(value: number | null | undefined, unit: DistanceUnit) {
+  if (value == null) return "";
+  return `${convertKmToDisplayDistance(value, unit)} ${getDistanceUnitSuffix(unit)}`;
+}
+
+function convertFormDistances(form: TemplateForm, from: DistanceUnit, to: DistanceUnit): TemplateForm {
+  if (from === to) return form;
+  return {
+    ...form,
+    weeks: form.weeks.map((week) => ({
+      ...week,
+      sessions: week.sessions.map((session) => ({
+        ...session,
+        distanceKm: convertDistanceInput(session.distanceKm, from, to),
+      })),
+    })),
+  };
+}
+
+function buildSessionNameFromFormData(
+  formData: UnifiedSessionFormData,
+  fallbackName: string,
+  distanceUnit: DistanceUnit = "km",
+) {
   const parts: string[] = [];
   if (formData.activity) parts.push(formatOptionLabel(formData.activity));
   if (formData.targetIntensity) parts.push(formData.targetIntensity);
   if (formData.subtype) parts.push(formatOptionLabel(formData.subtype));
-  if (formData.distanceKm) parts.push(`${formData.distanceKm}km`);
+  if (formData.distanceKm) parts.push(`${formData.distanceKm}${getDistanceUnitSuffix(distanceUnit)}`);
   else if (formData.durationMinutes) parts.push(`${formData.durationMinutes}min`);
   return parts.join(" - ") || fallbackName;
 }
@@ -362,6 +427,7 @@ function mapSessionToUnifiedFormData(session: EditableSession): Partial<UnifiedS
 function applyUnifiedFormDataToSession(
   session: EditableSession,
   formData: UnifiedSessionFormData,
+  distanceUnit: DistanceUnit = "km",
 ): EditableSession {
   const setDurationMinutes = formData.setDurationSeconds
     ? String(Number.parseInt(formData.setDurationSeconds, 10) / 60)
@@ -370,7 +436,7 @@ function applyUnifiedFormDataToSession(
   return {
     ...session,
     type: formData.subtype ? formatOptionLabel(formData.subtype) : session.type,
-    name: buildSessionNameFromFormData(formData, session.name || `Session ${session.sortOrder}`),
+    name: buildSessionNameFromFormData(formData, session.name || `Session ${session.sortOrder}`, distanceUnit),
     description: formData.description,
     duration: formData.durationMinutes ? getDigitsOnly(formData.durationMinutes) : "",
     intensity: formData.targetIntensity,
@@ -612,6 +678,15 @@ function buildFunctionalDescription(row: SessionTemplateRow) {
   return baseDescription || detailText;
 }
 
+function buildFunctionalDescriptionForDisplay(row: SessionTemplateRow, distanceUnit: DistanceUnit) {
+  const description = buildFunctionalDescription(row);
+  if (distanceUnit === "km" || row.distance_km == null) return description;
+  return description.replace(
+    `${row.distance_km} km`,
+    `${convertKmToDisplayDistance(row.distance_km, distanceUnit)} ${getDistanceUnitSuffix(distanceUnit)}`,
+  );
+}
+
 function mapTemplateToEditableSessionType(row: SessionTemplateRow): EditableSession["type"] {
   const rawType = (row.type ?? "").trim().toLowerCase();
   const subtype = (row.subtype ?? "").trim().toLowerCase();
@@ -661,6 +736,7 @@ function buildEditableSessionFromTemplate(
   weekNumber: number,
   sortOrder: number,
   exerciseNameMap: Record<string, string>,
+  distanceUnit: DistanceUnit = "km",
 ): EditableSession | null {
   if (!row) {
     return null;
@@ -676,7 +752,7 @@ function buildEditableSessionFromTemplate(
     sortOrder,
     type: mapTemplateToEditableSessionType(row),
     name: row.name ?? formatOptionLabel(row.subtype) ?? `Session ${sortOrder}`,
-    description: row.type === "functional" ? buildFunctionalDescription(row) : row.description ?? "",
+    description: row.type === "functional" ? buildFunctionalDescriptionForDisplay(row, distanceUnit) : row.description ?? "",
     duration: row.duration_minutes != null ? `${row.duration_minutes} min` : legacyDuration,
     intensity: row.target_intensity ?? "",
     isKeySession: Boolean(row.is_key_session),
@@ -687,6 +763,9 @@ function buildEditableSessionFromTemplate(
     dayNumber: "",
     numSets: (row.session_data as any)?.num_sets?.toString() ?? "",
     setDurationMinutes: (row.session_data as any)?.set_duration_minutes?.toString() ?? "",
+    activity: row.activity ?? "",
+    subtype: row.subtype ?? "",
+    distanceKm: convertKmToDisplayDistance(row.distance_km, distanceUnit),
     exercises: (row.session_template_exercises ?? [])
       .slice()
       .sort((a, b) => a.exercise_order - b.exercise_order)
@@ -872,6 +951,7 @@ export default function EditProgramTemplatePage() {
   const [loadError, setLoadError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>("km");
   const [pendingSessionSlot, setPendingSessionSlot] = useState<PendingTemplateSessionSlot | null>(null);
   const [pendingSessionType, setPendingSessionType] = useState<"gym" | "functional" | "mobility" | null>(null);
   const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
@@ -894,7 +974,7 @@ export default function EditProgramTemplatePage() {
       .filter((race) =>
         [
           race.name,
-          race.distance_km ? `${race.distance_km}km` : "",
+          formatDistanceLabelFromKm(race.distance_km, distanceUnit),
           race.terrain_type,
           race.climate_type,
         ]
@@ -904,7 +984,7 @@ export default function EditProgramTemplatePage() {
           .includes(query)
       )
       .slice(0, 8);
-  }, [raceSearchQuery, races]);
+  }, [distanceUnit, raceSearchQuery, races]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1129,6 +1209,12 @@ export default function EditProgramTemplatePage() {
     window.setTimeout(() => setStatusMessage(""), timeoutMs);
   }
 
+  function handleDistanceUnitChange(nextUnit: DistanceUnit) {
+    if (nextUnit === distanceUnit) return;
+    setForm((current) => (current ? convertFormDistances(current, distanceUnit, nextUnit) : current));
+    setDistanceUnit(nextUnit);
+  }
+
   async function searchSessionTemplates(searchTerm: string) {
     const trimmed = searchTerm.trim();
     if (!trimmed) {
@@ -1280,7 +1366,7 @@ export default function EditProgramTemplatePage() {
               if (formData?.activity) parts.push(formatOptionLabel(formData.activity));
               if (formData?.targetIntensity) parts.push(formData.targetIntensity);
               if (formData?.subtype) parts.push(formatOptionLabel(formData.subtype));
-              if (formData?.distanceKm) parts.push(`${formData.distanceKm}km`);
+              if (formData?.distanceKm) parts.push(`${formData.distanceKm}${getDistanceUnitSuffix(distanceUnit)}`);
               else if (formData?.durationMinutes) parts.push(`${formData.durationMinutes}min`);
               return parts.join(" · ") || `Session ${nextSortOrder}`;
             })(),
@@ -1329,7 +1415,7 @@ export default function EditProgramTemplatePage() {
     formData: UnifiedSessionFormData,
   ) {
     updateSession(weekLocalId, sessionLocalId, (session) =>
-      applyUnifiedFormDataToSession(session, formData),
+      applyUnifiedFormDataToSession(session, formData, distanceUnit),
     );
     setEditingSessionSlot(null);
     showTemporaryStatus("Session updated.", 1500);
@@ -1401,6 +1487,7 @@ export default function EditProgramTemplatePage() {
         week.weekNumber,
         nextSortOrder,
         exerciseNameMap,
+        distanceUnit,
       );
 
       if (!builtSession) {
@@ -1662,7 +1749,7 @@ export default function EditProgramTemplatePage() {
           // Extended session fields
           activity: session.activity || null,
           subtype: session.subtype || null,
-          distance_km: session.distanceKm ? parseFloat(session.distanceKm) || null : null,
+          distance_km: parseDisplayDistanceToKm(session.distanceKm, distanceUnit),
           terrain: session.terrain || null,
           elevation_gain_meters: session.elevation ? parseInt(session.elevation, 10) || null : null,
           pack_weight_kg: session.packWeightKg ? parseFloat(session.packWeightKg) || null : null,
@@ -1826,7 +1913,23 @@ export default function EditProgramTemplatePage() {
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex rounded-lg border border-zinc-300 bg-white p-1" aria-label="Distance units">
+              {(["km", "mi"] as DistanceUnit[]).map((unit) => (
+                <button
+                  key={unit}
+                  type="button"
+                  onClick={() => handleDistanceUnitChange(unit)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                    distanceUnit === unit
+                      ? "bg-zinc-900 text-white"
+                      : "text-zinc-700 hover:bg-zinc-100"
+                  }`}
+                >
+                  {unit === "km" ? "km" : "mi"}
+                </button>
+              ))}
+            </div>
             <Link
               href="/coach/program-templates"
               className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-100"
@@ -1896,7 +1999,7 @@ export default function EditProgramTemplatePage() {
                 <div className="mt-2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
                   {filteredRaces.map((race) => {
                     const details = [
-                      race.distance_km ? `${race.distance_km}km` : "",
+                      formatDistanceLabelFromKm(race.distance_km, distanceUnit),
                       race.terrain_type,
                       race.climate_type,
                     ].filter(Boolean);
@@ -2120,12 +2223,15 @@ export default function EditProgramTemplatePage() {
                           </div>
 
                           <UnifiedSessionForm
+                            key={`create-${week.localId}-${distanceUnit}`}
+                            distanceUnit={distanceUnit}
                             onSave={(formData) =>
                               handleCreateBlankSessionFromForm(week.localId, formData)
                             }
                             onCancel={() => setCreatingBlankSessionWeekId(null)}
                             submitButtonLabel="Create Session"
                             progressiveReveal
+                            hideDescription
                           />
                         </div>
                       ) : null}
@@ -2214,6 +2320,7 @@ export default function EditProgramTemplatePage() {
                                   template.activity ? formatOptionLabel(template.activity) : "",
                                   template.subtype ? formatOptionLabel(template.subtype) : "",
                                   template.duration_minutes != null ? `${template.duration_minutes} min` : "",
+                                  formatDistanceLabelFromKm(template.distance_km, distanceUnit),
                                   template.target_intensity ?? "",
                                 ].filter(Boolean);
 
@@ -2289,7 +2396,8 @@ export default function EditProgramTemplatePage() {
                                 </div>
 
                                 <UnifiedSessionForm
-                                  key={session.localId}
+                                  key={`${session.localId}-${distanceUnit}`}
+                                  distanceUnit={distanceUnit}
                                   initialData={mapSessionToUnifiedFormData(session)}
                                   onSave={(formData) =>
                                     handleUpdateSessionFromForm(week.localId, session.localId, formData)
@@ -2452,7 +2560,7 @@ export default function EditProgramTemplatePage() {
 
                               {session.distanceKm && (
                                 <label className="text-sm font-medium text-zinc-700">
-                                  Distance (km)
+                                  Distance ({getDistanceUnitSuffix(distanceUnit)})
                                   <input
                                     value={session.distanceKm}
                                     onChange={(e) =>
@@ -2491,8 +2599,8 @@ export default function EditProgramTemplatePage() {
 
                               {session.elevation && (
                                 <label className="text-sm font-medium text-zinc-700">
-                                  Elevation Gain (m)
-                                  <input
+                                  Elevation / Steepness
+                                  <select
                                     value={session.elevation}
                                     onChange={(e) =>
                                       updateSession(week.localId, session.localId, (current) => ({
@@ -2500,9 +2608,17 @@ export default function EditProgramTemplatePage() {
                                         elevation: e.target.value,
                                       }))
                                     }
-                                    placeholder="e.g. 500"
-                                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                                  />
+                                    className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                                  >
+                                    {elevationOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                    {session.elevation && !elevationOptions.some((option) => option.value === session.elevation) ? (
+                                      <option value={session.elevation}>{session.elevation}</option>
+                                    ) : null}
+                                  </select>
                                 </label>
                               )}
 
