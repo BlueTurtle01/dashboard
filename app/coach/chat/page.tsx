@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -132,7 +132,7 @@ function CoachChatPageContent() {
   );
 }
 
-export default function CoachChatPage() {
+function CoachChatPageWrapper() {
   const searchParams = useSearchParams();
   const tutorial = searchParams.get('tutorial');
   const isInTutorial = tutorial === 'chat';
@@ -141,5 +141,13 @@ export default function CoachChatPage() {
     <TutorialProvider isInTutorial={isInTutorial} tutorialType="chat">
       <CoachChatPageContent />
     </TutorialProvider>
+  );
+}
+
+export default function CoachChatPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CoachChatPageWrapper />
+    </Suspense>
   );
 }
