@@ -121,9 +121,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: rolesError.message }, { status: 500 });
     }
 
-    // Get user emails from auth - this requires admin context
+    // Get user emails from auth.users table
     const adminClient = createAdminClient();
-    const { data: { users: authUsers }, error: authError } = await adminClient.auth.admin.listUsers();
+    const { data: authUsers, error: authError } = await adminClient
+      .from('auth.users')
+      .select('id, email, created_at');
 
     if (authError) {
       console.error('Error fetching auth users:', authError);
@@ -137,7 +139,7 @@ export async function GET(req: Request) {
 
     // Combine data
     const usersMap = new Map();
-    authUsers?.forEach((authUser: any) => {
+    (authUsers as any[])?.forEach((authUser: any) => {
       usersMap.set(authUser.id, {
         id: authUser.id,
         email: authUser.email,
