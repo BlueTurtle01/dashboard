@@ -25,17 +25,46 @@ function addDays(date: Date, days: number): Date {
   return copy;
 }
 
-function getPlanWeekStartDates(plan: GeneratedPlan) {
-  try {
-    if (!plan.eventDate) return [];
+function parsePlanDate(value: unknown): Date | null {
+  if (typeof value !== "string" || !value) return null;
 
-    let eventDate = new Date(plan.eventDate);
-    if (isNaN(eventDate.getTime()) && plan.eventDate.includes("T")) {
-      const dateOnly = plan.eventDate.split("T")[0];
-      eventDate = new Date(dateOnly);
+  let parsed = new Date(value);
+  if (isNaN(parsed.getTime()) && value.includes("T")) {
+    parsed = new Date(value.split("T")[0]);
+  }
+
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getPlanWeekStartDates(plan: GeneratedPlan, planCreatedAt?: string | null) {
+  try {
+    const scheduledStartDate =
+      parsePlanDate((plan as unknown as { startDate?: string }).startDate) ??
+      parsePlanDate(planCreatedAt) ??
+      null;
+
+    if (scheduledStartDate) {
+      const firstWeekMonday = getMondayOfWeek(scheduledStartDate);
+
+      return plan.weeks
+        .slice()
+        .sort((a, b) => a.weekNumber - b.weekNumber)
+        .map((week, index) => {
+          const monday = addDays(firstWeekMonday, index * 7);
+          return {
+            weekId: week.id,
+            weekNumber: week.weekNumber,
+            monday: isNaN(monday.getTime()) ? new Date() : monday,
+          };
+        })
+        .filter((w) => !isNaN(w.monday.getTime()));
     }
 
-    if (isNaN(eventDate.getTime())) return [];
+    if (!plan.eventDate) return [];
+
+    const eventDate = parsePlanDate(plan.eventDate);
+
+    if (!eventDate) return [];
 
     const eventWeekMonday = getMondayOfWeek(eventDate);
     const weeksAvailable = typeof plan.weeksAvailable === "number" ? plan.weeksAvailable : plan.weeks?.length ?? 0;
@@ -107,7 +136,7 @@ export default function PlanPage() {
 
         const { data: planData, error: planError } = await supabase
           .from("athlete_plans")
-          .select("id, plan_json")
+          .select("id, plan_json, created_at")
           .eq("athlete_user_id", user.id)
           .eq("status", "active")
           .limit(1)
@@ -119,7 +148,7 @@ export default function PlanPage() {
         }
 
         const plan = planData.plan_json as GeneratedPlan;
-        const weekStarts = getPlanWeekStartDates(plan);
+        const weekStarts = getPlanWeekStartDates(plan, planData.created_at);
 
         // Flatten sessions with dates
         const flatSessions: SessionWithDate[] = [];

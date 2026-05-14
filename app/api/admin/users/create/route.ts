@@ -12,6 +12,22 @@ async function isAdmin(supabase: any, userId: string): Promise<boolean> {
   return !!data;
 }
 
+async function ensureAthleteProfile(adminClient: any, userId: string, email?: string | null) {
+  const { error } = await adminClient
+    .from('athlete_profiles')
+    .upsert(
+      {
+        user_id: userId,
+        full_name: email?.split('@')[0] ?? null,
+      },
+      { onConflict: 'user_id' }
+    );
+
+  if (error) {
+    throw new Error(`Failed to create athlete profile: ${error.message}`);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -61,12 +77,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: rolesError.message }, { status: 500 });
     }
 
-    // Create athlete profile if athlete role
-    if (roles.includes('athlete')) {
-      await supabase.from('athlete_profiles').insert({
-        user_id: newUserId,
-        full_name: email.split('@')[0],
-      });
+    // Create athlete profile for any role that uses athlete-facing plan/profile features.
+    if (roles.includes('athlete') || roles.includes('solo_plan_holder')) {
+      await ensureAthleteProfile(adminClient, newUserId, email);
     }
 
     // Grant default features based on roles
@@ -188,6 +201,13 @@ export async function PATCH(req: Request) {
         { error: 'User ID and at least one role required' },
         { status: 400 }
       );
+    }
+
+    const adminClient = createAdminClient();
+
+    // Ensure profile-backed roles have the minimum profile row before saving roles.
+    if (roles.includes('athlete') || roles.includes('solo_plan_holder')) {
+      await ensureAthleteProfile(adminClient, userId);
     }
 
     // Delete existing roles

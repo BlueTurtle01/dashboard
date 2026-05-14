@@ -6,6 +6,26 @@ import { AppRole, requireAdminOrThrow } from "@/lib/auth/get-current-user";
 
 const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder"];
 
+async function ensureAthleteProfileForPlanRole(adminClient: any, userId: string) {
+  const { data: userData } = await adminClient
+    .from("users")
+    .select("email")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const { error } = await adminClient
+    .from("athlete_profiles")
+    .upsert(
+      {
+        user_id: userId,
+        full_name: userData?.email ? String(userData.email).split("@")[0] : null,
+      },
+      { onConflict: "user_id" },
+    );
+
+  if (error) throw new Error(error.message);
+}
+
 export type UserWithRoles = {
   id: string;
   email: string;
@@ -104,6 +124,10 @@ export async function getUserById(userId: string): Promise<UserDetail> {
 export async function saveUserRoles(userId: string, roles: AppRole[]) {
   await requireAdminOrThrow();
   const adminClient = createAdminClient();
+
+  if (roles.includes("athlete") || roles.includes("solo_plan_holder")) {
+    await ensureAthleteProfileForPlanRole(adminClient, userId);
+  }
 
   // Delete existing roles for this user
   const { error: deleteError } = await adminClient

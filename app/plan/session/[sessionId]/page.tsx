@@ -76,7 +76,7 @@ export default function SessionDetailPage() {
         setSession(foundSession);
 
         // Fetch media for exercises that have an exerciseId
-        const exerciseIds = foundSession.exercises
+        const exerciseIds = (foundSession.exercises ?? [])
           .map((ex) => ex.exerciseId)
           .filter((id): id is string => !!id);
 

@@ -200,14 +200,17 @@ export default function AdminSoloPlanPage() {
     setSuccessMessage("");
 
     try {
-      // athlete_plans.athlete_user_id FK references athlete_profiles(user_id),
+      // athlete_plans.athlete_user_id may reference athlete_profiles(user_id),
       // so the profile row must exist before the plan is inserted.
-      const { error: profileError } = await supabase
-        .from("athlete_profiles")
-        .upsert({ user_id: formData.athleteUserId }, { onConflict: "user_id" });
+      const profileResponse = await fetch("/api/admin/ensure-athlete-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: formData.athleteUserId }),
+      });
 
-      if (profileError) {
-        setErrorMessage(`Could not create athlete profile: ${profileError.message}`);
+      if (!profileResponse.ok) {
+        const { error } = (await profileResponse.json()) as { error?: string };
+        setErrorMessage(`Could not create athlete profile: ${error ?? profileResponse.statusText}`);
         setAssigningPlan(false);
         return;
       }
@@ -245,7 +248,8 @@ export default function AdminSoloPlanPage() {
       }
 
       // Create a new athlete_plan from the template with sessions
-      const planJson = generatePlanFromTemplate(selectedTemplate, weekData || [], allSessions);
+      const assignmentDate = new Date().toISOString();
+      const planJson = generatePlanFromTemplate(selectedTemplate, weekData || [], allSessions, assignmentDate);
 
       const { data: planData, error: planError } = await supabase
         .from("athlete_plans")
@@ -516,7 +520,8 @@ export default function AdminSoloPlanPage() {
 function generatePlanFromTemplate(
   template: ProgramTemplate,
   weeks: any[] = [],
-  sessions: any[] = []
+  sessions: any[] = [],
+  assignmentDate = new Date().toISOString()
 ): Record<string, unknown> {
   // Build weeks with sessions from the template
   const weeksArray = weeks.map((week: any) => {
@@ -542,6 +547,7 @@ function generatePlanFromTemplate(
         cooldownMinutes: s.cooldown_minutes,
         intervalReps: s.interval_reps,
         intervalDuration: s.interval_duration,
+        exercises: [],
       }));
 
     return {
@@ -556,6 +562,7 @@ function generatePlanFromTemplate(
   if (weeksArray.length === 0) {
     for (let w = 0; w < template.plan_length_weeks; w++) {
       weeksArray.push({
+        id: `${template.id}-week-${w + 1}`,
         weekNumber: w + 1,
         focus: null,
         sessions: [],
@@ -566,8 +573,10 @@ function generatePlanFromTemplate(
   return {
     weeks: weeksArray,
     totalWeeks: template.plan_length_weeks,
+    weeksAvailable: template.plan_length_weeks,
     templateId: template.id,
-    createdAt: new Date().toISOString(),
+    startDate: assignmentDate,
+    createdAt: assignmentDate,
   };
 }
 
