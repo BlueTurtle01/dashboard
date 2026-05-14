@@ -4,11 +4,12 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 
 const ROUTE_TITLES: Record<string, string> = {
-  "/plan": "My Plan",
   "/plan/session": "Session Details",
   "/plan/help": "Help & Support",
   "/plan/account": "Account",
+  "/plan/race/reviews": "Race Reviews",
   "/plan/race": "Race",
+  "/plan": "My Plan",
 };
 
 export default function PwaTopBar() {
@@ -17,7 +18,7 @@ export default function PwaTopBar() {
 
   // Determine title based on route
   let title = "My Plan";
-  for (const [route, routeTitle] of Object.entries(ROUTE_TITLES)) {
+  for (const [route, routeTitle] of Object.entries(ROUTE_TITLES).sort((a, b) => b[0].length - a[0].length)) {
     if (pathname.startsWith(route)) {
       title = routeTitle;
       break;
