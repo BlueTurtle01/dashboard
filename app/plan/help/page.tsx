@@ -16,7 +16,7 @@ export default function HelpPage() {
         </Link>
 
         <a
-          href="https://feedback.yourapp.com"
+          href="https://dashboard-delta-ten-55.vercel.app/help/suggest-feature"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-between p-4 rounded-lg border border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm transition-all"
