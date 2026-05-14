@@ -4,6 +4,12 @@ import { getGoogleCalendarAuthorizeUrl } from "@/lib/googleCalendar";
 
 export async function GET() {
   try {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      const redirectUrl = new URL("/athlete/integrations", process.env.NEXT_PUBLIC_APP_URL!);
+      redirectUrl.searchParams.set("error", "Google Calendar is not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.");
+      return NextResponse.redirect(redirectUrl);
+    }
+
     const supabase = await createClient();
     const { data: { user }, error } = await supabase.auth.getUser();
 
