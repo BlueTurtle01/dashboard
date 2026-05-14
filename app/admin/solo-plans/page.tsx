@@ -212,8 +212,40 @@ export default function AdminSoloPlanPage() {
         return;
       }
 
-      // Create a new athlete_plan from the template
-      const planJson = generatePlanFromTemplate(selectedTemplate);
+      // Fetch template weeks and sessions
+      const { data: weekData, error: weekError } = await supabase
+        .from("program_template_weeks")
+        .select("id, week_number, focus, notes")
+        .eq("program_template_id", formData.templateId)
+        .order("week_number", { ascending: true });
+
+      if (weekError) {
+        setErrorMessage(`Could not load template weeks: ${weekError.message}`);
+        setAssigningPlan(false);
+        return;
+      }
+
+      const weekIds = (weekData || []).map((w: any) => w.id);
+      let allSessions: any[] = [];
+
+      if (weekIds.length > 0) {
+        const { data: sessionData, error: sessionError } = await supabase
+          .from("program_template_sessions")
+          .select("*")
+          .in("program_template_week_id", weekIds)
+          .order("sort_order", { ascending: true });
+
+        if (sessionError) {
+          setErrorMessage(`Could not load template sessions: ${sessionError.message}`);
+          setAssigningPlan(false);
+          return;
+        }
+
+        allSessions = sessionData || [];
+      }
+
+      // Create a new athlete_plan from the template with sessions
+      const planJson = generatePlanFromTemplate(selectedTemplate, weekData || [], allSessions);
 
       const { data: planData, error: planError } = await supabase
         .from("athlete_plans")
@@ -481,20 +513,58 @@ export default function AdminSoloPlanPage() {
   );
 }
 
-function generatePlanFromTemplate(template: ProgramTemplate): Record<string, unknown> {
-  const cyclesArray = [];
-  const weeksPerCycle = Math.ceil(template.plan_length_weeks / 1);
+function generatePlanFromTemplate(
+  template: ProgramTemplate,
+  weeks: any[] = [],
+  sessions: any[] = []
+): Record<string, unknown> {
+  // Build weeks with sessions from the template
+  const weeksArray = weeks.map((week: any) => {
+    const weekSessions = sessions
+      .filter((s: any) => s.program_template_week_id === week.id)
+      .map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        dayLabel: s.day_label,
+        duration: s.duration,
+        durationMinutes: s.duration_minutes,
+        intensity: s.intensity,
+        activity: s.activity,
+        subtype: s.subtype,
+        terrain: s.terrain,
+        description: s.description,
+        isKeySession: s.is_key_session,
+        elevationGainMeters: s.elevation_gain_meters,
+        packWeightKg: s.pack_weight_kg,
+        strides: s.strides,
+        warmupMinutes: s.warmup_minutes,
+        cooldownMinutes: s.cooldown_minutes,
+        intervalReps: s.interval_reps,
+        intervalDuration: s.interval_duration,
+      }));
 
-  for (let w = 0; w < template.plan_length_weeks; w++) {
-    cyclesArray.push({
-      weekNumber: w + 1,
-      focus: null,
-      sessions: [],
-    });
+    return {
+      id: week.id,
+      weekNumber: week.week_number,
+      focus: week.focus,
+      sessions: weekSessions,
+    };
+  });
+
+  // If no weeks loaded from template, create empty weeks
+  if (weeksArray.length === 0) {
+    for (let w = 0; w < template.plan_length_weeks; w++) {
+      weeksArray.push({
+        weekNumber: w + 1,
+        focus: null,
+        sessions: [],
+      });
+    }
   }
 
   return {
-    weeks: cyclesArray,
+    weeks: weeksArray,
     totalWeeks: template.plan_length_weeks,
     templateId: template.id,
     createdAt: new Date().toISOString(),
