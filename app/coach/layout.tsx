@@ -9,7 +9,7 @@ export default async function CoachLayout({
   const hasCoachRole = await userHasEffectiveRole("coach");
 
   if (!hasCoachRole) {
-    redirect("/login");
+    redirect("/coach/login");
   }
 
   return <main className="app-content">{children}</main>;
