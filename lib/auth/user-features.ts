@@ -1,7 +1,6 @@
-import { getCurrentUser } from "./get-current-user";
+import { getCurrentUser } from "./core";
 import { createClient } from "@/lib/supabase/server";
-
-export type UserFeature = "race_info" | "video_analysis" | "vaccinations" | "kit_list";
+import type { UserFeature } from "@/lib/types/auth";
 
 export async function userHasFeature(feature: UserFeature): Promise<boolean> {
   const user = await getCurrentUser();

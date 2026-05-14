@@ -1,4 +1,4 @@
-import type { AppRole } from "@/lib/auth/get-current-user";
+import type { AppRole } from "@/lib/types/auth";
 import { getDefaultRouteForAccess } from "@/lib/auth/product-access";
 
 export function getDefaultRouteForRoles(

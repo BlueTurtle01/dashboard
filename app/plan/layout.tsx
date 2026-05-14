@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser, getCurrentUserEffectiveRoles } from "@/lib/auth/get-current-user";
+﻿import { redirect } from "next/navigation";
+import { getCurrentUser, getUserRoles } from "@/lib/auth/core";
 import { userHasPlanAppAccess } from "@/lib/auth/product-access";
 import { createClient } from "@/lib/supabase/server";
 import PwaTopBar from "@/components/pwa/PwaTopBar";
@@ -26,7 +26,7 @@ export default async function PlanLayout({
     redirect("/login");
   }
 
-  const roles = await getCurrentUserEffectiveRoles();
+  const roles = await getUserRoles();
   const supabase = await createClient();
   const canAccess =
     roles.includes("solo_plan_holder") ||
@@ -47,3 +47,4 @@ export default async function PlanLayout({
     </>
   );
 }
+

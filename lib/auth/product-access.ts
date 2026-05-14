@@ -1,12 +1,10 @@
-export const PRODUCT_CODES = [
+import type { ProductCode, ProductAccessStatus } from "@/lib/types/auth";
+
+export const PRODUCT_CODES: ProductCode[] = [
   "solo_16_week_plan",
   "personalised_16_week_plan",
   "monthly_coaching",
-] as const;
-
-export type ProductCode = (typeof PRODUCT_CODES)[number];
-export type ProductAccessStatus = "active" | "expired" | "cancelled" | "archived";
-export type CoachingLevel = "none" | "limited" | "full";
+];
 
 type ProductAccessRow = {
   id: string;

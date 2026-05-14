@@ -1,16 +1,12 @@
-import { redirect } from "next/navigation";
-import { userHasEffectiveRole } from "@/lib/auth/get-current-user";
+﻿import { requireAuth } from "@/lib/auth/core";
 
 export default async function CoachLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const hasCoachRole = await userHasEffectiveRole("coach");
-
-  if (!hasCoachRole) {
-    redirect("/login");
-  }
+  await requireAuth("coach");
 
   return <main className="app-content">{children}</main>;
 }
+

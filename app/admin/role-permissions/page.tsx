@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { userHasRole } from "@/lib/auth/get-current-user";
+﻿import { redirect } from "next/navigation";
+import { userHasRole } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
 import { NAV_ITEMS, ALL_ROLES, type NavItemKey, type ManagedRole } from "@/lib/nav-items";
 import RolePermissionsClient from "./RolePermissionsClient";
@@ -13,13 +13,13 @@ export default async function RolePermissionsPage() {
     .from("role_nav_permissions")
     .select("role, nav_item, enabled");
 
-  // Build a map: role → Set of enabled nav items
+  // Build a map: role â†’ Set of enabled nav items
   const permissions = {} as Record<ManagedRole, Set<NavItemKey>>;
   for (const role of ALL_ROLES) {
     permissions[role] = new Set<NavItemKey>();
   }
 
-  // Admin always gets everything — no DB rows needed
+  // Admin always gets everything â€” no DB rows needed
   for (const item of NAV_ITEMS) {
     permissions["admin"].add(item.key);
   }
@@ -58,3 +58,4 @@ export default async function RolePermissionsPage() {
     </main>
   );
 }
+

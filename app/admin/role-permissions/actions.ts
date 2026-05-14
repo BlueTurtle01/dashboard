@@ -1,6 +1,6 @@
-"use server";
+﻿"use server";
 
-import { requireAdminOrThrow } from "@/lib/auth/get-current-user";
+import { requireAdminOrThrow } from "@/lib/auth/core";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { ALL_ROLES, NAV_ITEMS, type NavItemKey, type ManagedRole } from "@/lib/nav-items";
@@ -45,3 +45,4 @@ export async function toggleNavPermission(
     };
   }
 }
+

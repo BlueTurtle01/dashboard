@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import Link from "next/link";
-import { userHasRole } from "@/lib/auth/get-current-user";
+import { userHasRole } from "@/lib/auth/core";
 import { getTicketStats, TicketStats } from "@/lib/actions/support";
 import SupportStatsView from "./SupportStatsView";
 
@@ -28,7 +28,7 @@ export default async function SupportStatsPage() {
             <p style={subtitleStyle}>Resolution times and ticket breakdown</p>
           </div>
           <Link href="/admin/support" style={backLink}>
-            ← All Tickets
+            â† All Tickets
           </Link>
         </div>
 
@@ -95,3 +95,4 @@ const errorStyle: React.CSSProperties = {
   background: "#fff0f0",
   borderRadius: "8px",
 };
+

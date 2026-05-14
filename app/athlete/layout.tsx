@@ -1,12 +1,12 @@
-import { redirect } from "next/navigation";
-import { getCurrentUserEffectiveRoles } from "@/lib/auth/get-current-user";
+﻿import { redirect } from "next/navigation";
+import { getUserRoles } from "@/lib/auth/core";
 
 export default async function AthleteLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const roles = await getCurrentUserEffectiveRoles();
+  const roles = await getUserRoles();
   const canAccess = roles.includes("athlete");
 
   if (!canAccess) {
@@ -19,3 +19,4 @@ export default async function AthleteLayout({
     </main>
   );
 }
+

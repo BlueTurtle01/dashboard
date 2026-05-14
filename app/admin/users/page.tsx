@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { userHasRole } from "@/lib/auth/get-current-user";
+﻿import { redirect } from "next/navigation";
+import { userHasRole } from "@/lib/auth/core";
 import { listUsersWithRoles, UserWithRoles } from "@/lib/actions/userRoles";
 import UserRolesTable from "./UserRolesTable";
 
@@ -76,3 +76,4 @@ const errorStyle: React.CSSProperties = {
   background: "#fff0f0",
   borderRadius: "8px",
 };
+

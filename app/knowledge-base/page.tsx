@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser, getCurrentUserRoles } from "@/lib/auth/get-current-user";
+﻿import { redirect } from "next/navigation";
+import { getCurrentUser, getUserRoles } from "@/lib/auth/core";
 import { userHasPlanAppAccess } from "@/lib/auth/product-access";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -11,7 +11,7 @@ import {
 import KnowledgeBaseClient from "./KnowledgeBaseClient";
 
 export default async function KnowledgeBasePage() {
-  const roles = await getCurrentUserRoles();
+  const roles = await getUserRoles();
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
@@ -70,3 +70,4 @@ export default async function KnowledgeBasePage() {
     />
   );
 }
+

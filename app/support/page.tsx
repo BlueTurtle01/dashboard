@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/get-current-user";
+﻿import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth/core";
 import { getMyTickets, SupportTicket } from "@/lib/actions/support";
 import SupportPageClient from "./SupportPageClient";
 
@@ -68,3 +68,4 @@ const subtitleStyle: React.CSSProperties = {
   fontSize: "14px",
   margin: 0,
 };
+

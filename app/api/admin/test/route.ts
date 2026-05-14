@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUserRoles } from "@/lib/auth/get-current-user";
+import { getUserRoles } from "@/lib/auth/core";
 
 export async function GET() {
   try {
     // Check user is admin
-    const roles = await getCurrentUserRoles();
+    const roles = await getUserRoles();
     if (!roles.includes("admin")) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
@@ -45,3 +45,4 @@ export async function GET() {
     });
   }
 }
+

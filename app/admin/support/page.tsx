@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentUser, userHasRole } from "@/lib/auth/get-current-user";
+import { getCurrentUser, userHasRole } from "@/lib/auth/core";
 import { getAllTickets, SupportTicket } from "@/lib/actions/support";
 import AdminSupportTable from "./AdminSupportTable";
 
@@ -31,7 +31,7 @@ export default async function AdminSupportPage() {
         <div style={pageHeaderRow}>
           <h1 style={titleStyle}>Support Tickets</h1>
           <Link href="/admin/support/stats" style={analyticsLinkStyle}>
-            Analytics →
+            Analytics â†’
           </Link>
         </div>
         <div style={statsRow}>
@@ -134,3 +134,4 @@ const errorStyle: React.CSSProperties = {
   background: "#fff0f0",
   borderRadius: "8px",
 };
+

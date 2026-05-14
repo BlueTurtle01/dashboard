@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { userHasRole } from "@/lib/auth/get-current-user";
+﻿import { redirect } from "next/navigation";
+import { userHasRole } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -51,13 +51,13 @@ export default async function CoachPerformancePage() {
       case 3:
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-sm font-semibold text-yellow-900">
-            🥇 Tier 3 (Elite)
+            ðŸ¥‡ Tier 3 (Elite)
           </span>
         );
       case 2:
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-900">
-            🥈 Tier 2
+            ðŸ¥ˆ Tier 2
           </span>
         );
       default:
@@ -70,12 +70,12 @@ export default async function CoachPerformancePage() {
   };
 
   const formatHours = (hours: number | null) => {
-    if (hours === null) return "—";
+    if (hours === null) return "â€”";
     return `${hours.toFixed(1)}h`;
   };
 
   const formatScore = (score: number | null) => {
-    if (score === null) return "—";
+    if (score === null) return "â€”";
     return score.toFixed(1);
   };
 
@@ -144,7 +144,7 @@ export default async function CoachPerformancePage() {
                         {formatScore(score.avg_clarity_score)}/10
                       </td>
                       <td className="px-6 py-4 text-sm text-zinc-600">
-                        {score.athlete_retention_rate ? `${(score.athlete_retention_rate as number).toFixed(0)}%` : "—"}
+                        {score.athlete_retention_rate ? `${(score.athlete_retention_rate as number).toFixed(0)}%` : "â€”"}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         {getTierBadge(score.tier)}
@@ -161,7 +161,7 @@ export default async function CoachPerformancePage() {
           <h2 className="font-semibold text-zinc-900">Tier Criteria</h2>
           <div className="mt-4 space-y-3 text-sm text-zinc-600">
             <div>
-              <p className="font-medium text-zinc-900">🥇 Tier 3 (Elite)</p>
+              <p className="font-medium text-zinc-900">ðŸ¥‡ Tier 3 (Elite)</p>
               <ul className="mt-1 ml-4 space-y-1 list-disc text-zinc-600">
                 <li>Avg delivery time &lt; 24 hours</li>
                 <li>Satisfaction score &gt; 8.5/10</li>
@@ -169,7 +169,7 @@ export default async function CoachPerformancePage() {
               </ul>
             </div>
             <div>
-              <p className="font-medium text-zinc-900">🥈 Tier 2</p>
+              <p className="font-medium text-zinc-900">ðŸ¥ˆ Tier 2</p>
               <ul className="mt-1 ml-4 space-y-1 list-disc text-zinc-600">
                 <li>Avg delivery time &lt; 48 hours</li>
                 <li>Satisfaction score &gt; 7.5/10</li>
@@ -188,3 +188,4 @@ export default async function CoachPerformancePage() {
     </main>
   );
 }
+

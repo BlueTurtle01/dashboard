@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
-import { AppRole } from "@/lib/auth/get-current-user";
+import { AppRole } from "@/lib/auth/core";
 import { UserWithRoles, saveUserRoles } from "@/lib/actions/userRoles";
 
 const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "creator"];
@@ -117,7 +117,7 @@ export default function UserRolesTable({ users }: { users: UserWithRoles[] }) {
                   </td>
                   <td style={tdCenterStyle}>
                     <Link href={`/admin/users/${user.id}`} style={viewLinkStyle}>
-                      View →
+                      View â†’
                     </Link>
                   </td>
                 </tr>
@@ -228,3 +228,4 @@ const viewLinkStyle: React.CSSProperties = {
   textDecoration: "none",
   whiteSpace: "nowrap",
 };
+

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import type { AppRole } from "@/lib/auth/get-current-user";
+import type { AppRole } from "@/lib/types/auth";
 import { userHasPlanAppAccess } from "@/lib/auth/product-access";
 import NotificationsIcon from "./NotificationsIcon";
 import WarningsIcon from "./WarningsIcon";
