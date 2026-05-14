@@ -4,7 +4,6 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { getProductIdByCode } from "@/lib/auth/product-access";
 
 type SoloPlanAssignment = {
   id: string;
@@ -62,17 +61,10 @@ export default function AdminSoloPlanPage() {
     setLoading(true);
     setErrorMessage("");
 
-    const productId = await getProductIdByCode(supabase, "solo_16_week_plan");
-    if (!productId) {
-      setErrorMessage("Could not load solo plan product.");
-      setLoading(false);
-      return;
-    }
-
     const { data: accessData, error: accessError } = await supabase
       .from("user_product_access")
       .select("id, user_id, created_at")
-      .eq("product_id", productId)
+      .eq("product_code", "solo_16_week_plan")
       .eq("status", "active")
       .order("created_at", { ascending: false });
 
@@ -294,9 +286,10 @@ export default function AdminSoloPlanPage() {
           status: "active",
           name: selectedTemplate.name,
           coach_user_id: null,
+          event_id: null,
           source_program_template_id: formData.templateId,
         })
-        .select("id")
+        .select("id, event_id")
         .single();
 
       if (planError) {
@@ -305,18 +298,12 @@ export default function AdminSoloPlanPage() {
         return;
       }
 
-      const productId = await getProductIdByCode(supabase, "solo_16_week_plan");
-      if (!productId) {
-        setErrorMessage("Could not find solo plan product.");
-        setAssigningPlan(false);
-        return;
-      }
-
       const { data: accessData, error: accessError } = await supabase
         .from("user_product_access")
         .insert({
           user_id: formData.athleteUserId,
-          product_id: productId,
+          product_id: null,
+          product_code: "solo_16_week_plan",
           status: "active",
           starts_at: assignmentDate,
           metadata: { source: "admin_solo_plan_assignment" },
@@ -337,6 +324,7 @@ export default function AdminSoloPlanPage() {
           product_access_id: accessData.id,
           athlete_plan_id: planData.id,
           source_program_template_id: formData.templateId,
+          race_id: planData.event_id ?? null,
           coach_user_id: null,
           status: "active",
           coaching_level: "none",

@@ -11,15 +11,14 @@ export type CoachingLevel = "none" | "limited" | "full";
 type ProductAccessRow = {
   id: string;
   user_id: string;
+  product_code: ProductCode;
   status: ProductAccessStatus;
   starts_at: string | null;
   ends_at: string | null;
-  products: { code: ProductCode } | { code: ProductCode }[] | null;
 };
 
 function productCodeFromRow(row: ProductAccessRow): ProductCode | null {
-  const product = Array.isArray(row.products) ? row.products[0] : row.products;
-  return product?.code ?? null;
+  return row.product_code ?? null;
 }
 
 function isCurrentlyActive(row: { status: string; starts_at?: string | null; ends_at?: string | null }) {
@@ -38,7 +37,7 @@ export async function getActiveProductCodes(
 ): Promise<ProductCode[]> {
   const { data, error } = await supabase
     .from("user_product_access")
-    .select("id, user_id, status, starts_at, ends_at, products(code)")
+    .select("id, user_id, product_code, status, starts_at, ends_at")
     .eq("user_id", userId);
 
   if (error || !data) return [];
