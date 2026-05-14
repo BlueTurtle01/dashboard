@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AppRole } from "@/lib/auth/get-current-user";
 import { UserWithRoles, saveUserRoles } from "@/lib/actions/userRoles";
 
-const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder", "creator"];
+const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "creator"];
 
 const ROLE_LABELS: Record<AppRole, string> = {
   admin: "Admin",

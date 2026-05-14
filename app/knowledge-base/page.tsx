@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { getCurrentUserRoles } from "@/lib/auth/get-current-user";
+import { getCurrentUser, getCurrentUserRoles } from "@/lib/auth/get-current-user";
+import { userHasPlanAppAccess } from "@/lib/auth/product-access";
 import { createClient } from "@/lib/supabase/server";
 import {
   getFaqQuestionsForAdmin,
@@ -11,13 +12,20 @@ import KnowledgeBaseClient from "./KnowledgeBaseClient";
 
 export default async function KnowledgeBasePage() {
   const roles = await getCurrentUserRoles();
-  if (roles.length === 0) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const supabase = await createClient();
+  const hasPlanAccess = await userHasPlanAppAccess(supabase, user.id);
+
+  if (roles.length === 0 && !hasPlanAccess) {
     redirect("/login");
   }
 
   let allowedNavItems = new Set<string>();
   if (!roles.includes("admin")) {
-    const supabase = await createClient();
     const { data: permissions } = await supabase
       .from("role_nav_permissions")
       .select("nav_item")
@@ -36,6 +44,7 @@ export default async function KnowledgeBasePage() {
   const canViewAthleteKb =
     roles.includes("athlete") ||
     roles.includes("solo_plan_holder") ||
+    hasPlanAccess ||
     hasPermission("athlete_knowledge_base");
 
   if (!canViewAthleteKb && !canViewCoachKb && !canViewAdminKb) {

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AppRole, requireAdminOrThrow } from "@/lib/auth/get-current-user";
 
-const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder"];
+const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "creator"];
 
 async function ensureAthleteProfileForPlanRole(adminClient: any, userId: string) {
   const { data: userData } = await adminClient
@@ -125,7 +125,7 @@ export async function saveUserRoles(userId: string, roles: AppRole[]) {
   await requireAdminOrThrow();
   const adminClient = createAdminClient();
 
-  if (roles.includes("athlete") || roles.includes("solo_plan_holder")) {
+  if (roles.includes("athlete")) {
     await ensureAthleteProfileForPlanRole(adminClient, userId);
   }
 

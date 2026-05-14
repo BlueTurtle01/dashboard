@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
-import { getCurrentUserEffectiveRoles } from "@/lib/auth/get-current-user";
+import { getCurrentUser, getCurrentUserEffectiveRoles } from "@/lib/auth/get-current-user";
+import { userHasPlanAppAccess } from "@/lib/auth/product-access";
+import { createClient } from "@/lib/supabase/server";
 import PwaTopBar from "@/components/pwa/PwaTopBar";
 import PwaBottomNav from "@/components/pwa/PwaBottomNav";
 import RegisterSW from "@/components/pwa/RegisterSW";
@@ -19,8 +21,16 @@ export default async function PlanLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
   const roles = await getCurrentUserEffectiveRoles();
-  const canAccess = roles.includes("solo_plan_holder");
+  const supabase = await createClient();
+  const canAccess =
+    roles.includes("solo_plan_holder") ||
+    (await userHasPlanAppAccess(supabase, user.id));
 
   if (!canAccess) {
     redirect("/login");

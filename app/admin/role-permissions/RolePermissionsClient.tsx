@@ -12,7 +12,6 @@ const ROLE_LABELS: Record<ManagedRole, string> = {
   admin: "Admin",
   coach: "Coach",
   athlete: "Athlete",
-  solo_plan_holder: "Solo Plan",
   creator: "Creator",
 };
 

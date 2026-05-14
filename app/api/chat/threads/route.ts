@@ -1,22 +1,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { canAccessConversation } from '@/lib/chat/access';
 
-async function isParticipantInConversation(
+async function canUserAccessConversation(
   supabase: any,
   conversationId: string,
   userId: string
 ): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('chat_conversations')
-    .select('coach_user_id, athlete_user_id')
-    .eq('id', conversationId)
-    .maybeSingle();
-
-  if (error || !data) {
-    return false;
-  }
-
-  return data.coach_user_id === userId || data.athlete_user_id === userId;
+  return canAccessConversation(supabase, conversationId, userId);
 }
 
 export async function GET(req: Request) {
@@ -39,7 +30,7 @@ export async function GET(req: Request) {
     }
 
     // Check participant
-    const isParticipant = await isParticipantInConversation(
+    const isParticipant = await canUserAccessConversation(
       supabase,
       conversationId,
       user.id
@@ -88,7 +79,7 @@ export async function POST(req: Request) {
     }
 
     // Check participant
-    const isParticipant = await isParticipantInConversation(
+    const isParticipant = await canUserAccessConversation(
       supabase,
       conversationId,
       user.id

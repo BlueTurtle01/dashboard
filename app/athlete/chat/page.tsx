@@ -45,13 +45,33 @@ function AthleteChatContent() {
           throw new Error(linksError.message);
         }
 
-        if (!links) {
+        let linkedCoachId = links?.coach_user_id ?? null;
+
+        if (!linkedCoachId) {
+          const { data: enrollment, error: enrollmentError } = await supabase
+            .from('plan_enrollments')
+            .select('coach_user_id')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .in('coaching_level', ['limited', 'full'])
+            .not('coach_user_id', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (enrollmentError) {
+            throw new Error(enrollmentError.message);
+          }
+
+          linkedCoachId = enrollment?.coach_user_id ?? null;
+        }
+
+        if (!linkedCoachId) {
           setError('No active coach assigned');
           setLoading(false);
           return;
         }
 
-        const linkedCoachId = links.coach_user_id;
         console.log('[AthleteChat] Coach ID:', linkedCoachId);
         setCoachId(linkedCoachId);
 

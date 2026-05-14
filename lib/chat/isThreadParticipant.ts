@@ -1,3 +1,5 @@
+import { canAccessConversation } from "@/lib/chat/access";
+
 export async function isThreadParticipant(
   supabase: any,
   threadId: string,
@@ -13,15 +15,5 @@ export async function isThreadParticipant(
     return false;
   }
 
-  const { data: conversation, error: convError } = await supabase
-    .from('chat_conversations')
-    .select('coach_user_id, athlete_user_id')
-    .eq('id', thread.conversation_id)
-    .maybeSingle();
-
-  if (convError || !conversation) {
-    return false;
-  }
-
-  return conversation.coach_user_id === userId || conversation.athlete_user_id === userId;
+  return canAccessConversation(supabase, thread.conversation_id, userId);
 }

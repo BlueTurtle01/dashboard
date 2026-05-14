@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/auth/get-current-user";
+import { userHasPlanAppAccess } from "@/lib/auth/product-access";
 import NotificationsIcon from "./NotificationsIcon";
 import WarningsIcon from "./WarningsIcon";
 import UserAccountDropdown from "./UserAccountDropdown";
@@ -21,6 +22,7 @@ export default async function Navbar() {
 
   let actualRoles: AppRole[] = [];
   let features: string[] = [];
+  let hasPlanAccess = false;
 
   if (user) {
     const { data } = await supabase
@@ -43,6 +45,7 @@ export default async function Navbar() {
       .eq("user_id", user.id);
 
     features = featureData?.map((row) => row.feature) ?? [];
+    hasPlanAccess = await userHasPlanAppAccess(supabase, user.id);
   }
 
   const selectedRole = (await cookies()).get(VIEW_AS_ROLE_COOKIE)?.value as AppRole | undefined;
@@ -56,11 +59,14 @@ export default async function Navbar() {
   const isAdmin = roles.includes("admin");
   const isCoach = roles.includes("coach");
   const isAthlete = roles.includes("athlete");
-  const isSoloPlanHolder = roles.includes("solo_plan_holder");
+  const isSoloPlanHolder = roles.includes("solo_plan_holder") || hasPlanAccess;
 
-  // Hide navbar for solo plan holders (they use PWA shell instead)
-  // Only hide if: user is NOT an actual admin AND their role is ONLY solo_plan_holder
-  if (!isActualAdmin && actualRoles.length === 1 && actualRoles[0] === "solo_plan_holder") {
+  // Hide navbar for plan-only users; they use the PWA shell instead.
+  if (
+    !isActualAdmin &&
+    hasPlanAccess &&
+    actualRoles.every((role) => role === "solo_plan_holder")
+  ) {
     return null;
   }
 
@@ -242,11 +248,11 @@ export default async function Navbar() {
                   Onboarding
                 </Link>
               )}
-              {can("athlete_plan") && (
+              {(can("athlete_plan") || hasPlanAccess) && (
                 <SidebarDropdown
                   label="My Plan"
                   items={[
-                    { href: "/athlete", label: "Plan" },
+                    { href: hasPlanAccess && !isAthlete ? "/plan" : "/athlete", label: "Plan" },
                     { href: "/athlete/race-summary", label: "Race Summary" },
                     ...(isSoloPlanHolder ? [] : [{ href: "/athlete/log", label: "Log" }]),
                   ]}

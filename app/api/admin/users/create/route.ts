@@ -77,8 +77,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: rolesError.message }, { status: 500 });
     }
 
-    // Create athlete profile for any role that uses athlete-facing plan/profile features.
-    if (roles.includes('athlete') || roles.includes('solo_plan_holder')) {
+    // Create athlete profile for athlete-facing role users.
+    if (roles.includes('athlete')) {
       await ensureAthleteProfile(adminClient, newUserId, email);
     }
 
@@ -206,7 +206,7 @@ export async function PATCH(req: Request) {
     const adminClient = createAdminClient();
 
     // Ensure profile-backed roles have the minimum profile row before saving roles.
-    if (roles.includes('athlete') || roles.includes('solo_plan_holder')) {
+    if (roles.includes('athlete')) {
       await ensureAthleteProfile(adminClient, userId);
     }
 

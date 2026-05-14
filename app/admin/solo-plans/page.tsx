@@ -4,9 +4,12 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getProductIdByCode } from "@/lib/auth/product-access";
 
 type SoloPlanAssignment = {
   id: string;
+  product_access_id: string;
+  plan_enrollment_id: string | null;
   plan_id: string;
   athlete_user_id: string;
   user_email: string | null;
@@ -59,29 +62,52 @@ export default function AdminSoloPlanPage() {
     setLoading(true);
     setErrorMessage("");
 
-    const { data: roleData, error: roleError } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "solo_plan_holder");
-
-    if (roleError) {
-      setErrorMessage(`Could not load assignments: ${roleError.message}`);
+    const productId = await getProductIdByCode(supabase, "solo_16_week_plan");
+    if (!productId) {
+      setErrorMessage("Could not load solo plan product.");
       setLoading(false);
       return;
     }
 
-    const soloPlanUserIds = (roleData || []).map((r) => r.user_id);
-    if (soloPlanUserIds.length === 0) {
+    const { data: accessData, error: accessError } = await supabase
+      .from("user_product_access")
+      .select("id, user_id, created_at")
+      .eq("product_id", productId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false });
+
+    if (accessError) {
+      setErrorMessage(`Could not load assignments: ${accessError.message}`);
+      setLoading(false);
+      return;
+    }
+
+    const accessRows = accessData || [];
+    if (accessRows.length === 0) {
       setAssignments([]);
       setLoading(false);
       return;
     }
 
-    const { data: plansData, error: plansError } = await supabase
-      .from("athlete_plans")
-      .select("id, name, athlete_user_id, created_at")
-      .in("athlete_user_id", soloPlanUserIds)
-      .order("created_at", { ascending: false });
+    const { data: enrollmentData, error: enrollmentError } = await supabase
+      .from("plan_enrollments")
+      .select("id, user_id, product_access_id, athlete_plan_id, created_at")
+      .in("product_access_id", accessRows.map((row) => row.id))
+      .eq("status", "active");
+
+    if (enrollmentError) {
+      setErrorMessage(`Could not load enrollments: ${enrollmentError.message}`);
+      setLoading(false);
+      return;
+    }
+
+    const planIds = [...new Set((enrollmentData || []).map((row) => row.athlete_plan_id).filter(Boolean))];
+    const { data: plansData, error: plansError } = planIds.length > 0
+      ? await supabase
+          .from("athlete_plans")
+          .select("id, name, athlete_user_id, created_at")
+          .in("id", planIds)
+      : { data: [], error: null };
 
     if (plansError) {
       setErrorMessage(`Could not load plans: ${plansError.message}`);
@@ -99,15 +125,24 @@ export default function AdminSoloPlanPage() {
     const { users: allUsers } = await usersRes.json() as { users: { id: string; email: string | null }[] };
 
     const emailMap = new Map(allUsers.map((u) => [u.id, u.email]));
+    const plansById = new Map((plansData || []).map((plan: any) => [`${plan.id}`, plan]));
+    const enrollmentByAccessId = new Map((enrollmentData || []).map((row: any) => [`${row.product_access_id}`, row]));
 
-    const assignmentList = (plansData || []).map((plan: Record<string, unknown>) => ({
-      id: `${plan.id}`,
-      plan_id: `${plan.id}`,
-      athlete_user_id: `${plan.athlete_user_id}`,
-      user_email: emailMap.get(`${plan.athlete_user_id}`) || null,
-      plan_name: plan.name || null,
-      created_at: plan.created_at || null,
-    })) as SoloPlanAssignment[];
+    const assignmentList = accessRows.map((access: Record<string, unknown>) => {
+      const enrollment = enrollmentByAccessId.get(`${access.id}`);
+      const plan = enrollment?.athlete_plan_id ? plansById.get(`${enrollment.athlete_plan_id}`) : null;
+
+      return {
+        id: `${access.id}`,
+        product_access_id: `${access.id}`,
+        plan_enrollment_id: enrollment?.id ? `${enrollment.id}` : null,
+        plan_id: plan?.id ? `${plan.id}` : "",
+        athlete_user_id: `${access.user_id}`,
+        user_email: emailMap.get(`${access.user_id}`) || null,
+        plan_name: plan?.name || null,
+        created_at: plan?.created_at || access.created_at || null,
+      };
+    }) as SoloPlanAssignment[];
 
     setAssignments(assignmentList);
     setLoading(false);
@@ -270,14 +305,47 @@ export default function AdminSoloPlanPage() {
         return;
       }
 
-      // Assign solo_plan_holder role
-      const { error: roleError } = await supabase.from("user_roles").insert({
-        user_id: formData.athleteUserId,
-        role: "solo_plan_holder",
-      });
+      const productId = await getProductIdByCode(supabase, "solo_16_week_plan");
+      if (!productId) {
+        setErrorMessage("Could not find solo plan product.");
+        setAssigningPlan(false);
+        return;
+      }
 
-      if (roleError && !roleError.message.includes("duplicate")) {
-        setErrorMessage(`Could not assign role: ${roleError.message}`);
+      const { data: accessData, error: accessError } = await supabase
+        .from("user_product_access")
+        .insert({
+          user_id: formData.athleteUserId,
+          product_id: productId,
+          status: "active",
+          starts_at: assignmentDate,
+          metadata: { source: "admin_solo_plan_assignment" },
+        })
+        .select("id")
+        .single();
+
+      if (accessError || !accessData?.id) {
+        setErrorMessage(`Could not grant product access: ${accessError?.message ?? "Unknown error"}`);
+        setAssigningPlan(false);
+        return;
+      }
+
+      const { error: enrollmentError } = await supabase
+        .from("plan_enrollments")
+        .insert({
+          user_id: formData.athleteUserId,
+          product_access_id: accessData.id,
+          athlete_plan_id: planData.id,
+          source_program_template_id: formData.templateId,
+          coach_user_id: null,
+          status: "active",
+          coaching_level: "none",
+          starts_at: assignmentDate,
+          metadata: { source: "admin_solo_plan_assignment" },
+        });
+
+      if (enrollmentError) {
+        setErrorMessage(`Could not create plan enrollment: ${enrollmentError.message}`);
         setAssigningPlan(false);
         return;
       }
@@ -318,17 +386,36 @@ export default function AdminSoloPlanPage() {
         setErrorMessage(`Could not archive plan: ${planError.message}`);
       }
 
-      const { error: roleError } = await supabase
+      const { error: enrollmentError } = assignment.plan_enrollment_id
+        ? await supabase
+            .from("plan_enrollments")
+            .update({ status: "archived", ends_at: new Date().toISOString() })
+            .eq("id", assignment.plan_enrollment_id)
+        : await supabase
+            .from("plan_enrollments")
+            .update({ status: "archived", ends_at: new Date().toISOString() })
+            .eq("product_access_id", assignment.product_access_id);
+
+      if (enrollmentError) {
+        setErrorMessage(`Could not archive enrollment: ${enrollmentError.message}`);
+      }
+
+      const { error: accessError } = await supabase
+        .from("user_product_access")
+        .update({ status: "archived", ends_at: new Date().toISOString() })
+        .eq("id", assignment.product_access_id);
+
+      if (accessError) {
+        setErrorMessage(`Could not archive product access: ${accessError.message}`);
+      }
+
+      await supabase
         .from("user_roles")
         .delete()
         .eq("user_id", assignment.athlete_user_id)
         .eq("role", "solo_plan_holder");
 
-      if (roleError) {
-        setErrorMessage(`Could not remove role: ${roleError.message}`);
-      }
-
-      if (!planError && !roleError) {
+      if (!planError && !enrollmentError && !accessError) {
         setSuccessMessage(`Access revoked for ${assignment.user_email}.`);
         setAssignments((prev) => prev.filter((a) => a.id !== assignment.id));
       }

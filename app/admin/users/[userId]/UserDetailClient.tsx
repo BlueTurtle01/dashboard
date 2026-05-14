@@ -6,7 +6,7 @@ import { AppRole } from "@/lib/auth/get-current-user";
 import { UserDetail, saveUserRoles } from "@/lib/actions/userRoles";
 import { grantFeature, revokeFeature } from "@/lib/actions/userFeatures";
 
-const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder", "creator"];
+const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "creator"];
 const ALL_FEATURES = ["race_info", "video_analysis", "vaccinations", "kit_list"] as const;
 type UserFeature = (typeof ALL_FEATURES)[number];
 

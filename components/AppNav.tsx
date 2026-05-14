@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import NotificationsIcon from "@/components/NotificationsIcon";
+import { userHasPlanAppAccess } from "@/lib/auth/product-access";
 
 export default function AppNav() {
   const [roles, setRoles] = useState<string[]>([]);
+  const [hasPlanAccess, setHasPlanAccess] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,6 +19,7 @@ export default function AppNav() {
 
         if (userError || !user) {
           setRoles([]);
+          setHasPlanAccess(false);
           setLoading(false);
           return;
         }
@@ -29,6 +32,8 @@ export default function AppNav() {
         if (!error && data) {
           setRoles(data.map((r) => r.role));
         }
+
+        setHasPlanAccess(await userHasPlanAppAccess(supabase, user.id));
       } catch (err) {
         console.error("Error fetching roles:", err);
       } finally {
@@ -42,7 +47,7 @@ export default function AppNav() {
   const isAthlete = roles.includes("athlete");
   const isCoach = roles.includes("coach");
   const isAdmin = roles.includes("admin");
-  const isSoloPlanHolder = roles.includes("solo_plan_holder");
+  const isSoloPlanHolder = roles.includes("solo_plan_holder") || hasPlanAccess;
 
   return (
     <nav className="bg-white border-b border-zinc-200">

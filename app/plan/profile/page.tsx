@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { userHasPlanAppAccess } from "@/lib/auth/product-access";
 import { TutorialProvider, useTutorial } from "@/lib/context/TutorialContext";
 import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
 import { createHolidayNotification, createBlockedDateNotification, createProfileSubmittedNotification } from "@/lib/actions/createNotification";
@@ -311,7 +312,7 @@ function AthleteProfileContent() {
         const supabaseAuth = await supabase.auth.getUser();
         const currentUserId = supabaseAuth.data?.user?.id;
 
-        // Check if user is solo_plan_holder
+        // Check if user has plan-only access.
         if (currentUserId) {
           const { data: roleData } = await supabase
             .from("user_roles")
@@ -319,7 +320,8 @@ function AthleteProfileContent() {
             .eq("user_id", currentUserId)
             .eq("role", "solo_plan_holder")
             .maybeSingle();
-          setIsSoloPlanHolder(!!roleData);
+          const hasPlanAccess = await userHasPlanAppAccess(supabase, currentUserId);
+          setIsSoloPlanHolder(!!roleData || hasPlanAccess);
         }
 
         const [

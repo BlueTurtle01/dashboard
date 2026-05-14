@@ -51,5 +51,5 @@ export const NAV_ITEMS: NavItemDef[] = [
   { key: "admin_config",           label: "Config",           section: "Admin" },
 ];
 
-export const ALL_ROLES = ["admin", "coach", "athlete", "solo_plan_holder", "creator"] as const;
+export const ALL_ROLES = ["admin", "coach", "athlete", "creator"] as const;
 export type ManagedRole = (typeof ALL_ROLES)[number];

@@ -15,7 +15,7 @@ const ROLE_ROUTES: Partial<Record<AppRole, string>> = {
   admin: "/admin/users",
   coach: "/coach/dashboard",
   athlete: "/athlete",
-  solo_plan_holder: "/athlete",
+  solo_plan_holder: "/plan",
 };
 
 const VIEW_AS_ROLE_COOKIE = "ep_view_as_role";
@@ -30,7 +30,7 @@ export default function RoleViewDropdown({
   const router = useRouter();
   const canViewAllRoles = roles.includes("admin");
   const options: AppRole[] = canViewAllRoles
-    ? ["admin", "coach", "athlete", "solo_plan_holder"]
+    ? ["admin", "coach", "athlete"]
     : roles.filter((role) => role !== "creator");
 
   if (options.length <= 1) return null;

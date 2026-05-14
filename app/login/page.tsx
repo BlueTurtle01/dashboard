@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getDefaultRouteForRoles } from "@/lib/auth/get-default-route-for-roles";
+import { userHasPlanAppAccess } from "@/lib/auth/product-access";
 
 type RoleRow = {
   role: "admin" | "coach" | "athlete" | "solo_plan_holder";
@@ -47,14 +48,15 @@ export default function LoginPage() {
     }
 
     const roles = ((roleRows || []) as RoleRow[]).map((row) => row.role);
+    const hasPlanAccess = await userHasPlanAppAccess(supabase, signInData.user.id);
 
-    if (roles.length === 0) {
-      setErrorMessage("This account has no role assigned.");
+    if (roles.length === 0 && !hasPlanAccess) {
+      setErrorMessage("This account has no role or product access assigned.");
       setLoading(false);
       return;
     }
 
-    router.push(getDefaultRouteForRoles(roles));
+    router.push(getDefaultRouteForRoles(roles, { hasPlanAccess }));
     router.refresh();
   }
 

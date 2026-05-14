@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { getUserDisplayName } from '@/lib/chat/getUserName';
+import { canUseCoachChat } from '@/lib/chat/access';
 
 export async function GET(req: Request) {
   try {
@@ -91,6 +92,10 @@ export async function POST(req: Request) {
         { error: 'Invalid partnerRole' },
         { status: 400 }
       );
+    }
+
+    if (!(await canUseCoachChat(supabase, coachUserId, athleteUserId))) {
+      return NextResponse.json({ error: 'Chat access is not active for this coach-athlete pair' }, { status: 403 });
     }
 
     // Check if conversation exists
