@@ -24,14 +24,12 @@ export async function GET() {
   }
 
   const adminClient = createAdminClient();
-  const { data, error } = await adminClient
-    .from('auth.users')
-    .select('id, email');
+  const { data, error } = await adminClient.auth.admin.listUsers();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const users = (data as any[])?.map((u) => ({ id: u.id, email: u.email ?? null })) ?? [];
+  const users = (data?.users ?? []).map((u) => ({ id: u.id, email: u.email ?? null }));
   return NextResponse.json({ users });
 }
