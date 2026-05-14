@@ -2,7 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { AppRole, requireAdminOrThrow } from "@/lib/auth/get-current-user";
+import { requireAdminOrThrow } from "@/lib/auth/core";
+import type { AppRole } from "@/lib/types/auth";
 
 const ALL_ROLES: AppRole[] = ["admin", "coach", "athlete", "creator"];
 

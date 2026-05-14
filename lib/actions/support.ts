@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, requireAdminOrThrow } from "@/lib/auth/get-current-user";
+import { getCurrentUser, requireAdminOrThrow } from "@/lib/auth/core";
 
 export type TicketCategory = "technical" | "billing" | "coaching" | "account" | "feedback" | "other";
 export type TicketUrgency = "low" | "medium" | "high" | "urgent";

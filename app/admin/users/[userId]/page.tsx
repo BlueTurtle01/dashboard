@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { userHasRole } from "@/lib/auth/get-current-user";
+import { userHasRole } from "@/lib/auth/core";
 import { getUserById } from "@/lib/actions/userRoles";
 import { createClient } from "@/lib/supabase/server";
 import UserDetailClient from "./UserDetailClient";

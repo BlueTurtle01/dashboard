@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { requireAdminOrThrow } from "@/lib/auth/get-current-user";
+import { requireAdminOrThrow } from "@/lib/auth/core";
 
 export async function grantFeature(userId: string, feature: string) {
   await requireAdminOrThrow();
