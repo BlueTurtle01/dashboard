@@ -91,7 +91,7 @@ export default async function Navbar() {
     can("coach_chat") || can("coach_programs") ||
     can("coach_mobility") || can("coach_gym_sessions") || can("coach_profile");
   const canAccessTrainingArea = isAthlete || isSoloPlanHolder ||
-    can("athlete_plan") || can("athlete_chat") || can("athlete_library") ||
+    can("athlete_plan") || can("athlete_chat") ||
     can("athlete_information") ||
     can("athlete_profile") || can("athlete_integrations") || can("athlete_upgrades");
   const canAccessKnowledgeBase = isAdmin || isCoach || isAthlete || isSoloPlanHolder ||
@@ -262,11 +262,6 @@ export default async function Navbar() {
                 <Link href="/athlete/chat" className="app-sidebar__link">
                   Chat
                   {athleteHasUnread && <span className="app-sidebar__nav-badge" />}
-                </Link>
-              )}
-              {can("athlete_library") && (
-                <Link href="/athlete/library" className="app-sidebar__link">
-                  Library
                 </Link>
               )}
               {can("athlete_information") && (

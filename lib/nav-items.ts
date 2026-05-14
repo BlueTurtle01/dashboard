@@ -1,7 +1,6 @@
 export type NavItemKey =
   | "athlete_plan"
   | "athlete_chat"
-  | "athlete_library"
   | "athlete_knowledge_base"
   | "athlete_information"
   | "athlete_profile"
@@ -30,7 +29,6 @@ export type NavItemDef = {
 export const NAV_ITEMS: NavItemDef[] = [
   { key: "athlete_plan",           label: "My Plan",          section: "Training" },
   { key: "athlete_chat",           label: "Chat",             section: "Training" },
-  { key: "athlete_library",        label: "Library",          section: "Training" },
   { key: "athlete_knowledge_base", label: "Knowledge Base: Athlete", section: "Help" },
   { key: "athlete_information",    label: "Information",      section: "Training" },
   { key: "athlete_profile",        label: "Profile",          section: "Training" },
