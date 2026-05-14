@@ -16,6 +16,15 @@ const DAY_FULL_NAMES: Record<string, string> = {
   Sun: "Sunday",
 };
 
+interface SessionCompletion {
+  id: string;
+  session_id: string;
+  week_number: number;
+  perceived_effort: number | null;
+  notes: string | null;
+  completed_at: string;
+}
+
 function getMondayOfWeek(date: Date): Date {
   const copy = new Date(date);
   copy.setHours(0, 0, 0, 0);
@@ -97,11 +106,17 @@ function isDateInHolidayRange(date: Date, ranges: Array<{ start: string; end: st
 
 export default function AthletePage() {
   const [plan, setPlan] = useState<GeneratedPlan | null>(null);
+  const [planId, setPlanId] = useState<string | null>(null);
   const [displayWeekIndex, setDisplayWeekIndex] = useState(0);
-  const [completedSessionIds, setCompletedSessionIds] = useState<Set<string>>(new Set());
+  const [completions, setCompletions] = useState<Map<string, SessionCompletion>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [holidayDateRanges, setHolidayDateRanges] = useState<Array<{ start: string; end: string }>>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [calendarSubmitting, setCalendarSubmitting] = useState<string | null>(null);
+  const [perceivedEffort, setPerceivedEffort] = useState<number | null>(null);
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -138,6 +153,7 @@ export default function AthletePage() {
 
         const loadedPlan = planData.plan_json as GeneratedPlan;
         setPlan(loadedPlan);
+        setPlanId(planData.id);
 
         // Jump to current week by finding which week contains today
         const weekStarts = getPlanWeekStartDates(loadedPlan);
@@ -165,11 +181,16 @@ export default function AthletePage() {
 
         const { data: completionsData } = await supabase
           .from("session_completions")
-          .select("session_id")
-          .eq("athlete_user_id", user.id);
+          .select("*")
+          .eq("athlete_user_id", user.id)
+          .eq("plan_id", planData.id);
 
         if (completionsData) {
-          setCompletedSessionIds(new Set(completionsData.map((c: any) => c.session_id)));
+          const completionMap = new Map<string, SessionCompletion>();
+          completionsData.forEach((completion) => {
+            completionMap.set(completion.session_id, completion as SessionCompletion);
+          });
+          setCompletions(completionMap);
         }
 
         // Fetch holidays
@@ -196,6 +217,145 @@ export default function AthletePage() {
     fetchData();
   }, []);
 
+  const handleLogCompletion = async (sessionId: string, alternativeSessionId?: string) => {
+    if (perceivedEffort === null) {
+      setError("Please select an effort level");
+      return;
+    }
+
+    if (!plan || !planId) return;
+
+    setSubmitting(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      const displayWeek = plan.weeks[displayWeekIndex];
+
+      if (!user || !displayWeek) return;
+
+      if (alternativeSessionId && completions.has(alternativeSessionId)) {
+        const { error: deleteError } = await supabase
+          .from("session_completions")
+          .delete()
+          .eq("athlete_user_id", user.id)
+          .eq("plan_id", planId)
+          .eq("session_id", alternativeSessionId);
+
+        if (deleteError) {
+          setError("Failed to update completion");
+          return;
+        }
+      }
+
+      const completedAt = new Date().toISOString();
+      const { error: upsertError } = await supabase
+        .from("session_completions")
+        .upsert(
+          {
+            athlete_user_id: user.id,
+            plan_id: planId,
+            session_id: sessionId,
+            week_number: displayWeek.weekNumber,
+            perceived_effort: perceivedEffort,
+            notes: notes || null,
+            completed_at: completedAt,
+          },
+          { onConflict: "athlete_user_id,session_id" }
+        );
+
+      if (upsertError) {
+        setError("Failed to log session");
+        return;
+      }
+
+      setCompletions((current) => {
+        const next = new Map(current);
+        if (alternativeSessionId) next.delete(alternativeSessionId);
+        next.set(sessionId, {
+          id: sessionId,
+          session_id: sessionId,
+          week_number: displayWeek.weekNumber,
+          perceived_effort: perceivedEffort,
+          notes: notes || null,
+          completed_at: completedAt,
+        });
+        return next;
+      });
+
+      setSelectedSessionId(null);
+      setPerceivedEffort(null);
+      setNotes("");
+      setError(null);
+    } catch {
+      setError("An error occurred while saving");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRemoveCompletion = async (sessionId: string) => {
+    if (!planId) return;
+
+    setSubmitting(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return;
+
+      const { error: deleteError } = await supabase
+        .from("session_completions")
+        .delete()
+        .eq("athlete_user_id", user.id)
+        .eq("plan_id", planId)
+        .eq("session_id", sessionId);
+
+      if (deleteError) {
+        setError("Failed to unlog session");
+        return;
+      }
+
+      setCompletions((current) => {
+        const next = new Map(current);
+        next.delete(sessionId);
+        return next;
+      });
+
+      if (selectedSessionId === sessionId) {
+        setSelectedSessionId(null);
+      }
+
+      setError(null);
+    } catch {
+      setError("An error occurred while updating the session");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const sendSessionsToCalendar = async (input: { sessionId?: string; mode?: "single" | "all" }) => {
+    try {
+      setCalendarSubmitting(input.mode === "all" ? "all" : input.sessionId ?? null);
+      setError(null);
+
+      const response = await fetch("/api/google-calendar/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "Could not send to Google Calendar");
+
+      const failedText = data.failedCount ? ` (${data.failedCount} failed)` : "";
+      alert(`Sent ${data.createdCount} session${data.createdCount === 1 ? "" : "s"} to Google Calendar${failedText}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCalendarSubmitting(null);
+    }
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900">
@@ -219,6 +379,11 @@ export default function AthletePage() {
   const displayWeek = plan.weeks[displayWeekIndex];
   if (!displayWeek) return null;
 
+  const totalCount = displayWeek.sessions.filter((session) => session.type !== "Rest").length;
+  const completedCount = displayWeek.sessions.filter(
+    (session) => session.type !== "Rest" && completions.has(session.id)
+  ).length;
+
   // Get week start date from computed week starts
   const weekStarts = getPlanWeekStartDates(plan);
   const weekStartMonday = weekStarts[displayWeekIndex]?.monday;
@@ -240,9 +405,17 @@ export default function AthletePage() {
               <p className="mt-1 text-sm text-zinc-500">
                 Week {displayWeek.weekNumber} · {displayWeek.phase}
                 {weekRangeLabel && <> · {weekRangeLabel}</>}
+                <> · {completedCount} of {totalCount} sessions complete</>
               </p>
             </div>
             <div className="flex shrink-0 gap-2">
+              <button
+                onClick={() => void sendSessionsToCalendar({ mode: "all" })}
+                disabled={calendarSubmitting !== null}
+                className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {calendarSubmitting === "all" ? "Sending..." : "Send All"}
+              </button>
               <button
                 onClick={() => setDisplayWeekIndex(Math.max(0, displayWeekIndex - 1))}
                 disabled={displayWeekIndex === 0}
@@ -263,6 +436,12 @@ export default function AthletePage() {
             <p className="mt-3 text-sm text-zinc-600">{displayWeek.focus}</p>
           )}
         </div>
+
+        {error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
 
         {/* Day-by-day list */}
         <div className="space-y-6">
@@ -307,7 +486,31 @@ export default function AthletePage() {
                       <SessionCard
                         key={session.id}
                         session={session}
-                        isCompleted={completedSessionIds.has(session.id)}
+                        isCompleted={completions.has(session.id)}
+                        completion={completions.get(session.id)}
+                        isSelected={selectedSessionId === session.id}
+                        onSelectToggle={() =>
+                          completions.has(session.id)
+                            ? void handleRemoveCompletion(session.id)
+                            : setSelectedSessionId(selectedSessionId === session.id ? null : session.id)
+                        }
+                        isSubmitting={submitting}
+                        perceivedEffort={perceivedEffort}
+                        setPerceivedEffort={setPerceivedEffort}
+                        notes={notes}
+                        setNotes={setNotes}
+                        onLogCompletion={() => {
+                          const alternativeSession = displayWeek.sessions.find((candidate) => {
+                            if (candidate.id === session.id) return false;
+                            if (candidate.dayLabel !== session.dayLabel) return false;
+                            const sessionIsAlternative = session.isInsertedAlternative === true;
+                            const candidateIsAlternative = candidate.isInsertedAlternative === true;
+                            return sessionIsAlternative !== candidateIsAlternative;
+                          });
+                          void handleLogCompletion(session.id, alternativeSession?.id);
+                        }}
+                        onSendToCalendar={() => sendSessionsToCalendar({ mode: "single", sessionId: session.id })}
+                        isSendingToCalendar={calendarSubmitting === session.id}
                       />
                     ))}
                   </div>
@@ -325,23 +528,54 @@ export default function AthletePage() {
   );
 }
 
-function SessionCard({ session, isCompleted }: { session: PlanSession; isCompleted: boolean }) {
+interface SessionCardProps {
+  session: PlanSession;
+  isCompleted: boolean;
+  completion: SessionCompletion | undefined;
+  isSelected: boolean;
+  onSelectToggle: () => void;
+  isSubmitting: boolean;
+  perceivedEffort: number | null;
+  setPerceivedEffort: (value: number) => void;
+  notes: string;
+  setNotes: (value: string) => void;
+  onLogCompletion: () => void;
+  onSendToCalendar: () => void;
+  isSendingToCalendar: boolean;
+}
+
+function SessionCard({
+  session,
+  isCompleted,
+  completion,
+  isSelected,
+  onSelectToggle,
+  isSubmitting,
+  perceivedEffort,
+  setPerceivedEffort,
+  notes,
+  setNotes,
+  onLogCompletion,
+  onSendToCalendar,
+  isSendingToCalendar,
+}: SessionCardProps) {
   return (
-    <Link
-      href={`/athlete/session/${encodeURIComponent(session.id)}`}
-      className="block rounded-xl border border-zinc-200 bg-white p-4 shadow-sm hover:border-zinc-300 hover:shadow-md transition-all"
-    >
+    <div className="block rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:border-zinc-300 hover:shadow-md">
       <div className="flex items-start gap-3">
         {/* Completion indicator */}
-        <div
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+        <button
+          type="button"
+          onClick={onSelectToggle}
+          disabled={isSubmitting}
+          aria-label={isCompleted ? "Remove session completion" : "Log session completion"}
+          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
             isCompleted
-              ? "border-emerald-500 bg-emerald-100"
-              : "border-zinc-300"
+              ? "border-emerald-500 bg-emerald-100 hover:bg-emerald-50"
+              : "border-zinc-300 hover:border-zinc-400"
           }`}
         >
           {isCompleted && <span className="text-emerald-600 text-xs font-bold">✓</span>}
-        </div>
+        </button>
 
         <div className="flex-1 min-w-0">
           {/* Badges + name row */}
@@ -356,7 +590,7 @@ function SessionCard({ session, isCompleted }: { session: PlanSession; isComplet
                 Key
               </span>
             )}
-            {(session as any).isInsertedAlternative && (
+            {session.isInsertedAlternative && (
               <span className="inline-block rounded px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-900">
                 Alternative
               </span>
@@ -371,6 +605,30 @@ function SessionCard({ session, isCompleted }: { session: PlanSession; isComplet
             {session.activity ? ` · ${session.activity}` : ""}
           </p>
 
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onSendToCalendar}
+              disabled={isSendingToCalendar}
+              className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSendingToCalendar ? "Sending..." : "Send to Google Calendar"}
+            </button>
+            <Link
+              href={`/athlete/session/${encodeURIComponent(session.id)}`}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+            >
+              View details
+            </Link>
+          </div>
+
+          {isCompleted && completion && (
+            <div className="mt-2 text-xs text-zinc-500">
+              <p>Effort: {completion.perceived_effort}/10</p>
+              {completion.notes && <p className="mt-1">Notes: {completion.notes}</p>}
+            </div>
+          )}
+
           {/* Description */}
           {session.description && (
             <p className="mt-2 text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">
@@ -380,20 +638,19 @@ function SessionCard({ session, isCompleted }: { session: PlanSession; isComplet
 
           {/* Session Details */}
           {(() => {
-            const s = session as any;
             const details = [
-              { label: "Session Type", value: s.subtype },
-              { label: "Terrain", value: s.terrain },
-              { label: "Elevation Gain", value: s.elevationGainMeters, format: (v: any) => `${v}m` },
-              { label: "Pack Weight", value: s.packWeightKg, format: (v: any) => `${v}kg` },
-              { label: "Strides", value: s.strides },
-              { label: "Warm-up", value: s.warmupMinutes, format: (v: any) => `${v} min` },
-              { label: "Cool-down", value: s.cooldownMinutes, format: (v: any) => `${v} min` },
-              { label: "Intervals", value: s.intervalReps, format: (v: any) => `${v} sets` },
-              { label: "Interval Duration", value: s.intervalDuration },
-              { label: "Rest Between Sets", value: s.intervalRestSeconds, format: (v: any) => `${v}s` },
-              { label: "Time Up", value: s.timeUpSeconds, format: (v: any) => `${v}s` },
-              { label: "Time Down", value: s.timeDownSeconds, format: (v: any) => `${v}s` },
+              { label: "Session Type", value: session.subtype },
+              { label: "Terrain", value: session.terrain },
+              { label: "Elevation Gain", value: session.elevationGainMeters, format: (value: string | number) => `${value}m` },
+              { label: "Pack Weight", value: session.packWeightKg, format: (value: string | number) => `${value}kg` },
+              { label: "Strides", value: session.strides },
+              { label: "Warm-up", value: session.warmupMinutes, format: (value: string | number) => `${value} min` },
+              { label: "Cool-down", value: session.cooldownMinutes, format: (value: string | number) => `${value} min` },
+              { label: "Intervals", value: session.intervalReps, format: (value: string | number) => `${value} sets` },
+              { label: "Interval Duration", value: session.intervalDuration },
+              { label: "Rest Between Sets", value: session.intervalRestSeconds, format: (value: string | number) => `${value}s` },
+              { label: "Time Up", value: session.timeUpSeconds, format: (value: string | number) => `${value}s` },
+              { label: "Time Down", value: session.timeDownSeconds, format: (value: string | number) => `${value}s` },
             ].filter(({ value }) => value);
 
             if (details.length === 0) return null;
@@ -411,13 +668,57 @@ function SessionCard({ session, isCompleted }: { session: PlanSession; isComplet
           })()}
 
           {/* Reason */}
-          {(session as any).reason && (
+          {session.reason && (
             <p className="mt-2 text-sm text-zinc-600 italic border-l-2 border-emerald-200 pl-3 leading-relaxed">
-              {(session as any).reason}
+              {session.reason}
             </p>
+          )}
+
+          {isSelected && (
+            <div className="mt-4 space-y-3 border-t border-zinc-200 pt-3">
+              <div>
+                <label className="text-xs font-semibold text-zinc-700">Perceived Effort (1-10)</label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {Array.from({ length: 10 }, (_, index) => index + 1).map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setPerceivedEffort(num)}
+                      className={`h-8 w-8 rounded text-xs font-semibold transition-colors ${
+                        perceivedEffort === num
+                          ? "bg-indigo-600 text-white"
+                          : "border border-zinc-300 hover:border-zinc-400"
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-700">Notes (optional)</label>
+                <textarea
+                  rows={2}
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="How did it go?"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={onLogCompletion}
+                disabled={isSubmitting}
+                className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSubmitting ? "Saving..." : "Log Session"}
+              </button>
+            </div>
           )}
         </div>
       </div>
-    </Link>
+    </div>
   );
 }

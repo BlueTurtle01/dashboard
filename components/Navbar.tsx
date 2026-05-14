@@ -1,10 +1,16 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import type { AppRole } from "@/lib/auth/get-current-user";
 import NotificationsIcon from "./NotificationsIcon";
 import WarningsIcon from "./WarningsIcon";
 import UserAccountDropdown from "./UserAccountDropdown";
 import SidebarDropdown from "./SidebarDropdown";
+import RoleViewDropdown from "./RoleViewDropdown";
 import "./Navbar.css";
+
+const VIEW_AS_ROLE_COOKIE = "ep_view_as_role";
+const VIEWABLE_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder"];
 
 export default async function Navbar() {
   const supabase = await createClient();
@@ -13,7 +19,7 @@ export default async function Navbar() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let roles: string[] = [];
+  let actualRoles: AppRole[] = [];
   let features: string[] = [];
 
   if (user) {
@@ -22,7 +28,14 @@ export default async function Navbar() {
       .select("role")
       .eq("user_id", user.id);
 
-    roles = data?.map((row) => row.role) ?? [];
+    actualRoles = (data?.map((row) => row.role) ?? []).filter(
+      (role): role is AppRole =>
+        role === "admin" ||
+        role === "coach" ||
+        role === "athlete" ||
+        role === "solo_plan_holder" ||
+        role === "creator"
+    );
 
     const { data: featureData } = await supabase
       .from("user_features")
@@ -32,6 +45,14 @@ export default async function Navbar() {
     features = featureData?.map((row) => row.feature) ?? [];
   }
 
+  const selectedRole = (await cookies()).get(VIEW_AS_ROLE_COOKIE)?.value as AppRole | undefined;
+  const roleView =
+    actualRoles.includes("admin") && selectedRole && VIEWABLE_ROLES.includes(selectedRole)
+      ? selectedRole
+      : null;
+  const roles = roleView ? [roleView] : actualRoles;
+
+  const isActualAdmin = actualRoles.includes("admin");
   const isAdmin = roles.includes("admin");
   const isCoach = roles.includes("coach");
   const isAthlete = roles.includes("athlete");
@@ -73,7 +94,7 @@ export default async function Navbar() {
   let coachHasUnread = false;
   let athleteHasUnread = false;
 
-  if (isAdmin) {
+  if (isActualAdmin) {
     const { count } = await supabase
       .from("support_tickets")
       .select("*", { count: "exact", head: true })
@@ -221,7 +242,6 @@ export default async function Navbar() {
                   items={[
                     { href: "/athlete", label: "Plan" },
                     { href: "/athlete/race-summary", label: "Race Summary" },
-                    { href: "/athlete/sessions", label: "Sessions" },
                     ...(isSoloPlanHolder ? [] : [{ href: "/athlete/log", label: "Log" }]),
                   ]}
                 />
@@ -323,13 +343,13 @@ export default async function Navbar() {
           <span className="app-sidebar__group-label">Help</span>
           <Link href="/support" className="app-sidebar__link">
             Support
-            {isAdmin && adminOpenTicketCount > 0 && <span className="app-sidebar__nav-badge" />}
+            {isActualAdmin && adminOpenTicketCount > 0 && <span className="app-sidebar__nav-badge" />}
           </Link>
           {canAccessKnowledgeBase && (
             <Link href="/knowledge-base" className="app-sidebar__link">
               Knowledge Base
               {athleteKbUnread && <span className="app-sidebar__nav-badge--green" />}
-              {isAdmin && adminFlaggedQbCount > 0 && <span className="app-sidebar__nav-badge" />}
+              {isActualAdmin && adminFlaggedQbCount > 0 && <span className="app-sidebar__nav-badge" />}
             </Link>
           )}
           <Link href="/help/suggest-feature" className="app-sidebar__link">
@@ -401,6 +421,7 @@ export default async function Navbar() {
 
         {/* Bottom user area */}
         <div className="app-sidebar__bottom">
+          <RoleViewDropdown roles={actualRoles} selectedRole={roleView} />
           <UserAccountDropdown />
         </div>
       </aside>

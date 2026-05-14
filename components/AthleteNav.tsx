@@ -18,7 +18,6 @@ export default function AthleteNav({ isSoloPlanHolder = false }: AthleteNavProps
   const tabs = [
     { href: "/athlete", label: "My Plan" },
     { href: "/athlete/race-summary", label: "Race Summary" },
-    { href: "/athlete/sessions", label: "Sessions" },
     ...(isSoloPlanHolder ? [] : [{ href: "/athlete/log", label: "Log" }]),
     { href: "/athlete/progress", label: "Progress" },
     ...(isSoloPlanHolder ? [{ href: "/athlete/library", label: "Library" }] : []),

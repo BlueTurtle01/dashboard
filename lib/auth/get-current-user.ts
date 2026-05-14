@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 
 export type AppRole = "admin" | "coach" | "athlete" | "solo_plan_holder" | "creator";
+const VIEW_AS_ROLE_COOKIE = "ep_view_as_role";
+const VIEWABLE_ROLES: AppRole[] = ["admin", "coach", "athlete", "solo_plan_holder"];
 
 export async function getCurrentUser() {
   const supabase = await createClient();
@@ -44,8 +47,29 @@ export async function getCurrentUserRoles(): Promise<AppRole[]> {
     );
 }
 
+export async function getCurrentUserEffectiveRoles(): Promise<AppRole[]> {
+  const roles = await getCurrentUserRoles();
+
+  if (!roles.includes("admin")) {
+    return roles;
+  }
+
+  const selectedRole = (await cookies()).get(VIEW_AS_ROLE_COOKIE)?.value as AppRole | undefined;
+
+  if (selectedRole && VIEWABLE_ROLES.includes(selectedRole)) {
+    return [selectedRole];
+  }
+
+  return roles;
+}
+
 export async function userHasRole(role: AppRole): Promise<boolean> {
   const roles = await getCurrentUserRoles();
+  return roles.includes(role);
+}
+
+export async function userHasEffectiveRole(role: AppRole): Promise<boolean> {
+  const roles = await getCurrentUserEffectiveRoles();
   return roles.includes(role);
 }
 

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "app/athlete/page.tsx",
+    "app/athlete/layout.tsx",
+    "app/coach/layout.tsx",
+    "components/AthleteNav.tsx",
+    "components/Navbar.tsx",
+    "components/RoleViewDropdown.tsx",
+    "lib/auth/get-current-user.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}

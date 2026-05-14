@@ -64,7 +64,7 @@ export default function AthleteProgramLibrary() {
       .from("athlete_plans")
       .select("id, name, source_program_template_id")
       .eq("athlete_user_id", user.id)
-      .eq("status", "active")
+      .in("status", ["active", "draft"])
       .not("source_program_template_id", "is", null);
 
     if (plansErr) { setError(plansErr.message); setLoading(false); return; }
