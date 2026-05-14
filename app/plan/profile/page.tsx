@@ -280,6 +280,7 @@ function AthleteProfileContent() {
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSoloPlanHolder, setIsSoloPlanHolder] = useState(false);
   const [activeTab, setActiveTab] = useState<"event" | "training" | "preferences" | "constraints" | "schedule" | "races" | "history" | "health">("event");
   const [completedTabs, setCompletedTabs] = useState<Set<string>>(new Set());
   const [showSendConfirm, setShowSendConfirm] = useState<"low-progress" | "no-holidays" | false>(false);
@@ -310,6 +311,16 @@ function AthleteProfileContent() {
         const supabaseAuth = await supabase.auth.getUser();
         const currentUserId = supabaseAuth.data?.user?.id;
 
+        // Check if user is solo_plan_holder
+        if (currentUserId) {
+          const { data: roleData } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", currentUserId)
+            .eq("role", "solo_plan_holder")
+            .maybeSingle();
+          setIsSoloPlanHolder(!!roleData);
+        }
 
         const [
           existingProfile,
@@ -1214,8 +1225,8 @@ function AthleteProfileContent() {
                   setEventSearchQuery(e.target.value);
                   searchEvents(e.target.value);
                 }}
-                disabled={profile.eventLocked}
-                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm ${profile.eventLocked ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
+                disabled={isSoloPlanHolder || profile.eventLocked}
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm ${isSoloPlanHolder || profile.eventLocked ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
               />
             </div>
             {eventSearchResults.length > 0 && (
@@ -1225,7 +1236,7 @@ function AthleteProfileContent() {
                     key={event.id}
                     type="button"
                     onClick={() => selectEvent(event)}
-                    disabled={profile.eventLocked}
+                    disabled={isSoloPlanHolder || profile.eventLocked}
                     className="w-full text-left px-4 py-2 hover:bg-zinc-100 border-b border-zinc-200 last:border-b-0 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="font-medium">{event.name}</div>
@@ -1283,10 +1294,10 @@ function AthleteProfileContent() {
               Event Goal
             </label>
             <select
-              className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+              className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
               value={profile.raceGoal ?? defaultProfile.raceGoal}
               onChange={(e) => updateRaceGoal(e.target.value)}
-              disabled={false}
+              disabled={isSoloPlanHolder}
             >
               {raceGoalOptions.map((goal) => (
                 <option key={goal.value} value={goal.value}>
@@ -1294,6 +1305,9 @@ function AthleteProfileContent() {
                 </option>
               ))}
             </select>
+            {isSoloPlanHolder && (
+              <SoloPlanDisabledField disabled={true} tooltip="💡 Choose your goal so a coach can tailor sessions and intensity to your target outcome." />
+            )}
           </div>
         </section>
         )}
@@ -1321,10 +1335,10 @@ function AthleteProfileContent() {
                 Baseline Fitness
               </span>
               <select
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
                 value={profile.baselineFitness ?? defaultProfile.baselineFitness}
                 onChange={(e) => updateBaselineFitness(e.target.value)}
-                disabled={false}
+                disabled={isSoloPlanHolder}
               >
                 {baselineFitnessOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -1342,12 +1356,12 @@ function AthleteProfileContent() {
                 type="number"
                 min="0"
                 max="14"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
                 value={profile.currentTrainingDaysPerWeek ?? 0}
                 onChange={(e) =>
                   updateTrainingMetric("currentTrainingDaysPerWeek", e.target.value)
                 }
-                disabled={false}
+                disabled={isSoloPlanHolder}
               />
             </label>
 
@@ -1359,12 +1373,12 @@ function AthleteProfileContent() {
                 type="number"
                 min="0"
                 max="14"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
                 value={profile.availableTrainingDaysPerWeek ?? 0}
                 onChange={(e) =>
                   updateTrainingMetric("availableTrainingDaysPerWeek", e.target.value)
                 }
-                disabled={false}
+                disabled={isSoloPlanHolder}
               />
             </label>
 
@@ -1376,12 +1390,12 @@ function AthleteProfileContent() {
                 type="number"
                 min="0"
                 step="0.5"
-                className="w-full rounded-xl border border-zinc-300 px-4 py-3"
+                className={`w-full rounded-xl border border-zinc-300 px-4 py-3 ${isSoloPlanHolder ? "cursor-not-allowed bg-gray-100 opacity-50" : ""}`}
                 value={profile.weeklyTrainingHours ?? 0}
                 onChange={(e) =>
                   updateTrainingMetric("weeklyTrainingHours", e.target.value)
                 }
-                disabled={false}
+                disabled={isSoloPlanHolder}
               />
             </label>
 
@@ -2522,6 +2536,13 @@ function AthleteProfileContent() {
           </div>
         )}
 
+        {isSoloPlanHolder && (
+          <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm text-amber-900">
+              <strong>📋 Unlock personalization:</strong> This plan is currently generic. Completing your profile details above would let a coach personalize it with your specific fitness level, equipment access, race history, and training preferences.
+            </p>
+          </div>
+        )}
       </div>
     </main>
   );

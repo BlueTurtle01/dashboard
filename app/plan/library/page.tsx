@@ -30,7 +30,7 @@ function formatDurationMinutes(value: number | null | undefined) {
   return value != null ? `${value} min` : "";
 }
 
-export default function AthleteProgramLibrary() {
+export default function PlanLibrary() {
   const router = useRouter();
   const [cards, setCards] = useState<PlanCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -212,22 +212,6 @@ export default function AthleteProgramLibrary() {
     setSaving(true);
     const supabase = createClient();
 
-    // Coached athletes get day assignment driven by their profile preferences
-    let preferredLongDay: string | null = null;
-    let availableRunDays: string[] | null = null;
-    let availableGymDays: string[] | null = null;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profile } = await supabase
-        .from("athlete_profiles")
-        .select("preferred_long_session_day, available_run_days, available_gym_days")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      preferredLongDay = (profile as { preferred_long_session_day: string | null } | null)?.preferred_long_session_day ?? null;
-      availableRunDays = (profile as { available_run_days: string[] | null } | null)?.available_run_days ?? null;
-      availableGymDays = (profile as { available_gym_days: string[] | null } | null)?.available_gym_days ?? null;
-    }
-
     // Fetch template weeks
     const { data: templateWeeks } = await supabase
       .from("program_template_weeks")
@@ -313,13 +297,11 @@ export default function AthleteProgramLibrary() {
 
     const VALID_DAYS = new Set(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 
-    // Day assignment driven by athlete profile preferences
-    const longRunDay = preferredLongDay && VALID_DAYS.has(preferredLongDay) ? preferredLongDay : "Sun";
-    const gymDay = availableGymDays && availableGymDays.length > 0 ? availableGymDays[0] : "Wed";
+    // Solo plan holders always use template day labels
+    const longRunDay = "Sun";
+    const gymDay = "Wed";
     const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const SPREAD_DAYS = availableRunDays && availableRunDays.length > 0
-      ? availableRunDays.filter((d) => VALID_DAYS.has(d) && d !== longRunDay && d !== gymDay)
-      : ALL_DAYS.filter((d) => d !== longRunDay && d !== gymDay);
+    const SPREAD_DAYS = ALL_DAYS.filter((d) => d !== longRunDay && d !== gymDay);
 
     // Build GeneratedPlan weeks
     const planWeeks = (templateWeeks ?? []).map((week) => {
@@ -327,8 +309,8 @@ export default function AthleteProgramLibrary() {
         .slice()
         .sort((a, b) => ((a.sort_order as number) ?? 0) - ((b.sort_order as number) ?? 0));
 
-      // Coached athletes ignore template day labels entirely
-      const unlabelled = rawSessions;
+      // Solo plan holders respect template day labels; unlabelled sessions are spread
+      const unlabelled = rawSessions.filter((s) => !VALID_DAYS.has((s.day_label as string) ?? ""));
 
       // Longest run (from unlabelled pool) → longRunDay
       const longestRunId = unlabelled
@@ -338,8 +320,11 @@ export default function AthleteProgramLibrary() {
       let spreadIdx = 0;
 
       const weekSessions = rawSessions.map((s) => {
+        const fixedDay = (s.day_label as string) ?? "";
         let dayLabel: string;
-        if (s.id === longestRunId) {
+        if (VALID_DAYS.has(fixedDay)) {
+          dayLabel = fixedDay;
+        } else if (s.id === longestRunId) {
           dayLabel = longRunDay;
         } else if ((s.type as string) === "Gym") {
           dayLabel = gymDay;
@@ -421,7 +406,7 @@ export default function AthleteProgramLibrary() {
 
     setSaving(false);
     setModal(null);
-    router.push("/athlete");
+    router.push("/plan");
   }
 
   async function handleClearCalendar() {
@@ -482,8 +467,17 @@ export default function AthleteProgramLibrary() {
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h1 className="mb-1 text-2xl font-bold text-zinc-900">Program Library</h1>
-          <p className="text-sm text-zinc-500">Your assigned training programs.</p>
+          <p className="text-sm text-zinc-500">Your training programs.</p>
         </div>
+        {cards.length > 0 && (
+          <button
+            onClick={handleClearCalendar}
+            disabled={clearing}
+            className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            {clearing ? "Clearing..." : "Clear Calendar"}
+          </button>
+        )}
       </div>
 
       {cards.length === 0 ? (
