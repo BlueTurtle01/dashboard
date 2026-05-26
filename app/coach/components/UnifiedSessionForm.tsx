@@ -91,6 +91,7 @@ interface UnifiedSessionFormProps {
   submitButtonLabel?: string;
   progressiveReveal?: boolean;
   hideDescription?: boolean;
+  disableActivityAutoDefault?: boolean;
 }
 
 const FIELD_VISIBILITY_DEFAULTS: FieldVisibility = {
@@ -239,6 +240,7 @@ export function UnifiedSessionForm({
   submitButtonLabel = "Save",
   progressiveReveal = false,
   hideDescription = false,
+  disableActivityAutoDefault = false,
 }: UnifiedSessionFormProps) {
   const [form, setForm] = useState<UnifiedSessionFormData>(
     initialData ? { ...createEmptyForm(), ...initialData } : createEmptyForm()
@@ -409,6 +411,7 @@ export function UnifiedSessionForm({
   useEffect(() => {
     if (loadingOptionData) return;
     if (activityOptions.length === 0) return;
+    if (disableActivityAutoDefault) return;
 
     setForm((current) => {
       let nextActivity = current.activity;

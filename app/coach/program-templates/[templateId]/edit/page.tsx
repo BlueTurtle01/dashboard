@@ -2405,6 +2405,7 @@ export default function EditProgramTemplatePage() {
                                   onCancel={() => setEditingSessionSlot(null)}
                                   submitButtonLabel="Update Session"
                                   progressiveReveal
+                                  disableActivityAutoDefault={!session.activity}
                                 />
                               </div>
                             ) : null}
