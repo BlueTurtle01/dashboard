@@ -30,6 +30,7 @@ type ProgramTemplateRow = {
   requires_load_carriage: boolean;
   requires_heat_acclimation: boolean;
   suitable_race_goals: string[] | null;
+  race_id: string | null;
 };
 
 type RaceRow = {
@@ -569,28 +570,6 @@ function buildAutoName(
   return parts.join(" · ");
 }
 
-function extractRaceNameFromTemplateName(template: ProgramTemplateRow) {
-  const parts = template.name
-    .split(/\s*(?:Â·|·)\s*/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  const generatedTokens = new Set([
-    ...Object.values(FITNESS_LABELS),
-    ...DISTANCE_OPTIONS.map((option) => option.value).filter(Boolean),
-    ...RACE_GOAL_OPTIONS.map((option) => option.label),
-  ]);
-
-  const firstGeneratedIndex = parts.findIndex((part) =>
-    generatedTokens.has(part) || /^\d+wk$/i.test(part) || /^\d+(?:-\d+)?d\/wk$/i.test(part)
-  );
-
-  if (firstGeneratedIndex <= 0) {
-    return "";
-  }
-
-  return parts.slice(0, firstGeneratedIndex).join(" · ");
-}
 
 function slugify(value: string) {
   return value
@@ -812,7 +791,7 @@ function mapToForm(
   }
 
   return {
-    raceName: extractRaceNameFromTemplateName(template),
+    raceName: "",
     name: template.name,
     slug: template.slug,
     description: template.description ?? "",
@@ -1566,7 +1545,8 @@ export default function EditProgramTemplatePage() {
               requires_gym,
               requires_load_carriage,
               requires_heat_acclimation,
-              suitable_race_goals
+              suitable_race_goals,
+              race_id
             `)
             .eq("id", templateId)
             .maybeSingle(),
@@ -1678,9 +1658,10 @@ export default function EditProgramTemplatePage() {
         sessionRows = (sessionData ?? []) as ProgramTemplateSessionRow[];
       }
 
-      const nextForm = mapToForm(templateData as ProgramTemplateRow, typedWeeks, sessionRows, exerciseMap);
+      const tpl = templateData as ProgramTemplateRow;
+      const nextForm = mapToForm(tpl, typedWeeks, sessionRows, exerciseMap);
       setForm(nextForm);
-      setRaceSearchQuery(nextForm.raceName);
+      setSelectedRaceId(tpl.race_id ?? null);
       setIsLoading(false);
     }
 
@@ -1721,12 +1702,15 @@ export default function EditProgramTemplatePage() {
     };
   }, []);
 
-  // Resolve race ID from name whenever raceName or races list changes
+  // Once races load, resolve the display name and search query from selectedRaceId
   useEffect(() => {
-    if (!form?.raceName || races.length === 0) { setSelectedRaceId(null); return; }
-    const match = races.find((r) => r.name === form.raceName);
-    setSelectedRaceId(match?.id ?? null);
-  }, [form?.raceName, races]);
+    if (!selectedRaceId || races.length === 0) return;
+    const match = races.find((r) => r.id === selectedRaceId);
+    if (match) {
+      updateForm("raceName", match.name);
+      setRaceSearchQuery(match.name);
+    }
+  }, [selectedRaceId, races]);
 
   // Fetch course profile from races_meta when a race is selected
   useEffect(() => {
@@ -2182,6 +2166,7 @@ export default function EditProgramTemplatePage() {
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean),
+      race_id: selectedRaceId ?? null,
     };
 
     const { error: templateError } = await supabase

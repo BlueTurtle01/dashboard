@@ -133,6 +133,7 @@ type ProgramTemplate = {
   discipline: string | null;
   plan_length_weeks: number;
   training_days_per_week: number;
+  race_id: string | null;
   program_template_weeks: TemplateWeek[];
 };
 
@@ -564,7 +565,7 @@ export default function ExportPreviewPage() {
       const { data, error: err } = await supabase
         .from("program_templates")
         .select(`
-          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week,
+          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week, race_id,
           program_template_weeks (
             id, week_number, focus, notes,
             program_template_sessions (
@@ -594,20 +595,11 @@ export default function ExportPreviewPage() {
 
       setTemplate(sorted);
 
-      // Fetch race profile via products table
-      const { data: productRow } = await supabase
-        .from("products")
-        .select("race_id")
-        .eq("template_id", templateId)
-        .not("race_id", "is", null)
-        .limit(1)
-        .maybeSingle();
-
-      if (productRow?.race_id) {
+      if (sorted.race_id) {
         const { data: metaRows } = await supabase
           .from("races_meta")
           .select("meta_key, meta_value")
-          .eq("race_id", productRow.race_id)
+          .eq("race_id", sorted.race_id)
           .in("meta_key", ["elevation_profile", "terrain_breakdown", "sustained_segments"]);
 
         const meta: Record<string, string> = {};
@@ -717,7 +709,8 @@ export default function ExportPreviewPage() {
           .no-print { display: none !important; }
           .app-sidebar { display: none !important; }
           .app-topbar { display: none !important; }
-          body { margin: 0; background: #fff; }
+          body { margin: 0 !important; padding: 0 !important; background: #fff; }
+          .app-content { margin: 0 !important; padding: 0 !important; }
           @page { size: A4 portrait; margin: 0; }
         }
       `}</style>
