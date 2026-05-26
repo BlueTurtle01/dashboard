@@ -961,6 +961,8 @@ type ElevationStats = {
 
 type TerrainSegment = { type: string; label: string; percentage: number; distanceKm?: number };
 
+type PositionedTerrainSegment = { startKm: number; endKm: number; type: string; label: string };
+
 type SustainedSegment = {
   startKm: number;
   endKm: number;
@@ -980,6 +982,7 @@ type SegmentNote = {
 type RaceProfile = {
   elevation: ElevationStats | null;
   terrain: TerrainSegment[] | null;
+  positionedTerrain: PositionedTerrainSegment[] | null;
   sustainedSegments: SustainedSegment[] | null;
   segmentNotes: SegmentNote[] | null;
 };
@@ -1036,6 +1039,43 @@ function parseSustainedSegmentsData(value: string | null | undefined): Sustained
     });
     return segs.length > 0 ? segs : null;
   } catch { return null; }
+}
+
+function parsePositionedTerrainData(value: string | null | undefined): PositionedTerrainSegment[] | null {
+  if (!value) return null;
+  try {
+    const p = JSON.parse(value) as unknown;
+    if (!Array.isArray(p)) return null;
+    const segs = p.flatMap((s): PositionedTerrainSegment[] => {
+      if (!s || typeof s !== "object") return [];
+      const r = s as Record<string, unknown>;
+      if (typeof r.startKm !== "number" || typeof r.endKm !== "number" ||
+          typeof r.type !== "string" || typeof r.label !== "string") return [];
+      return [{ startKm: r.startKm, endKm: r.endKm, type: r.type, label: r.label }];
+    });
+    return segs.length > 0 ? segs : null;
+  } catch { return null; }
+}
+
+function getTerrainLabelsForRange(
+  positionedTerrain: PositionedTerrainSegment[] | null,
+  startKm: number,
+  endKm: number,
+): string[] {
+  if (!positionedTerrain) return [];
+  // Find overlapping terrain segments, weighted by overlap length
+  const weighted = new Map<string, number>();
+  for (const seg of positionedTerrain) {
+    const overlapStart = Math.max(seg.startKm, startKm);
+    const overlapEnd = Math.min(seg.endKm, endKm);
+    if (overlapEnd <= overlapStart) continue;
+    const len = overlapEnd - overlapStart;
+    weighted.set(seg.label, (weighted.get(seg.label) ?? 0) + len);
+  }
+  // Return labels sorted by coverage, descending
+  return [...weighted.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([label]) => label);
 }
 
 function parseSegmentNotesData(value: string | null | undefined): SegmentNote[] | null {
@@ -1697,7 +1737,7 @@ export default function EditProgramTemplatePage() {
       .from("races_meta")
       .select("meta_key, meta_value")
       .eq("race_id", selectedRaceId)
-      .in("meta_key", ["elevation_profile", "terrain_breakdown", "sustained_segments", "segment_training_notes"])
+      .in("meta_key", ["elevation_profile", "terrain_breakdown", "terrain_segments", "sustained_segments", "segment_training_notes"])
       .then(({ data }) => {
         if (cancelled) return;
         const meta: Record<string, string> = {};
@@ -1708,6 +1748,7 @@ export default function EditProgramTemplatePage() {
         setRaceProfile({
           elevation: parseElevationStats(meta.elevation_profile),
           terrain: parseTerrainBreakdownData(meta.terrain_breakdown),
+          positionedTerrain: parsePositionedTerrainData(meta.terrain_segments),
           sustainedSegments: parseSustainedSegmentsData(meta.sustained_segments),
           segmentNotes: parseSegmentNotesData(meta.segment_training_notes),
         });
@@ -2629,6 +2670,7 @@ export default function EditProgramTemplatePage() {
                             .slice(0, 8)
                             .map((seg, i) => {
                               const isClimb = seg.type === "climb";
+                              const terrainLabels = getTerrainLabelsForRange(raceProfile.positionedTerrain, seg.startKm, seg.endKm);
                               return (
                                 <div key={i} className="flex items-center gap-3 rounded-lg bg-white px-3 py-2 text-xs">
                                   <span className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${isClimb ? "bg-orange-100 text-orange-800" : "bg-sky-100 text-sky-800"}`}>
@@ -2639,6 +2681,9 @@ export default function EditProgramTemplatePage() {
                                     {" · "}{seg.lengthKm.toFixed(1)} km
                                     {" · "}{Math.abs(seg.avgGradient).toFixed(1)}% avg
                                     {" · "}{Math.abs(Math.round(seg.totalElevationM))} m
+                                    {terrainLabels.length > 0 && (
+                                      <span className="ml-2 text-zinc-500">— {terrainLabels.join(", ")}</span>
+                                    )}
                                   </span>
                                 </div>
                               );

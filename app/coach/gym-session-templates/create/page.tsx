@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { SEGMENT_TRAINING_FOCUS_TAGS } from "@/lib/constants/race-segment-tags";
 
 type ExerciseSearchRow = {
   id: string;
@@ -127,6 +126,7 @@ export default function NewGymSessionTemplatePage() {
 
   const [aimTags, setAimTags] = useState<string[]>([]);
   const [aimTagSearch, setAimTagSearch] = useState("");
+  const [terrainTagOptions, setTerrainTagOptions] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -188,6 +188,30 @@ export default function NewGymSessionTemplatePage() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    void supabase
+      .from("races_meta")
+      .select("meta_value")
+      .eq("meta_key", "terrain_segments")
+      .then(({ data }) => {
+        if (!data) return;
+        const labels = new Set<string>();
+        for (const row of data as { meta_value: string }[]) {
+          try {
+            const segs = JSON.parse(row.meta_value) as unknown;
+            if (!Array.isArray(segs)) continue;
+            for (const seg of segs) {
+              if (seg && typeof seg === "object" && typeof (seg as Record<string, unknown>).label === "string") {
+                labels.add((seg as Record<string, unknown>).label as string);
+              }
+            }
+          } catch { /* skip malformed rows */ }
+        }
+        setTerrainTagOptions([...labels].sort());
+      });
   }, []);
 
   useEffect(() => {
@@ -684,8 +708,8 @@ export default function NewGymSessionTemplatePage() {
                   {/* Suggestions */}
                   {(() => {
                     const q = aimTagSearch.trim().toLowerCase();
-                    const suggestions = SEGMENT_TRAINING_FOCUS_TAGS.filter(
-                      (t) => (!q || t.includes(q)) && !aimTags.includes(t)
+                    const suggestions = terrainTagOptions.filter(
+                      (t) => (!q || t.toLowerCase().includes(q)) && !aimTags.includes(t)
                     ).slice(0, 12);
                     if (suggestions.length === 0) return null;
                     return (
