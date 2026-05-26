@@ -4,14 +4,53 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { GeneratedPlan, PlanWeek, PlanSession, PlanExercise } from "@/lib/planner/types";
 
-type PlanMeta = {
-  name: string;
-  athleteName: string | null;
-  raceName: string | null;
+/* ── DB types ── */
+type TemplateExercise = {
+  id: string;
+  sort_order: number;
+  sets: number | null;
+  reps: number | null;
+  duration_seconds: number | null;
+  notes: string | null;
+  exercises: { name: string; description: string } | null;
 };
 
+type TemplateSession = {
+  id: string;
+  day_label: string;
+  sort_order: number;
+  type: string;
+  name: string;
+  description: string | null;
+  duration: string | null;
+  duration_minutes: number | null;
+  intensity: string | null;
+  is_key_session: boolean;
+  reason: string | null;
+  program_template_session_exercises: TemplateExercise[];
+};
+
+type TemplateWeek = {
+  id: string;
+  week_number: number;
+  focus: string | null;
+  notes: string | null;
+  program_template_sessions: TemplateSession[];
+};
+
+type ProgramTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  event_goal: string | null;
+  discipline: string | null;
+  plan_length_weeks: number;
+  training_days_per_week: number;
+  program_template_weeks: TemplateWeek[];
+};
+
+/* ── Helpers ── */
 function formatDuration(seconds: number | null | undefined): string {
   if (!seconds) return "—";
   if (seconds < 60) return `${seconds}s`;
@@ -19,44 +58,90 @@ function formatDuration(seconds: number | null | undefined): string {
   return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
 }
 
-function ExerciseRow({ ex }: { ex: PlanExercise }) {
-  const prescription =
-    ex.sets && ex.reps
-      ? `${ex.sets} × ${ex.reps}`
-      : ex.sets && ex.durationSeconds
-      ? `${ex.sets} × ${formatDuration(ex.durationSeconds)}`
-      : ex.durationSeconds
-      ? formatDuration(ex.durationSeconds)
-      : ex.sets
-      ? `${ex.sets} sets`
-      : "—";
+function sessionDuration(s: TemplateSession): string {
+  if (s.duration_minutes) {
+    const h = Math.floor(s.duration_minutes / 60);
+    const m = s.duration_minutes % 60;
+    return h > 0 ? `${h}h ${m > 0 ? `${m}m` : ""}`.trim() : `${m}m`;
+  }
+  return s.duration || "—";
+}
 
+function sortSessions(sessions: TemplateSession[]): TemplateSession[] {
+  const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  return [...sessions].sort((a, b) => {
+    const di = dayOrder.indexOf(a.day_label) - dayOrder.indexOf(b.day_label);
+    return di !== 0 ? di : a.sort_order - b.sort_order;
+  });
+}
+
+/* ── Sub-components ── */
+function PrintHeader({ template }: { template: ProgramTemplate }) {
   return (
-    <tr>
-      <td style={exTd}>{ex.name}</td>
-      <td style={{ ...exTd, textAlign: "center", whiteSpace: "nowrap" }}>{prescription}</td>
-      <td style={exTd}>{ex.description || "—"}</td>
-    </tr>
+    <div style={printHeader}>
+      <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+      <div style={headerRight}>
+        <div style={headerRaceName}>{template.name}</div>
+        {template.event_goal && (
+          <div style={headerAthleteName}>{template.event_goal}</div>
+        )}
+      </div>
+    </div>
   );
 }
 
-function SessionCard({ session }: { session: PlanSession }) {
+function ExerciseTable({ exercises }: { exercises: TemplateExercise[] }) {
+  if (exercises.length === 0) return null;
+  const sorted = [...exercises].sort((a, b) => a.sort_order - b.sort_order);
+  return (
+    <table style={exTable}>
+      <thead>
+        <tr>
+          <th style={exTh}>Exercise</th>
+          <th style={{ ...exTh, textAlign: "center", width: "110px" }}>Sets / Reps</th>
+          <th style={exTh}>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((ex) => {
+          const prescription =
+            ex.sets && ex.reps
+              ? `${ex.sets} × ${ex.reps}`
+              : ex.sets && ex.duration_seconds
+              ? `${ex.sets} × ${formatDuration(ex.duration_seconds)}`
+              : ex.duration_seconds
+              ? formatDuration(ex.duration_seconds)
+              : ex.sets
+              ? `${ex.sets} sets`
+              : "—";
+          return (
+            <tr key={ex.id}>
+              <td style={exTd}>{ex.exercises?.name ?? "Unknown exercise"}</td>
+              <td style={{ ...exTd, textAlign: "center", whiteSpace: "nowrap" }}>{prescription}</td>
+              <td style={exTd}>{ex.notes || (ex.exercises?.description ? ex.exercises.description.slice(0, 120) : "—")}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function SessionCard({ session }: { session: TemplateSession }) {
   const isGym = session.type === "Gym";
-  const typeColour = SESSION_COLOURS[session.type] ?? SESSION_COLOURS.default;
+  const col = SESSION_COLOURS[session.type] ?? SESSION_COLOURS.default;
 
   return (
     <div style={sessionCard}>
       <div style={sessionHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <span style={{ ...typeBadge, background: typeColour.bg, color: typeColour.fg }}>
-            {session.type}
-          </span>
-          <span style={dayLabel}>{session.dayLabel}</span>
-          {session.isKeySession && <span style={keyBadge}>★ Key Session</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <span style={{ ...typeBadge, background: col.bg, color: col.fg }}>{session.type}</span>
+          <span style={dayLabel}>{session.day_label}</span>
+          {session.is_key_session && <span style={keyBadge}>★ Key Session</span>}
           <strong style={sessionName}>{session.name}</strong>
         </div>
         <div style={sessionMeta}>
-          {session.duration && <span>{session.duration}</span>}
+          {sessionDuration(session) !== "—" && <span>{sessionDuration(session)}</span>}
           {session.intensity && <span style={{ textTransform: "capitalize" }}>{session.intensity}</span>}
         </div>
       </div>
@@ -72,41 +157,23 @@ function SessionCard({ session }: { session: PlanSession }) {
         </div>
       )}
 
-      {isGym && session.exercises.length > 0 && (
-        <div style={{ marginTop: "12px" }}>
-          <table style={exTable}>
-            <thead>
-              <tr>
-                <th style={exTh}>Exercise</th>
-                <th style={{ ...exTh, textAlign: "center" }}>Sets / Reps</th>
-                <th style={exTh}>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {session.exercises.map((ex) => (
-                <ExerciseRow key={ex.id} ex={ex} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {isGym && <ExerciseTable exercises={session.program_template_session_exercises} />}
     </div>
   );
 }
 
-function WeekOverview({ week }: { week: PlanWeek }) {
-  const trainingSessions = week.sessions.filter((s) => s.type !== "Rest");
+function WeekOverviewPage({ week, template }: { week: TemplateWeek; template: ProgramTemplate }) {
+  const sessions = sortSessions(week.program_template_sessions);
+  const trainingSessions = sessions.filter((s) => s.type !== "Rest");
+
   return (
-    <div style={weekPage}>
+    <div style={a4Page}>
+      <PrintHeader template={template} />
       <div style={weekHeaderBar}>
         <div style={{ display: "flex", alignItems: "baseline", gap: "12px" }}>
-          <h2 style={weekTitle}>Week {week.weekNumber}</h2>
-          <span style={phaseBadge}>{week.phase}</span>
-          {week.trainingPurpose && (
-            <span style={purposeText}>{week.trainingPurpose}</span>
-          )}
+          <h2 style={weekTitle}>Week {week.week_number}</h2>
+          {week.focus && <span style={focusBadge}>{week.focus}</span>}
         </div>
-        <div style={focusText}>{week.focus}</div>
         {week.notes && <p style={weekNotes}>{week.notes}</p>}
       </div>
 
@@ -122,242 +189,203 @@ function WeekOverview({ week }: { week: PlanWeek }) {
           </tr>
         </thead>
         <tbody>
-          {week.sessions.map((s) => (
-            <tr key={s.id} style={s.type === "Rest" ? restRowStyle : undefined}>
-              <td style={ovTd}>{s.dayLabel}</td>
+          {sessions.map((s) => (
+            <tr key={s.id} style={s.type === "Rest" ? { opacity: 0.45 } : undefined}>
+              <td style={ovTd}>{s.day_label}</td>
               <td style={ovTd}>
-                <span
-                  style={{
-                    ...smallTypeBadge,
-                    background: (SESSION_COLOURS[s.type] ?? SESSION_COLOURS.default).bg,
-                    color: (SESSION_COLOURS[s.type] ?? SESSION_COLOURS.default).fg,
-                  }}
-                >
+                <span style={{
+                  ...smallTypeBadge,
+                  background: (SESSION_COLOURS[s.type] ?? SESSION_COLOURS.default).bg,
+                  color: (SESSION_COLOURS[s.type] ?? SESSION_COLOURS.default).fg,
+                }}>
                   {s.type}
                 </span>
               </td>
-              <td style={{ ...ovTd, fontWeight: s.isKeySession ? 600 : 400 }}>{s.name}</td>
-              <td style={ovTd}>{s.duration || "—"}</td>
+              <td style={{ ...ovTd, fontWeight: s.is_key_session ? 600 : 400 }}>{s.name}</td>
+              <td style={ovTd}>{sessionDuration(s)}</td>
               <td style={{ ...ovTd, textTransform: "capitalize" }}>{s.intensity || "—"}</td>
-              <td style={{ ...ovTd, textAlign: "center" }}>{s.isKeySession ? "★" : ""}</td>
+              <td style={{ ...ovTd, textAlign: "center" }}>{s.is_key_session ? "★" : ""}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      {week.isHolidayWeek && (
-        <div style={holidayBanner}>Holiday / reduced training week</div>
-      )}
-
       <div style={weekStat}>
         {trainingSessions.length} training session{trainingSessions.length !== 1 ? "s" : ""}
         {" · "}
-        {week.sessions.filter((s) => s.isKeySession).length} key session{week.sessions.filter((s) => s.isKeySession).length !== 1 ? "s" : ""}
+        {sessions.filter((s) => s.is_key_session).length} key session{sessions.filter((s) => s.is_key_session).length !== 1 ? "s" : ""}
       </div>
     </div>
   );
 }
 
-function WeekDetail({ week }: { week: PlanWeek }) {
+function WeekDetailPage({ week, template }: { week: TemplateWeek; template: ProgramTemplate }) {
+  const sessions = sortSessions(week.program_template_sessions);
   return (
-    <div style={weekPage}>
+    <div style={a4Page}>
+      <PrintHeader template={template} />
       <div style={weekHeaderBar}>
         <div style={{ display: "flex", alignItems: "baseline", gap: "12px" }}>
-          <h2 style={weekTitle}>Week {week.weekNumber} — Full Detail</h2>
-          <span style={phaseBadge}>{week.phase}</span>
-          {week.trainingPurpose && (
-            <span style={purposeText}>{week.trainingPurpose}</span>
-          )}
+          <h2 style={weekTitle}>Week {week.week_number} — Full Detail</h2>
+          {week.focus && <span style={focusBadge}>{week.focus}</span>}
         </div>
-        <div style={focusText}>{week.focus}</div>
         {week.notes && <p style={weekNotes}>{week.notes}</p>}
       </div>
 
-      {week.sessions.map((session) => (
+      {sessions.map((session) => (
         <SessionCard key={session.id} session={session} />
       ))}
     </div>
   );
 }
 
-function PrintHeader({ meta }: { meta: PlanMeta }) {
-  return (
-    <div style={printHeader}>
-      <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
-      <div style={headerRight}>
-        {meta.raceName && <div style={headerRaceName}>{meta.raceName}</div>}
-        {meta.athleteName && <div style={headerAthleteName}>{meta.athleteName}</div>}
-      </div>
-    </div>
-  );
-}
-
+/* ── Main page ── */
 export default function ExportPreviewPage() {
   const router = useRouter();
   const params = useParams();
-  const planId = params?.planId as string;
+  const templateId = params?.planId as string;
   const supabase = createClient();
 
-  const [plan, setPlan] = useState<GeneratedPlan | null>(null);
-  const [meta, setMeta] = useState<PlanMeta>({ name: "", athleteName: null, raceName: null });
+  const [template, setTemplate] = useState<ProgramTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!planId) return;
+    if (!templateId) return;
     async function load() {
       setLoading(true);
       const { data, error: err } = await supabase
-        .from("athlete_plans")
+        .from("program_templates")
         .select(`
-          name,
-          plan_json,
-          athlete_profiles!athlete_user_id ( full_name ),
-          races!event_id ( name )
+          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week,
+          program_template_weeks (
+            id, week_number, focus, notes,
+            program_template_sessions (
+              id, day_label, sort_order, type, name, description,
+              duration, duration_minutes, intensity, is_key_session, reason,
+              program_template_session_exercises (
+                id, sort_order, sets, reps, duration_seconds, notes,
+                exercises ( name, description )
+              )
+            )
+          )
         `)
-        .eq("id", planId)
+        .eq("id", templateId)
         .single();
 
       if (err || !data) {
-        setError(err?.message ?? "Plan not found.");
+        setError(err?.message ?? "Template not found.");
         setLoading(false);
         return;
       }
 
-      const rawAthlete = Array.isArray(data.athlete_profiles)
-        ? data.athlete_profiles[0]
-        : data.athlete_profiles;
-      const rawRace = Array.isArray(data.races) ? data.races[0] : data.races;
+      // Sort weeks
+      const sorted = { ...data } as ProgramTemplate;
+      sorted.program_template_weeks = [...sorted.program_template_weeks].sort(
+        (a, b) => a.week_number - b.week_number
+      );
 
-      setMeta({
-        name: (data.name as string) ?? "Unnamed Plan",
-        athleteName: (rawAthlete as { full_name: string | null } | null)?.full_name ?? null,
-        raceName: (rawRace as { name: string | null } | null)?.name ?? null,
-      });
-
-      try {
-        const parsed = typeof data.plan_json === "string"
-          ? JSON.parse(data.plan_json)
-          : data.plan_json;
-        setPlan(parsed as GeneratedPlan);
-      } catch {
-        setError("Could not parse plan data.");
-      }
-
+      setTemplate(sorted);
       setLoading(false);
     }
     void load();
-  }, [planId]);
+  }, [templateId]);
 
   if (loading) {
+    return <main style={{ padding: "60px 24px", textAlign: "center" }}><p style={{ color: "#666" }}>Loading template...</p></main>;
+  }
+
+  if (error || !template) {
     return (
       <main style={{ padding: "60px 24px", textAlign: "center" }}>
-        <p style={{ color: "#666" }}>Loading plan...</p>
+        <p style={{ color: "#b00020" }}>{error || "Template not found."}</p>
+        <button type="button" onClick={() => router.push("/admin/export-programme")} style={backBtn}>Back</button>
       </main>
     );
   }
 
-  if (error || !plan) {
-    return (
-      <main style={{ padding: "60px 24px", textAlign: "center" }}>
-        <p style={{ color: "#b00020" }}>{error || "Plan not found."}</p>
-        <button type="button" onClick={() => router.push("/admin/export-programme")} style={backBtn}>
-          Back
-        </button>
-      </main>
-    );
-  }
+  const weeks = template.program_template_weeks;
 
   return (
     <>
-      {/* ── Screen-only toolbar ── */}
+      {/* ── Screen toolbar (hidden on print) ── */}
       <div style={toolbar} className="no-print">
         <button type="button" onClick={() => router.push("/admin/export-programme")} style={backBtn}>
           ← Back
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <strong style={{ fontSize: "16px" }}>{meta.name}</strong>
-          {meta.athleteName && (
-            <span style={{ color: "#666", marginLeft: "10px", fontSize: "14px" }}>
-              {meta.athleteName}
-            </span>
+          <strong style={{ fontSize: "16px" }}>{template.name}</strong>
+          {template.event_goal && (
+            <span style={{ color: "#666", marginLeft: "10px", fontSize: "14px" }}>· {template.event_goal}</span>
           )}
-          {meta.raceName && (
-            <span style={{ color: "#666", marginLeft: "10px", fontSize: "14px" }}>
-              · {meta.raceName}
-            </span>
-          )}
+          <span style={{ color: "#aaa", marginLeft: "10px", fontSize: "13px" }}>
+            {template.plan_length_weeks} weeks · {template.training_days_per_week} days/week
+          </span>
         </div>
         <button type="button" onClick={() => window.print()} style={printBtn}>
           Export to PDF
         </button>
       </div>
 
-      {/* ── Printable document ── */}
-      <div style={printDocument}>
+      {/* ── A4 document canvas ── */}
+      <div style={canvas}>
+
         {/* Cover page */}
-        <div style={{ ...weekPage, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "80vh", textAlign: "center" }}>
-          <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={{ maxWidth: "280px", marginBottom: "48px" }} />
-          <h1 style={{ fontSize: "32px", fontWeight: 700, color: "#1e3a1e", marginBottom: "16px" }}>{meta.name}</h1>
-          {meta.athleteName && <p style={{ fontSize: "20px", color: "#444", margin: "4px 0" }}>{meta.athleteName}</p>}
-          {meta.raceName && <p style={{ fontSize: "18px", color: "#666", margin: "4px 0" }}>{meta.raceName}</p>}
-          {plan.eventDate && (
-            <p style={{ fontSize: "15px", color: "#888", marginTop: "16px" }}>
-              Race date: {new Date(plan.eventDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
-            </p>
-          )}
-          <p style={{ fontSize: "15px", color: "#888" }}>
-            {plan.weeksAvailable} week programme · {plan.trainingDaysPerWeek} training days per week
+        <div style={{ ...a4Page, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
+          <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={{ maxWidth: "260px", marginBottom: "48px" }} />
+          <h1 style={{ fontSize: "30px", fontWeight: 700, color: "#1e3a1e", margin: "0 0 12px" }}>{template.name}</h1>
+          {template.event_goal && <p style={{ fontSize: "18px", color: "#555", margin: "4px 0" }}>{template.event_goal}</p>}
+          {template.discipline && <p style={{ fontSize: "15px", color: "#888", margin: "4px 0", textTransform: "capitalize" }}>{template.discipline}</p>}
+          <p style={{ fontSize: "15px", color: "#888", marginTop: "24px" }}>
+            {template.plan_length_weeks} week programme · {template.training_days_per_week} training days per week
           </p>
+          {template.description && (
+            <p style={{ fontSize: "14px", color: "#666", marginTop: "20px", maxWidth: "480px", lineHeight: "1.6" }}>{template.description}</p>
+          )}
         </div>
 
-        {/* Section divider: Overview */}
-        <div style={sectionDivider}>
-          <PrintHeader meta={meta} />
-          <h2 style={sectionTitle}>Programme Overview</h2>
-          <p style={sectionSubtitle}>One week per page — all sessions at a glance</p>
-        </div>
-
-        {/* Overview — one week per page */}
-        {plan.weeks.map((week) => (
-          <div key={`overview-${week.id}`}>
-            <PrintHeader meta={meta} />
-            <WeekOverview week={week} />
+        {/* Section title: Overview */}
+        <div style={{ ...a4Page, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
+          <PrintHeader template={template} />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+            <h2 style={{ fontSize: "32px", fontWeight: 700, color: "#1e3a1e", margin: "0 0 12px" }}>Programme Overview</h2>
+            <p style={{ fontSize: "15px", color: "#666", margin: 0 }}>One week per page — all sessions at a glance</p>
           </div>
+        </div>
+
+        {/* Overview — one week per A4 page */}
+        {weeks.map((week) => (
+          <WeekOverviewPage key={`ov-${week.id}`} week={week} template={template} />
         ))}
 
-        {/* Section divider: Full Detail */}
-        <div style={sectionDivider}>
-          <PrintHeader meta={meta} />
-          <h2 style={sectionTitle}>Full Session Detail</h2>
-          <p style={sectionSubtitle}>Complete session breakdown including gym exercises and session rationale</p>
+        {/* Section title: Full Detail */}
+        <div style={{ ...a4Page, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
+          <PrintHeader template={template} />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+            <h2 style={{ fontSize: "32px", fontWeight: 700, color: "#1e3a1e", margin: "0 0 12px" }}>Full Session Detail</h2>
+            <p style={{ fontSize: "15px", color: "#666", margin: 0 }}>Complete breakdown including gym exercises and session rationale</p>
+          </div>
         </div>
 
-        {/* Detail — one week per page */}
-        {plan.weeks.map((week) => (
-          <div key={`detail-${week.id}`}>
-            <PrintHeader meta={meta} />
-            <WeekDetail week={week} />
-          </div>
+        {/* Detail — one week per A4 page */}
+        {weeks.map((week) => (
+          <WeekDetailPage key={`det-${week.id}`} week={week} template={template} />
         ))}
+
       </div>
 
-      {/* Print CSS */}
       <style>{`
         @media print {
           .no-print { display: none !important; }
           body { margin: 0; background: #fff; }
-          @page { size: A4 portrait; margin: 15mm 15mm 20mm 15mm; }
-        }
-        @media screen {
-          .no-print { display: flex; }
+          @page { size: A4 portrait; margin: 0; }
         }
       `}</style>
     </>
   );
 }
 
-/* ── Colour map for session types ── */
+/* ── Colour map ── */
 const SESSION_COLOURS: Record<string, { bg: string; fg: string }> & { default: { bg: string; fg: string } } = {
   Easy:       { bg: "#e8f5e9", fg: "#2e7d32" },
   Long:       { bg: "#e3f2fd", fg: "#1565c0" },
@@ -373,6 +401,29 @@ const SESSION_COLOURS: Record<string, { bg: string; fg: string }> & { default: {
 };
 
 /* ── Styles ── */
+
+// A4 at 96dpi: 794 × 1123px. We use min-height so content can overflow gracefully on screen.
+const a4Page: React.CSSProperties = {
+  width: "794px",
+  minHeight: "1123px",
+  background: "#fff",
+  padding: "40px 48px",
+  boxSizing: "border-box",
+  marginBottom: "0",
+  breakAfter: "page",
+  pageBreakAfter: "always",
+  position: "relative",
+};
+
+const canvas: React.CSSProperties = {
+  background: "#6b6b6b",
+  padding: "32px 0",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: "12px",
+};
+
 const toolbar: React.CSSProperties = {
   position: "sticky",
   top: 0,
@@ -386,39 +437,6 @@ const toolbar: React.CSSProperties = {
   boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
 };
 
-const printDocument: React.CSSProperties = {
-  background: "#f0f0f0",
-  padding: "24px",
-};
-
-const weekPage: React.CSSProperties = {
-  background: "#fff",
-  maxWidth: "794px", // A4 width approximation at 96dpi
-  margin: "0 auto 24px",
-  padding: "32px 40px",
-  borderRadius: "4px",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.12)",
-  breakAfter: "page",
-  pageBreakAfter: "always",
-};
-
-const sectionDivider: React.CSSProperties = {
-  background: "#fff",
-  maxWidth: "794px",
-  margin: "0 auto 24px",
-  padding: "40px",
-  borderRadius: "4px",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.12)",
-  breakAfter: "page",
-  pageBreakAfter: "always",
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
-  alignItems: "center",
-  minHeight: "400px",
-  textAlign: "center",
-};
-
 const printHeader: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -429,39 +447,35 @@ const printHeader: React.CSSProperties = {
 };
 
 const logoImg: React.CSSProperties = {
-  height: "40px",
+  height: "36px",
   width: "auto",
   objectFit: "contain",
 };
 
-const headerRight: React.CSSProperties = {
-  textAlign: "right",
-};
+const headerRight: React.CSSProperties = { textAlign: "right" };
 
 const headerRaceName: React.CSSProperties = {
-  fontSize: "14px",
+  fontSize: "13px",
   fontWeight: 700,
   color: "#1e3a1e",
 };
 
 const headerAthleteName: React.CSSProperties = {
-  fontSize: "12px",
+  fontSize: "11px",
   color: "#666",
   marginTop: "2px",
 };
 
-const weekHeaderBar: React.CSSProperties = {
-  marginBottom: "20px",
-};
+const weekHeaderBar: React.CSSProperties = { marginBottom: "20px" };
 
 const weekTitle: React.CSSProperties = {
   margin: 0,
-  fontSize: "22px",
+  fontSize: "20px",
   fontWeight: 700,
   color: "#1e3a1e",
 };
 
-const phaseBadge: React.CSSProperties = {
+const focusBadge: React.CSSProperties = {
   display: "inline-block",
   padding: "2px 10px",
   borderRadius: "12px",
@@ -471,21 +485,8 @@ const phaseBadge: React.CSSProperties = {
   fontWeight: 600,
 };
 
-const purposeText: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#555",
-  fontStyle: "italic",
-};
-
-const focusText: React.CSSProperties = {
-  fontSize: "15px",
-  color: "#444",
-  marginTop: "6px",
-  fontWeight: 500,
-};
-
 const weekNotes: React.CSSProperties = {
-  margin: "8px 0 0",
+  margin: "6px 0 0",
   fontSize: "13px",
   color: "#666",
   fontStyle: "italic",
@@ -497,10 +498,7 @@ const weekStat: React.CSSProperties = {
   color: "#888",
 };
 
-const overviewTable: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
+const overviewTable: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
 
 const ovTh: React.CSSProperties = {
   textAlign: "left",
@@ -519,15 +517,11 @@ const ovTd: React.CSSProperties = {
   verticalAlign: "middle",
 };
 
-const restRowStyle: React.CSSProperties = {
-  opacity: 0.5,
-};
-
 const sessionCard: React.CSSProperties = {
   border: "1px solid #e5e5e5",
-  borderRadius: "8px",
-  padding: "16px",
-  marginBottom: "12px",
+  borderRadius: "6px",
+  padding: "14px",
+  marginBottom: "10px",
   breakInside: "avoid",
   pageBreakInside: "avoid",
 };
@@ -541,10 +535,7 @@ const sessionHeader: React.CSSProperties = {
   flexWrap: "wrap",
 };
 
-const sessionName: React.CSSProperties = {
-  fontSize: "15px",
-  color: "#111",
-};
+const sessionName: React.CSSProperties = { fontSize: "14px", color: "#111" };
 
 const sessionMeta: React.CSSProperties = {
   display: "flex",
@@ -554,15 +545,11 @@ const sessionMeta: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const dayLabel: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#555",
-  fontWeight: 500,
-};
+const dayLabel: React.CSSProperties = { fontSize: "12px", color: "#555", fontWeight: 500 };
 
 const typeBadge: React.CSSProperties = {
   display: "inline-block",
-  padding: "2px 8px",
+  padding: "2px 7px",
   borderRadius: "10px",
   fontSize: "11px",
   fontWeight: 600,
@@ -595,17 +582,17 @@ const descriptionText: React.CSSProperties = {
 const reasonBox: React.CSSProperties = {
   background: "#f0f7f0",
   border: "1px solid #c8e6c9",
-  borderRadius: "6px",
-  padding: "10px 14px",
-  marginBottom: "12px",
-  fontSize: "13px",
+  borderRadius: "5px",
+  padding: "8px 12px",
+  marginBottom: "10px",
+  fontSize: "12px",
   lineHeight: "1.5",
 };
 
 const reasonLabel: React.CSSProperties = {
   fontWeight: 600,
   color: "#2e7d32",
-  marginRight: "6px",
+  marginRight: "5px",
 };
 
 const reasonText: React.CSSProperties = {
@@ -617,11 +604,12 @@ const exTable: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   fontSize: "12px",
+  marginTop: "8px",
 };
 
 const exTh: React.CSSProperties = {
   textAlign: "left",
-  padding: "6px 8px",
+  padding: "5px 8px",
   borderBottom: "1px solid #ddd",
   fontWeight: 600,
   color: "#555",
@@ -629,33 +617,10 @@ const exTh: React.CSSProperties = {
 };
 
 const exTd: React.CSSProperties = {
-  padding: "6px 8px",
+  padding: "5px 8px",
   borderBottom: "1px solid #f0f0f0",
   verticalAlign: "top",
   color: "#333",
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: "28px",
-  fontWeight: 700,
-  color: "#1e3a1e",
-  margin: "0 0 8px",
-};
-
-const sectionSubtitle: React.CSSProperties = {
-  fontSize: "15px",
-  color: "#666",
-  margin: 0,
-};
-
-const holidayBanner: React.CSSProperties = {
-  marginTop: "12px",
-  padding: "8px 14px",
-  background: "#fff8e1",
-  border: "1px solid #ffe082",
-  borderRadius: "6px",
-  fontSize: "13px",
-  color: "#f57f17",
 };
 
 const backBtn: React.CSSProperties = {

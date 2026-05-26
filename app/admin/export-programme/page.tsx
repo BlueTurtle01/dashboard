@@ -5,57 +5,38 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type PlanRow = {
+type TemplateRow = {
   id: string;
   name: string;
-  status: string | null;
+  event_goal: string | null;
+  discipline: string | null;
+  plan_length_weeks: number;
+  training_days_per_week: number;
+  is_active: boolean;
   updated_at: string | null;
-  athlete: { full_name: string | null } | null;
-  race: { name: string | null } | null;
 };
 
 export default function ExportProgrammePage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [plans, setPlans] = useState<PlanRow[]>([]);
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       const { data, error } = await supabase
-        .from("athlete_plans")
-        .select(`
-          id,
-          name,
-          status,
-          updated_at,
-          athlete_profiles!athlete_user_id ( full_name ),
-          races!event_id ( name )
-        `)
+        .from("program_templates")
+        .select("id, name, event_goal, discipline, plan_length_weeks, training_days_per_week, is_active, updated_at")
         .order("updated_at", { ascending: false });
 
       if (error) {
-        setErrorMessage(`Could not load plans: ${error.message}`);
+        setErrorMessage(`Could not load templates: ${error.message}`);
       } else {
-        setPlans(
-          (data ?? []).map((row: Record<string, unknown>) => ({
-            id: row.id as string,
-            name: row.name as string,
-            status: row.status as string | null,
-            updated_at: row.updated_at as string | null,
-            athlete: Array.isArray(row.athlete_profiles)
-              ? (row.athlete_profiles[0] ?? null)
-              : (row.athlete_profiles as { full_name: string | null } | null),
-            race: Array.isArray(row.races)
-              ? (row.races[0] ?? null)
-              : (row.races as { name: string | null } | null),
-          }))
-        );
+        setTemplates((data ?? []) as TemplateRow[]);
       }
       setLoading(false);
     }
@@ -63,33 +44,15 @@ export default function ExportProgrammePage() {
   }, []);
 
   const filtered = useMemo(() => {
-    let result = plans;
-    if (statusFilter !== "all") {
-      result = result.filter((p) => (p.status ?? "draft") === statusFilter);
-    }
     const q = search.trim().toLowerCase();
-    if (q) {
-      result = result.filter(
-        (p) =>
-          (p.name ?? "").toLowerCase().includes(q) ||
-          (p.athlete?.full_name ?? "").toLowerCase().includes(q) ||
-          (p.race?.name ?? "").toLowerCase().includes(q)
-      );
-    }
-    return result;
-  }, [plans, search, statusFilter]);
-
-  function statusBadge(status: string | null) {
-    const s = status ?? "draft";
-    const colours: Record<string, React.CSSProperties> = {
-      active: { background: "#e8f5e9", color: "#2e7d32" },
-      draft: { background: "#fff8e1", color: "#f57f17" },
-      archived: { background: "#f5f5f5", color: "#757575" },
-    };
-    return (
-      <span style={{ ...badgeBase, ...(colours[s] ?? colours.draft) }}>{s}</span>
+    if (!q) return templates;
+    return templates.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        (t.event_goal ?? "").toLowerCase().includes(q) ||
+        (t.discipline ?? "").toLowerCase().includes(q)
     );
-  }
+  }, [templates, search]);
 
   return (
     <main style={page}>
@@ -97,7 +60,7 @@ export default function ExportProgrammePage() {
         <div style={headerRow}>
           <div>
             <h1 style={title}>Export Programme</h1>
-            <p style={subtitle}>Select an athlete plan to preview and export as PDF.</p>
+            <p style={subtitle}>Select a programme template to preview and export as PDF.</p>
           </div>
           <button type="button" onClick={() => router.push("/admin")} style={secondaryBtn}>
             Back to Admin
@@ -111,58 +74,50 @@ export default function ExportProgrammePage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by plan name, athlete or race..."
+              placeholder="Search by name, event goal or discipline..."
               style={searchInput}
             />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={selectInput}
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-              <option value="archived">Archived</option>
-            </select>
-            <span style={count}>{filtered.length} plan{filtered.length !== 1 ? "s" : ""}</span>
+            <span style={count}>{filtered.length} template{filtered.length !== 1 ? "s" : ""}</span>
           </div>
 
           {loading ? (
-            <p style={helper}>Loading plans...</p>
+            <p style={helper}>Loading templates...</p>
           ) : filtered.length === 0 ? (
-            <p style={helper}>No plans found.</p>
+            <p style={helper}>No templates found.</p>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={table}>
                 <thead>
                   <tr>
-                    <th style={th}>Athlete</th>
-                    <th style={th}>Plan Name</th>
-                    <th style={th}>Race</th>
+                    <th style={th}>Name</th>
+                    <th style={th}>Event Goal</th>
+                    <th style={th}>Discipline</th>
+                    <th style={th}>Length</th>
+                    <th style={th}>Days/Week</th>
                     <th style={th}>Status</th>
-                    <th style={th}>Updated</th>
                     <th style={th}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((plan) => (
-                    <tr key={plan.id}>
-                      <td style={td}>{plan.athlete?.full_name ?? <span style={{ color: "#999" }}>Unknown</span>}</td>
+                  {filtered.map((t) => (
+                    <tr key={t.id}>
                       <td style={td}>
-                        <div style={{ fontWeight: 600 }}>{plan.name || "Unnamed plan"}</div>
-                        <div style={{ color: "#999", fontSize: "11px", fontFamily: "monospace" }}>{plan.id}</div>
+                        <div style={{ fontWeight: 600 }}>{t.name}</div>
+                        <div style={{ color: "#999", fontSize: "11px", fontFamily: "monospace" }}>{t.id}</div>
                       </td>
-                      <td style={td}>{plan.race?.name ?? <span style={{ color: "#999" }}>No race</span>}</td>
-                      <td style={td}>{statusBadge(plan.status)}</td>
+                      <td style={td}>{t.event_goal ?? <span style={{ color: "#999" }}>—</span>}</td>
+                      <td style={td}>{t.discipline ?? <span style={{ color: "#999" }}>—</span>}</td>
+                      <td style={td}>{t.plan_length_weeks} weeks</td>
+                      <td style={td}>{t.training_days_per_week}</td>
                       <td style={td}>
-                        {plan.updated_at
-                          ? new Date(plan.updated_at).toLocaleDateString("en-GB")
-                          : "—"}
+                        <span style={t.is_active ? activeBadge : inactiveBadge}>
+                          {t.is_active ? "active" : "inactive"}
+                        </span>
                       </td>
                       <td style={td}>
                         <button
                           type="button"
-                          onClick={() => router.push(`/admin/export-programme/${plan.id}`)}
+                          onClick={() => router.push(`/admin/export-programme/${t.id}`)}
                           style={exportBtn}
                         >
                           Preview &amp; Export
@@ -188,13 +143,13 @@ const subtitle: React.CSSProperties = { margin: "8px 0 0", color: "#666", fontSi
 const card: React.CSSProperties = { background: "#fff", borderRadius: "12px", border: "1px solid #e5e5e5", padding: "24px" };
 const filterRow: React.CSSProperties = { display: "flex", gap: "12px", alignItems: "center", marginBottom: "20px", flexWrap: "wrap" };
 const searchInput: React.CSSProperties = { flex: 1, minWidth: "200px", padding: "10px 12px", border: "1px solid #ccc", borderRadius: "8px", fontSize: "14px" };
-const selectInput: React.CSSProperties = { padding: "10px 12px", border: "1px solid #ccc", borderRadius: "8px", fontSize: "14px", background: "#fff" };
 const count: React.CSSProperties = { fontSize: "14px", color: "#666", whiteSpace: "nowrap" };
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const th: React.CSSProperties = { textAlign: "left", padding: "12px", borderBottom: "1px solid #ddd", fontSize: "14px", background: "#fafafa" };
 const td: React.CSSProperties = { padding: "12px", borderBottom: "1px solid #eee", verticalAlign: "top", fontSize: "14px" };
 const helper: React.CSSProperties = { color: "#666", fontSize: "14px" };
 const errorStyle: React.CSSProperties = { color: "#b00020", marginBottom: "16px" };
-const badgeBase: React.CSSProperties = { display: "inline-block", padding: "2px 10px", borderRadius: "12px", fontSize: "12px", fontWeight: 500 };
 const secondaryBtn: React.CSSProperties = { padding: "12px 16px", border: "1px solid #ccc", borderRadius: "8px", background: "#fff", color: "#111", fontWeight: 700, cursor: "pointer" };
 const exportBtn: React.CSSProperties = { padding: "8px 16px", border: "none", borderRadius: "8px", background: "#1e3a1e", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: "13px" };
+const activeBadge: React.CSSProperties = { display: "inline-block", padding: "2px 10px", borderRadius: "12px", fontSize: "12px", fontWeight: 500, background: "#e8f5e9", color: "#2e7d32" };
+const inactiveBadge: React.CSSProperties = { display: "inline-block", padding: "2px 10px", borderRadius: "12px", fontSize: "12px", fontWeight: 500, background: "#f5f5f5", color: "#757575" };
