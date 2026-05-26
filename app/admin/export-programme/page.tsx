@@ -11,7 +11,7 @@ type PlanRow = {
   status: string | null;
   updated_at: string | null;
   athlete: { full_name: string | null } | null;
-  race: { race_name: string | null } | null;
+  race: { name: string | null } | null;
 };
 
 export default function ExportProgrammePage() {
@@ -35,7 +35,7 @@ export default function ExportProgrammePage() {
           status,
           updated_at,
           athlete_profiles!athlete_user_id ( full_name ),
-          races!event_id ( race_name )
+          races!event_id ( name )
         `)
         .order("updated_at", { ascending: false });
 
@@ -53,7 +53,7 @@ export default function ExportProgrammePage() {
               : (row.athlete_profiles as { full_name: string | null } | null),
             race: Array.isArray(row.races)
               ? (row.races[0] ?? null)
-              : (row.races as { race_name: string | null } | null),
+              : (row.races as { name: string | null } | null),
           }))
         );
       }
@@ -73,7 +73,7 @@ export default function ExportProgrammePage() {
         (p) =>
           (p.name ?? "").toLowerCase().includes(q) ||
           (p.athlete?.full_name ?? "").toLowerCase().includes(q) ||
-          (p.race?.race_name ?? "").toLowerCase().includes(q)
+          (p.race?.name ?? "").toLowerCase().includes(q)
       );
     }
     return result;
@@ -152,7 +152,7 @@ export default function ExportProgrammePage() {
                         <div style={{ fontWeight: 600 }}>{plan.name || "Unnamed plan"}</div>
                         <div style={{ color: "#999", fontSize: "11px", fontFamily: "monospace" }}>{plan.id}</div>
                       </td>
-                      <td style={td}>{plan.race?.race_name ?? <span style={{ color: "#999" }}>No race</span>}</td>
+                      <td style={td}>{plan.race?.name ?? <span style={{ color: "#999" }}>No race</span>}</td>
                       <td style={td}>{statusBadge(plan.status)}</td>
                       <td style={td}>
                         {plan.updated_at

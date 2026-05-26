@@ -213,7 +213,7 @@ export default function ExportPreviewPage() {
           name,
           plan_json,
           athlete_profiles!athlete_user_id ( full_name ),
-          races!event_id ( race_name )
+          races!event_id ( name )
         `)
         .eq("id", planId)
         .single();
@@ -232,7 +232,7 @@ export default function ExportPreviewPage() {
       setMeta({
         name: (data.name as string) ?? "Unnamed Plan",
         athleteName: (rawAthlete as { full_name: string | null } | null)?.full_name ?? null,
-        raceName: (rawRace as { race_name: string | null } | null)?.race_name ?? null,
+        raceName: (rawRace as { name: string | null } | null)?.name ?? null,
       });
 
       try {
