@@ -194,23 +194,47 @@ export default function NewGymSessionTemplatePage() {
     const supabase = createClient();
     void supabase
       .from("races_meta")
-      .select("meta_value")
-      .eq("meta_key", "terrain_segments")
+      .select("race_id, meta_key, meta_value")
+      .in("meta_key", ["terrain_segments", "sustained_segments"])
       .then(({ data }) => {
         if (!data) return;
-        const labels = new Set<string>();
-        for (const row of data as { meta_value: string }[]) {
+        type Row = { race_id: string; meta_key: string; meta_value: string };
+        const byRace = new Map<string, { terrain?: string; sustained?: string }>();
+        for (const row of data as Row[]) {
+          const entry = byRace.get(row.race_id) ?? {};
+          if (row.meta_key === "terrain_segments") entry.terrain = row.meta_value;
+          else if (row.meta_key === "sustained_segments") entry.sustained = row.meta_value;
+          byRace.set(row.race_id, entry);
+        }
+        const tags = new Set<string>();
+        for (const { terrain, sustained } of byRace.values()) {
+          if (!terrain || !sustained) continue;
           try {
-            const segs = JSON.parse(row.meta_value) as unknown;
-            if (!Array.isArray(segs)) continue;
-            for (const seg of segs) {
-              if (seg && typeof seg === "object" && typeof (seg as Record<string, unknown>).label === "string") {
-                labels.add((seg as Record<string, unknown>).label as string);
+            const tSegs = JSON.parse(terrain) as unknown[];
+            const sSegs = JSON.parse(sustained) as unknown[];
+            if (!Array.isArray(tSegs) || !Array.isArray(sSegs)) continue;
+            for (const s of sSegs) {
+              if (!s || typeof s !== "object") continue;
+              const sr = s as Record<string, unknown>;
+              if (typeof sr.startKm !== "number" || typeof sr.endKm !== "number") continue;
+              if (sr.type !== "climb" && sr.type !== "descent" && sr.type !== "flat") continue;
+              const elevWord = sr.type === "climb" ? "Uphill" : sr.type === "descent" ? "Downhill" : "Flat";
+              const weighted = new Map<string, number>();
+              for (const t of tSegs) {
+                if (!t || typeof t !== "object") continue;
+                const tr = t as Record<string, unknown>;
+                if (typeof tr.startKm !== "number" || typeof tr.endKm !== "number" || typeof tr.label !== "string") continue;
+                const overlapLen = Math.min(tr.endKm, sr.endKm) - Math.max(tr.startKm, sr.startKm);
+                if (overlapLen <= 0) continue;
+                weighted.set(tr.label, (weighted.get(tr.label) ?? 0) + overlapLen);
               }
+              if (weighted.size === 0) continue;
+              const dominant = [...weighted.entries()].sort((a, b) => b[1] - a[1])[0][0];
+              tags.add(`${elevWord} on ${dominant}`);
             }
           } catch { /* skip malformed rows */ }
         }
-        setTerrainTagOptions([...labels].sort());
+        setTerrainTagOptions([...tags].sort());
       });
   }, []);
 
