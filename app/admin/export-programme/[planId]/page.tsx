@@ -5,6 +5,92 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+/* ── Race profile types ── */
+type ElevationPoint = { distanceKm: number; elevationM: number };
+
+type RaceElevProfile = {
+  points: ElevationPoint[];
+  totalDistanceKm: number;
+  totalAscentM: number;
+  totalDescentM: number;
+  climbPerKm: number;
+  minElevationM: number;
+  maxElevationM: number;
+};
+
+type RaceTerrainSeg = { type: string; label: string; percentage: number; distanceKm?: number };
+
+type RaceSustainedSeg = {
+  startKm: number; endKm: number; lengthKm: number;
+  avgGradient: number; totalElevationM: number;
+  type: "climb" | "descent" | "flat";
+};
+
+type RaceProfileData = {
+  elevation: RaceElevProfile | null;
+  terrain: RaceTerrainSeg[] | null;
+  sustainedSegments: RaceSustainedSeg[] | null;
+};
+
+function parseRaceElevProfile(value: string | null | undefined): RaceElevProfile | null {
+  if (!value) return null;
+  try {
+    const p = JSON.parse(value) as Record<string, unknown>;
+    if (!Array.isArray(p.points) || typeof p.totalDistanceKm !== "number") return null;
+    const points = (p.points as unknown[]).flatMap((pt): ElevationPoint[] => {
+      if (!pt || typeof pt !== "object") return [];
+      const r = pt as Record<string, unknown>;
+      if (typeof r.distanceKm !== "number" || typeof r.elevationM !== "number") return [];
+      return [{ distanceKm: r.distanceKm, elevationM: r.elevationM }];
+    });
+    if (points.length < 2) return null;
+    const elevs = points.map((p) => p.elevationM);
+    return {
+      points,
+      totalDistanceKm: p.totalDistanceKm,
+      totalAscentM: typeof p.totalAscentM === "number" ? p.totalAscentM : 0,
+      totalDescentM: typeof p.totalDescentM === "number" ? p.totalDescentM : 0,
+      climbPerKm: typeof p.climbPerKm === "number" ? p.climbPerKm : (p.totalDistanceKm > 0 ? (p.totalAscentM as number) / p.totalDistanceKm : 0),
+      minElevationM: Math.min(...elevs),
+      maxElevationM: Math.max(...elevs),
+    };
+  } catch { return null; }
+}
+
+function parseRaceTerrainSegs(value: string | null | undefined): RaceTerrainSeg[] | null {
+  if (!value) return null;
+  try {
+    const p = JSON.parse(value) as Record<string, unknown>;
+    if (!Array.isArray(p.segments)) return null;
+    const segs = (p.segments as unknown[]).flatMap((s): RaceTerrainSeg[] => {
+      if (!s || typeof s !== "object") return [];
+      const r = s as Record<string, unknown>;
+      if (typeof r.type !== "string" || typeof r.label !== "string" || typeof r.percentage !== "number") return [];
+      return [{ type: r.type, label: r.label, percentage: r.percentage, distanceKm: typeof r.distanceKm === "number" ? r.distanceKm : undefined }];
+    });
+    return segs.length > 0 ? segs : null;
+  } catch { return null; }
+}
+
+function parseRaceSustainedSegs(value: string | null | undefined): RaceSustainedSeg[] | null {
+  if (!value) return null;
+  try {
+    const p = JSON.parse(value) as unknown;
+    if (!Array.isArray(p)) return null;
+    const segs = p.flatMap((s): RaceSustainedSeg[] => {
+      if (!s || typeof s !== "object") return [];
+      const r = s as Record<string, unknown>;
+      if (typeof r.startKm !== "number" || typeof r.endKm !== "number" || typeof r.lengthKm !== "number" ||
+          typeof r.avgGradient !== "number" || typeof r.totalElevationM !== "number" ||
+          (r.type !== "climb" && r.type !== "descent" && r.type !== "flat")) return [];
+      return [{ startKm: r.startKm, endKm: r.endKm, lengthKm: r.lengthKm,
+                avgGradient: r.avgGradient, totalElevationM: r.totalElevationM,
+                type: r.type as RaceSustainedSeg["type"] }];
+    });
+    return segs.length > 0 ? segs : null;
+  } catch { return null; }
+}
+
 /* ── DB types ── */
 type TemplateExercise = {
   id: string;
@@ -73,6 +159,226 @@ function sortSessions(sessions: TemplateSession[]): TemplateSession[] {
     const di = dayOrder.indexOf(a.day_label) - dayOrder.indexOf(b.day_label);
     return di !== 0 ? di : a.sort_order - b.sort_order;
   });
+}
+
+/* ── Race profile sub-components ── */
+
+const TERRAIN_COLORS: Record<string, string> = {
+  road: "#78909c", tarmac: "#607d8b", asphalt: "#546e7a",
+  trail: "#8d6e63", dirt: "#795548", path: "#a1887f",
+  grass: "#66bb6a", grassland: "#81c784",
+  gravel: "#bcaaa4", chalk: "#e0e0e0",
+  sand: "#ffcc80", beach: "#ffd54f",
+  technical: "#5d4037", rocky: "#6d4c41",
+  woodland: "#388e3c", forest: "#2e7d32",
+  default: "#90a4ae",
+};
+
+function terrainColor(type: string) {
+  return TERRAIN_COLORS[type.toLowerCase()] ?? TERRAIN_COLORS.default;
+}
+
+// Downsample to at most maxPts points while preserving shape
+function downsamplePoints(points: ElevationPoint[], maxPts: number): ElevationPoint[] {
+  if (points.length <= maxPts) return points;
+  const step = (points.length - 1) / (maxPts - 1);
+  return Array.from({ length: maxPts }, (_, i) => points[Math.round(i * step)]);
+}
+
+function ElevationChart({ profile, notable }: { profile: RaceElevProfile; notable: RaceSustainedSeg[] }) {
+  const W = 698; const H = 200;
+  const padL = 46; const padB = 22; const padR = 8; const padT = 16;
+  const cW = W - padL - padR;
+  const cH = H - padT - padB;
+
+  const elevRange = Math.max(profile.maxElevationM - profile.minElevationM, 50);
+  const xS = (km: number) => padL + (km / profile.totalDistanceKm) * cW;
+  const yS = (m: number) => padT + cH - ((m - profile.minElevationM) / elevRange) * cH;
+
+  const pts = downsamplePoints(profile.points, 300);
+  const linePts = pts.map((p) => `${xS(p.distanceKm).toFixed(1)},${yS(p.elevationM).toFixed(1)}`).join(" ");
+  const first = pts[0]; const last = pts[pts.length - 1];
+  const areaD = `M${xS(first.distanceKm).toFixed(1)},${(padT + cH).toFixed(1)} ` +
+    pts.map((p) => `L${xS(p.distanceKm).toFixed(1)},${yS(p.elevationM).toFixed(1)}`).join(" ") +
+    ` L${xS(last.distanceKm).toFixed(1)},${(padT + cH).toFixed(1)} Z`;
+
+  // Y-axis ticks (4 gridlines)
+  const yStep = elevRange / 4;
+  const yTicks = Array.from({ length: 5 }, (_, i) => profile.minElevationM + i * yStep);
+
+  // X-axis ticks — roughly every 5 km
+  const xInterval = Math.ceil(profile.totalDistanceKm / 8 / 5) * 5;
+  const xTicks: number[] = [];
+  for (let k = 0; k <= profile.totalDistanceKm; k += xInterval) xTicks.push(k);
+
+  return (
+    <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
+      {/* Gridlines */}
+      {yTicks.map((elev, i) => (
+        <line key={i} x1={padL} y1={yS(elev)} x2={padL + cW} y2={yS(elev)} stroke="#eee" strokeWidth="1" />
+      ))}
+
+      {/* Notable segment bands */}
+      {notable.map((seg, i) => (
+        <rect key={i} x={xS(seg.startKm)} y={padT} width={Math.max(xS(seg.endKm) - xS(seg.startKm), 1)}
+          height={cH} fill={seg.type === "climb" ? "#ff980018" : "#1565c018"} />
+      ))}
+
+      {/* Filled area */}
+      <path d={areaD} fill="#1e3a1e18" />
+
+      {/* Elevation line */}
+      <polyline points={linePts} fill="none" stroke="#1e3a1e" strokeWidth="1.5" strokeLinejoin="round" />
+
+      {/* Y-axis labels */}
+      {yTicks.map((elev, i) => (
+        <text key={i} x={padL - 5} y={yS(elev) + 3.5} textAnchor="end" fontSize="8.5" fill="#888">
+          {Math.round(elev)}
+        </text>
+      ))}
+
+      {/* X-axis ticks + labels */}
+      {xTicks.map((km, i) => (
+        <g key={i}>
+          <line x1={xS(km)} y1={padT + cH} x2={xS(km)} y2={padT + cH + 4} stroke="#ccc" strokeWidth="1" />
+          <text x={xS(km)} y={padT + cH + 13} textAnchor="middle" fontSize="8.5" fill="#888">{Math.round(km)}km</text>
+        </g>
+      ))}
+
+      {/* Axis borders */}
+      <line x1={padL} y1={padT} x2={padL} y2={padT + cH} stroke="#bbb" strokeWidth="1" />
+      <line x1={padL} y1={padT + cH} x2={padL + cW} y2={padT + cH} stroke="#bbb" strokeWidth="1" />
+
+      {/* Notable segment labels */}
+      {notable.map((seg, i) => {
+        const midX = xS((seg.startKm + seg.endKm) / 2);
+        const isClimb = seg.type === "climb";
+        return (
+          <text key={i} x={midX} y={padT - 3} textAnchor="middle" fontSize="8" fontWeight="700"
+            fill={isClimb ? "#bf360c" : "#0d47a1"}>
+            {isClimb ? "▲" : "▼"} {Math.abs(Math.round(seg.totalElevationM))}m
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
+function TerrainBar({ terrain }: { terrain: RaceTerrainSeg[] }) {
+  return (
+    <div>
+      {/* Stacked bar */}
+      <div style={{ display: "flex", height: "18px", borderRadius: "4px", overflow: "hidden", marginBottom: "8px", border: "1px solid #ddd" }}>
+        {terrain.map((seg) => (
+          <div key={seg.type} style={{ width: `${seg.percentage}%`, background: terrainColor(seg.type), flexShrink: 0 }} />
+        ))}
+      </div>
+      {/* Legend */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
+        {terrain.map((seg) => (
+          <div key={seg.type} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", color: "#444" }}>
+            <span style={{ display: "inline-block", width: "11px", height: "11px", borderRadius: "2px", background: terrainColor(seg.type), border: "1px solid #ccc", flexShrink: 0 }} />
+            {seg.label} — {Math.round(seg.percentage)}%
+            {seg.distanceKm != null ? ` (${seg.distanceKm.toFixed(1)} km)` : ""}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RaceSummaryPage({ template, profile }: { template: ProgramTemplate; profile: RaceProfileData }) {
+  const { elevation, terrain, sustainedSegments } = profile;
+
+  // Top 3–5 notable segments by absolute elevation change, excluding flats
+  const notable = (sustainedSegments ?? [])
+    .filter((s) => s.type !== "flat")
+    .sort((a, b) => Math.abs(b.totalElevationM) - Math.abs(a.totalElevationM))
+    .slice(0, 5);
+
+  const hasContent = elevation ?? terrain ?? (sustainedSegments?.length ?? 0) > 0;
+  if (!hasContent) return null;
+
+  return (
+    <div style={a4Page}>
+      <PrintHeader template={template} />
+      <h2 style={{ margin: "0 0 16px", fontSize: "18px", fontWeight: 700, color: "#1e3a1e" }}>Race Course Profile</h2>
+
+      {elevation && (
+        <>
+          {/* Stats strip */}
+          <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
+            {[
+              { label: "Distance", value: `${elevation.totalDistanceKm.toFixed(1)} km` },
+              { label: "Total ascent", value: `${Math.round(elevation.totalAscentM).toLocaleString()} m` },
+              { label: "Total descent", value: `${Math.round(elevation.totalDescentM).toLocaleString()} m` },
+              { label: "Climb / km", value: `${elevation.climbPerKm.toFixed(1)} m/km` },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "8px 14px", fontSize: "11px", background: "#fafafa" }}>
+                <div style={{ color: "#888", marginBottom: "2px" }}>{label}</div>
+                <div style={{ fontWeight: 700, color: "#111", fontSize: "13px" }}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Elevation chart */}
+          <div style={{ marginBottom: "20px" }}>
+            <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Elevation Profile
+              {notable.length > 0 && " — shaded sections are the most significant climbs & descents"}
+            </p>
+            <ElevationChart profile={elevation} notable={notable} />
+          </div>
+        </>
+      )}
+
+      {/* Notable segments table */}
+      {notable.length > 0 && (
+        <div style={{ marginBottom: "20px" }}>
+          <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Notable Segments
+          </p>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+            <thead>
+              <tr>
+                {["#", "Type", "km range", "Length", "Avg gradient", "Elevation"].map((h) => (
+                  <th key={h} style={{ textAlign: "left", padding: "5px 8px", borderBottom: "2px solid #1e3a1e", color: "#1e3a1e", fontWeight: 600, background: "#f9f9f9", fontSize: "11px" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {notable.map((seg, i) => (
+                <tr key={i}>
+                  <td style={{ padding: "5px 8px", borderBottom: "1px solid #eee", color: "#555" }}>{i + 1}</td>
+                  <td style={{ padding: "5px 8px", borderBottom: "1px solid #eee" }}>
+                    <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: "8px", fontSize: "10px", fontWeight: 700,
+                      background: seg.type === "climb" ? "#fff3e0" : "#e3f2fd",
+                      color: seg.type === "climb" ? "#bf360c" : "#0d47a1" }}>
+                      {seg.type === "climb" ? "▲ Climb" : "▼ Descent"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "5px 8px", borderBottom: "1px solid #eee" }}>{seg.startKm.toFixed(1)}–{seg.endKm.toFixed(1)} km</td>
+                  <td style={{ padding: "5px 8px", borderBottom: "1px solid #eee" }}>{seg.lengthKm.toFixed(1)} km</td>
+                  <td style={{ padding: "5px 8px", borderBottom: "1px solid #eee" }}>{Math.abs(seg.avgGradient).toFixed(1)}%</td>
+                  <td style={{ padding: "5px 8px", borderBottom: "1px solid #eee", fontWeight: 600 }}>{Math.abs(Math.round(seg.totalElevationM))} m</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Terrain breakdown */}
+      {terrain && terrain.length > 0 && (
+        <div>
+          <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Terrain Surface
+          </p>
+          <TerrainBar terrain={terrain} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ── Sub-components ── */
@@ -247,6 +553,7 @@ export default function ExportPreviewPage() {
   const supabase = createClient();
 
   const [template, setTemplate] = useState<ProgramTemplate | null>(null);
+  const [raceProfile, setRaceProfile] = useState<RaceProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -286,6 +593,34 @@ export default function ExportPreviewPage() {
       );
 
       setTemplate(sorted);
+
+      // Fetch race profile via products table
+      const { data: productRow } = await supabase
+        .from("products")
+        .select("race_id")
+        .eq("template_id", templateId)
+        .not("race_id", "is", null)
+        .limit(1)
+        .maybeSingle();
+
+      if (productRow?.race_id) {
+        const { data: metaRows } = await supabase
+          .from("races_meta")
+          .select("meta_key, meta_value")
+          .eq("race_id", productRow.race_id)
+          .in("meta_key", ["elevation_profile", "terrain_breakdown", "sustained_segments"]);
+
+        const meta: Record<string, string> = {};
+        for (const row of (metaRows ?? []) as { meta_key: string; meta_value: string }[]) {
+          meta[row.meta_key] = row.meta_value;
+        }
+        setRaceProfile({
+          elevation: parseRaceElevProfile(meta.elevation_profile),
+          terrain: parseRaceTerrainSegs(meta.terrain_breakdown),
+          sustainedSegments: parseRaceSustainedSegs(meta.sustained_segments),
+        });
+      }
+
       setLoading(false);
     }
     void load();
@@ -344,6 +679,9 @@ export default function ExportPreviewPage() {
           )}
         </div>
 
+        {/* Race course profile page */}
+        {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} />}
+
         {/* Section title: Overview */}
         <div style={{ ...a4Page, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
           <PrintHeader template={template} />
@@ -377,6 +715,8 @@ export default function ExportPreviewPage() {
       <style>{`
         @media print {
           .no-print { display: none !important; }
+          .app-sidebar { display: none !important; }
+          .app-topbar { display: none !important; }
           body { margin: 0; background: #fff; }
           @page { size: A4 portrait; margin: 0; }
         }
