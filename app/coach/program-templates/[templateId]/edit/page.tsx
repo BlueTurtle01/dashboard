@@ -248,19 +248,19 @@ const weekdayQuickAddOptions = [
 ];
 
 const sessionTypeOptions = [
-  "Easy",
-  "Steady",
-  "Long",
-  "Recovery",
-  "Rest",
-  "Gym",
-  "Tempo",
-  "Intervals",
+  "Long Run",
+  "Easy Run",
+  "Tempo Run",
+  "Interval Session",
   "Hill Reps",
+  "Recovery Run",
   "Race Specific",
+  "Cross Training",
   "Loaded March",
   "Recce",
   "Navigation",
+  "Gym",
+  "Rest",
 ];
 
 const runTimeTypeOptions = ["any", "morning", "afternoon", "evening"];
@@ -930,17 +930,16 @@ function getExerciseHeading(exercise: EditableExercise) {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   SessionSlideOver — fixed right-hand panel for editing a session
+   SessionModal — centered dialog for editing a session
    ───────────────────────────────────────────────────────────── */
 
 type SessionSlideOverProps = {
   session: EditableSession;
   distanceUnit: DistanceUnit;
-  exerciseNameMap: Record<string, string>;
   isPersonalised: boolean;
   onSaveFromForm: (formData: UnifiedSessionFormData) => void;
   onFieldChange: (updater: (s: EditableSession) => EditableSession) => void;
-  onAddExercise: () => void;
+  onAddExercise: (exerciseId: string, exerciseName: string) => void;
   onRemoveExercise: (exerciseLocalId: string) => void;
   onUpdateExercise: (exerciseLocalId: string, updater: (e: EditableExercise) => EditableExercise) => void;
   onClose: () => void;
@@ -949,7 +948,6 @@ type SessionSlideOverProps = {
 function SessionSlideOver({
   session,
   distanceUnit,
-  exerciseNameMap,
   isPersonalised,
   onSaveFromForm,
   onFieldChange,
@@ -960,260 +958,274 @@ function SessionSlideOver({
 }: SessionSlideOverProps) {
   const isGym = session.type === "Gym";
 
+  // Exercise picker state
+  const [supabase] = useState(() => createClient());
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [pickerResults, setPickerResults] = useState<{ id: string; name: string }[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+
+  useEffect(() => {
+    const q = pickerSearch.trim();
+    if (!q) { setPickerResults([]); return; }
+    const id = window.setTimeout(async () => {
+      setPickerLoading(true);
+      const { data } = await supabase
+        .from("exercises")
+        .select("id, name")
+        .ilike("name", `%${q}%`)
+        .order("name")
+        .limit(20);
+      setPickerResults((data ?? []) as { id: string; name: string }[]);
+      setPickerLoading(false);
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [pickerSearch, supabase]);
+
+  function closePicker() {
+    setShowPicker(false);
+    setPickerSearch("");
+    setPickerResults([]);
+  }
+
   return (
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/30"
+        className="fixed inset-0 z-40 bg-black/40"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Panel */}
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col bg-white shadow-2xl">
-        {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-6 py-4">
-          <div className="min-w-0 flex-1 pr-4">
-            <input
-              value={session.name}
-              onChange={(e) => onFieldChange((s) => ({ ...s, name: e.target.value }))}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-base font-semibold text-zinc-900 focus:border-zinc-500 focus:outline-none"
-              placeholder="Session name"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
-          >
-            Close
-          </button>
-        </div>
+      {/* Centered modal */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl" style={{ maxHeight: "90vh" }}>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-
-          {/* Meta row — type / day / key session */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <label className="text-sm font-medium text-zinc-700">
-              Session type
-              <select
-                value={session.type}
-                onChange={(e) => onFieldChange((s) => ({ ...s, type: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-              >
-                {sessionTypeOptions.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-                {!sessionTypeOptions.includes(session.type) && (
-                  <option value={session.type}>{session.type}</option>
-                )}
-              </select>
-            </label>
-
-            {!isPersonalised && (
-              <label className="text-sm font-medium text-zinc-700">
-                Day of week
-                <select
-                  value={session.dayLabel}
-                  onChange={(e) => onFieldChange((s) => ({ ...s, dayLabel: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                >
-                  <option value="">— Any day —</option>
-                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            <label className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 self-end">
+          {/* Header */}
+          <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-6 py-4">
+            <div className="min-w-0 flex-1 pr-4">
               <input
-                type="checkbox"
-                checked={session.isKeySession}
-                onChange={(e) => onFieldChange((s) => ({ ...s, isKeySession: e.target.checked }))}
-                className="h-4 w-4"
+                value={session.name}
+                onChange={(e) => onFieldChange((s) => ({ ...s, name: e.target.value }))}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-base font-semibold text-zinc-900 focus:border-zinc-500 focus:outline-none"
+                placeholder="Session name"
               />
-              <span>Key session</span>
-            </label>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
+            >
+              Close
+            </button>
           </div>
 
-          {/* Intensity + Duration */}
-          {!isGym && (
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+            {/* Meta row — type / day */}
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-medium text-zinc-700">
-                Intensity
-                <input
-                  value={session.intensity}
-                  onChange={(e) => onFieldChange((s) => ({ ...s, intensity: e.target.value }))}
+                Session type
+                <select
+                  value={session.type}
+                  onChange={(e) => onFieldChange((s) => ({ ...s, type: e.target.value }))}
                   className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                />
-              </label>
-              <label className="text-sm font-medium text-zinc-700">
-                Duration (minutes)
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={session.duration}
-                  onChange={(e) => onFieldChange((s) => ({ ...s, duration: getDigitsOnly(e.target.value) }))}
-                  placeholder="e.g. 45"
-                  className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                />
-              </label>
-            </div>
-          )}
-
-          {/* Description */}
-          <label className="block text-sm font-medium text-zinc-700">
-            Description
-            <textarea
-              value={session.description}
-              onChange={(e) => onFieldChange((s) => ({ ...s, description: e.target.value }))}
-              rows={3}
-              className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-            />
-          </label>
-
-          {/* Reason — always visible */}
-          <label className="block text-sm font-medium text-zinc-700">
-            Why this session?
-            <textarea
-              value={session.reason ?? ""}
-              onChange={(e) => onFieldChange((s) => ({ ...s, reason: e.target.value }))}
-              rows={3}
-              placeholder="Explain why this session is included and how it relates to the goal race…"
-              className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-            />
-          </label>
-
-          {/* UnifiedSessionForm — for activity-based sessions */}
-          {!isGym && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <h5 className="mb-3 text-sm font-semibold text-zinc-900">Activity details</h5>
-              <UnifiedSessionForm
-                key={`slideover-${session.localId}-${distanceUnit}`}
-                distanceUnit={distanceUnit}
-                initialData={mapSessionToUnifiedFormData(session)}
-                onSave={onSaveFromForm}
-                onCancel={onClose}
-                submitButtonLabel="Save Session"
-                progressiveReveal
-                disableActivityAutoDefault={!session.activity}
-              />
-            </div>
-          )}
-
-          {/* Exercise editor — for Gym sessions */}
-          {isGym && (
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <h5 className="text-sm font-semibold">Exercises</h5>
-                <button
-                  type="button"
-                  onClick={onAddExercise}
-                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
                 >
-                  Add Exercise
-                </button>
-              </div>
+                  {sessionTypeOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                  {!sessionTypeOptions.includes(session.type) && (
+                    <option value={session.type}>{session.type}</option>
+                  )}
+                </select>
+              </label>
 
-              <div className="space-y-3">
-                {session.exercises.map((exercise) => (
-                  <div key={exercise.localId} className="rounded-xl border border-zinc-200 bg-white p-4">
-                    <div className="mb-3 flex items-center justify-between gap-4">
-                      <div className="text-sm font-medium text-zinc-700">
-                        {getExerciseHeading(exercise)}
-                      </div>
+              {!isPersonalised && (
+                <label className="text-sm font-medium text-zinc-700">
+                  Day of week
+                  <select
+                    value={session.dayLabel}
+                    onChange={(e) => onFieldChange((s) => ({ ...s, dayLabel: e.target.value }))}
+                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                  >
+                    <option value="">— Any day —</option>
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+
+            {/* Why this session */}
+            <label className="block text-sm font-medium text-zinc-700">
+              Why this session?
+              <textarea
+                value={session.reason ?? ""}
+                onChange={(e) => onFieldChange((s) => ({ ...s, reason: e.target.value }))}
+                rows={3}
+                placeholder="Explain why this session is included and how it relates to the goal race…"
+                className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+              />
+            </label>
+
+            {/* Activity details (non-gym) */}
+            {!isGym && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <h5 className="mb-3 text-sm font-semibold text-zinc-900">Activity details</h5>
+                <UnifiedSessionForm
+                  key={`modal-${session.localId}-${distanceUnit}`}
+                  distanceUnit={distanceUnit}
+                  initialData={mapSessionToUnifiedFormData(session)}
+                  onSave={onSaveFromForm}
+                  onCancel={onClose}
+                  submitButtonLabel="Save Session"
+                  progressiveReveal
+                  disableActivityAutoDefault={!session.activity}
+                />
+              </div>
+            )}
+
+            {/* Exercises (gym sessions) */}
+            {isGym && (
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-4">
+                  <h5 className="text-sm font-semibold">Exercises</h5>
+                  {!showPicker && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPicker(true)}
+                      className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-100"
+                    >
+                      Add Exercise
+                    </button>
+                  )}
+                </div>
+
+                {/* Exercise search picker */}
+                {showPicker && (
+                  <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-zinc-700">Search exercise by name</span>
                       <button
                         type="button"
-                        onClick={() => onRemoveExercise(exercise.localId)}
-                        className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
+                        onClick={closePicker}
+                        className="text-sm text-zinc-400 hover:text-zinc-600"
                       >
-                        Remove
+                        Cancel
                       </button>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                      <label className="text-sm font-medium text-zinc-700 sm:col-span-2">
-                        Exercise
-                        <input
-                          value={exercise.exerciseId}
-                          onChange={(e) =>
-                            onUpdateExercise(exercise.localId, (ex) => ({
-                              ...ex,
-                              exerciseId: e.target.value,
-                              exerciseName: exerciseNameMap[e.target.value] ?? e.target.value,
-                            }))
-                          }
-                          placeholder="Exercise ID"
-                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                        />
-                        {exercise.exerciseName && exercise.exerciseName !== exercise.exerciseId && (
-                          <span className="mt-1 block text-xs text-zinc-500">{exercise.exerciseName}</span>
-                        )}
-                      </label>
-                      <label className="text-sm font-medium text-zinc-700">
-                        Sets
-                        <input
-                          value={exercise.sets}
-                          onChange={(e) => onUpdateExercise(exercise.localId, (ex) => ({ ...ex, sets: e.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                        />
-                      </label>
-                      <label className="text-sm font-medium text-zinc-700">
-                        Reps
-                        <input
-                          value={exercise.reps}
-                          onChange={(e) => onUpdateExercise(exercise.localId, (ex) => ({ ...ex, reps: e.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                        />
-                      </label>
-                      <label className="text-sm font-medium text-zinc-700">
-                        Duration (s)
-                        <input
-                          value={exercise.durationSeconds}
-                          onChange={(e) => onUpdateExercise(exercise.localId, (ex) => ({ ...ex, durationSeconds: e.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                        />
-                      </label>
-                      <label className="text-sm font-medium text-zinc-700 sm:col-span-2 xl:col-span-4">
-                        Notes
-                        <input
-                          value={exercise.notes}
-                          onChange={(e) => onUpdateExercise(exercise.localId, (ex) => ({ ...ex, notes: e.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                ))}
-                {session.exercises.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-5 text-sm text-zinc-500">
-                    No exercises added yet.
+                    <input
+                      value={pickerSearch}
+                      onChange={(e) => setPickerSearch(e.target.value)}
+                      placeholder="e.g. Romanian deadlift, box jump…"
+                      autoFocus
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                    />
+                    {pickerLoading && (
+                      <p className="mt-2 text-sm text-zinc-400">Searching…</p>
+                    )}
+                    {!pickerLoading && pickerResults.length > 0 && (
+                      <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                        {pickerResults.map((ex) => (
+                          <button
+                            key={ex.id}
+                            type="button"
+                            onClick={() => {
+                              onAddExercise(ex.id, ex.name);
+                              closePicker();
+                            }}
+                            className="block w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left text-sm hover:bg-zinc-100"
+                          >
+                            {ex.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {!pickerLoading && pickerSearch.trim() && pickerResults.length === 0 && (
+                      <p className="mt-2 text-sm text-zinc-400">No exercises found.</p>
+                    )}
                   </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {/* Gym save button (since UnifiedSessionForm isn't shown) */}
-          {isGym && (
-            <div className="flex justify-end gap-3 pb-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-sm font-medium hover:bg-zinc-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-emerald-700 bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
-              >
-                Done
-              </button>
-            </div>
-          )}
+                <div className="space-y-3">
+                  {session.exercises.map((exercise) => (
+                    <div key={exercise.localId} className="rounded-xl border border-zinc-200 bg-white p-4">
+                      <div className="mb-3 flex items-center justify-between gap-4">
+                        <div className="text-sm font-medium text-zinc-700">
+                          {getExerciseHeading(exercise)}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onRemoveExercise(exercise.localId)}
+                          className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-4">
+                        <label className="text-sm font-medium text-zinc-700 sm:col-span-4">
+                          Exercise name
+                          <div className="mt-1 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                            {exercise.exerciseName || <span className="text-zinc-400 italic">No exercise selected</span>}
+                          </div>
+                        </label>
+                        <label className="text-sm font-medium text-zinc-700">
+                          Sets
+                          <input
+                            value={exercise.sets}
+                            onChange={(e) => onUpdateExercise(exercise.localId, (ex) => ({ ...ex, sets: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                          />
+                        </label>
+                        <label className="text-sm font-medium text-zinc-700">
+                          Reps
+                          <input
+                            value={exercise.reps}
+                            onChange={(e) => onUpdateExercise(exercise.localId, (ex) => ({ ...ex, reps: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                          />
+                        </label>
+                        <label className="text-sm font-medium text-zinc-700">
+                          Duration (s)
+                          <input
+                            value={exercise.durationSeconds}
+                            onChange={(e) => onUpdateExercise(exercise.localId, (ex) => ({ ...ex, durationSeconds: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                          />
+                        </label>
+                        <label className="text-sm font-medium text-zinc-700 sm:col-span-4">
+                          Notes
+                          <input
+                            value={exercise.notes}
+                            onChange={(e) => onUpdateExercise(exercise.localId, (ex) => ({ ...ex, notes: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                  {session.exercises.length === 0 && !showPicker && (
+                    <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-5 text-sm text-zinc-500">
+                      No exercises yet. Click "Add Exercise" to search and add one.
+                    </div>
+                  )}
+                </div>
+
+                {/* Gym close button */}
+                <div className="mt-4 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-xl border border-emerald-700 bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
@@ -1793,7 +1805,7 @@ export default function EditProgramTemplatePage() {
     }));
   }
 
-  function addExercise(weekLocalId: string, sessionLocalId: string) {
+  function addExercise(weekLocalId: string, sessionLocalId: string, exerciseId = "", exerciseName = "") {
     updateSession(weekLocalId, sessionLocalId, (session) => ({
       ...session,
       exercises: [
@@ -1801,8 +1813,8 @@ export default function EditProgramTemplatePage() {
         {
           localId: makeLocalId("exercise"),
           dbId: null,
-          exerciseId: "",
-          exerciseName: "",
+          exerciseId,
+          exerciseName,
           sortOrder: session.exercises.length + 1,
           sets: "",
           reps: "",
@@ -2635,9 +2647,6 @@ export default function EditProgramTemplatePage() {
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <h4 className="text-base font-semibold">{session.name || "Untitled Session"}</h4>
-                                  {session.isKeySession && (
-                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Key</span>
-                                  )}
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500">
                                   <span>{session.type}</span>
@@ -2698,7 +2707,6 @@ export default function EditProgramTemplatePage() {
           <SessionSlideOver
             session={slideSession}
             distanceUnit={distanceUnit}
-            exerciseNameMap={exerciseNameMap}
             isPersonalised={form.isPersonalised}
             onSaveFromForm={(formData) =>
               handleUpdateSessionFromForm(editingSessionSlot.weekLocalId, editingSessionSlot.sessionLocalId, formData)
@@ -2706,7 +2714,7 @@ export default function EditProgramTemplatePage() {
             onFieldChange={(updater) =>
               updateSession(editingSessionSlot.weekLocalId, editingSessionSlot.sessionLocalId, updater)
             }
-            onAddExercise={() => addExercise(editingSessionSlot.weekLocalId, editingSessionSlot.sessionLocalId)}
+            onAddExercise={(exerciseId, exerciseName) => addExercise(editingSessionSlot.weekLocalId, editingSessionSlot.sessionLocalId, exerciseId, exerciseName)}
             onRemoveExercise={(exerciseLocalId) =>
               removeExercise(editingSessionSlot.weekLocalId, editingSessionSlot.sessionLocalId, exerciseLocalId)
             }
