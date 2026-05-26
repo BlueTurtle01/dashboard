@@ -948,6 +948,117 @@ function getExerciseHeading(exercise: EditableExercise) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   Race course profile types + helpers
+   ───────────────────────────────────────────────────────────── */
+
+type ElevationStats = {
+  totalAscentM: number;
+  totalDescentM: number;
+  climbPerKm: number;
+  totalDistanceKm: number;
+  maxGradientPct: number;
+};
+
+type TerrainSegment = { type: string; label: string; percentage: number; distanceKm?: number };
+
+type SustainedSegment = {
+  startKm: number;
+  endKm: number;
+  lengthKm: number;
+  avgGradient: number;
+  totalElevationM: number;
+  type: "climb" | "descent" | "flat";
+};
+
+type SegmentNote = {
+  start_km: number;
+  end_km: number;
+  note: string;
+  trainingFocus?: string[];
+};
+
+type RaceProfile = {
+  elevation: ElevationStats | null;
+  terrain: TerrainSegment[] | null;
+  sustainedSegments: SustainedSegment[] | null;
+  segmentNotes: SegmentNote[] | null;
+};
+
+function parseElevationStats(value: string | null | undefined): ElevationStats | null {
+  if (!value) return null;
+  try {
+    const p = JSON.parse(value) as Record<string, unknown>;
+    if (typeof p.totalAscentM !== "number" || typeof p.totalDistanceKm !== "number") return null;
+    const dist = p.totalDistanceKm;
+    return {
+      totalAscentM: p.totalAscentM,
+      totalDescentM: typeof p.totalDescentM === "number" ? p.totalDescentM : 0,
+      climbPerKm: typeof p.climbPerKm === "number" ? p.climbPerKm : (dist > 0 ? p.totalAscentM / dist : 0),
+      totalDistanceKm: dist,
+      maxGradientPct: typeof p.maxGradientPct === "number" ? p.maxGradientPct : 0,
+    };
+  } catch { return null; }
+}
+
+function parseTerrainBreakdownData(value: string | null | undefined): TerrainSegment[] | null {
+  if (!value) return null;
+  try {
+    const p = JSON.parse(value) as Record<string, unknown>;
+    if (!Array.isArray(p.segments)) return null;
+    const segs = (p.segments as unknown[]).flatMap((s): TerrainSegment[] => {
+      if (!s || typeof s !== "object") return [];
+      const r = s as Record<string, unknown>;
+      if (typeof r.type !== "string" || typeof r.label !== "string" || typeof r.percentage !== "number") return [];
+      return [{ type: r.type, label: r.label, percentage: r.percentage,
+                distanceKm: typeof r.distanceKm === "number" ? r.distanceKm : undefined }];
+    });
+    return segs.length > 0 ? segs : null;
+  } catch { return null; }
+}
+
+function parseSustainedSegmentsData(value: string | null | undefined): SustainedSegment[] | null {
+  if (!value) return null;
+  try {
+    const p = JSON.parse(value) as unknown;
+    if (!Array.isArray(p)) return null;
+    const segs = p.flatMap((s): SustainedSegment[] => {
+      if (!s || typeof s !== "object") return [];
+      const r = s as Record<string, unknown>;
+      if (
+        typeof r.startKm !== "number" || typeof r.endKm !== "number" ||
+        typeof r.lengthKm !== "number" || typeof r.avgGradient !== "number" ||
+        typeof r.totalElevationM !== "number" ||
+        (r.type !== "climb" && r.type !== "descent" && r.type !== "flat")
+      ) return [];
+      return [{ startKm: r.startKm, endKm: r.endKm, lengthKm: r.lengthKm,
+                avgGradient: r.avgGradient, totalElevationM: r.totalElevationM,
+                type: r.type as SustainedSegment["type"] }];
+    });
+    return segs.length > 0 ? segs : null;
+  } catch { return null; }
+}
+
+function parseSegmentNotesData(value: string | null | undefined): SegmentNote[] | null {
+  if (!value) return null;
+  try {
+    const p = JSON.parse(value) as unknown;
+    if (!Array.isArray(p)) return null;
+    const notes = p.flatMap((n): SegmentNote[] => {
+      if (!n || typeof n !== "object") return [];
+      const r = n as Record<string, unknown>;
+      if (typeof r.start_km !== "number" || typeof r.end_km !== "number" || typeof r.note !== "string") return [];
+      return [{
+        start_km: r.start_km, end_km: r.end_km, note: r.note,
+        trainingFocus: Array.isArray(r.trainingFocus)
+          ? (r.trainingFocus as unknown[]).filter((v): v is string => typeof v === "string")
+          : undefined,
+      }];
+    });
+    return notes.length > 0 ? notes : null;
+  } catch { return null; }
+}
+
+/* ─────────────────────────────────────────────────────────────
    SessionModal — centered dialog for editing a session
    ───────────────────────────────────────────────────────────── */
 
@@ -1348,6 +1459,9 @@ export default function EditProgramTemplatePage() {
   const [races, setRaces] = useState<RaceRow[]>([]);
   const [raceSearchQuery, setRaceSearchQuery] = useState("");
   const [isLoadingRaces, setIsLoadingRaces] = useState(true);
+  const [selectedRaceId, setSelectedRaceId] = useState<string | null>(null);
+  const [raceProfile, setRaceProfile] = useState<RaceProfile | null>(null);
+  const [loadingRaceProfile, setLoadingRaceProfile] = useState(false);
 
   const [collapsedWeekLocalIds, setCollapsedWeekLocalIds] = useState<Record<string, boolean>>({});
   const [editingSessionSlot, setEditingSessionSlot] = useState<EditingSessionSlot | null>(null);
@@ -1566,6 +1680,41 @@ export default function EditProgramTemplatePage() {
       cancelled = true;
     };
   }, []);
+
+  // Resolve race ID from name whenever raceName or races list changes
+  useEffect(() => {
+    if (!form?.raceName || races.length === 0) { setSelectedRaceId(null); return; }
+    const match = races.find((r) => r.name === form.raceName);
+    setSelectedRaceId(match?.id ?? null);
+  }, [form?.raceName, races]);
+
+  // Fetch course profile from races_meta when a race is selected
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedRaceId) { setRaceProfile(null); return; }
+    setLoadingRaceProfile(true);
+    void supabase
+      .from("races_meta")
+      .select("meta_key, meta_value")
+      .eq("race_id", selectedRaceId)
+      .in("meta_key", ["elevation_profile", "terrain_breakdown", "sustained_segments", "segment_training_notes"])
+      .then(({ data }) => {
+        if (cancelled) return;
+        const meta: Record<string, string> = {};
+        for (const row of (data ?? [])) {
+          const r = row as { meta_key: string; meta_value: string };
+          meta[r.meta_key] = r.meta_value;
+        }
+        setRaceProfile({
+          elevation: parseElevationStats(meta.elevation_profile),
+          terrain: parseTerrainBreakdownData(meta.terrain_breakdown),
+          sustainedSegments: parseSustainedSegmentsData(meta.sustained_segments),
+          segmentNotes: parseSegmentNotesData(meta.segment_training_notes),
+        });
+        setLoadingRaceProfile(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedRaceId]);
 
   useEffect(() => {
     if (sessionPanel?.mode !== "template-picker") {
@@ -2381,6 +2530,7 @@ export default function EditProgramTemplatePage() {
                     onClick={() => {
                       updateForm("raceName", "");
                       setRaceSearchQuery("");
+                      setSelectedRaceId(null);
                     }}
                     className="text-xs font-semibold text-emerald-800 underline"
                   >
@@ -2404,6 +2554,7 @@ export default function EditProgramTemplatePage() {
                         onClick={() => {
                           updateForm("raceName", race.name);
                           setRaceSearchQuery(race.name);
+                          setSelectedRaceId(race.id);
                         }}
                         className="block w-full border-b border-zinc-100 px-4 py-3 text-left text-sm last:border-b-0 hover:bg-zinc-50"
                       >
@@ -2420,6 +2571,108 @@ export default function EditProgramTemplatePage() {
                 <p className="mt-2 text-xs text-zinc-500">No matching races found.</p>
               ) : null}
             </label>
+
+            {/* Course Profile panel */}
+            {selectedRaceId && (
+              <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                <h3 className="mb-3 text-sm font-semibold text-amber-900 uppercase tracking-wide">Course Profile</h3>
+                {loadingRaceProfile ? (
+                  <p className="text-sm text-amber-700">Loading course data…</p>
+                ) : !raceProfile || (!raceProfile.elevation && !raceProfile.terrain && !raceProfile.sustainedSegments && !raceProfile.segmentNotes) ? (
+                  <p className="text-sm italic text-amber-700">No course data available for this race yet.</p>
+                ) : (
+                  <div className="space-y-5">
+
+                    {/* Key elevation stats */}
+                    {raceProfile.elevation && (
+                      <div className="flex flex-wrap gap-3">
+                        {[
+                          { label: "Distance", value: `${raceProfile.elevation.totalDistanceKm.toFixed(1)} km` },
+                          { label: "Total ascent", value: `${Math.round(raceProfile.elevation.totalAscentM).toLocaleString()} m` },
+                          { label: "Total descent", value: `${Math.round(raceProfile.elevation.totalDescentM).toLocaleString()} m` },
+                          { label: "Climb / km", value: `${raceProfile.elevation.climbPerKm.toFixed(1)} m/km` },
+                          ...(raceProfile.elevation.maxGradientPct > 0
+                            ? [{ label: "Max gradient", value: `${raceProfile.elevation.maxGradientPct.toFixed(0)}%` }]
+                            : []),
+                        ].map(({ label, value }) => (
+                          <div key={label} className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs">
+                            <span className="block text-zinc-500">{label}</span>
+                            <span className="block font-semibold text-zinc-900">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Terrain surface breakdown */}
+                    {raceProfile.terrain && raceProfile.terrain.length > 0 && (
+                      <div>
+                        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-800">Terrain surface</p>
+                        <div className="flex flex-wrap gap-2">
+                          {raceProfile.terrain.map((seg) => (
+                            <span key={seg.type} className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700">
+                              {seg.label} — {Math.round(seg.percentage)}%
+                              {seg.distanceKm != null ? ` (${seg.distanceKm.toFixed(1)} km)` : ""}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sustained climbs / descents */}
+                    {raceProfile.sustainedSegments && raceProfile.sustainedSegments.filter((s) => s.type !== "flat").length > 0 && (
+                      <div>
+                        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-800">Major climbs &amp; descents</p>
+                        <div className="space-y-1">
+                          {raceProfile.sustainedSegments
+                            .filter((s) => s.type !== "flat")
+                            .sort((a, b) => Math.abs(b.avgGradient) - Math.abs(a.avgGradient))
+                            .slice(0, 8)
+                            .map((seg, i) => {
+                              const isClimb = seg.type === "climb";
+                              return (
+                                <div key={i} className="flex items-center gap-3 rounded-lg bg-white px-3 py-2 text-xs">
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${isClimb ? "bg-orange-100 text-orange-800" : "bg-sky-100 text-sky-800"}`}>
+                                    {isClimb ? "↑ Climb" : "↓ Descent"}
+                                  </span>
+                                  <span className="text-zinc-700">
+                                    km {seg.startKm.toFixed(1)}–{seg.endKm.toFixed(1)}
+                                    {" · "}{seg.lengthKm.toFixed(1)} km
+                                    {" · "}{Math.abs(seg.avgGradient).toFixed(1)}% avg
+                                    {" · "}{Math.abs(Math.round(seg.totalElevationM))} m
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Segment training notes */}
+                    {raceProfile.segmentNotes && raceProfile.segmentNotes.length > 0 && (
+                      <div>
+                        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-800">Training focus notes</p>
+                        <div className="space-y-2">
+                          {raceProfile.segmentNotes.map((n, i) => (
+                            <div key={i} className="rounded-lg bg-white px-3 py-2 text-xs">
+                              <span className="font-medium text-zinc-600">km {n.start_km.toFixed(1)}–{n.end_km.toFixed(1)}: </span>
+                              <span className="text-zinc-700">{n.note}</span>
+                              {n.trainingFocus && n.trainingFocus.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {n.trainingFocus.map((tag) => (
+                                    <span key={tag} className="rounded-full bg-violet-100 px-2 py-0.5 font-medium text-violet-800">{tag}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+              </div>
+            )}
 
             <label className="text-sm font-medium text-zinc-700 md:col-span-2">
               Description
