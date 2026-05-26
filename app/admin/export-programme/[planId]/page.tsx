@@ -114,6 +114,11 @@ type TemplateSession = {
   intensity: string | null;
   is_key_session: boolean;
   reason: string | null;
+  distance_km: number | null;
+  terrain: string | null;
+  elevation_gain_meters: number | null;
+  activity: string | null;
+  subtype: string | null;
   program_template_session_exercises: TemplateExercise[];
 };
 
@@ -434,8 +439,26 @@ function ExerciseTable({ exercises }: { exercises: TemplateExercise[] }) {
   );
 }
 
+function RunDetail({ session }: { session: TemplateSession }) {
+  const pills: string[] = [];
+  if (session.distance_km != null) pills.push(`${session.distance_km.toFixed(1)} km`);
+  if (session.elevation_gain_meters != null) pills.push(`+${Math.round(session.elevation_gain_meters)} m`);
+  if (session.terrain) pills.push(session.terrain);
+  if (session.activity) pills.push(session.activity);
+  if (session.subtype) pills.push(session.subtype);
+  if (pills.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "8px" }}>
+      {pills.map((p) => (
+        <span key={p} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", border: "1px solid #e0e0e0", background: "#f5f5f5", color: "#333" }}>{p}</span>
+      ))}
+    </div>
+  );
+}
+
 function SessionCard({ session }: { session: TemplateSession }) {
   const isGym = session.type === "Gym";
+  const isRest = session.type === "Rest";
   const col = SESSION_COLOURS[session.type] ?? SESSION_COLOURS.default;
 
   return (
@@ -453,6 +476,8 @@ function SessionCard({ session }: { session: TemplateSession }) {
         </div>
       </div>
 
+      {!isRest && <RunDetail session={session} />}
+
       {session.description && (
         <p style={descriptionText}>{session.description}</p>
       )}
@@ -469,62 +494,83 @@ function SessionCard({ session }: { session: TemplateSession }) {
   );
 }
 
-function WeekOverviewPage({ week, template }: { week: TemplateWeek; template: ProgramTemplate }) {
-  const sessions = sortSessions(week.program_template_sessions);
-  const trainingSessions = sessions.filter((s) => s.type !== "Rest");
+function WeeklyMileagePage({ weeks, template }: { weeks: TemplateWeek[]; template: ProgramTemplate }) {
+  const sorted = weeks.slice().sort((a, b) => a.week_number - b.week_number);
+  const weekMiles = sorted.map((week) => {
+    const totalKm = week.program_template_sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
+    return { weekNumber: week.week_number, focus: week.focus ?? "", miles: totalKm * 0.621371 };
+  });
+
+  const maxMiles = Math.max(...weekMiles.map((w) => w.miles), 1);
+  const niceMax = Math.ceil(maxMiles / 5) * 5;
+  const step = niceMax <= 20 ? 5 : niceMax <= 50 ? 10 : 20;
+  const yTicks: number[] = [];
+  for (let v = 0; v <= niceMax; v += step) yTicks.push(v);
+
+  const chartH = 200;
+  const barW = Math.min(32, Math.max(14, Math.floor(560 / weekMiles.length) - 6));
+  const gap = 6;
+  const yAxisW = 36;
+  const totalW = weekMiles.length * (barW + gap);
+
+  if (weekMiles.every((w) => w.miles === 0)) return null;
 
   return (
     <div style={a4Page}>
       <PrintHeader template={template} />
-      <div style={weekHeaderBar}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: "12px" }}>
-          <h2 style={weekTitle}>Week {week.week_number}</h2>
-          {week.focus && <span style={focusBadge}>{week.focus}</span>}
-        </div>
-        {week.notes && <p style={weekNotes}>{week.notes}</p>}
-      </div>
-
-      <table style={overviewTable}>
-        <thead>
-          <tr>
-            <th style={ovTh}>Day</th>
-            <th style={ovTh}>Type</th>
-            <th style={ovTh}>Session</th>
-            <th style={ovTh}>Duration</th>
-            <th style={ovTh}>Intensity</th>
-            <th style={{ ...ovTh, textAlign: "center" }}>Key</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sessions.map((s) => (
-            <tr key={s.id} style={s.type === "Rest" ? { opacity: 0.45 } : undefined}>
-              <td style={ovTd}>{s.day_label}</td>
-              <td style={ovTd}>
-                <span style={{
-                  ...smallTypeBadge,
-                  background: (SESSION_COLOURS[s.type] ?? SESSION_COLOURS.default).bg,
-                  color: (SESSION_COLOURS[s.type] ?? SESSION_COLOURS.default).fg,
-                }}>
-                  {s.type}
-                </span>
-              </td>
-              <td style={{ ...ovTd, fontWeight: s.is_key_session ? 600 : 400 }}>{s.name}</td>
-              <td style={ovTd}>{sessionDuration(s)}</td>
-              <td style={{ ...ovTd, textTransform: "capitalize" }}>{s.intensity || "—"}</td>
-              <td style={{ ...ovTd, textAlign: "center" }}>{s.is_key_session ? "★" : ""}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div style={weekStat}>
-        {trainingSessions.length} training session{trainingSessions.length !== 1 ? "s" : ""}
-        {" · "}
-        {sessions.filter((s) => s.is_key_session).length} key session{sessions.filter((s) => s.is_key_session).length !== 1 ? "s" : ""}
+      <h2 style={{ margin: "0 0 20px", fontSize: "18px", fontWeight: 700, color: "#1e3a1e" }}>Weekly Mileage</h2>
+      <svg width={yAxisW + totalW} height={chartH + 40} style={{ display: "block", overflow: "visible" }}>
+        {yTicks.map((tick) => {
+          const y = chartH - (tick / niceMax) * chartH;
+          return (
+            <g key={tick}>
+              <line x1={yAxisW} x2={yAxisW + totalW} y1={y} y2={y} stroke="#e4e4e7" strokeWidth={1} />
+              <text x={yAxisW - 4} y={y + 4} fontSize={9} textAnchor="end" fill="#71717a">{tick}</text>
+            </g>
+          );
+        })}
+        {weekMiles.map((w, i) => {
+          const barH = Math.max(2, (w.miles / niceMax) * chartH);
+          const x = yAxisW + i * (barW + gap);
+          const y = chartH - barH;
+          const focus = w.focus.toLowerCase();
+          const fill =
+            focus.includes("recovery") || focus.includes("deload") ? "#10b981" :
+            focus.includes("build") || focus.includes("specific") ? "#3b82f6" :
+            focus.includes("taper") || focus.includes("peak") ? "#8b5cf6" :
+            "#1e3a1e";
+          return (
+            <g key={w.weekNumber}>
+              <rect x={x} y={y} width={barW} height={barH} fill={fill} rx={3} />
+              {w.miles > 0 && (
+                <text x={x + barW / 2} y={y - 4} fontSize={8} textAnchor="middle" fill="#52525b">{w.miles.toFixed(1)}</text>
+              )}
+              <text x={x + barW / 2} y={chartH + 14} fontSize={8} textAnchor="middle" fill="#71717a">W{w.weekNumber}</text>
+              {w.focus && (
+                <text x={x + barW / 2} y={chartH + 26} fontSize={7} textAnchor="middle" fill="#a1a1aa"
+                  style={{ textOverflow: "ellipsis" }}>{w.focus.length > 8 ? w.focus.slice(0, 7) + "…" : w.focus}</text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ marginTop: "16px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+        {[
+          { color: "#3b82f6", label: "Build / Specific" },
+          { color: "#8b5cf6", label: "Taper / Peak" },
+          { color: "#10b981", label: "Recovery / Deload" },
+          { color: "#1e3a1e", label: "Other" },
+        ].map(({ color, label }) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#555" }}>
+            <span style={{ display: "inline-block", width: "12px", height: "12px", borderRadius: "3px", background: color }} />
+            {label}
+          </div>
+        ))}
       </div>
     </div>
   );
 }
+
 
 function WeekDetailPage({ week, template }: { week: TemplateWeek; template: ProgramTemplate }) {
   const sessions = sortSessions(week.program_template_sessions);
@@ -533,7 +579,7 @@ function WeekDetailPage({ week, template }: { week: TemplateWeek; template: Prog
       <PrintHeader template={template} />
       <div style={weekHeaderBar}>
         <div style={{ display: "flex", alignItems: "baseline", gap: "12px" }}>
-          <h2 style={weekTitle}>Week {week.week_number} — Full Detail</h2>
+          <h2 style={weekTitle}>Week {week.week_number}</h2>
           {week.focus && <span style={focusBadge}>{week.focus}</span>}
         </div>
         {week.notes && <p style={weekNotes}>{week.notes}</p>}
@@ -571,6 +617,7 @@ export default function ExportPreviewPage() {
             program_template_sessions (
               id, day_label, sort_order, type, name, description,
               duration, duration_minutes, intensity, is_key_session, reason,
+              distance_km, terrain, elevation_gain_meters, activity, subtype,
               program_template_session_exercises (
                 id, sort_order, sets, reps, duration_seconds, notes,
                 exercises ( name, description )
@@ -588,7 +635,7 @@ export default function ExportPreviewPage() {
       }
 
       // Sort weeks
-      const sorted = { ...data } as ProgramTemplate;
+      const sorted = { ...data } as unknown as ProgramTemplate;
       sorted.program_template_weeks = [...sorted.program_template_weeks].sort(
         (a, b) => a.week_number - b.week_number
       );
@@ -674,28 +721,8 @@ export default function ExportPreviewPage() {
         {/* Race course profile page */}
         {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} />}
 
-        {/* Section title: Overview */}
-        <div style={{ ...a4Page, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
-          <PrintHeader template={template} />
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
-            <h2 style={{ fontSize: "32px", fontWeight: 700, color: "#1e3a1e", margin: "0 0 12px" }}>Programme Overview</h2>
-            <p style={{ fontSize: "15px", color: "#666", margin: 0 }}>One week per page — all sessions at a glance</p>
-          </div>
-        </div>
-
-        {/* Overview — one week per A4 page */}
-        {weeks.map((week) => (
-          <WeekOverviewPage key={`ov-${week.id}`} week={week} template={template} />
-        ))}
-
-        {/* Section title: Full Detail */}
-        <div style={{ ...a4Page, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
-          <PrintHeader template={template} />
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
-            <h2 style={{ fontSize: "32px", fontWeight: 700, color: "#1e3a1e", margin: "0 0 12px" }}>Full Session Detail</h2>
-            <p style={{ fontSize: "15px", color: "#666", margin: 0 }}>Complete breakdown including gym exercises and session rationale</p>
-          </div>
-        </div>
+        {/* Weekly mileage chart */}
+        <WeeklyMileagePage weeks={weeks} template={template} />
 
         {/* Detail — one week per A4 page */}
         {weeks.map((week) => (
@@ -705,6 +732,7 @@ export default function ExportPreviewPage() {
       </div>
 
       <style>{`
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         @media print {
           .no-print { display: none !important; }
           .app-sidebar { display: none !important; }
@@ -825,30 +853,6 @@ const weekNotes: React.CSSProperties = {
   fontStyle: "italic",
 };
 
-const weekStat: React.CSSProperties = {
-  marginTop: "14px",
-  fontSize: "12px",
-  color: "#888",
-};
-
-const overviewTable: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
-
-const ovTh: React.CSSProperties = {
-  textAlign: "left",
-  padding: "8px 10px",
-  borderBottom: "2px solid #1e3a1e",
-  fontSize: "12px",
-  fontWeight: 600,
-  color: "#1e3a1e",
-  background: "#f9f9f9",
-};
-
-const ovTd: React.CSSProperties = {
-  padding: "8px 10px",
-  borderBottom: "1px solid #eee",
-  fontSize: "13px",
-  verticalAlign: "middle",
-};
 
 const sessionCard: React.CSSProperties = {
   border: "1px solid #e5e5e5",
@@ -888,13 +892,6 @@ const typeBadge: React.CSSProperties = {
   fontWeight: 600,
 };
 
-const smallTypeBadge: React.CSSProperties = {
-  display: "inline-block",
-  padding: "1px 6px",
-  borderRadius: "8px",
-  fontSize: "11px",
-  fontWeight: 600,
-};
 
 const keyBadge: React.CSSProperties = {
   fontSize: "11px",
