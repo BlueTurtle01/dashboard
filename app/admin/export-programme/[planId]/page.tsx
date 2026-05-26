@@ -115,10 +115,15 @@ type TemplateSession = {
   is_key_session: boolean;
   reason: string | null;
   distance_km: number | null;
-  terrain: string | null;
+  num_sets: number | null;
+  set_duration_minutes: number | null;
+  interval_reps: number | null;
+  interval_duration: string | null;
+  strides: string | null;
+  warmup_minutes: number | null;
+  cooldown_minutes: number | null;
   elevation_gain_meters: number | null;
-  activity: string | null;
-  subtype: string | null;
+  pack_weight_kg: number | null;
   program_template_session_exercises: TemplateExercise[];
 };
 
@@ -439,18 +444,22 @@ function ExerciseTable({ exercises }: { exercises: TemplateExercise[] }) {
   );
 }
 
-function RunDetail({ session }: { session: TemplateSession }) {
-  const pills: string[] = [];
-  if (session.distance_km != null) pills.push(`${session.distance_km.toFixed(1)} km`);
-  if (session.elevation_gain_meters != null) pills.push(`+${Math.round(session.elevation_gain_meters)} m`);
-  if (session.terrain) pills.push(session.terrain);
-  if (session.activity) pills.push(session.activity);
-  if (session.subtype) pills.push(session.subtype);
-  if (pills.length === 0) return null;
+function SessionSpecs({ session }: { session: TemplateSession }) {
+  const specs: string[] = [];
+  if (session.warmup_minutes) specs.push(`${session.warmup_minutes} min warm-up`);
+  if (session.interval_reps && session.interval_duration) specs.push(`${session.interval_reps} × ${session.interval_duration}`);
+  else if (session.interval_reps) specs.push(`${session.interval_reps} reps`);
+  if (session.num_sets && session.set_duration_minutes) specs.push(`${session.num_sets} sets × ${session.set_duration_minutes} min`);
+  else if (session.num_sets) specs.push(`${session.num_sets} sets`);
+  if (session.strides) specs.push(session.strides);
+  if (session.elevation_gain_meters) specs.push(`+${Math.round(session.elevation_gain_meters)} m`);
+  if (session.pack_weight_kg) specs.push(`${session.pack_weight_kg} kg pack`);
+  if (session.cooldown_minutes) specs.push(`${session.cooldown_minutes} min cool-down`);
+  if (specs.length === 0) return null;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "8px" }}>
-      {pills.map((p) => (
-        <span key={p} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", border: "1px solid #e0e0e0", background: "#f5f5f5", color: "#333" }}>{p}</span>
+      {specs.map((p) => (
+        <span key={p} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", border: "1px solid #d4d4d4", background: "#f9f9f9", color: "#333", fontVariantNumeric: "tabular-nums" }}>{p}</span>
       ))}
     </div>
   );
@@ -476,7 +485,7 @@ function SessionCard({ session }: { session: TemplateSession }) {
         </div>
       </div>
 
-      {!isRest && <RunDetail session={session} />}
+      {!isRest && <SessionSpecs session={session} />}
 
       {session.description && (
         <p style={descriptionText}>{session.description}</p>
@@ -535,9 +544,8 @@ function WeeklyMileagePage({ weeks, template }: { weeks: TemplateWeek[]; templat
           const y = chartH - barH;
           const focus = w.focus.toLowerCase();
           const fill =
-            focus.includes("recovery") || focus.includes("deload") ? "#10b981" :
-            focus.includes("build") || focus.includes("specific") ? "#3b82f6" :
-            focus.includes("taper") || focus.includes("peak") ? "#8b5cf6" :
+            focus.includes("taper") || focus.includes("peak") ? "#bf360c" :
+            focus.includes("recovery") || focus.includes("deload") ? "#78909c" :
             "#1e3a1e";
           return (
             <g key={w.weekNumber}>
@@ -556,10 +564,9 @@ function WeeklyMileagePage({ weeks, template }: { weeks: TemplateWeek[]; templat
       </svg>
       <div style={{ marginTop: "16px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
         {[
-          { color: "#3b82f6", label: "Build / Specific" },
-          { color: "#8b5cf6", label: "Taper / Peak" },
-          { color: "#10b981", label: "Recovery / Deload" },
-          { color: "#1e3a1e", label: "Other" },
+          { color: "#1e3a1e", label: "Build / Base" },
+          { color: "#bf360c", label: "Taper / Peak" },
+          { color: "#78909c", label: "Recovery / Deload" },
         ].map(({ color, label }) => (
           <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#555" }}>
             <span style={{ display: "inline-block", width: "12px", height: "12px", borderRadius: "3px", background: color }} />
@@ -617,7 +624,8 @@ export default function ExportPreviewPage() {
             program_template_sessions (
               id, day_label, sort_order, type, name, description,
               duration, duration_minutes, intensity, is_key_session, reason,
-              distance_km, terrain, elevation_gain_meters, activity, subtype,
+              distance_km, num_sets, set_duration_minutes, interval_reps, interval_duration,
+              strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg,
               program_template_session_exercises (
                 id, sort_order, sets, reps, duration_seconds, notes,
                 exercises ( name, description )
