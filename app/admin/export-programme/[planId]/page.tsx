@@ -35,7 +35,7 @@ function ExerciseRow({ ex }: { ex: PlanExercise }) {
     <tr>
       <td style={exTd}>{ex.name}</td>
       <td style={{ ...exTd, textAlign: "center", whiteSpace: "nowrap" }}>{prescription}</td>
-      <td style={exTd}>{ex.notes || "—"}</td>
+      <td style={exTd}>{ex.description || "—"}</td>
     </tr>
   );
 }
