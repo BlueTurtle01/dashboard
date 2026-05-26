@@ -377,6 +377,7 @@ export default async function Navbar() {
                     { href: "/admin/coach-performance", label: "Coach Performance" },
                     { href: "/admin/support", label: "Support Tickets" },
                     { href: "/admin/support/stats", label: "Support Analytics" },
+                    { href: "/admin/export-programme", label: "Export Programme" },
                   ]}
                 />
               )}
