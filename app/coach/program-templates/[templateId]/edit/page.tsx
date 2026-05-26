@@ -248,19 +248,37 @@ const weekdayQuickAddOptions = [
 ];
 
 const sessionTypeOptions = [
+  "General Run",
   "Long Run",
-  "Easy Run",
   "Tempo Run",
   "Interval Session",
   "Hill Reps",
-  "Recovery Run",
+  "Fartlek",
+  "Track Session",
   "Race Specific",
   "Cross Training",
+  "Gym",
   "Loaded March",
   "Recce",
   "Navigation",
-  "Gym",
   "Rest",
+];
+
+const MUSCLE_OPTIONS: { label: string; values: string[] }[] = [
+  { label: "Glutes",      values: ["glutes"] },
+  { label: "Hamstrings",  values: ["hamstrings"] },
+  { label: "Quads",       values: ["quadriceps", "quads"] },
+  { label: "Calves",      values: ["calves"] },
+  { label: "Hip Flexors", values: ["hip_flexors", "hips"] },
+  { label: "Core / Abs",  values: ["core", "abs", "obliques"] },
+  { label: "Lats",        values: ["lats"] },
+  { label: "Upper Back",  values: ["upper_back"] },
+  { label: "Chest",       values: ["chest", "upper_chest"] },
+  { label: "Shoulders",   values: ["shoulders"] },
+  { label: "Biceps",      values: ["biceps"] },
+  { label: "Triceps",     values: ["triceps"] },
+  { label: "Forearms",    values: ["forearms", "grip"] },
+  { label: "Full Body",   values: ["full_body", "legs"] },
 ];
 
 const runTimeTypeOptions = ["any", "morning", "afternoon", "evening"];
@@ -961,11 +979,15 @@ function SessionSlideOver({
   // Exercise picker state
   const [supabase] = useState(() => createClient());
   const [showPicker, setShowPicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState<"name" | "muscle">("name");
   const [pickerSearch, setPickerSearch] = useState("");
+  const [selectedMuscle, setSelectedMuscle] = useState<{ label: string; values: string[] } | null>(null);
   const [pickerResults, setPickerResults] = useState<{ id: string; name: string }[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
 
+  // Name search — debounced
   useEffect(() => {
+    if (pickerTab !== "name") return;
     const q = pickerSearch.trim();
     if (!q) { setPickerResults([]); return; }
     const id = window.setTimeout(async () => {
@@ -980,12 +1002,37 @@ function SessionSlideOver({
       setPickerLoading(false);
     }, 300);
     return () => window.clearTimeout(id);
-  }, [pickerSearch, supabase]);
+  }, [pickerSearch, pickerTab, supabase]);
+
+  // Muscle search — fires immediately on muscle selection
+  useEffect(() => {
+    if (pickerTab !== "muscle" || !selectedMuscle) {
+      if (pickerTab === "muscle") setPickerResults([]);
+      return;
+    }
+    setPickerLoading(true);
+    const orParts = selectedMuscle.values.flatMap((v) => [
+      `primary_muscles.cs.{${v}}`,
+      `secondary_muscles.cs.{${v}}`,
+    ]);
+    supabase
+      .from("exercises")
+      .select("id, name")
+      .or(orParts.join(","))
+      .order("name")
+      .limit(50)
+      .then(({ data }) => {
+        setPickerResults((data ?? []) as { id: string; name: string }[]);
+        setPickerLoading(false);
+      });
+  }, [selectedMuscle, pickerTab, supabase]);
 
   function closePicker() {
     setShowPicker(false);
     setPickerSearch("");
     setPickerResults([]);
+    setPickerTab("name");
+    setSelectedMuscle(null);
   }
 
   return (
@@ -1103,11 +1150,28 @@ function SessionSlideOver({
                   )}
                 </div>
 
-                {/* Exercise search picker */}
+                {/* Exercise picker */}
                 {showPicker && (
                   <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-zinc-700">Search exercise by name</span>
+                    {/* Picker header */}
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      {/* Tabs */}
+                      <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => { setPickerTab("name"); setPickerResults([]); setSelectedMuscle(null); }}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${pickerTab === "name" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500 hover:text-zinc-700"}`}
+                        >
+                          Search by name
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setPickerTab("muscle"); setPickerSearch(""); setPickerResults([]); }}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${pickerTab === "muscle" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500 hover:text-zinc-700"}`}
+                        >
+                          Search by muscle
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={closePicker}
@@ -1116,26 +1180,49 @@ function SessionSlideOver({
                         Cancel
                       </button>
                     </div>
-                    <input
-                      value={pickerSearch}
-                      onChange={(e) => setPickerSearch(e.target.value)}
-                      placeholder="e.g. Romanian deadlift, box jump…"
-                      autoFocus
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
-                    />
+
+                    {/* Name tab */}
+                    {pickerTab === "name" && (
+                      <input
+                        value={pickerSearch}
+                        onChange={(e) => setPickerSearch(e.target.value)}
+                        placeholder="e.g. Romanian deadlift, box jump…"
+                        autoFocus
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm"
+                      />
+                    )}
+
+                    {/* Muscle tab */}
+                    {pickerTab === "muscle" && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {MUSCLE_OPTIONS.map((m) => (
+                          <button
+                            key={m.label}
+                            type="button"
+                            onClick={() => setSelectedMuscle(selectedMuscle?.label === m.label ? null : m)}
+                            className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                              selectedMuscle?.label === m.label
+                                ? "border-zinc-800 bg-zinc-800 text-white"
+                                : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100"
+                            }`}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Results */}
                     {pickerLoading && (
-                      <p className="mt-2 text-sm text-zinc-400">Searching…</p>
+                      <p className="mt-3 text-sm text-zinc-400">Searching…</p>
                     )}
                     {!pickerLoading && pickerResults.length > 0 && (
-                      <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                      <div className="mt-3 max-h-48 space-y-1 overflow-y-auto">
                         {pickerResults.map((ex) => (
                           <button
                             key={ex.id}
                             type="button"
-                            onClick={() => {
-                              onAddExercise(ex.id, ex.name);
-                              closePicker();
-                            }}
+                            onClick={() => { onAddExercise(ex.id, ex.name); closePicker(); }}
                             className="block w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left text-sm hover:bg-zinc-100"
                           >
                             {ex.name}
@@ -1143,8 +1230,11 @@ function SessionSlideOver({
                         ))}
                       </div>
                     )}
-                    {!pickerLoading && pickerSearch.trim() && pickerResults.length === 0 && (
-                      <p className="mt-2 text-sm text-zinc-400">No exercises found.</p>
+                    {!pickerLoading && pickerTab === "name" && pickerSearch.trim() && pickerResults.length === 0 && (
+                      <p className="mt-3 text-sm text-zinc-400">No exercises found.</p>
+                    )}
+                    {!pickerLoading && pickerTab === "muscle" && selectedMuscle && pickerResults.length === 0 && (
+                      <p className="mt-3 text-sm text-zinc-400">No exercises found for {selectedMuscle.label}.</p>
                     )}
                   </div>
                 )}
