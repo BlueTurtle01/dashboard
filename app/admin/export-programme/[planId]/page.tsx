@@ -15,6 +15,22 @@ type PacingSection = {
   pace_band: string;
 };
 
+/* ── Route / wind types ── */
+type RoutePoint = { lat: number; lon: number };
+
+type WindSection = {
+  section_id: number;
+  start_km: number;
+  end_km: number;
+  mid_lat: number;
+  mid_lon: number;
+  bearing_deg: number;
+  median_wind_speed_ms: number;
+  median_headwind_ms: number;
+  median_crosswind_ms: number;
+  wind_risk_label: string;
+};
+
 /* ── Race profile types ── */
 type ElevationPoint = { distanceKm: number; elevationM: number };
 
@@ -192,6 +208,8 @@ type ProgramTemplate = {
   training_days_per_week: number;
   race_id: string | null;
   pacing_data: PacingSection[] | null;
+  gpx_data: RoutePoint[] | null;
+  wind_data: WindSection[] | null;
   program_template_weeks: TemplateWeek[];
 };
 
@@ -445,6 +463,135 @@ function TerrainBar({ terrain }: { terrain: RaceTerrainSeg[] }) {
   );
 }
 
+/* ── Route map ── */
+function windRiskColor(label: string): string {
+  if (label.includes("high")) return "#c62828";
+  if (label.includes("moderate")) return "#e65100";
+  return "#546e7a"; // low
+}
+
+function RouteMap({
+  route,
+  windSections,
+  width = 694,
+  height = 230,
+}: {
+  route: RoutePoint[];
+  windSections?: WindSection[];
+  width?: number;
+  height?: number;
+}) {
+  if (route.length < 2) return null;
+
+  const pad = 22;
+  const lats = route.map((p) => p.lat);
+  const lons = route.map((p) => p.lon);
+  const minLat = Math.min(...lats); const maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons); const maxLon = Math.max(...lons);
+
+  const midLat = (minLat + maxLat) / 2;
+  const lonScale = Math.cos(midLat * Math.PI / 180);
+
+  const latRange = maxLat - minLat || 0.001;
+  const lonRange = (maxLon - minLon) * lonScale || 0.001;
+
+  const drawW = width - pad * 2;
+  const drawH = height - pad * 2;
+  const scale = Math.min(drawW / lonRange, drawH / latRange);
+
+  const projW = lonRange * scale;
+  const projH = latRange * scale;
+  const offsetX = pad + (drawW - projW) / 2;
+  const offsetY = pad + (drawH - projH) / 2;
+
+  const toX = (lon: number) => offsetX + (lon - minLon) * lonScale * scale;
+  const toY = (lat: number) => offsetY + projH - (lat - minLat) * scale;
+
+  const pts = route.map((p) => `${toX(p.lon).toFixed(1)},${toY(p.lat).toFixed(1)}`).join(" ");
+  const startPt = route[0];
+  const endPt = route[route.length - 1];
+
+  const maxWindSpeed = Math.max(...(windSections ?? []).map((s) => s.median_wind_speed_ms), 1);
+
+  const hasWind = (windSections ?? []).length > 0;
+
+  return (
+    <svg width={width} height={height} style={{ display: "block" }}>
+      {/* Map background */}
+      <rect x={0} y={0} width={width} height={height} fill="#eef2ee" rx={4} />
+
+      {/* Route line */}
+      <polyline
+        points={pts}
+        fill="none"
+        stroke="#1e3a1e"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+
+      {/* Wind arrows (only on wind map) */}
+      {(windSections ?? []).map((sec, i) => {
+        const cx = toX(sec.mid_lon);
+        const cy = toY(sec.mid_lat);
+        const color = windRiskColor(sec.wind_risk_label);
+        const isSignificant = sec.wind_risk_label !== "low_wind_risk";
+
+        // Arrow points in direction the wind is blowing:
+        // positive headwind → wind opposes travel → blowing from bearing toward bearing+180
+        const windDir = sec.median_headwind_ms >= 0
+          ? ((sec.bearing_deg + 180) % 360)
+          : (sec.bearing_deg % 360);
+
+        // Size scales with wind speed
+        const arrowLen = 9 + (sec.median_wind_speed_ms / maxWindSpeed) * 7;
+        const sw = isSignificant ? 2.5 : 1.5;
+        const op = isSignificant ? 1 : 0.5;
+
+        return (
+          <g key={i} transform={`translate(${cx.toFixed(1)},${cy.toFixed(1)}) rotate(${windDir.toFixed(1)})`} opacity={op}>
+            <circle r={arrowLen + 5} fill={color} opacity={0.13} />
+            {/* Shaft */}
+            <line x1={0} y1={arrowLen * 0.65} x2={0} y2={-arrowLen * 0.65}
+              stroke={color} strokeWidth={sw} strokeLinecap="round" />
+            {/* Head — pointing in windDir (upward before rotate) */}
+            <polygon
+              points={`0,${-(arrowLen + 4)} ${-arrowLen * 0.4},${-arrowLen * 0.35} ${arrowLen * 0.4},${-arrowLen * 0.35}`}
+              fill={color}
+            />
+          </g>
+        );
+      })}
+
+      {/* Start marker */}
+      <circle cx={toX(startPt.lon).toFixed(1)} cy={toY(startPt.lat).toFixed(1)} r={5} fill="#2e7d32" stroke="#fff" strokeWidth="1.5" />
+      <text x={(toX(startPt.lon) + 8).toFixed(1)} y={(toY(startPt.lat) + 4).toFixed(1)} fontSize="9" fill="#2e7d32" fontWeight="700">Start</text>
+
+      {/* Finish marker */}
+      <circle cx={toX(endPt.lon).toFixed(1)} cy={toY(endPt.lat).toFixed(1)} r={5} fill="#c62828" stroke="#fff" strokeWidth="1.5" />
+      <text x={(toX(endPt.lon) + 8).toFixed(1)} y={(toY(endPt.lat) + 4).toFixed(1)} fontSize="9" fill="#c62828" fontWeight="700">Finish</text>
+
+      {/* Wind legend */}
+      {hasWind && (
+        <g transform={`translate(${width - 130},${height - 56})`}>
+          <rect x={0} y={0} width={125} height={52} fill="white" opacity={0.88} rx={3} />
+          <text x={7} y={14} fontSize="8" fontWeight="700" fill="#333">Wind risk</text>
+          {[
+            { color: "#546e7a", label: "Low" },
+            { color: "#e65100", label: "Moderate headwind" },
+            { color: "#c62828", label: "High headwind" },
+          ].map(({ color, label }, li) => (
+            <g key={li} transform={`translate(7,${22 + li * 11})`}>
+              <circle r={4} fill={color} />
+              <text x={11} y={4} fontSize="7.5" fill="#444">{label}</text>
+            </g>
+          ))}
+        </g>
+      )}
+    </svg>
+  );
+}
+
 function RaceSummaryPage({ template, profile }: { template: ProgramTemplate; profile: RaceProfileData }) {
   const { elevation, terrain, sustainedSegments } = profile;
 
@@ -461,6 +608,16 @@ function RaceSummaryPage({ template, profile }: { template: ProgramTemplate; pro
     <div style={a4Page}>
       <PrintHeader template={template} />
       <h2 style={{ margin: "0 0 16px", fontSize: "18px", fontWeight: 700, color: "#1e3a1e" }}>Race Course Profile</h2>
+
+      {/* Route map */}
+      {template.gpx_data && template.gpx_data.length > 1 && (
+        <div style={{ marginBottom: "20px" }}>
+          <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Route Map
+          </p>
+          <RouteMap route={template.gpx_data} />
+        </div>
+      )}
 
       {elevation && (
         <>
@@ -885,6 +1042,17 @@ function RaceStrategyPage({
         </div>
       )}
 
+      {/* Route map with wind overlay */}
+      {template.gpx_data && template.gpx_data.length > 1 && (
+        <div style={{ marginBottom: "20px" }}>
+          <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Route &amp; Wind Conditions
+            {template.wind_data && template.wind_data.length > 0 && " — arrows show wind direction · colour shows headwind risk"}
+          </p>
+          <RouteMap route={template.gpx_data} windSections={template.wind_data ?? undefined} />
+        </div>
+      )}
+
       {/* Pacing sections table */}
       <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
         Section Pacing Plan
@@ -962,7 +1130,7 @@ export default function ExportPreviewPage() {
       const { data, error: err } = await supabase
         .from("program_templates")
         .select(`
-          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week, race_id, pacing_data,
+          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week, race_id, pacing_data, gpx_data, wind_data,
           program_template_weeks (
             id, week_number, focus, notes,
             program_template_sessions (

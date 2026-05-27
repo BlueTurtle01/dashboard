@@ -32,6 +32,8 @@ type ProgramTemplateRow = {
   suitable_race_goals: string[] | null;
   race_id: string | null;
   pacing_data: PacingSection[] | null;
+  gpx_data: RoutePoint[] | null;
+  wind_data: WindSection[] | null;
 };
 
 type RaceRow = {
@@ -214,6 +216,8 @@ type TemplateForm = {
   requiresHeatAcclimation: boolean;
   suitableRaceGoals: string;
   pacingData: PacingSection[] | null;
+  gpxData: RoutePoint[] | null;
+  windData: WindSection[] | null;
   weeks: EditableWeek[];
 };
 
@@ -815,6 +819,8 @@ function mapToForm(
     requiresHeatAcclimation: template.requires_heat_acclimation,
     suitableRaceGoals: (template.suitable_race_goals ?? []).join(", "),
     pacingData: template.pacing_data ?? null,
+    gpxData: (template.gpx_data as RoutePoint[] | null) ?? null,
+    windData: (template.wind_data as WindSection[] | null) ?? null,
     weeks: weeks
       .slice()
       .sort((a, b) => a.week_number - b.week_number)
@@ -976,6 +982,74 @@ type PacingSection = {
   target_pace: string;
   pace_band: string;
 };
+
+type RoutePoint = { lat: number; lon: number };
+
+type WindSection = {
+  section_id: number;
+  start_km: number;
+  end_km: number;
+  mid_lat: number;
+  mid_lon: number;
+  bearing_deg: number;
+  median_wind_speed_ms: number;
+  median_headwind_ms: number;
+  median_crosswind_ms: number;
+  wind_risk_label: string;
+};
+
+function downsampleRoutePoints(points: RoutePoint[], maxPts: number): RoutePoint[] {
+  if (points.length <= maxPts) return points;
+  const step = (points.length - 1) / (maxPts - 1);
+  return Array.from({ length: maxPts }, (_, i) => points[Math.round(i * step)]);
+}
+
+function parseGpx(gpxText: string): RoutePoint[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(gpxText, "text/xml");
+  const trkpts = Array.from(doc.querySelectorAll("trkpt"));
+  const wpts = trkpts.length > 0 ? trkpts : Array.from(doc.querySelectorAll("wpt"));
+  const points: RoutePoint[] = [];
+  for (const pt of wpts) {
+    const lat = parseFloat(pt.getAttribute("lat") ?? "");
+    const lon = parseFloat(pt.getAttribute("lon") ?? "");
+    if (!isNaN(lat) && !isNaN(lon)) points.push({ lat, lon });
+  }
+  return downsampleRoutePoints(points, 800);
+}
+
+function parseWindCsv(csv: string): WindSection[] {
+  const lines = csv.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim());
+  return lines.slice(1).flatMap((line): WindSection[] => {
+    const cols = line.split(",");
+    const get = (key: string) => cols[headers.indexOf(key)]?.trim() ?? "";
+    const sectionId = parseFloat(get("section_id"));
+    const startKm   = parseFloat(get("start_distance_km"));
+    const endKm     = parseFloat(get("end_distance_km"));
+    const midLat    = parseFloat(get("mid_lat"));
+    const midLon    = parseFloat(get("mid_lon"));
+    const bearing   = parseFloat(get("bearing_deg"));
+    const windSpeed = parseFloat(get("median_wind_speed_ms"));
+    const headwind  = parseFloat(get("median_headwind_ms"));
+    const crosswind = parseFloat(get("median_crosswind_ms"));
+    const riskLabel = get("wind_risk_label");
+    if (isNaN(sectionId) || isNaN(midLat) || isNaN(midLon)) return [];
+    return [{
+      section_id: sectionId,
+      start_km: isNaN(startKm) ? 0 : startKm,
+      end_km:   isNaN(endKm) ? 0 : endKm,
+      mid_lat: midLat,
+      mid_lon: midLon,
+      bearing_deg: isNaN(bearing) ? 0 : bearing,
+      median_wind_speed_ms: isNaN(windSpeed) ? 0 : windSpeed,
+      median_headwind_ms:   isNaN(headwind) ? 0 : headwind,
+      median_crosswind_ms:  isNaN(crosswind) ? 0 : crosswind,
+      wind_risk_label: riskLabel,
+    }];
+  });
+}
 
 function parsePacingCsv(csv: string): PacingSection[] {
   const lines = csv.trim().split(/\r?\n/);
@@ -1636,7 +1710,9 @@ export default function EditProgramTemplatePage() {
               requires_heat_acclimation,
               suitable_race_goals,
               race_id,
-              pacing_data
+              pacing_data,
+              gpx_data,
+              wind_data
             `)
             .eq("id", templateId)
             .maybeSingle(),
@@ -2258,6 +2334,8 @@ export default function EditProgramTemplatePage() {
         .filter(Boolean),
       race_id: selectedRaceId ?? null,
       pacing_data: form.pacingData && form.pacingData.length > 0 ? form.pacingData : null,
+      gpx_data: form.gpxData && form.gpxData.length > 0 ? form.gpxData : null,
+      wind_data: form.windData && form.windData.length > 0 ? form.windData : null,
     };
 
     const { error: templateError } = await supabase
@@ -2860,6 +2938,125 @@ export default function EditProgramTemplatePage() {
                       };
                       reader.readAsText(file);
                       // Reset so same file can be re-uploaded
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* GPX Route card */}
+            <div className="md:col-span-2 rounded-2xl border border-teal-200 bg-teal-50 p-5">
+              <h3 className="mb-3 text-sm font-semibold text-teal-900 uppercase tracking-wide">Route GPX</h3>
+              {form.gpxData && form.gpxData.length > 1 ? (
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-teal-700">
+                    {form.gpxData.length} track points loaded
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => updateForm("gpxData", null)}
+                    className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer flex-col items-start gap-1">
+                  <span className="text-sm text-teal-700">Upload a GPX file to show the route map in the PDF</span>
+                  <input
+                    type="file"
+                    accept=".gpx"
+                    className="text-xs text-teal-800"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const text = ev.target?.result;
+                        if (typeof text !== "string") return;
+                        const points = parseGpx(text);
+                        if (points.length < 2) {
+                          alert("No valid track points found in the GPX file.");
+                          return;
+                        }
+                        updateForm("gpxData", points);
+                      };
+                      reader.readAsText(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Wind Analysis card */}
+            <div className="md:col-span-2 rounded-2xl border border-sky-200 bg-sky-50 p-5">
+              <h3 className="mb-3 text-sm font-semibold text-sky-900 uppercase tracking-wide">Wind Analysis</h3>
+              {form.windData && form.windData.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-sky-700">
+                      {form.windData.length} sections · {form.windData.filter((s) => s.wind_risk_label !== "low_wind_risk").length} with headwind risk
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => updateForm("windData", null)}
+                      className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-sky-200 text-left text-sky-700">
+                          <th className="pb-1 pr-3 font-semibold">Section</th>
+                          <th className="pb-1 pr-3 font-semibold">Headwind</th>
+                          <th className="pb-1 pr-3 font-semibold">Wind speed</th>
+                          <th className="pb-1 font-semibold">Risk</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.windData.map((s, i) => {
+                          const isRisk = s.wind_risk_label !== "low_wind_risk";
+                          return (
+                            <tr key={i} className="border-b border-sky-100 last:border-0">
+                              <td className="py-1 pr-3 text-zinc-700">{s.start_km.toFixed(1)}–{s.end_km.toFixed(1)} km</td>
+                              <td className="py-1 pr-3 text-zinc-700">{s.median_headwind_ms.toFixed(1)} m/s</td>
+                              <td className="py-1 pr-3 text-zinc-700">{s.median_wind_speed_ms.toFixed(1)} m/s</td>
+                              <td className={`py-1 font-medium ${isRisk ? "text-orange-600" : "text-zinc-400"}`}>
+                                {s.wind_risk_label.replace(/_/g, " ")}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer flex-col items-start gap-1">
+                  <span className="text-sm text-sky-700">Upload a wind analysis CSV to overlay wind arrows on the route map</span>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="text-xs text-sky-800"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const text = ev.target?.result;
+                        if (typeof text !== "string") return;
+                        const sections = parseWindCsv(text);
+                        if (sections.length === 0) {
+                          alert("No valid sections found. Check the CSV has section_id, mid_lat, mid_lon, bearing_deg, median_wind_speed_ms, median_headwind_ms, median_crosswind_ms, wind_risk_label columns.");
+                          return;
+                        }
+                        updateForm("windData", sections);
+                      };
+                      reader.readAsText(file);
                       e.target.value = "";
                     }}
                   />
