@@ -221,10 +221,10 @@ export default function PacingExportClient({ raceId, targetMinutes, raceName }: 
                       }}
                     >
                       <td style={{ ...td, fontFamily: "monospace", whiteSpace: "nowrap" }}>
-                        {s.start_distance_km.toFixed(1)}–{s.end_distance_km.toFixed(1)}
+                        {s.start_distance_km.toFixed(0)}–{s.end_distance_km.toFixed(0)}
                       </td>
                       <td style={{ ...td, textAlign: "right", color: "#6b7280" }}>
-                        {s.distance_km.toFixed(2)}
+                        {s.distance_km.toFixed(0)}
                       </td>
                       <td style={{ ...td, whiteSpace: "nowrap" }}>
                         <span style={{ color: gradientColor(s.avg_gradient_percent), fontWeight: 600 }}>

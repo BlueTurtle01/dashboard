@@ -268,11 +268,11 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                         <tr key={i} style={{ background: rowBg, borderBottom: "1px solid #f3f4f6" }}>
 
                           <td style={{ ...td, fontFamily: "monospace", fontSize: "12px", whiteSpace: "nowrap" }}>
-                            {s.start_distance_km.toFixed(1)}–{s.end_distance_km.toFixed(1)} km
+                            {s.start_distance_km.toFixed(0)}–{s.end_distance_km.toFixed(0)} km
                           </td>
 
                           <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap", color: "#6b7280" }}>
-                            {s.distance_km.toFixed(2)} km
+                            {s.distance_km.toFixed(0)} km
                           </td>
 
                           <td style={{ ...td, whiteSpace: "nowrap" }}>
