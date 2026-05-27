@@ -146,8 +146,8 @@ export async function POST(req: NextRequest) {
       confidence = "low";
       const missingWind =
         profileA.profile_source !== "gpx_wind"
-          ? (profileA.races as { name: string })?.name
-          : (profileB.races as { name: string })?.name;
+          ? (profileA.races as unknown as { name: string })?.name
+          : (profileB.races as unknown as { name: string })?.name;
       confidenceNote = `${missingWind} has no wind profile — generate wind analysis for that race to improve confidence.`;
     } else {
       confidence = "medium";
@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
       using_wind_adjusted: bothHaveWind,
       race_a: {
         id: race_a_id,
-        name: (profileA.races as { name: string })?.name ?? race_a_id,
+        name: (profileA.races as unknown as { name: string })?.name ?? race_a_id,
         flat_equivalent_km: flatEquivA,
         difficulty_ratio: diffRatioA,
         total_distance_km: profileA.total_distance_km,
@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
       },
       race_b: {
         id: race_b_id,
-        name: (profileB.races as { name: string })?.name ?? race_b_id,
+        name: (profileB.races as unknown as { name: string })?.name ?? race_b_id,
         flat_equivalent_km: flatEquivB,
         difficulty_ratio: diffRatioB,
         total_distance_km: profileB.total_distance_km,
