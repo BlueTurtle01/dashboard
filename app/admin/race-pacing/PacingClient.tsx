@@ -34,7 +34,6 @@ interface Props {
   raceName: string;
 }
 
-type GoalLevel = "stretch" | "target" | "comfortable";
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -43,7 +42,6 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [showWind, setShowWind] = useState(true);
-  const [goalLevel, setGoalLevel] = useState<GoalLevel>("target");
 
   // ── Derived goal finish times (no API call needed — just scale targetMinutes) ─
   const stretchTime     = formatDuration(targetMinutes * 0.96);
@@ -75,24 +73,25 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
 
   useEffect(() => { loadGuide(); }, [loadGuide]);
 
-  // ── Section pace for the current goal level ──────────────────────────────────
-  //
-  // Stretch / Comfortable are computed client-side by scaling target_pace_min_per_km.
-  // A finish time of T×0.96 means all section paces are also ×0.96 (proportional).
+  // ── Section paces (all three goal levels shown simultaneously) ───────────────
 
-  function getSectionPace(s: PacingSection): string {
-    const base = (showWind && s.wind_target_pace_min_per_km != null)
-      ? s.wind_target_pace_min_per_km
-      : s.target_pace_min_per_km;
-
-    if (goalLevel === "stretch")     return formatPace(base * 0.96);
-    if (goalLevel === "comfortable") return formatPace(base * 1.08);
-    // "target" — use raw pace strings from the API
+  function getTargetPace(s: PacingSection): string {
     return (showWind && s.wind_target_pace) ? s.wind_target_pace : s.target_pace;
   }
 
-  function getSectionBand(s: PacingSection): string {
-    if (goalLevel !== "target") return "";
+  function getStretchPace(s: PacingSection): string {
+    const base = (showWind && s.wind_target_pace_min_per_km != null)
+      ? s.wind_target_pace_min_per_km : s.target_pace_min_per_km;
+    return formatPace(base * 0.96);
+  }
+
+  function getComfortPace(s: PacingSection): string {
+    const base = (showWind && s.wind_target_pace_min_per_km != null)
+      ? s.wind_target_pace_min_per_km : s.target_pace_min_per_km;
+    return formatPace(base * 1.08);
+  }
+
+  function getPaceBand(s: PacingSection): string {
     return (showWind && s.wind_acceptable_pace_band)
       ? s.wind_acceptable_pace_band
       : s.acceptable_pace_band;
@@ -119,22 +118,6 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
   const td: React.CSSProperties = {
     padding: "9px 10px", fontSize: "13px", color: "#111", verticalAlign: "top",
   };
-
-  const goalBtn = (level: GoalLevel, label: string, accent: string) => (
-    <button
-      key={level}
-      onClick={() => setGoalLevel(level)}
-      style={{
-        padding: "5px 14px", borderRadius: "6px", border: "1px solid",
-        borderColor: goalLevel === level ? accent : "#d1d5db",
-        background: goalLevel === level ? accent : "#fff",
-        color: goalLevel === level ? "#fff" : "#374151",
-        fontSize: "12px", fontWeight: 600, cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
-  );
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -226,93 +209,40 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
             <h2 style={{ margin: "0 0 14px 0", fontSize: "15px", fontWeight: 700, color: "#111" }}>
               Goal Finish Times
             </h2>
-            <p style={{ margin: "0 0 14px 0", fontSize: "13px", color: "#6b7280" }}>
-              Stretch and Comfortable targets are ±% of your Riegel-estimated finish time.
-              Use the buttons below to switch all section paces accordingly.
-            </p>
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
               {(
                 [
-                  { level: "stretch"     as GoalLevel, label: "Stretch −4%",   time: stretchTime,     accent: "#b45309", bg: "#fef3c7" },
-                  { level: "target"      as GoalLevel, label: "Target",         time: targetTime,      accent: "#1e3a1e", bg: "#dcfce7" },
-                  { level: "comfortable" as GoalLevel, label: "Comfortable +8%", time: comfortableTime, accent: "#1d4ed8", bg: "#dbeafe" },
+                  { label: "Stretch −4%",    time: stretchTime,     accent: "#b45309", bg: "#fef3c7" },
+                  { label: "Target",          time: targetTime,      accent: "#1e3a1e", bg: "#dcfce7" },
+                  { label: "Comfortable +8%", time: comfortableTime, accent: "#1d4ed8", bg: "#dbeafe" },
                 ]
-              ).map(({ level, label, time, accent, bg }) => (
-                <button
-                  key={level}
-                  onClick={() => setGoalLevel(level)}
+              ).map(({ label, time, accent, bg }) => (
+                <div
+                  key={label}
                   style={{
-                    background: goalLevel === level ? accent : bg,
-                    border: `2px solid ${goalLevel === level ? accent : accent + "40"}`,
+                    background: bg,
+                    border: `2px solid ${accent}40`,
                     borderRadius: "10px", padding: "12px 20px",
-                    cursor: "pointer", textAlign: "left", minWidth: "140px",
+                    textAlign: "left", minWidth: "140px",
                   }}
                 >
-                  <div style={{ fontSize: "11px", fontWeight: 600, color: goalLevel === level ? "#fff" : accent, textTransform: "uppercase", marginBottom: "3px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 600, color: accent, textTransform: "uppercase", marginBottom: "3px" }}>
                     {label}
                   </div>
-                  <div style={{ fontSize: "22px", fontWeight: 800, color: goalLevel === level ? "#fff" : accent, fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ fontSize: "22px", fontWeight: 800, color: accent, fontVariantNumeric: "tabular-nums" }}>
                     {time}
                   </div>
-                </button>
+                </div>
               ))}
             </div>
             <div style={{ fontSize: "12px", color: "#9ca3af" }}>
-              Stretch = target × 0.96 &nbsp;·&nbsp; Comfortable = target × 1.08 &nbsp;·&nbsp;
-              Selecting a goal switches all section paces in the table below.
+              Stretch = target × 0.96 &nbsp;·&nbsp; Comfortable = target × 1.08
             </div>
           </div>
         )}
 
         {guide && (
           <>
-            {/* ── Highest-cost sections ── */}
-            <div style={card}>
-              <h2 style={{ margin: "0 0 14px 0", fontSize: "15px", fontWeight: 700, color: "#111" }}>
-                Highest-cost sections (top 5)
-              </h2>
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                {guide.highest_cost_sections.map((s, i) => {
-                  const badge = gradientBadge(s.avg_gradient_percent);
-                  return (
-                    <div key={i} style={{
-                      background: gradientRowColor(s.avg_gradient_percent),
-                      border: "1px solid #e4e4e7", borderRadius: "8px", padding: "10px 14px",
-                      minWidth: "150px", flex: "1",
-                    }}>
-                      <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "3px" }}>
-                        km {s.start_distance_km.toFixed(1)} – {s.end_distance_km.toFixed(1)}
-                      </div>
-                      <div style={{
-                        display: "inline-block", padding: "2px 6px", borderRadius: "4px",
-                        fontSize: "10px", fontWeight: 600, color: badge.color, background: badge.bg,
-                        marginBottom: "4px",
-                      }}>
-                        {badge.label} {s.avg_gradient_percent > 0 ? "+" : ""}{s.avg_gradient_percent.toFixed(1)}%
-                      </div>
-                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#111" }}>
-                        {getSectionPace(s)}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "#6b7280" }}>{s.energy_share_percent}% energy</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ── Goal level selector ── */}
-            <div style={{
-              ...card, padding: "12px 20px",
-              display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
-            }}>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151", marginRight: "4px" }}>
-                Show section paces for:
-              </span>
-              {goalBtn("stretch",     "Stretch (−4%)",    "#b45309")}
-              {goalBtn("target",      "Target",           "#1e3a1e")}
-              {goalBtn("comfortable", "Comfortable (+8%)", "#1d4ed8")}
-            </div>
-
             {/* ── Section table ── */}
             <div style={{ ...card, padding: "0", overflow: "hidden" }}>
               <div style={{
@@ -331,12 +261,11 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                       <th style={{ ...th, textAlign: "right" }}>Dist</th>
                       <th style={th}>Terrain</th>
                       <th style={{ ...th, textAlign: "right" }}>Flat eq.</th>
-                      <th style={{ ...th, textAlign: "right" }}>Energy</th>
-                      <th style={{ ...th, textAlign: "right" }}>Pace</th>
-                      {goalLevel === "target" && (
-                        <th style={th}>Pace band</th>
-                      )}
-                      {guide.wind_adjusted && showWind && goalLevel === "target" && (
+                      <th style={{ ...th, textAlign: "right", color: "#b45309" }}>Stretch</th>
+                      <th style={{ ...th, textAlign: "right", color: "#1e3a1e" }}>Target</th>
+                      <th style={{ ...th, textAlign: "right", color: "#1d4ed8" }}>Comfortable</th>
+                      <th style={th}>Pace band</th>
+                      {guide.wind_adjusted && showWind && (
                         <>
                           <th style={{ ...th, textAlign: "right", color: "#15803d" }}>Wind pace</th>
                           <th style={{ ...th, color: "#15803d" }}>Wind band</th>
@@ -380,23 +309,23 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                             {s.flat_equivalent_km.toFixed(2)}
                           </td>
 
-                          <td style={{ ...td, textAlign: "right" }}>
-                            <span style={{ fontSize: "12px", color: "#374151" }}>
-                              {s.energy_share_percent.toFixed(1)}%
-                            </span>
+                          <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#b45309", whiteSpace: "nowrap" }}>
+                            {getStretchPace(s)}
                           </td>
 
-                          <td style={{ ...td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap", fontFamily: "monospace" }}>
-                            {getSectionPace(s)}
+                          <td style={{ ...td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap", fontFamily: "monospace", color: "#1e3a1e" }}>
+                            {getTargetPace(s)}
                           </td>
 
-                          {goalLevel === "target" && (
-                            <td style={{ ...td, whiteSpace: "nowrap", fontSize: "12px", color: "#374151" }}>
-                              {getSectionBand(s)}
-                            </td>
-                          )}
+                          <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#1d4ed8", whiteSpace: "nowrap" }}>
+                            {getComfortPace(s)}
+                          </td>
 
-                          {guide.wind_adjusted && showWind && goalLevel === "target" && (
+                          <td style={{ ...td, whiteSpace: "nowrap", fontSize: "12px", color: "#374151" }}>
+                            {getPaceBand(s)}
+                          </td>
+
+                          {guide.wind_adjusted && showWind && (
                             <>
                               <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#15803d", whiteSpace: "nowrap" }}>
                                 {s.wind_target_pace ?? "–"}

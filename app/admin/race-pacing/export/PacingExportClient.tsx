@@ -12,18 +12,7 @@ interface Props {
   raceName: string;
 }
 
-// ── Gradient badge helper ──────────────────────────────────────────────────────
-
-function gradientLabel(g: number): string {
-  if (g >= 12) return "Very steep ↑";
-  if (g >= 8)  return "Major climb ↑";
-  if (g >= 4)  return "Climb ↑";
-  if (g >= 2)  return "Gentle ↑";
-  if (g <= -8) return "Steep ↓";
-  if (g <= -4) return "Descent ↓";
-  if (g <= -2) return "Gentle ↓";
-  return "Flat ↔";
-}
+// ── Gradient colour helper ─────────────────────────────────────────────────────
 
 function gradientColor(g: number): string {
   if (g >= 8)  return "#b91c1c";
@@ -197,35 +186,6 @@ export default function PacingExportClient({ raceId, targetMinutes, raceName }: 
             ))}
           </div>
 
-          {/* Highest-cost sections summary */}
-          <div style={{ marginBottom: "20px" }}>
-            <h2 style={{ fontSize: "12px", fontWeight: 700, color: "#111", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Key sections to watch (highest energy cost)
-            </h2>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {guide.highest_cost_sections.slice(0, 5).map((s: PacingSection, i: number) => (
-                <div key={i} style={{
-                  background: gradientRowColor(s.avg_gradient_percent),
-                  border: "1px solid #e4e4e7",
-                  borderRadius: "6px",
-                  padding: "8px 12px",
-                  minWidth: "110px", flex: "1",
-                }}>
-                  <div style={{ fontSize: "9px", color: "#9ca3af" }}>
-                    km {s.start_distance_km.toFixed(1)}–{s.end_distance_km.toFixed(1)}
-                  </div>
-                  <div style={{ fontSize: "10px", fontWeight: 600, color: gradientColor(s.avg_gradient_percent), marginTop: "2px" }}>
-                    {gradientLabel(s.avg_gradient_percent)} {s.avg_gradient_percent > 0 ? "+" : ""}{s.avg_gradient_percent.toFixed(1)}%
-                  </div>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#111", fontFamily: "monospace", marginTop: "3px" }}>
-                    {s.target_pace}
-                  </div>
-                  <div style={{ fontSize: "9px", color: "#6b7280" }}>{s.energy_share_percent}% energy</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Section-by-section plan table */}
           <div style={{ marginBottom: "16px" }}>
             <h2 style={{ fontSize: "12px", fontWeight: 700, color: "#111", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -241,9 +201,8 @@ export default function PacingExportClient({ raceId, targetMinutes, raceName }: 
                   <th style={{ ...th, textAlign: "right" }}>Dist</th>
                   <th style={th}>Gradient</th>
                   <th style={{ ...th, textAlign: "right" }}>Flat eq.</th>
-                  <th style={{ ...th, textAlign: "right" }}>Energy</th>
-                  <th style={{ ...th, textAlign: "right", color: "#1e3a1e" }}>Target pace</th>
                   <th style={{ ...th, textAlign: "right", color: "#b45309" }}>Stretch</th>
+                  <th style={{ ...th, textAlign: "right", color: "#1e3a1e" }}>Target pace</th>
                   <th style={{ ...th, textAlign: "right", color: "#1d4ed8" }}>Comfortable</th>
                   <th style={th}>Pace band</th>
                   {guide.wind_adjusted && (
@@ -281,14 +240,11 @@ export default function PacingExportClient({ raceId, targetMinutes, raceName }: 
                       <td style={{ ...td, textAlign: "right", color: "#374151" }}>
                         {s.flat_equivalent_km.toFixed(2)}
                       </td>
-                      <td style={{ ...td, textAlign: "right", color: "#374151" }}>
-                        {s.energy_share_percent.toFixed(1)}%
+                      <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#b45309" }}>
+                        {stretchPace}
                       </td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 700, fontFamily: "monospace", color: "#1e3a1e" }}>
                         {s.target_pace}
-                      </td>
-                      <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#b45309" }}>
-                        {stretchPace}
                       </td>
                       <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#1d4ed8" }}>
                         {comfortPace}
