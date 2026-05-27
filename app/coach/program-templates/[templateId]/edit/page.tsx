@@ -31,6 +31,7 @@ type ProgramTemplateRow = {
   requires_heat_acclimation: boolean;
   suitable_race_goals: string[] | null;
   race_id: string | null;
+  pacing_data: PacingSection[] | null;
 };
 
 type RaceRow = {
@@ -212,6 +213,7 @@ type TemplateForm = {
   requiresLoadCarriage: boolean;
   requiresHeatAcclimation: boolean;
   suitableRaceGoals: string;
+  pacingData: PacingSection[] | null;
   weeks: EditableWeek[];
 };
 
@@ -812,6 +814,7 @@ function mapToForm(
     requiresLoadCarriage: template.requires_load_carriage,
     requiresHeatAcclimation: template.requires_heat_acclimation,
     suitableRaceGoals: (template.suitable_race_goals ?? []).join(", "),
+    pacingData: template.pacing_data ?? null,
     weeks: weeks
       .slice()
       .sort((a, b) => a.week_number - b.week_number)
@@ -965,6 +968,34 @@ type RaceProfile = {
   sustainedSegments: SustainedSegment[] | null;
   segmentNotes: SegmentNote[] | null;
 };
+
+type PacingSection = {
+  start_km: number;
+  end_km: number;
+  section_type: string;
+  target_pace: string;
+  pace_band: string;
+};
+
+function parsePacingCsv(csv: string): PacingSection[] {
+  const lines = csv.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim());
+  return lines.slice(1).flatMap((line): PacingSection[] => {
+    const cols = line.split(",");
+    const get = (key: string) => cols[headers.indexOf(key)]?.trim() ?? "";
+    const startKm = parseFloat(get("start_km"));
+    const endKm = parseFloat(get("end_km"));
+    if (isNaN(startKm) || isNaN(endKm)) return [];
+    return [{
+      start_km: startKm,
+      end_km: endKm,
+      section_type: get("section_type"),
+      target_pace: get("target_pace"),
+      pace_band: get("acceptable_pace_band"),
+    }];
+  });
+}
 
 function parseElevationStats(value: string | null | undefined): ElevationStats | null {
   if (!value) return null;
@@ -1604,7 +1635,8 @@ export default function EditProgramTemplatePage() {
               requires_load_carriage,
               requires_heat_acclimation,
               suitable_race_goals,
-              race_id
+              race_id,
+              pacing_data
             `)
             .eq("id", templateId)
             .maybeSingle(),
@@ -2225,6 +2257,7 @@ export default function EditProgramTemplatePage() {
         .map((value) => value.trim())
         .filter(Boolean),
       race_id: selectedRaceId ?? null,
+      pacing_data: form.pacingData && form.pacingData.length > 0 ? form.pacingData : null,
     };
 
     const { error: templateError } = await supabase
@@ -2761,6 +2794,78 @@ export default function EditProgramTemplatePage() {
                 )}
               </div>
             )}
+
+            {/* Race Pacing card */}
+            <div className="md:col-span-2 rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
+              <h3 className="mb-3 text-sm font-semibold text-indigo-900 uppercase tracking-wide">Race Pacing</h3>
+              {form.pacingData && form.pacingData.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-indigo-700">
+                      {form.pacingData.length} sections · km 0–{form.pacingData[form.pacingData.length - 1].end_km.toFixed(1)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => updateForm("pacingData", null)}
+                      className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-indigo-200 text-left text-indigo-700">
+                          <th className="pb-1 pr-3 font-semibold">Section</th>
+                          <th className="pb-1 pr-3 font-semibold">Type</th>
+                          <th className="pb-1 pr-3 font-semibold">Target pace</th>
+                          <th className="pb-1 font-semibold">Pace band</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.pacingData.map((s, i) => (
+                          <tr key={i} className="border-b border-indigo-100 last:border-0">
+                            <td className="py-1 pr-3 text-zinc-700">
+                              {s.start_km.toFixed(1)}–{s.end_km.toFixed(1)} km
+                            </td>
+                            <td className="py-1 pr-3 text-zinc-700">{s.section_type.replace(/_/g, " ")}</td>
+                            <td className="py-1 pr-3 font-medium text-zinc-900">{s.target_pace}</td>
+                            <td className="py-1 text-zinc-500">{s.pace_band}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer flex-col items-start gap-1">
+                  <span className="text-sm text-indigo-700">Upload a pacing CSV for this template</span>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="text-xs text-indigo-800"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const text = ev.target?.result;
+                        if (typeof text !== "string") return;
+                        const sections = parsePacingCsv(text);
+                        if (sections.length === 0) {
+                          alert("No valid sections found in the CSV. Check that it has start_km, end_km, section_type, target_pace, and acceptable_pace_band columns.");
+                          return;
+                        }
+                        updateForm("pacingData", sections);
+                      };
+                      reader.readAsText(file);
+                      // Reset so same file can be re-uploaded
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+            </div>
 
             <label className="text-sm font-medium text-zinc-700 md:col-span-2">
               Description

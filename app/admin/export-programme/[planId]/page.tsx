@@ -6,6 +6,15 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getDayOrderIndex } from "@/lib/planner/dayLabels";
 
+/* ── Pacing section type ── */
+type PacingSection = {
+  start_km: number;
+  end_km: number;
+  section_type: string;
+  target_pace: string;
+  pace_band: string;
+};
+
 /* ── Race profile types ── */
 type ElevationPoint = { distanceKm: number; elevationM: number };
 
@@ -182,6 +191,7 @@ type ProgramTemplate = {
   plan_length_weeks: number;
   training_days_per_week: number;
   race_id: string | null;
+  pacing_data: PacingSection[] | null;
   program_template_weeks: TemplateWeek[];
 };
 
@@ -204,8 +214,11 @@ function sessionDuration(s: TemplateSession): string {
 
 function sortSessions(sessions: TemplateSession[]): TemplateSession[] {
   return [...sessions].sort((a, b) => {
-    const di = getDayOrderIndex(a.day_label) - getDayOrderIndex(b.day_label);
-    return di !== 0 ? di : a.sort_order - b.sort_order;
+    const da = getDayOrderIndex(a.day_label ?? "");
+    const db = getDayOrderIndex(b.day_label ?? "");
+    const ia = da === -1 ? 99 : da;
+    const ib = db === -1 ? 99 : db;
+    return ia !== ib ? ia - ib : a.sort_order - b.sort_order;
   });
 }
 
@@ -233,7 +246,15 @@ function downsamplePoints(points: ElevationPoint[], maxPts: number): ElevationPo
   return Array.from({ length: maxPts }, (_, i) => points[Math.round(i * step)]);
 }
 
-function ElevationChart({ profile, notable }: { profile: RaceElevProfile; notable: RaceSustainedSeg[] }) {
+function pacingSectionFill(sectionType: string): string {
+  const t = sectionType.toLowerCase();
+  if (t === "steady_climb") return "#bf360c18";
+  if (t === "gentle_descent" || t === "runnable_descent") return "#1565c018";
+  if (t === "steep_descent") return "#0d47a130";
+  return "#78909c10";
+}
+
+function ElevationChart({ profile, notable, pacingSections }: { profile: RaceElevProfile; notable: RaceSustainedSeg[]; pacingSections?: PacingSection[] }) {
   const W = 698; const H = 200;
   const padL = 46; const padB = 22; const padR = 8; const padT = 16;
   const cW = W - padL - padR;
@@ -293,6 +314,24 @@ function ElevationChart({ profile, notable }: { profile: RaceElevProfile; notabl
         </g>
       ))}
 
+      {/* Pacing section overlays */}
+      {(pacingSections ?? []).map((sec, i) => {
+        const x1 = xS(sec.start_km);
+        const x2 = xS(sec.end_km);
+        const w = Math.max(x2 - x1, 1);
+        const showLabel = w >= 30 && sec.target_pace;
+        return (
+          <g key={`pace-${i}`}>
+            <rect x={x1} y={padT} width={w} height={cH} fill={pacingSectionFill(sec.section_type)} />
+            {showLabel && (
+              <text x={x1 + w / 2} y={padT - 4} textAnchor="middle" fontSize="7.5" fill="#444" fontWeight="600">
+                {sec.target_pace}
+              </text>
+            )}
+          </g>
+        );
+      })}
+
       {/* Axis borders */}
       <line x1={padL} y1={padT} x2={padL} y2={padT + cH} stroke="#bbb" strokeWidth="1" />
       <line x1={padL} y1={padT + cH} x2={padL + cW} y2={padT + cH} stroke="#bbb" strokeWidth="1" />
@@ -337,7 +376,7 @@ function TerrainBar({ terrain }: { terrain: RaceTerrainSeg[] }) {
   );
 }
 
-function RaceSummaryPage({ template, profile }: { template: ProgramTemplate; profile: RaceProfileData }) {
+function RaceSummaryPage({ template, profile, pacingSections }: { template: ProgramTemplate; profile: RaceProfileData; pacingSections?: PacingSection[] }) {
   const { elevation, terrain, sustainedSegments } = profile;
 
   // Top 3–5 notable segments by absolute elevation change, excluding flats
@@ -377,7 +416,7 @@ function RaceSummaryPage({ template, profile }: { template: ProgramTemplate; pro
               Elevation Profile
               {notable.length > 0 && " — shaded sections are the most significant climbs & descents"}
             </p>
-            <ElevationChart profile={elevation} notable={notable} />
+            <ElevationChart profile={elevation} notable={notable} pacingSections={pacingSections} />
           </div>
         </>
       )}
@@ -738,7 +777,7 @@ export default function ExportPreviewPage() {
       const { data, error: err } = await supabase
         .from("program_templates")
         .select(`
-          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week, race_id,
+          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week, race_id, pacing_data,
           program_template_weeks (
             id, week_number, focus, notes,
             program_template_sessions (
@@ -848,7 +887,7 @@ export default function ExportPreviewPage() {
         </div>
 
         {/* Race course profile page */}
-        {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} />}
+        {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} pacingSections={template.pacing_data ?? undefined} />}
 
         {/* Weekly mileage chart */}
         <WeeklyMileagePage weeks={weeks} template={template} />
