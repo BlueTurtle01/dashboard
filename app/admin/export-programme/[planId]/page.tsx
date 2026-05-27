@@ -445,7 +445,7 @@ function TerrainBar({ terrain }: { terrain: RaceTerrainSeg[] }) {
   );
 }
 
-function RaceSummaryPage({ template, profile, pacingSections }: { template: ProgramTemplate; profile: RaceProfileData; pacingSections?: PacingSection[] }) {
+function RaceSummaryPage({ template, profile }: { template: ProgramTemplate; profile: RaceProfileData }) {
   const { elevation, terrain, sustainedSegments } = profile;
 
   // Top 3–5 notable segments by absolute elevation change, excluding flats
@@ -485,7 +485,7 @@ function RaceSummaryPage({ template, profile, pacingSections }: { template: Prog
               Elevation Profile
               {notable.length > 0 && " — shaded sections are the most significant climbs & descents"}
             </p>
-            <ElevationChart profile={elevation} notable={notable} pacingSections={pacingSections} />
+            <ElevationChart profile={elevation} notable={notable} />
           </div>
         </>
       )}
@@ -807,6 +807,122 @@ function WeeklyMileagePage({ weeks, template }: { weeks: TemplateWeek[]; templat
 }
 
 
+function formatSectionType(type: string): string {
+  return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatRaceTime(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = Math.round(totalMinutes % 60);
+  const adjustedMins = mins === 60 ? 0 : mins;
+  const adjustedHours = mins === 60 ? hours + 1 : hours;
+  return `${adjustedHours}h ${adjustedMins.toString().padStart(2, "0")}m`;
+}
+
+function RaceStrategyPage({
+  template,
+  profile,
+  pacingSections,
+}: {
+  template: ProgramTemplate;
+  profile: RaceProfileData | null;
+  pacingSections: PacingSection[];
+}) {
+  // Compute estimated total race time
+  const totalMinutes = pacingSections.reduce((sum, sec) => {
+    const pace = parsePaceToMinutes(sec.target_pace);
+    if (pace === null) return sum;
+    return sum + (sec.end_km - sec.start_km) * pace;
+  }, 0);
+
+  const notable = ((profile?.sustainedSegments ?? []) as RaceSustainedSeg[])
+    .filter((s) => s.type !== "flat")
+    .sort((a, b) => Math.abs(b.totalElevationM) - Math.abs(a.totalElevationM))
+    .slice(0, 5);
+
+  const thStyle: React.CSSProperties = {
+    textAlign: "left", padding: "5px 8px",
+    borderBottom: "2px solid #1e3a1e", color: "#1e3a1e",
+    fontWeight: 600, background: "#f9f9f9", fontSize: "11px",
+  };
+  const tdStyle: React.CSSProperties = {
+    padding: "5px 8px", borderBottom: "1px solid #eee", fontSize: "12px",
+  };
+
+  return (
+    <div style={a4Page}>
+      <PrintHeader template={template} />
+      <h2 style={{ margin: "0 0 16px", fontSize: "18px", fontWeight: 700, color: "#1e3a1e" }}>Race Strategy</h2>
+
+      {/* Estimated finish time */}
+      {totalMinutes > 0 && (
+        <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+          <div style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "8px 18px", fontSize: "11px", background: "#fafafa" }}>
+            <div style={{ color: "#888", marginBottom: "2px" }}>Estimated finish time</div>
+            <div style={{ fontWeight: 700, color: "#1e3a1e", fontSize: "20px" }}>{formatRaceTime(totalMinutes)}</div>
+            <div style={{ color: "#aaa", fontSize: "10px", marginTop: "2px" }}>based on target pacing strategy</div>
+          </div>
+          <div style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "8px 14px", fontSize: "11px", background: "#fafafa" }}>
+            <div style={{ color: "#888", marginBottom: "2px" }}>Total distance</div>
+            <div style={{ fontWeight: 700, color: "#111", fontSize: "13px" }}>
+              {pacingSections[pacingSections.length - 1].end_km.toFixed(1)} km
+            </div>
+          </div>
+          <div style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "8px 14px", fontSize: "11px", background: "#fafafa" }}>
+            <div style={{ color: "#888", marginBottom: "2px" }}>Sections</div>
+            <div style={{ fontWeight: 700, color: "#111", fontSize: "13px" }}>{pacingSections.length}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Elevation + pace chart */}
+      {profile?.elevation && (
+        <div style={{ marginBottom: "20px" }}>
+          <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Elevation &amp; Target Pace
+          </p>
+          <ElevationChart profile={profile.elevation} notable={notable} pacingSections={pacingSections} />
+        </div>
+      )}
+
+      {/* Pacing sections table */}
+      <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        Section Pacing Plan
+      </p>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+        <thead>
+          <tr>
+            {["#", "km Range", "Distance", "Section Type", "Target Pace", "Pace Band", "Section Time"].map((h) => (
+              <th key={h} style={thStyle}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {pacingSections.map((sec, i) => {
+            const dist = sec.end_km - sec.start_km;
+            const pace = parsePaceToMinutes(sec.target_pace);
+            const sectionMins = pace !== null ? dist * pace : null;
+            const rowBg = i % 2 === 0 ? "#fff" : "#fafafa";
+            return (
+              <tr key={i} style={{ background: rowBg }}>
+                <td style={{ ...tdStyle, color: "#888" }}>{i + 1}</td>
+                <td style={tdStyle}>{sec.start_km.toFixed(1)}–{sec.end_km.toFixed(1)} km</td>
+                <td style={tdStyle}>{dist.toFixed(1)} km</td>
+                <td style={tdStyle}>{formatSectionType(sec.section_type)}</td>
+                <td style={{ ...tdStyle, fontWeight: 600, color: "#c0392b" }}>{sec.target_pace}</td>
+                <td style={{ ...tdStyle, color: "#777" }}>{sec.pace_band}</td>
+                <td style={{ ...tdStyle, color: "#555" }}>
+                  {sectionMins !== null ? formatRaceTime(sectionMins) : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function WeekDetailPage({ week, template, raceProfile }: { week: TemplateWeek; template: ProgramTemplate; raceProfile?: RaceProfileData }) {
   const sessions = sortSessions(week.program_template_sessions);
   return (
@@ -956,10 +1072,15 @@ export default function ExportPreviewPage() {
         </div>
 
         {/* Race course profile page */}
-        {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} pacingSections={template.pacing_data ?? undefined} />}
+        {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} />}
 
         {/* Weekly mileage chart */}
         <WeeklyMileagePage weeks={weeks} template={template} />
+
+        {/* Race strategy page */}
+        {template.pacing_data && template.pacing_data.length > 0 && (
+          <RaceStrategyPage template={template} profile={raceProfile} pacingSections={template.pacing_data} />
+        )}
 
         {/* Detail — one week per A4 page */}
         {weeks.map((week) => (
