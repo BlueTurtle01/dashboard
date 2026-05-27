@@ -20,11 +20,20 @@ function gradientBadge(gradient: number): { label: string; color: string; bg: st
 
 function windBadge(label: string | undefined): string {
   if (!label || label === "none") return "";
-  if (label.includes("strong headwind")) return "💨↑↑";
-  if (label.includes("headwind"))        return "💨↑";
-  if (label.includes("tailwind"))        return "💨↓";
-  if (label.includes("crosswind"))       return "💨↔";
+  if (label.includes("strong headwind"))   return "💨↑↑";
+  if (label.includes("headwind"))          return "💨↑";
+  if (label.includes("tailwind"))          return "💨↓";
+  if (label.includes("crosswind"))         return "💨↔";
   return "💨";
+}
+
+/** Parse "H:MM" or "H:MM:SS" into total minutes, or return 0. */
+function parseHMSToMinutes(value: string): number {
+  const parts = value.trim().split(":").map(Number);
+  if (parts.some(isNaN)) return 0;
+  if (parts.length === 3) return parts[0] * 60 + parts[1] + parts[2] / 60;
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
 }
 
 // ── Props ──────────────────────────────────────────────────────────────────────
@@ -35,24 +44,44 @@ interface Props {
   raceName: string;
 }
 
+// ── Goal level type ────────────────────────────────────────────────────────────
+
+type GoalLevel = "target" | "stretch" | "realistic" | "comfortable";
+
 // ── Client component ───────────────────────────────────────────────────────────
 
 export default function PacingClient({ raceId, targetMinutes, raceName }: Props) {
-  const [guide, setGuide] = useState<PacingGuide | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [guide, setGuide]       = useState<PacingGuide | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
   const [expandedNote, setExpandedNote] = useState<number | null>(null);
   const [showWind, setShowWind] = useState(true);
+  const [goalLevel, setGoalLevel] = useState<GoalLevel>("target");
 
-  const loadGuide = useCallback(async () => {
+  // Half-marathon fitness goal input
+  const [hmInput, setHmInput]       = useState("");
+  const [hmMinutes, setHmMinutes]   = useState<number | null>(null);
+  const [hmPending, setHmPending]   = useState(false);
+
+  // ── API call ────────────────────────────────────────────────────────────────
+
+  const loadGuide = useCallback(async (halfMarathonMinutes?: number) => {
     if (!raceId || targetMinutes <= 0) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/race-analysis/pacing-guide", {
+      const body: Record<string, unknown> = {
+        race_id: raceId,
+        target_finish_minutes: targetMinutes,
+      };
+      if (halfMarathonMinutes && halfMarathonMinutes > 0) {
+        body.half_marathon_minutes = halfMarathonMinutes;
+      }
+
+      const res  = await fetch("/api/race-analysis/pacing-guide", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ race_id: raceId, target_finish_minutes: targetMinutes }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? "Failed to generate guide"); return; }
@@ -66,6 +95,41 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
   }, [raceId, targetMinutes]);
 
   useEffect(() => { loadGuide(); }, [loadGuide]);
+
+  // Apply half-marathon time
+  const applyHalfMarathon = () => {
+    const mins = parseHMSToMinutes(hmInput);
+    if (mins <= 0) return;
+    setHmMinutes(mins);
+    setHmPending(false);
+    setGoalLevel("realistic");
+    loadGuide(mins);
+  };
+
+  const clearHalfMarathon = () => {
+    setHmMinutes(null);
+    setHmInput("");
+    setHmPending(false);
+    setGoalLevel("target");
+    loadGuide();
+  };
+
+  // ── Section pace selector ───────────────────────────────────────────────────
+
+  function getSectionPace(s: PacingSection): string {
+    if (goalLevel === "stretch")     return s.stretch_target_pace ?? s.target_pace;
+    if (goalLevel === "realistic")   return s.realistic_target_pace ?? s.target_pace;
+    if (goalLevel === "comfortable") return s.comfortable_target_pace ?? s.target_pace;
+    // "target" — use wind-adjusted if toggled
+    return (showWind && s.wind_target_pace) ? s.wind_target_pace : s.target_pace;
+  }
+
+  function getSectionBand(s: PacingSection): string {
+    if (goalLevel !== "target") return "";  // no band for fitness goals (too wide)
+    return (showWind && s.wind_acceptable_pace_band)
+      ? s.wind_acceptable_pace_band
+      : s.acceptable_pace_band;
+  }
 
   // ── Styles ─────────────────────────────────────────────────────────────────
 
@@ -85,13 +149,28 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
     padding: "9px 10px", fontSize: "13px", color: "#111", verticalAlign: "top",
   };
 
+  const goalBtn = (level: GoalLevel, label: string, accent: string): React.ReactNode => (
+    <button
+      onClick={() => setGoalLevel(level)}
+      style={{
+        padding: "5px 12px", borderRadius: "6px", border: "1px solid",
+        borderColor: goalLevel === level ? accent : "#d1d5db",
+        background: goalLevel === level ? accent : "#fff",
+        color: goalLevel === level ? "#fff" : "#374151",
+        fontSize: "12px", fontWeight: 600, cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ minHeight: "100vh", background: "#f5f5f5", padding: "32px 24px" }}>
       <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div style={{ marginBottom: "24px" }}>
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -112,7 +191,7 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                 <input
                   type="checkbox"
                   checked={showWind}
-                  onChange={(e) => setShowWind(e.target.checked)}
+                  onChange={e => setShowWind(e.target.checked)}
                   style={{ width: "15px", height: "15px" }}
                 />
                 Show wind-adjusted pacing
@@ -128,6 +207,10 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
               &nbsp;·&nbsp;{guide.total_distance_km} km
               &nbsp;·&nbsp;↑{guide.total_ascent_m} m
               &nbsp;·&nbsp;Flat equiv: {guide.total_flat_equivalent_km} km ({guide.difficulty_ratio}×)
+              &nbsp;·&nbsp;{guide.sections.length} sections
+              {guide.sections_raw !== guide.sections.length && (
+                <span style={{ color: "#9ca3af" }}> (merged from {guide.sections_raw})</span>
+              )}
               {guide.wind_adjusted && guide.wind_adjusted_flat_equivalent_km && (
                 <>
                   &nbsp;·&nbsp;
@@ -140,7 +223,7 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
           )}
         </div>
 
-        {/* Loading / error */}
+        {/* ── Loading / error ── */}
         {loading && (
           <div style={{ ...card, textAlign: "center", color: "#9ca3af" }}>
             Generating pacing guide…
@@ -161,9 +244,93 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
           </div>
         )}
 
+        {/* ── Fitness goals panel ── */}
+        {!loading && (
+          <div style={card}>
+            <h2 style={{ margin: "0 0 12px 0", fontSize: "15px", fontWeight: 700, color: "#111" }}>
+              Fitness Goal Estimates
+            </h2>
+            <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#6b7280" }}>
+              Enter a recent half-marathon time to add stretch / realistic / comfortable finish
+              estimates using Riegel&apos;s formula (based on this course&apos;s flat-equivalent distance).
+            </p>
+
+            {/* Input row */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <input
+                type="text"
+                placeholder="H:MM:SS or H:MM"
+                value={hmInput}
+                onChange={e => { setHmInput(e.target.value); setHmPending(true); }}
+                onKeyDown={e => { if (e.key === "Enter") applyHalfMarathon(); }}
+                style={{
+                  padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: "8px",
+                  fontSize: "14px", width: "140px",
+                }}
+              />
+              <button
+                onClick={applyHalfMarathon}
+                disabled={!hmPending || !hmInput}
+                style={{
+                  padding: "8px 16px", borderRadius: "8px", border: "none",
+                  background: hmPending && hmInput ? "#4f46e5" : "#d1d5db",
+                  color: "#fff", fontSize: "13px", fontWeight: 600,
+                  cursor: hmPending && hmInput ? "pointer" : "default",
+                }}
+              >
+                Apply
+              </button>
+              {hmMinutes && (
+                <button
+                  onClick={clearHalfMarathon}
+                  style={{
+                    padding: "8px 14px", borderRadius: "8px", border: "1px solid #d1d5db",
+                    background: "#fff", color: "#374151", fontSize: "13px", cursor: "pointer",
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Goal summary */}
+            {guide?.fitness_goals && (
+              <div style={{ marginTop: "16px" }}>
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "14px" }}>
+                  {(["stretch", "realistic", "comfortable"] as const).map((level, i) => {
+                    const goals = guide.fitness_goals!;
+                    const src   = (showWind && goals.wind_adjusted) ? goals.wind_adjusted : goals.no_wind;
+                    const time  = src[level];
+                    const colors = ["#b45309", "#15803d", "#1d4ed8"];
+                    const bgs    = ["#fef3c7", "#dcfce7", "#dbeafe"];
+                    const labels = ["Stretch (−4%)", "Realistic", "Comfortable (+8%)"];
+                    return (
+                      <div key={level} style={{
+                        background: bgs[i], border: `1px solid`,
+                        borderColor: colors[i] + "40",
+                        borderRadius: "8px", padding: "10px 16px", minWidth: "140px",
+                      }}>
+                        <div style={{ fontSize: "11px", fontWeight: 600, color: colors[i], marginBottom: "3px", textTransform: "uppercase" }}>
+                          {labels[i]}
+                        </div>
+                        <div style={{ fontSize: "20px", fontWeight: 700, color: colors[i] }}>
+                          {time}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: "12px", color: "#9ca3af" }}>
+                  Based on half marathon {guide.fitness_goals.half_marathon_time} · Riegel exponent {guide.fitness_goals.riegel_exponent} · flat-equivalent {guide.total_flat_equivalent_km} km
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {guide && (
           <>
-            {/* Highest cost sections summary */}
+            {/* ── Highest-cost sections ── */}
             <div style={card}>
               <h2 style={{ margin: "0 0 14px 0", fontSize: "15px", fontWeight: 700, color: "#111" }}>
                 Highest-cost sections (top 5)
@@ -171,7 +338,7 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 {guide.highest_cost_sections.map((s, i) => {
                   const badge = gradientBadge(s.avg_gradient_percent);
-                  const pace = (showWind && s.wind_target_pace) ? s.wind_target_pace : s.target_pace;
+                  const pace  = getSectionPace(s);
                   return (
                     <div key={i} style={{
                       background: gradientRowColor(s.avg_gradient_percent),
@@ -179,7 +346,7 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                       minWidth: "150px", flex: "1",
                     }}>
                       <div style={{ fontSize: "11px", color: "#9ca3af", marginBottom: "3px" }}>
-                        km {s.start_km.toFixed(1)} – {s.end_km.toFixed(1)}
+                        km {s.start_distance_km.toFixed(1)} – {s.end_distance_km.toFixed(1)}
                       </div>
                       <div style={{
                         display: "inline-block", padding: "2px 6px", borderRadius: "4px",
@@ -196,7 +363,23 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
               </div>
             </div>
 
-            {/* Full section table */}
+            {/* ── Goal level selector ── */}
+            {guide.fitness_goals && (
+              <div style={{
+                ...card, padding: "14px 20px",
+                display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap",
+              }}>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>
+                  Section paces:
+                </span>
+                {goalBtn("target",      "Target time", "#111827")}
+                {goalBtn("stretch",     "Stretch",     "#b45309")}
+                {goalBtn("realistic",   "Realistic",   "#15803d")}
+                {goalBtn("comfortable", "Comfortable", "#1d4ed8")}
+              </div>
+            )}
+
+            {/* ── Full section table ── */}
             <div style={{ ...card, padding: "0", overflow: "hidden" }}>
               <div style={{
                 padding: "16px 20px", borderBottom: "1px solid #e4e4e7",
@@ -218,11 +401,13 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                       <th style={th}>Terrain</th>
                       <th style={{ ...th, textAlign: "right" }}>Flat eq.</th>
                       <th style={{ ...th, textAlign: "right" }}>Energy</th>
-                      <th style={{ ...th, textAlign: "right" }}>Target</th>
-                      <th style={th}>Pace band</th>
-                      {guide.wind_adjusted && showWind && (
+                      <th style={{ ...th, textAlign: "right" }}>Pace</th>
+                      {goalLevel === "target" && (
+                        <th style={th}>Pace band</th>
+                      )}
+                      {guide.wind_adjusted && showWind && goalLevel === "target" && (
                         <>
-                          <th style={{ ...th, textAlign: "right", color: "#15803d" }}>Wind target</th>
+                          <th style={{ ...th, textAlign: "right", color: "#15803d" }}>Wind pace</th>
                           <th style={{ ...th, color: "#15803d" }}>Wind band</th>
                           <th style={th}>Wind</th>
                         </>
@@ -232,18 +417,20 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                   </thead>
                   <tbody>
                     {guide.sections.map((s: PacingSection, i: number) => {
-                      const rowBg = gradientRowColor(s.avg_gradient_percent);
-                      const badge = gradientBadge(s.avg_gradient_percent);
+                      const rowBg    = gradientRowColor(s.avg_gradient_percent);
+                      const badge    = gradientBadge(s.avg_gradient_percent);
                       const isExpanded = expandedNote === i;
-                      const shortNote = s.strategy_note.length > 60
+                      const shortNote  = s.strategy_note.length > 60
                         ? s.strategy_note.slice(0, 57) + "…"
                         : s.strategy_note;
+                      const pace     = getSectionPace(s);
+                      const band     = getSectionBand(s);
 
                       return (
                         <tr key={i} style={{ background: rowBg, borderBottom: "1px solid #f3f4f6" }}>
 
                           <td style={{ ...td, fontFamily: "monospace", fontSize: "12px", whiteSpace: "nowrap" }}>
-                            {s.start_km.toFixed(1)}–{s.end_km.toFixed(1)} km
+                            {s.start_distance_km.toFixed(1)}–{s.end_distance_km.toFixed(1)} km
                           </td>
 
                           <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap", color: "#6b7280" }}>
@@ -274,14 +461,16 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                           </td>
 
                           <td style={{ ...td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap", fontFamily: "monospace" }}>
-                            {(showWind && s.wind_target_pace) ? s.wind_target_pace : s.target_pace}
+                            {pace}
                           </td>
 
-                          <td style={{ ...td, whiteSpace: "nowrap", fontSize: "12px", color: "#374151" }}>
-                            {(showWind && s.wind_acceptable_pace_band) ? s.wind_acceptable_pace_band : s.acceptable_pace_band}
-                          </td>
+                          {goalLevel === "target" && (
+                            <td style={{ ...td, whiteSpace: "nowrap", fontSize: "12px", color: "#374151" }}>
+                              {band}
+                            </td>
+                          )}
 
-                          {guide.wind_adjusted && showWind && (
+                          {guide.wind_adjusted && showWind && goalLevel === "target" && (
                             <>
                               <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#15803d", whiteSpace: "nowrap" }}>
                                 {s.wind_target_pace ?? "–"}
@@ -290,8 +479,9 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                                 {s.wind_acceptable_pace_band ?? "–"}
                               </td>
                               <td style={{ ...td, fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap" }}>
-                                {windBadge(s.wind_label)}{" "}
-                                {s.wind_label && s.wind_label !== "none" ? s.wind_label : "–"}
+                                {s.wind_label && s.wind_label !== "none"
+                                  ? `${windBadge(s.wind_label)} ${s.wind_label}`
+                                  : "–"}
                               </td>
                             </>
                           )}
@@ -310,25 +500,33 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
               </div>
             </div>
 
-            {/* Legend */}
+            {/* ── Legend ── */}
             <div style={{ ...card, padding: "14px 20px" }}>
               <p style={{ margin: "0 0 6px 0", fontSize: "12px", fontWeight: 600, color: "#374151" }}>
                 How to read this guide
               </p>
               <p style={{ margin: 0, fontSize: "12px", color: "#6b7280", lineHeight: 1.6 }}>
-                <strong>Target pace</strong> — the ideal pace for this section based on energy share of
-                the flat-equivalent distance.&nbsp;
-                <strong>Pace band</strong> — acceptable range; staying within this band keeps you on
-                track.&nbsp;
+                <strong>Sections</strong> — adjacent 1-km GPS sections with similar gradients are
+                merged into readable race-plan blocks (first pass), then blocks with identical
+                guidance are merged further (second pass).&nbsp;
+                <strong>Pace</strong> — target pace for this section based on its share of
+                the total flat-equivalent course cost.&nbsp;
+                <strong>Pace band</strong> — acceptable range; staying within this band keeps
+                you on track.&nbsp;
                 {guide.wind_adjusted && showWind && (
                   <>
-                    <strong>Wind columns</strong> — adjusted for historical wind conditions; use these
-                    when wind is expected.&nbsp;
+                    <strong>Wind columns</strong> — adjusted for historical wind conditions.&nbsp;
                   </>
                 )}
-                <strong>Flat equiv</strong> — section cost in flat-road km; a 3 km climb at +10% may
-                cost as much as 6 km of flat.&nbsp;
-                <strong>Energy %</strong> — what fraction of your total effort this section takes.&nbsp;
+                {guide.fitness_goals && (
+                  <>
+                    <strong>Stretch / Realistic / Comfortable</strong> — per-section paces
+                    derived from your half-marathon time via Riegel&apos;s formula applied to the
+                    flat-equivalent distance.&nbsp;
+                  </>
+                )}
+                <strong>Flat equiv</strong> — section cost in flat km.&nbsp;
+                <strong>Energy %</strong> — fraction of total effort.&nbsp;
                 Row colour: red = steep climb, yellow = climb, blue = descent, white = flat.
               </p>
             </div>

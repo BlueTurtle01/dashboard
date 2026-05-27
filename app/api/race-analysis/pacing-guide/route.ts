@@ -5,7 +5,11 @@
  * finish time. Loads the stored sections_json from race_profiles (no GPX
  * re-download needed) and applies the pacing distribution model.
  *
- * Body: { race_id, target_finish_minutes }
+ * Body:
+ *   race_id                  — required
+ *   target_finish_minutes    — required, positive number
+ *   half_marathon_minutes    — optional; enables Riegel fitness goal columns
+ *   riegel_exponent          — optional (default 1.06)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -25,9 +29,11 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as {
       race_id?: string;
       target_finish_minutes?: number;
+      half_marathon_minutes?: number;
+      riegel_exponent?: number;
     };
 
-    const { race_id, target_finish_minutes } = body;
+    const { race_id, target_finish_minutes, half_marathon_minutes, riegel_exponent } = body;
 
     if (!race_id) {
       return NextResponse.json({ error: "race_id is required" }, { status: 400 });
@@ -70,6 +76,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // sections_json stores CourseSection[] with start_distance_km / end_distance_km
     const sections = profile.sections_json as StoredSection[] | null;
 
     if (!sections || sections.length === 0) {
@@ -86,7 +93,18 @@ export async function POST(req: NextRequest) {
       (profile.races as unknown as { name: string } | null)?.name ?? race_id;
 
     // ── Build pacing guide ────────────────────────────────────────────────────
-    const guide = buildPacingGuide(race_id, raceName, sections, target_finish_minutes);
+    const guide = buildPacingGuide(race_id, raceName, sections, target_finish_minutes, {
+      // Section merging — defaults match Python script settings
+      mergeSections: true,
+      minSectionKm: 1.5,
+      maxSectionKm: 5.0,
+      gradientSimilarityThreshold: 2.0,
+      mergeIdenticalGuidance: true,
+      maxGuidanceSectionKm: 20.0,
+      // Fitness goals (optional)
+      halfMarathonMinutes: half_marathon_minutes,
+      riegelExponent: riegel_exponent ?? 1.06,
+    });
 
     return NextResponse.json(guide);
   } catch (err) {
