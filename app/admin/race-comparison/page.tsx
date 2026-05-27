@@ -471,21 +471,35 @@ export default function RaceComparisonPage() {
                 <div style={{
                   background: "#f0fdf4", border: "1px solid #86efac",
                   borderRadius: "10px", padding: "20px 24px", marginBottom: "20px",
-                  display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap",
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap",
                 }}>
-                  <div>
-                    <div style={{ fontSize: "12px", color: "#15803d", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Estimated finish time
+                  <div style={{ display: "flex", alignItems: "center", gap: "24px", flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: "12px", color: "#15803d", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        Estimated finish time
+                      </div>
+                      <div style={{ fontSize: "36px", fontWeight: 800, color: "#166534", lineHeight: 1.1 }}>
+                        {result.estimated_time_b}
+                      </div>
                     </div>
-                    <div style={{ fontSize: "36px", fontWeight: 800, color: "#166534", lineHeight: 1.1 }}>
-                      {result.estimated_time_b}
+                    <div style={{ fontSize: "13px", color: "#15803d" }}>
+                      <div>Difficulty ratio: {result.flat_equiv_ratio.toFixed(4)}</div>
+                      <div>Riegel exponent: {result.riegel_exponent_used}</div>
+                      <div>{result.using_wind_adjusted ? "Using wind-adjusted profiles" : "Using GPX-only profiles"}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize: "13px", color: "#15803d" }}>
-                    <div>Difficulty ratio: {result.flat_equiv_ratio.toFixed(4)}</div>
-                    <div>Riegel exponent: {result.riegel_exponent_used}</div>
-                    <div>{result.using_wind_adjusted ? "Using wind-adjusted profiles" : "Using GPX-only profiles"}</div>
-                  </div>
+                  {/* Pacing strategy link */}
+                  <Link
+                    href={`/admin/race-pacing?race_id=${result.race_b.id}&target_minutes=${result.estimated_time_b_minutes}&race_name=${encodeURIComponent(result.race_b.name)}`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "6px",
+                      padding: "10px 18px", borderRadius: "8px", textDecoration: "none",
+                      background: "#15803d", color: "#fff",
+                      fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap",
+                    }}
+                  >
+                    View Pacing Strategy →
+                  </Link>
                 </div>
 
                 {/* Confidence badge */}
