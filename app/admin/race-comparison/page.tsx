@@ -16,6 +16,9 @@ interface RaceWithProfile {
   profile_source: string;
   total_distance_km: number | null;
   total_ascent_m: number | null;
+  community_calibration_factor: number;
+  community_entry_count: number;
+  calibration_updated_at: string | null;
 }
 
 interface CompareResult {
@@ -26,6 +29,12 @@ interface CompareResult {
   confidence: "high" | "medium" | "low";
   confidence_note: string;
   using_wind_adjusted: boolean;
+  community_calibration_applied: {
+    race_a_factor: number;
+    race_b_factor: number;
+    race_a_entries: number;
+    race_b_entries: number;
+  };
   race_a: RaceSummary;
   race_b: RaceSummary;
 }
@@ -34,10 +43,24 @@ interface RaceSummary {
   id: string;
   name: string;
   flat_equivalent_km: number;
+  effective_flat_equivalent_km: number;
   difficulty_ratio: number | null;
   total_distance_km: number | null;
   total_ascent_m: number | null;
   profile_source: string;
+  community_calibration_factor: number;
+}
+
+interface CalibrateResult {
+  message: string;
+  updated: {
+    race_id: string;
+    race_name: string;
+    entry_count: number;
+    calibration_factor: number;
+    bias_points_used: number;
+    has_calibration: boolean;
+  }[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -81,6 +104,11 @@ export default function RaceComparisonPage() {
   const [comparing, setComparing] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
 
+  // Calibration state
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibrateResult, setCalibrateResult] = useState<CalibrateResult | null>(null);
+  const [calibrateError, setCalibrateError] = useState<string | null>(null);
+
   // ── Load races with profiles ────────────────────────────────────────────────
 
   useEffect(() => {
@@ -92,6 +120,7 @@ export default function RaceComparisonPage() {
           .select(
             `race_id, flat_equivalent_km, wind_adjusted_flat_equivalent_km,
              difficulty_ratio, profile_source, total_distance_km, total_ascent_m,
+             community_calibration_factor, community_entry_count, calibration_updated_at,
              races ( id, name, location )`
           )
           .order("race_id");
@@ -110,6 +139,9 @@ export default function RaceComparisonPage() {
             profile_source: row.profile_source,
             total_distance_km: row.total_distance_km,
             total_ascent_m: row.total_ascent_m,
+            community_calibration_factor: Number((row as unknown as Record<string, unknown>).community_calibration_factor ?? 1.0),
+            community_entry_count: Number((row as unknown as Record<string, unknown>).community_entry_count ?? 0),
+            calibration_updated_at: ((row as unknown as Record<string, unknown>).calibration_updated_at as string | null) ?? null,
           };
         });
 
@@ -161,6 +193,60 @@ export default function RaceComparisonPage() {
       setCompareError(err instanceof Error ? err.message : "Network error");
     } finally {
       setComparing(false);
+    }
+  }
+
+  // ── Calibration handler ─────────────────────────────────────────────────────
+
+  async function handleCalibrate() {
+    setCalibrating(true);
+    setCalibrateError(null);
+    setCalibrateResult(null);
+    try {
+      const res = await fetch("/api/race-analysis/calibrate", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        setCalibrateError(json.error ?? "Calibration failed");
+        return;
+      }
+      setCalibrateResult(json as CalibrateResult);
+      // Reload races to reflect updated factors
+      setLoading(true);
+      const { data, error: err } = await supabase
+        .from("race_profiles")
+        .select(
+          `race_id, flat_equivalent_km, wind_adjusted_flat_equivalent_km,
+           difficulty_ratio, profile_source, total_distance_km, total_ascent_m,
+           community_calibration_factor, community_entry_count, calibration_updated_at,
+           races ( id, name, location )`
+        )
+        .order("race_id");
+      if (!err && data) {
+        const mapped: RaceWithProfile[] = data.map((row) => {
+          const race = (row.races as unknown) as { id: string; name: string; location: string | null };
+          return {
+            id: row.race_id,
+            name: race?.name ?? row.race_id,
+            location: race?.location ?? null,
+            flat_equivalent_km: row.flat_equivalent_km,
+            wind_adjusted_flat_equivalent_km: row.wind_adjusted_flat_equivalent_km,
+            difficulty_ratio: row.difficulty_ratio,
+            profile_source: row.profile_source,
+            total_distance_km: row.total_distance_km,
+            total_ascent_m: row.total_ascent_m,
+            community_calibration_factor: Number((row as unknown as Record<string, unknown>).community_calibration_factor ?? 1.0),
+            community_entry_count: Number((row as unknown as Record<string, unknown>).community_entry_count ?? 0),
+            calibration_updated_at: ((row as unknown as Record<string, unknown>).calibration_updated_at as string | null) ?? null,
+          };
+        });
+        mapped.sort((a, b) => a.name.localeCompare(b.name));
+        setRaces(mapped);
+      }
+      setLoading(false);
+    } catch (err) {
+      setCalibrateError(err instanceof Error ? err.message : "Network error");
+    } finally {
+      setCalibrating(false);
     }
   }
 
@@ -459,13 +545,101 @@ export default function RaceComparisonPage() {
                 </div>
 
                 <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "16px", marginBottom: 0 }}>
-                  Formula: estimated_time_B = time_A × (flat_equiv_B ÷ flat_equiv_A)
+                  Formula: estimated_time_B = time_A × (effective_flat_B ÷ effective_flat_A)
                   <sup>{result.riegel_exponent_used}</sup>.
-                  Flat-equivalent distance accounts for gradient, terrain surface, fatigue overlay,
-                  downhill damage, and wind.
+                  Effective flat = flat_equiv × community_calibration_factor.
+                  {result.community_calibration_applied.race_a_factor !== 1.0 || result.community_calibration_applied.race_b_factor !== 1.0
+                    ? ` Calibration applied: A×${result.community_calibration_applied.race_a_factor.toFixed(3)} B×${result.community_calibration_applied.race_b_factor.toFixed(3)}.`
+                    : " No calibration applied (not enough community data yet)."}
                 </p>
               </div>
             )}
+
+            {/* Community Calibration Panel */}
+            <div style={cardStyle}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+                <div>
+                  <h2 style={{ margin: "0 0 4px 0", fontSize: "16px", fontWeight: 700, color: "#111" }}>
+                    Community Calibration
+                  </h2>
+                  <p style={{ margin: 0, fontSize: "12px", color: "#6b7280" }}>
+                    Detects systematic model bias per course. Requires 5+ athlete entries with overlap.
+                  </p>
+                </div>
+                <button
+                  disabled={calibrating}
+                  onClick={handleCalibrate}
+                  style={{
+                    padding: "9px 18px", borderRadius: "8px", border: "none",
+                    background: calibrating ? "#d1d5db" : "#4f46e5",
+                    color: "#fff", fontSize: "13px", fontWeight: 600,
+                    cursor: calibrating ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {calibrating ? "Recalibrating…" : "↻ Recalibrate All Races"}
+                </button>
+              </div>
+
+              {calibrateError && (
+                <p style={{ color: "#b91c1c", fontSize: "13px", marginBottom: "12px" }}>{calibrateError}</p>
+              )}
+              {calibrateResult && (
+                <p style={{ color: "#15803d", fontSize: "13px", marginBottom: "12px" }}>
+                  ✓ {calibrateResult.message}
+                </p>
+              )}
+
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #e4e4e7" }}>
+                    <th style={{ textAlign: "left", padding: "6px 8px", color: "#9ca3af", fontWeight: 600, fontSize: "11px", textTransform: "uppercase" }}>Race</th>
+                    <th style={{ textAlign: "right", padding: "6px 8px", color: "#9ca3af", fontWeight: 600, fontSize: "11px", textTransform: "uppercase" }}>Entries</th>
+                    <th style={{ textAlign: "right", padding: "6px 8px", color: "#9ca3af", fontWeight: 600, fontSize: "11px", textTransform: "uppercase" }}>Calibration</th>
+                    <th style={{ textAlign: "right", padding: "6px 8px", color: "#9ca3af", fontWeight: 600, fontSize: "11px", textTransform: "uppercase" }}>Last updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {races.map((r) => {
+                    const cal = r.community_calibration_factor;
+                    const hasData = r.community_entry_count >= 5;
+                    const calLabel = !hasData
+                      ? "–"
+                      : cal > 1
+                      ? `${cal.toFixed(3)} (+${((cal - 1) * 100).toFixed(1)}% harder)`
+                      : cal < 1
+                      ? `${cal.toFixed(3)} (${((cal - 1) * 100).toFixed(1)}% easier)`
+                      : "1.000 (no bias)";
+                    const calColor = !hasData ? "#9ca3af" : cal > 1.02 ? "#b91c1c" : cal < 0.98 ? "#15803d" : "#374151";
+                    return (
+                      <tr key={r.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                        <td style={{ padding: "8px 8px", color: "#111", fontWeight: 500 }}>
+                          {r.name}
+                          {r.profile_source === "gpx_wind" && (
+                            <span style={{ marginLeft: "6px", fontSize: "10px", color: "#15803d" }}>wind</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "8px 8px", textAlign: "right", color: r.community_entry_count >= 5 ? "#374151" : "#9ca3af" }}>
+                          {r.community_entry_count}
+                          {r.community_entry_count < 5 && r.community_entry_count > 0 && (
+                            <span style={{ fontSize: "10px", color: "#9ca3af", marginLeft: "4px" }}>
+                              ({5 - r.community_entry_count} more needed)
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: "8px 8px", textAlign: "right", color: calColor, fontFamily: hasData ? "monospace" : "inherit" }}>
+                          {calLabel}
+                        </td>
+                        <td style={{ padding: "8px 8px", textAlign: "right", color: "#9ca3af", fontSize: "12px" }}>
+                          {r.calibration_updated_at
+                            ? new Date(r.calibration_updated_at).toLocaleDateString()
+                            : "–"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </div>
