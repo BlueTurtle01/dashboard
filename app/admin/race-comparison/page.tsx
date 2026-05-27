@@ -99,7 +99,7 @@ export default function RaceComparisonPage() {
         if (err) throw err;
 
         const mapped: RaceWithProfile[] = (data ?? []).map((row) => {
-          const race = row.races as { id: string; name: string; location: string | null };
+          const race = (row.races as unknown) as { id: string; name: string; location: string | null };
           return {
             id: row.race_id,
             name: race?.name ?? row.race_id,
@@ -223,12 +223,20 @@ export default function RaceComparisonPage() {
 
         {/* Header */}
         <div style={{ marginBottom: "28px" }}>
-          <Link
-            href="/admin"
-            style={{ fontSize: "13px", color: "#6b7280", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px", marginBottom: "12px" }}
-          >
-            ← Back to Admin
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+            <Link
+              href="/admin"
+              style={{ fontSize: "13px", color: "#6b7280", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
+            >
+              ← Back to Admin
+            </Link>
+            <Link
+              href="/admin/race-files"
+              style={{ fontSize: "13px", color: "#4f46e5", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 500 }}
+            >
+              ← Race File Manager
+            </Link>
+          </div>
           <h1 style={{ fontSize: "28px", fontWeight: 700, color: "#111", margin: "0 0 6px 0" }}>
             Race Finish Time Estimator
           </h1>

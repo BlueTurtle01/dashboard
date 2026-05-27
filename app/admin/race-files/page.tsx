@@ -474,12 +474,20 @@ export default function RaceFilesPage() {
       <div style={innerStyle}>
         {/* Header */}
         <div style={{ marginBottom: "28px" }}>
-          <Link
-            href="/admin"
-            style={{ fontSize: "13px", color: "#6b7280", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px", marginBottom: "12px" }}
-          >
-            ← Back to Admin
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+            <Link
+              href="/admin"
+              style={{ fontSize: "13px", color: "#6b7280", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
+            >
+              ← Back to Admin
+            </Link>
+            <Link
+              href="/admin/race-comparison"
+              style={{ fontSize: "13px", color: "#4f46e5", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px", fontWeight: 500 }}
+            >
+              Race Comparison →
+            </Link>
+          </div>
           <h1 style={headingStyle}>Race File Manager</h1>
           <p style={subheadingStyle}>
             Upload and manage GPX courses, wind analysis CSVs, and other files for each race.
