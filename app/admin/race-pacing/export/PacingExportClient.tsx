@@ -205,9 +205,6 @@ export default function PacingExportClient({ raceId, targetMinutes, raceName }: 
                   <th style={{ ...th, textAlign: "right", color: "#1e3a1e" }}>Target pace</th>
                   <th style={{ ...th, textAlign: "right", color: "#1d4ed8" }}>Comfortable</th>
                   <th style={th}>Pace band</th>
-                  {guide.wind_adjusted && (
-                    <th style={{ ...th, textAlign: "right", color: "#15803d" }}>Wind pace</th>
-                  )}
                 </tr>
               </thead>
               <tbody>
@@ -252,11 +249,6 @@ export default function PacingExportClient({ raceId, targetMinutes, raceName }: 
                       <td style={{ ...td, fontSize: "10px", color: "#374151", whiteSpace: "nowrap" }}>
                         {s.acceptable_pace_band}
                       </td>
-                      {guide.wind_adjusted && (
-                        <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#15803d" }}>
-                          {s.wind_target_pace ?? "–"}
-                        </td>
-                      )}
                     </tr>
                   );
                 })}

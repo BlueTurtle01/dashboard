@@ -18,14 +18,6 @@ function gradientBadge(gradient: number): { label: string; color: string; bg: st
   return                     { label: "Flat ↔",         color: "#374151", bg: "#f9fafb" };
 }
 
-function windBadge(label: string | undefined): string {
-  if (!label || label === "none") return "";
-  if (label.includes("strong headwind"))   return "💨↑↑";
-  if (label.includes("headwind"))          return "💨↑";
-  if (label.includes("tailwind"))          return "💨↓";
-  return "💨";
-}
-
 // ── Props ──────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -265,13 +257,6 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                       <th style={{ ...th, textAlign: "right", color: "#1e3a1e" }}>Target</th>
                       <th style={{ ...th, textAlign: "right", color: "#1d4ed8" }}>Comfortable</th>
                       <th style={th}>Pace band</th>
-                      {guide.wind_adjusted && showWind && (
-                        <>
-                          <th style={{ ...th, textAlign: "right", color: "#15803d" }}>Wind pace</th>
-                          <th style={{ ...th, color: "#15803d" }}>Wind band</th>
-                          <th style={th}>Wind</th>
-                        </>
-                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -324,22 +309,6 @@ export default function PacingClient({ raceId, targetMinutes, raceName }: Props)
                           <td style={{ ...td, whiteSpace: "nowrap", fontSize: "12px", color: "#374151" }}>
                             {getPaceBand(s)}
                           </td>
-
-                          {guide.wind_adjusted && showWind && (
-                            <>
-                              <td style={{ ...td, textAlign: "right", fontFamily: "monospace", color: "#15803d", whiteSpace: "nowrap" }}>
-                                {s.wind_target_pace ?? "–"}
-                              </td>
-                              <td style={{ ...td, fontSize: "12px", color: "#15803d", whiteSpace: "nowrap" }}>
-                                {s.wind_acceptable_pace_band ?? "–"}
-                              </td>
-                              <td style={{ ...td, fontSize: "12px", color: "#6b7280", whiteSpace: "nowrap" }}>
-                                {s.wind_label && s.wind_label !== "none"
-                                  ? `${windBadge(s.wind_label)} ${s.wind_label}`
-                                  : "–"}
-                              </td>
-                            </>
-                          )}
                         </tr>
                       );
                     })}
