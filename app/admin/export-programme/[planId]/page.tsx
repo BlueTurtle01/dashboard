@@ -246,17 +246,25 @@ function downsamplePoints(points: ElevationPoint[], maxPts: number): ElevationPo
   return Array.from({ length: maxPts }, (_, i) => points[Math.round(i * step)]);
 }
 
-function pacingSectionFill(sectionType: string): string {
-  const t = sectionType.toLowerCase();
-  if (t === "steady_climb") return "#bf360c18";
-  if (t === "gentle_descent" || t === "runnable_descent") return "#1565c018";
-  if (t === "steep_descent") return "#0d47a130";
-  return "#78909c10";
+function parsePaceToMinutes(pace: string): number | null {
+  const match = pace.match(/(\d+):(\d+)/);
+  if (!match) return null;
+  return parseInt(match[1], 10) + parseInt(match[2], 10) / 60;
+}
+
+function formatPaceLabel(minPerKm: number): string {
+  const mins = Math.floor(minPerKm);
+  const secs = Math.round((minPerKm - mins) * 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
 function ElevationChart({ profile, notable, pacingSections }: { profile: RaceElevProfile; notable: RaceSustainedSeg[]; pacingSections?: PacingSection[] }) {
   const W = 698; const H = 200;
-  const padL = 46; const padB = 22; const padR = 8; const padT = 16;
+  const padL = 46; const padB = 22; const padT = 16;
+
+  // Widen right margin to fit pace axis when pacing data is present
+  const hasPacing = (pacingSections?.length ?? 0) > 0;
+  const padR = hasPacing ? 54 : 8;
   const cW = W - padL - padR;
   const cH = H - padT - padB;
 
@@ -280,11 +288,33 @@ function ElevationChart({ profile, notable, pacingSections }: { profile: RaceEle
   const xTicks: number[] = [];
   for (let k = 0; k <= profile.totalDistanceKm; k += xInterval) xTicks.push(k);
 
+  // ── Pace scale ──────────────────────────────────────────────
+  // Parse each section's target pace to minutes-per-km
+  const paceParsed = (pacingSections ?? []).map((s) => parsePaceToMinutes(s.target_pace));
+  const validPaces = paceParsed.filter((v): v is number => v !== null);
+  const paceMinRaw = validPaces.length > 0 ? Math.min(...validPaces) : 0;
+  const paceMaxRaw = validPaces.length > 0 ? Math.max(...validPaces) : 30;
+  // Add half-minute padding so the line never sits at the exact chart edge
+  const paceMin = paceMinRaw - 0.5;
+  const paceMax = paceMaxRaw + 0.5;
+  const paceRange = Math.max(paceMax - paceMin, 1);
+  // Slower pace (higher number) maps to the TOP of the chart —
+  // this makes the line rise on climbs, mirroring the elevation profile.
+  const paceY = (minPerKm: number) => padT + cH - ((minPerKm - paceMin) / paceRange) * cH;
+
+  // Pace axis ticks at every 1 or 2 whole minutes
+  const tickInterval = (paceMaxRaw - paceMinRaw) > 5 ? 2 : 1;
+  const firstTick = Math.ceil(paceMin / tickInterval) * tickInterval;
+  const paceTicks: number[] = [];
+  for (let p = firstTick; p <= paceMax + 0.01; p += tickInterval) paceTicks.push(p);
+
+  const axisX = padL + cW; // right edge of chart area
+
   return (
     <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
       {/* Gridlines */}
       {yTicks.map((elev, i) => (
-        <line key={i} x1={padL} y1={yS(elev)} x2={padL + cW} y2={yS(elev)} stroke="#eee" strokeWidth="1" />
+        <line key={i} x1={padL} y1={yS(elev)} x2={axisX} y2={yS(elev)} stroke="#eee" strokeWidth="1" />
       ))}
 
       {/* Notable segment bands */}
@@ -299,7 +329,31 @@ function ElevationChart({ profile, notable, pacingSections }: { profile: RaceEle
       {/* Elevation line */}
       <polyline points={linePts} fill="none" stroke="#1e3a1e" strokeWidth="1.5" strokeLinejoin="round" />
 
-      {/* Y-axis labels */}
+      {/* ── Pace stepped line ── */}
+      {hasPacing && (
+        <g>
+          {(pacingSections ?? []).map((sec, i) => {
+            const pace = paceParsed[i];
+            if (pace === null) return null;
+            const x1 = xS(sec.start_km);
+            const x2 = xS(sec.end_km);
+            const y  = paceY(pace);
+            const nextPace = i + 1 < paceParsed.length ? paceParsed[i + 1] : null;
+            return (
+              <g key={`pace-${i}`}>
+                {/* Horizontal segment at this section's pace */}
+                <line x1={x1} y1={y} x2={x2} y2={y} stroke="#c0392b" strokeWidth="1.5" strokeLinecap="square" />
+                {/* Vertical step connector to the next section */}
+                {nextPace !== null && (
+                  <line x1={x2} y1={y} x2={x2} y2={paceY(nextPace)} stroke="#c0392b" strokeWidth="1.5" />
+                )}
+              </g>
+            );
+          })}
+        </g>
+      )}
+
+      {/* Left Y-axis labels (elevation, m) */}
       {yTicks.map((elev, i) => (
         <text key={i} x={padL - 5} y={yS(elev) + 3.5} textAnchor="end" fontSize="8.5" fill="#888">
           {Math.round(elev)}
@@ -314,29 +368,44 @@ function ElevationChart({ profile, notable, pacingSections }: { profile: RaceEle
         </g>
       ))}
 
-      {/* Pacing section overlays */}
-      {(pacingSections ?? []).map((sec, i) => {
-        const x1 = xS(sec.start_km);
-        const x2 = xS(sec.end_km);
-        const w = Math.max(x2 - x1, 1);
-        const showLabel = w >= 30 && sec.target_pace;
-        return (
-          <g key={`pace-${i}`}>
-            <rect x={x1} y={padT} width={w} height={cH} fill={pacingSectionFill(sec.section_type)} />
-            {showLabel && (
-              <text x={x1 + w / 2} y={padT - 4} textAnchor="middle" fontSize="7.5" fill="#444" fontWeight="600">
-                {sec.target_pace}
-              </text>
-            )}
-          </g>
-        );
-      })}
-
       {/* Axis borders */}
-      <line x1={padL} y1={padT} x2={padL} y2={padT + cH} stroke="#bbb" strokeWidth="1" />
-      <line x1={padL} y1={padT + cH} x2={padL + cW} y2={padT + cH} stroke="#bbb" strokeWidth="1" />
+      <line x1={padL}  y1={padT}      x2={padL}  y2={padT + cH} stroke="#bbb" strokeWidth="1" />
+      <line x1={padL}  y1={padT + cH} x2={axisX} y2={padT + cH} stroke="#bbb" strokeWidth="1" />
 
-      {/* Notable segment labels */}
+      {/* ── Right pace axis ── */}
+      {hasPacing && (
+        <g>
+          {/* Axis line in pace colour */}
+          <line x1={axisX} y1={padT} x2={axisX} y2={padT + cH} stroke="#c0392b" strokeWidth="1" opacity="0.4" />
+          {/* Tick marks + labels */}
+          {paceTicks.map((p, i) => {
+            const y = paceY(p);
+            if (y < padT - 1 || y > padT + cH + 1) return null;
+            return (
+              <g key={i}>
+                <line x1={axisX} y1={y} x2={axisX + 4} y2={y} stroke="#c0392b" strokeWidth="1" />
+                <text x={axisX + 7} y={y + 3.5} textAnchor="start" fontSize="8.5" fill="#c0392b">
+                  {formatPaceLabel(p)}
+                </text>
+              </g>
+            );
+          })}
+          {/* Axis label — rotated, sitting at the far right */}
+          <text
+            x={axisX + 46}
+            y={padT + cH / 2}
+            textAnchor="middle"
+            fontSize="7.5"
+            fill="#c0392b"
+            opacity="0.7"
+            transform={`rotate(-90,${axisX + 46},${padT + cH / 2})`}
+          >
+            pace min/km
+          </text>
+        </g>
+      )}
+
+      {/* Notable segment labels (elevation ▲▼) */}
       {notable.map((seg, i) => {
         const midX = xS((seg.startKm + seg.endKm) / 2);
         const isClimb = seg.type === "climb";
