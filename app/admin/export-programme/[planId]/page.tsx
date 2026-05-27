@@ -13,6 +13,7 @@ type PacingSection = {
   section_type: string;
   target_pace: string;
   pace_band: string;
+  wind_adjusted_pace: string;
 };
 
 /* ── Route / wind types ── */
@@ -1139,7 +1140,7 @@ function RaceStrategyPage({
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
         <thead>
           <tr>
-            {["#", "km Range", "Distance", "Section Type", "Target Pace", "Pace Band", "Section Time"].map((h) => (
+            {["#", "km Range", "Distance", "Section Type", "Target Pace", "Wind Adj. Pace", "Pace Band", "Section Time"].map((h) => (
               <th key={h} style={thStyle}>{h}</th>
             ))}
           </tr>
@@ -1157,6 +1158,9 @@ function RaceStrategyPage({
                 <td style={tdStyle}>{dist.toFixed(1)} km</td>
                 <td style={tdStyle}>{formatSectionType(sec.section_type)}</td>
                 <td style={{ ...tdStyle, fontWeight: 600, color: "#c0392b" }}>{sec.target_pace}</td>
+                <td style={{ ...tdStyle, fontWeight: 600, color: sec.wind_adjusted_pace && sec.wind_adjusted_pace !== sec.target_pace ? "#1565c0" : "#c0392b" }}>
+                  {sec.wind_adjusted_pace || sec.target_pace}
+                </td>
                 <td style={{ ...tdStyle, color: "#777" }}>{sec.pace_band}</td>
                 <td style={{ ...tdStyle, color: "#555" }}>
                   {sectionMins !== null ? formatRaceTime(sectionMins) : "—"}

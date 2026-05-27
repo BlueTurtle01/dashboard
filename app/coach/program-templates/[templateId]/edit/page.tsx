@@ -981,6 +981,7 @@ type PacingSection = {
   section_type: string;
   target_pace: string;
   pace_band: string;
+  wind_adjusted_pace: string;
 };
 
 type RoutePoint = { lat: number; lon: number };
@@ -1067,6 +1068,7 @@ function parsePacingCsv(csv: string): PacingSection[] {
       section_type: get("section_type"),
       target_pace: get("target_pace"),
       pace_band: get("acceptable_pace_band"),
+      wind_adjusted_pace: get("wind_adjusted_target_pace"),
     }];
   });
 }
