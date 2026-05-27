@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getDayOrderIndex } from "@/lib/planner/dayLabels";
@@ -463,131 +463,210 @@ function TerrainBar({ terrain }: { terrain: RaceTerrainSeg[] }) {
   );
 }
 
-/* ── Route map ── */
+/* ── Route map (OSM tiles + Mercator projection) ── */
+
+// Web Mercator helpers — same projection as OSM tile server
+function osmMercX(lon: number): number {
+  return (lon + 180) / 360;
+}
+function osmMercY(lat: number): number {
+  const s = Math.sin(lat * Math.PI / 180);
+  return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+}
+function osmTileX(lon: number, z: number): number {
+  return Math.floor(osmMercX(lon) * Math.pow(2, z));
+}
+function osmTileY(lat: number, z: number): number {
+  return Math.floor(osmMercY(lat) * Math.pow(2, z));
+}
+
 function windRiskColor(label: string): string {
   if (label.includes("high")) return "#c62828";
   if (label.includes("moderate")) return "#e65100";
-  return "#546e7a"; // low
+  return "#546e7a";
 }
+
+type OsmTile = { url: string; x: number; y: number; w: number; h: number };
 
 function RouteMap({
   route,
   windSections,
   width = 694,
-  height = 230,
+  height = 240,
 }: {
   route: RoutePoint[];
   windSections?: WindSection[];
   width?: number;
   height?: number;
 }) {
+  // Stable clip-path ID for this component instance
+  const clipId = useRef(`mc-${Math.random().toString(36).slice(2, 7)}`).current;
+  const [tiles, setTiles] = useState<OsmTile[]>([]);
+
+  // Load OSM tiles whenever the route changes
+  useEffect(() => {
+    if (route.length < 2) { setTiles([]); return; }
+
+    const lats = route.map(p => p.lat);
+    const lons = route.map(p => p.lon);
+    const r0lat = Math.min(...lats); const r1lat = Math.max(...lats);
+    const r0lon = Math.min(...lons); const r1lon = Math.max(...lons);
+    // Add 15 % padding around the route bounding box
+    const dlat = r1lat - r0lat; const dlon = r1lon - r0lon;
+    const minLat = r0lat - dlat * 0.15 - 0.005;
+    const maxLat = r1lat + dlat * 0.15 + 0.005;
+    const minLon = r0lon - dlon * 0.15 - 0.008;
+    const maxLon = r1lon + dlon * 0.15 + 0.008;
+
+    // Choose highest zoom where total tile count ≤ 16
+    let z = 14;
+    for (; z >= 8; z--) {
+      const nx = osmTileX(maxLon, z) - osmTileX(minLon, z) + 1;
+      const ny = osmTileY(minLat, z) - osmTileY(maxLat, z) + 1; // minLat has larger tileY
+      if (nx * ny <= 16) break;
+    }
+
+    const zPow = Math.pow(2, z);
+    const mx0 = osmMercX(minLon); const mx1 = osmMercX(maxLon);
+    const my0 = osmMercY(maxLat); const my1 = osmMercY(minLat);
+    const sc = Math.min(width / (mx1 - mx0), height / (my1 - my0));
+    const ox = (width  - (mx1 - mx0) * sc) / 2;
+    const oy = (height - (my1 - my0) * sc) / 2;
+    const tsz = 1 / zPow; // tile size in Mercator units
+
+    const tx0 = osmTileX(minLon, z); const tx1 = osmTileX(maxLon, z);
+    const ty0 = osmTileY(maxLat, z); const ty1 = osmTileY(minLat, z);
+
+    const newTiles: OsmTile[] = [];
+    for (let tx = tx0; tx <= tx1; tx++) {
+      for (let ty = ty0; ty <= ty1; ty++) {
+        newTiles.push({
+          url: `https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`,
+          x: ox + (tx * tsz - mx0) * sc,
+          y: oy + (ty * tsz - my0) * sc,
+          w: tsz * sc,
+          h: tsz * sc,
+        });
+      }
+    }
+    setTiles(newTiles);
+  }, [route, width, height]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (route.length < 2) return null;
 
-  const pad = 22;
-  const lats = route.map((p) => p.lat);
-  const lons = route.map((p) => p.lon);
-  const minLat = Math.min(...lats); const maxLat = Math.max(...lats);
-  const minLon = Math.min(...lons); const maxLon = Math.max(...lons);
+  // Mercator layout for overlay rendering (same padding formula as the effect above)
+  const lats = route.map(p => p.lat);
+  const lons = route.map(p => p.lon);
+  const r0lat = Math.min(...lats); const r1lat = Math.max(...lats);
+  const r0lon = Math.min(...lons); const r1lon = Math.max(...lons);
+  const dlat = r1lat - r0lat; const dlon = r1lon - r0lon;
+  const minLat = r0lat - dlat * 0.15 - 0.005;
+  const maxLat = r1lat + dlat * 0.15 + 0.005;
+  const minLon = r0lon - dlon * 0.15 - 0.008;
+  const maxLon = r1lon + dlon * 0.15 + 0.008;
 
-  const midLat = (minLat + maxLat) / 2;
-  const lonScale = Math.cos(midLat * Math.PI / 180);
+  const mx0 = osmMercX(minLon); const mx1 = osmMercX(maxLon);
+  const my0 = osmMercY(maxLat); const my1 = osmMercY(minLat);
+  const sc = Math.min(width / (mx1 - mx0), height / (my1 - my0));
+  const ox = (width  - (mx1 - mx0) * sc) / 2;
+  const oy = (height - (my1 - my0) * sc) / 2;
 
-  const latRange = maxLat - minLat || 0.001;
-  const lonRange = (maxLon - minLon) * lonScale || 0.001;
+  const toX = (lon: number) => ox + (osmMercX(lon) - mx0) * sc;
+  const toY = (lat: number) => oy + (osmMercY(lat) - my0) * sc;
 
-  const drawW = width - pad * 2;
-  const drawH = height - pad * 2;
-  const scale = Math.min(drawW / lonRange, drawH / latRange);
-
-  const projW = lonRange * scale;
-  const projH = latRange * scale;
-  const offsetX = pad + (drawW - projW) / 2;
-  const offsetY = pad + (drawH - projH) / 2;
-
-  const toX = (lon: number) => offsetX + (lon - minLon) * lonScale * scale;
-  const toY = (lat: number) => offsetY + projH - (lat - minLat) * scale;
-
-  const pts = route.map((p) => `${toX(p.lon).toFixed(1)},${toY(p.lat).toFixed(1)}`).join(" ");
-  const startPt = route[0];
-  const endPt = route[route.length - 1];
-
-  const maxWindSpeed = Math.max(...(windSections ?? []).map((s) => s.median_wind_speed_ms), 1);
-
-  const hasWind = (windSections ?? []).length > 0;
+  const pts = route.map(p => `${toX(p.lon).toFixed(1)},${toY(p.lat).toFixed(1)}`).join(" ");
+  const startPt = route[0]; const endPt = route[route.length - 1];
+  const maxWindSpeed = Math.max(...(windSections ?? []).map(s => s.median_wind_speed_ms), 1);
+  const hasWind = (windSections?.length ?? 0) > 0;
 
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
-      {/* Map background */}
-      <rect x={0} y={0} width={width} height={height} fill="#eef2ee" rx={4} />
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={0} y={0} width={width} height={height} />
+        </clipPath>
+      </defs>
 
-      {/* Route line */}
-      <polyline
-        points={pts}
-        fill="none"
-        stroke="#1e3a1e"
-        strokeWidth="2.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+      {/* Fallback background colour while tiles load */}
+      <rect x={0} y={0} width={width} height={height} fill="#e8ede8" />
 
-      {/* Wind arrows (only on wind map) */}
-      {(windSections ?? []).map((sec, i) => {
-        const cx = toX(sec.mid_lon);
-        const cy = toY(sec.mid_lat);
-        const color = windRiskColor(sec.wind_risk_label);
-        const isSignificant = sec.wind_risk_label !== "low_wind_risk";
+      <g clipPath={`url(#${clipId})`}>
+        {/* OSM tile images — aligned via Mercator projection */}
+        {tiles.map((t, i) => (
+          <image key={i} href={t.url}
+            x={t.x.toFixed(1)} y={t.y.toFixed(1)}
+            width={t.w.toFixed(1)} height={t.h.toFixed(1)}
+            preserveAspectRatio="none"
+          />
+        ))}
 
-        // Arrow points in direction the wind is blowing:
-        // positive headwind → wind opposes travel → blowing from bearing toward bearing+180
-        const windDir = sec.median_headwind_ms >= 0
-          ? ((sec.bearing_deg + 180) % 360)
-          : (sec.bearing_deg % 360);
+        {/* Route: white halo so it reads against any map background */}
+        <polyline points={pts} fill="none" stroke="white" strokeWidth="5"
+          strokeLinejoin="round" strokeLinecap="round" opacity="0.8" />
+        <polyline points={pts} fill="none" stroke="#1a3a1a" strokeWidth="2.5"
+          strokeLinejoin="round" strokeLinecap="round" />
 
-        // Size scales with wind speed
-        const arrowLen = 9 + (sec.median_wind_speed_ms / maxWindSpeed) * 7;
-        const sw = isSignificant ? 2.5 : 1.5;
-        const op = isSignificant ? 1 : 0.5;
+        {/* Wind arrows */}
+        {(windSections ?? []).map((sec, i) => {
+          const cx = toX(sec.mid_lon); const cy = toY(sec.mid_lat);
+          const color = windRiskColor(sec.wind_risk_label);
+          const isSignificant = sec.wind_risk_label !== "low_wind_risk";
+          // Arrow points in the direction the wind is BLOWING:
+          // positive headwind → wind opposing travel → blowing from bearing, toward bearing+180
+          const windDir = sec.median_headwind_ms >= 0
+            ? (sec.bearing_deg + 180) % 360
+            : sec.bearing_deg % 360;
+          const arrowLen = 9 + (sec.median_wind_speed_ms / maxWindSpeed) * 7;
+          return (
+            <g key={i}
+              transform={`translate(${cx.toFixed(1)},${cy.toFixed(1)}) rotate(${windDir.toFixed(1)})`}
+              opacity={isSignificant ? 1 : 0.5}
+            >
+              <circle r={arrowLen + 5} fill={color} opacity={0.22} />
+              <line x1={0} y1={arrowLen * 0.65} x2={0} y2={-arrowLen * 0.65}
+                stroke={color} strokeWidth={isSignificant ? 2.5 : 1.5} strokeLinecap="round" />
+              <polygon
+                points={`0,${-(arrowLen + 4)} ${-arrowLen * 0.4},${-arrowLen * 0.35} ${arrowLen * 0.4},${-arrowLen * 0.35}`}
+                fill={color}
+              />
+            </g>
+          );
+        })}
 
-        return (
-          <g key={i} transform={`translate(${cx.toFixed(1)},${cy.toFixed(1)}) rotate(${windDir.toFixed(1)})`} opacity={op}>
-            <circle r={arrowLen + 5} fill={color} opacity={0.13} />
-            {/* Shaft */}
-            <line x1={0} y1={arrowLen * 0.65} x2={0} y2={-arrowLen * 0.65}
-              stroke={color} strokeWidth={sw} strokeLinecap="round" />
-            {/* Head — pointing in windDir (upward before rotate) */}
-            <polygon
-              points={`0,${-(arrowLen + 4)} ${-arrowLen * 0.4},${-arrowLen * 0.35} ${arrowLen * 0.4},${-arrowLen * 0.35}`}
-              fill={color}
-            />
-          </g>
-        );
-      })}
+        {/* Start marker */}
+        <circle cx={toX(startPt.lon)} cy={toY(startPt.lat)} r={6} fill="#2e7d32" stroke="white" strokeWidth="2" />
+        <text x={toX(startPt.lon) + 9} y={toY(startPt.lat) + 4} fontSize="9.5" fontWeight="700"
+          stroke="white" strokeWidth="3" paintOrder="stroke" fill="#2e7d32">Start</text>
 
-      {/* Start marker */}
-      <circle cx={toX(startPt.lon).toFixed(1)} cy={toY(startPt.lat).toFixed(1)} r={5} fill="#2e7d32" stroke="#fff" strokeWidth="1.5" />
-      <text x={(toX(startPt.lon) + 8).toFixed(1)} y={(toY(startPt.lat) + 4).toFixed(1)} fontSize="9" fill="#2e7d32" fontWeight="700">Start</text>
+        {/* Finish marker */}
+        <circle cx={toX(endPt.lon)} cy={toY(endPt.lat)} r={6} fill="#c62828" stroke="white" strokeWidth="2" />
+        <text x={toX(endPt.lon) + 9} y={toY(endPt.lat) + 4} fontSize="9.5" fontWeight="700"
+          stroke="white" strokeWidth="3" paintOrder="stroke" fill="#c62828">Finish</text>
+      </g>
 
-      {/* Finish marker */}
-      <circle cx={toX(endPt.lon).toFixed(1)} cy={toY(endPt.lat).toFixed(1)} r={5} fill="#c62828" stroke="#fff" strokeWidth="1.5" />
-      <text x={(toX(endPt.lon) + 8).toFixed(1)} y={(toY(endPt.lat) + 4).toFixed(1)} fontSize="9" fill="#c62828" fontWeight="700">Finish</text>
-
-      {/* Wind legend */}
+      {/* Wind legend (outside clipPath so it's always visible) */}
       {hasWind && (
-        <g transform={`translate(${width - 130},${height - 56})`}>
-          <rect x={0} y={0} width={125} height={52} fill="white" opacity={0.88} rx={3} />
-          <text x={7} y={14} fontSize="8" fontWeight="700" fill="#333">Wind risk</text>
+        <g transform={`translate(${width - 134},${height - 58})`}>
+          <rect x={0} y={0} width={130} height={54} fill="white" opacity={0.92} rx={3} />
+          <text x={7} y={13} fontSize="8" fontWeight="700" fill="#333">Wind risk</text>
           {[
             { color: "#546e7a", label: "Low" },
             { color: "#e65100", label: "Moderate headwind" },
             { color: "#c62828", label: "High headwind" },
           ].map(({ color, label }, li) => (
-            <g key={li} transform={`translate(7,${22 + li * 11})`}>
+            <g key={li} transform={`translate(7,${21 + li * 11})`}>
               <circle r={4} fill={color} />
               <text x={11} y={4} fontSize="7.5" fill="#444">{label}</text>
             </g>
           ))}
         </g>
       )}
+
+      {/* OSM attribution — required by usage policy */}
+      <rect x={width - 158} y={height - 14} width={154} height={12} fill="white" opacity={0.75} />
+      <text x={width - 4} y={height - 4} textAnchor="end" fontSize="7.5" fill="#555">
+        © OpenStreetMap contributors
+      </text>
     </svg>
   );
 }
