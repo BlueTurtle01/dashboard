@@ -106,6 +106,11 @@ export default function RaceFilesPage() {
   const [windError, setWindError] = useState<Record<string, string>>({});
   const [windSuccess, setWindSuccess] = useState<Record<string, string>>({});
 
+  // Race profile generation
+  const [profileGenerating, setProfileGenerating] = useState<Record<string, boolean>>({});
+  const [profileError, setProfileError] = useState<Record<string, string>>({});
+  const [profileSuccess, setProfileSuccess] = useState<Record<string, string>>({});
+
   // Hidden file inputs per (race × fileType)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -293,6 +298,45 @@ export default function RaceFilesPage() {
       }));
     } finally {
       setWindGenerating((prev) => ({ ...prev, [raceId]: false }));
+    }
+  }
+
+  // ── Race profile generation ───────────────────────────────────────────────
+
+  async function handleGenerateProfile(raceId: string) {
+    setProfileGenerating((prev) => ({ ...prev, [raceId]: true }));
+    setProfileError((prev) => ({ ...prev, [raceId]: "" }));
+    setProfileSuccess((prev) => ({ ...prev, [raceId]: "" }));
+
+    try {
+      const res = await fetch("/api/race-analysis/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race_id: raceId }),
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setProfileError((prev) => ({ ...prev, [raceId]: json.error ?? "Generation failed" }));
+        return;
+      }
+
+      setProfileSuccess((prev) => ({
+        ...prev,
+        [raceId]:
+          `${json.total_distance_km} km · flat equiv ${json.flat_equivalent_km} km` +
+          (json.difficulty_ratio ? ` (${json.difficulty_ratio}×)` : "") +
+          (json.wind_adjusted_flat_equivalent_km
+            ? ` · wind-adj ${json.wind_adjusted_flat_equivalent_km} km`
+            : ""),
+      }));
+    } catch (err) {
+      setProfileError((prev) => ({
+        ...prev,
+        [raceId]: err instanceof Error ? err.message : "Network error",
+      }));
+    } finally {
+      setProfileGenerating((prev) => ({ ...prev, [raceId]: false }));
     }
   }
 
@@ -664,6 +708,44 @@ export default function RaceFilesPage() {
                         </div>
                         <p style={{ fontSize: "12px", color: "#9ca3af", margin: "6px 0 0 0" }}>
                           Fetches ERA5 historical wind from Open-Meteo and saves a wind_analysis CSV automatically.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Generate Race Profile */}
+                    {filesByType.has("gpx") && (
+                      <div style={{ marginTop: "12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                          <button
+                            disabled={!!profileGenerating[race.id]}
+                            onClick={() => handleGenerateProfile(race.id)}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "6px",
+                              padding: "7px 14px", borderRadius: "7px",
+                              border: "1px solid #86efac",
+                              background: profileGenerating[race.id] ? "#f0fdf4" : "#dcfce7",
+                              color: "#15803d", fontSize: "13px", fontWeight: 600,
+                              cursor: profileGenerating[race.id] ? "not-allowed" : "pointer",
+                              opacity: profileGenerating[race.id] ? 0.7 : 1,
+                            }}
+                          >
+                            {profileGenerating[race.id] ? "⏳ Generating…" : "📊 Generate Race Profile"}
+                          </button>
+
+                          {profileError[race.id] && (
+                            <span style={{ fontSize: "12px", color: "#b91c1c" }}>
+                              {profileError[race.id]}
+                            </span>
+                          )}
+                          {profileSuccess[race.id] && (
+                            <span style={{ fontSize: "12px", color: "#15803d" }}>
+                              ✓ {profileSuccess[race.id]}
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ fontSize: "12px", color: "#9ca3af", margin: "6px 0 0 0" }}>
+                          Computes flat-equivalent difficulty score from GPX (+ wind if available).
+                          Required before using the Race Comparison tool.
                         </p>
                       </div>
                     )}
