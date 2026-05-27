@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getDayOrderIndex } from "@/lib/planner/dayLabels";
 
 /* ── Race profile types ── */
 type ElevationPoint = { distanceKm: number; elevationM: number };
@@ -202,9 +203,8 @@ function sessionDuration(s: TemplateSession): string {
 }
 
 function sortSessions(sessions: TemplateSession[]): TemplateSession[] {
-  const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   return [...sessions].sort((a, b) => {
-    const di = dayOrder.indexOf(a.day_label) - dayOrder.indexOf(b.day_label);
+    const di = getDayOrderIndex(a.day_label) - getDayOrderIndex(b.day_label);
     return di !== 0 ? di : a.sort_order - b.sort_order;
   });
 }
@@ -603,6 +603,8 @@ function SessionCard({ session, raceProfile }: { session: TemplateSession; raceP
         </div>
       </div>
 
+      {isGym && raceProfile && <GymFocusChart session={session} raceProfile={raceProfile} />}
+
       {!isRest && <SessionSpecs session={session} />}
 
       {session.description && (
@@ -617,7 +619,6 @@ function SessionCard({ session, raceProfile }: { session: TemplateSession; raceP
       )}
 
       {isGym && <ExerciseTable exercises={session.program_template_session_exercises} />}
-      {isGym && raceProfile && <GymFocusChart session={session} raceProfile={raceProfile} />}
     </div>
   );
 }
