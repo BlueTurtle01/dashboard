@@ -40,7 +40,7 @@ function escapeCsv(value: unknown): string {
 
 export function formatWindCsv(results: WindSectionResult[]): string {
   const rows = results.map((r) =>
-    HEADERS.map((h) => escapeCsv((r as Record<string, unknown>)[h])).join(",")
+    HEADERS.map((h) => escapeCsv((r as unknown as Record<string, unknown>)[h])).join(",")
   );
   return [HEADERS.join(","), ...rows].join("\n");
 }
