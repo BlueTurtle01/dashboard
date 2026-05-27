@@ -1,0 +1,596 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type FileType = "gpx" | "wind_analysis" | "course_map" | "elevation_profile" | "other";
+
+interface RaceFile {
+  id: string;
+  race_id: string;
+  file_type: FileType;
+  file_name: string;
+  storage_path: string;
+  public_url: string;
+  file_size_bytes: number | null;
+  mime_type: string | null;
+  uploaded_by: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+interface Race {
+  id: string;
+  name: string;
+  slug: string;
+  location: string | null;
+}
+
+interface RaceWithFiles extends Race {
+  files: RaceFile[];
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const FILE_TYPE_LABELS: Record<FileType, string> = {
+  gpx: "GPX Course",
+  wind_analysis: "Wind Analysis",
+  course_map: "Course Map",
+  elevation_profile: "Elevation Profile",
+  other: "Other",
+};
+
+const FILE_TYPE_ACCEPT: Record<FileType, string> = {
+  gpx: ".gpx,application/gpx+xml,application/xml,text/xml",
+  wind_analysis: ".csv,text/csv,application/csv",
+  course_map: ".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf",
+  elevation_profile: ".png,.jpg,.jpeg,.csv,image/png,image/jpeg,text/csv",
+  other: "*",
+};
+
+const FILE_TYPE_ORDER: FileType[] = [
+  "gpx",
+  "wind_analysis",
+  "course_map",
+  "elevation_profile",
+  "other",
+];
+
+const BUCKET = "race-files";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatBytes(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileTypeColor(type: FileType): { bg: string; text: string } {
+  const map: Record<FileType, { bg: string; text: string }> = {
+    gpx: { bg: "#e0f2fe", text: "#0369a1" },
+    wind_analysis: { bg: "#f0fdf4", text: "#15803d" },
+    course_map: { bg: "#fef9c3", text: "#92400e" },
+    elevation_profile: { bg: "#fce7f3", text: "#9d174d" },
+    other: { bg: "#f4f4f5", text: "#52525b" },
+  };
+  return map[type] ?? map.other;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+export default function RaceFilesPage() {
+  const supabase = createClient();
+
+  const [races, setRaces] = useState<RaceWithFiles[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedRaceId, setExpandedRaceId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  // Per-race upload state: { [raceId]: { [fileType]: boolean } }
+  const [uploading, setUploading] = useState<Record<string, Record<string, boolean>>>({});
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
+  const [uploadError, setUploadError] = useState<Record<string, string>>({});
+
+  // Hidden file inputs per (race × fileType)
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // ── Data loading ──────────────────────────────────────────────────────────
+
+  async function loadData() {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: racesData, error: racesErr } = await supabase
+        .from("races")
+        .select("id, name, slug, location")
+        .order("name", { ascending: true });
+
+      if (racesErr || !racesData) throw new Error(racesErr?.message ?? "Failed to load races");
+
+      const { data: filesData, error: filesErr } = await supabase
+        .from("race_files")
+        .select("*")
+        .order("created_at", { ascending: true });
+
+      if (filesErr) throw new Error(filesErr.message);
+
+      const filesByRace = new Map<string, RaceFile[]>();
+      for (const f of (filesData ?? []) as RaceFile[]) {
+        if (!filesByRace.has(f.race_id)) filesByRace.set(f.race_id, []);
+        filesByRace.get(f.race_id)!.push(f);
+      }
+
+      setRaces(
+        (racesData as Race[]).map((r) => ({
+          ...r,
+          files: filesByRace.get(r.id) ?? [],
+        }))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Upload ────────────────────────────────────────────────────────────────
+
+  async function handleFileSelected(
+    raceId: string,
+    fileType: FileType,
+    file: File
+  ) {
+    const key = `${raceId}_${fileType}`;
+    setUploading((prev) => ({ ...prev, [raceId]: { ...prev[raceId], [fileType]: true } }));
+    setUploadError((prev) => ({ ...prev, [key]: "" }));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const ext = file.name.split(".").pop() ?? "bin";
+      const uuid = crypto.randomUUID();
+      const storagePath = `${raceId}/${fileType}/${uuid}.${ext}`;
+
+      // Check if a file of this type already exists for this race
+      const existingFile = races
+        .find((r) => r.id === raceId)
+        ?.files.find((f) => f.file_type === fileType);
+
+      // Upload to storage (upsert if replacing)
+      const { error: storageErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(storagePath, file, { upsert: false });
+
+      if (storageErr) throw new Error(storageErr.message);
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(BUCKET)
+        .getPublicUrl(storagePath);
+
+      if (existingFile) {
+        // Delete old storage object
+        await supabase.storage.from(BUCKET).remove([existingFile.storage_path]);
+
+        // Update DB row
+        const { error: updateErr } = await supabase
+          .from("race_files")
+          .update({
+            file_name: file.name,
+            storage_path: storagePath,
+            public_url: publicUrl,
+            file_size_bytes: file.size,
+            mime_type: file.type || null,
+            uploaded_by: user.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingFile.id);
+
+        if (updateErr) throw new Error(updateErr.message);
+      } else {
+        // Insert new DB row
+        const { error: insertErr } = await supabase.from("race_files").insert({
+          race_id: raceId,
+          file_type: fileType,
+          file_name: file.name,
+          storage_path: storagePath,
+          public_url: publicUrl,
+          file_size_bytes: file.size,
+          mime_type: file.type || null,
+          uploaded_by: user.id,
+        });
+
+        if (insertErr) throw new Error(insertErr.message);
+      }
+
+      await loadData();
+    } catch (err) {
+      setUploadError((prev) => ({
+        ...prev,
+        [key]: err instanceof Error ? err.message : "Upload failed",
+      }));
+    } finally {
+      setUploading((prev) => ({ ...prev, [raceId]: { ...prev[raceId], [fileType]: false } }));
+      // Reset the hidden input so the same file can be re-selected if needed
+      const inputKey = `${raceId}_${fileType}`;
+      if (inputRefs.current[inputKey]) {
+        inputRefs.current[inputKey]!.value = "";
+      }
+    }
+  }
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+
+  async function handleDelete(raceId: string, file: RaceFile) {
+    if (!confirm(`Delete "${file.file_name}"? This cannot be undone.`)) return;
+
+    setDeleting((prev) => ({ ...prev, [file.id]: true }));
+    try {
+      await supabase.storage.from(BUCKET).remove([file.storage_path]);
+      const { error: dbErr } = await supabase
+        .from("race_files")
+        .delete()
+        .eq("id", file.id);
+      if (dbErr) throw new Error(dbErr.message);
+      await loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting((prev) => ({ ...prev, [file.id]: false }));
+    }
+  }
+
+  // ── Filtered races ────────────────────────────────────────────────────────
+
+  const filteredRaces = races.filter((r) =>
+    search.trim() === ""
+      ? true
+      : r.name.toLowerCase().includes(search.toLowerCase()) ||
+        (r.location ?? "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  // ── Styles ────────────────────────────────────────────────────────────────
+
+  const pageStyle: React.CSSProperties = {
+    minHeight: "100vh",
+    background: "#f5f5f5",
+    padding: "32px 24px",
+  };
+
+  const innerStyle: React.CSSProperties = {
+    maxWidth: "900px",
+    margin: "0 auto",
+  };
+
+  const headingStyle: React.CSSProperties = {
+    fontSize: "28px",
+    fontWeight: 700,
+    color: "#111",
+    margin: "0 0 6px 0",
+  };
+
+  const subheadingStyle: React.CSSProperties = {
+    fontSize: "15px",
+    color: "#666",
+    margin: "0 0 28px 0",
+  };
+
+  const searchStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "11px 14px",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+    fontSize: "14px",
+    marginBottom: "20px",
+    boxSizing: "border-box",
+    background: "#fff",
+  };
+
+  const cardStyle: React.CSSProperties = {
+    background: "#fff",
+    borderRadius: "12px",
+    border: "1px solid #e4e4e7",
+    marginBottom: "12px",
+    overflow: "hidden",
+  };
+
+  const cardHeaderStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "16px 20px",
+    cursor: "pointer",
+    userSelect: "none",
+  };
+
+  const cardBodyStyle: React.CSSProperties = {
+    borderTop: "1px solid #e4e4e7",
+    padding: "20px",
+  };
+
+  const fileRowStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    padding: "10px 14px",
+    borderRadius: "8px",
+    background: "#fafafa",
+    border: "1px solid #e4e4e7",
+    marginBottom: "8px",
+  };
+
+  const uploadSectionStyle: React.CSSProperties = {
+    marginTop: "16px",
+    paddingTop: "16px",
+    borderTop: "1px solid #e4e4e7",
+  };
+
+  const uploadBtnStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "7px 13px",
+    borderRadius: "7px",
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    fontSize: "13px",
+    fontWeight: 500,
+    color: "#374151",
+    cursor: "pointer",
+    marginRight: "8px",
+    marginBottom: "8px",
+  };
+
+  const uploadBtnLoadingStyle: React.CSSProperties = {
+    ...uploadBtnStyle,
+    opacity: 0.6,
+    cursor: "not-allowed",
+  };
+
+  const iconBtnStyle: React.CSSProperties = {
+    padding: "5px 9px",
+    borderRadius: "6px",
+    border: "1px solid #e4e4e7",
+    background: "#fff",
+    cursor: "pointer",
+    fontSize: "13px",
+    color: "#374151",
+    textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center",
+  };
+
+  const deleteBtnStyle: React.CSSProperties = {
+    ...iconBtnStyle,
+    color: "#b91c1c",
+    borderColor: "#fca5a5",
+    background: "#fff5f5",
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+
+  return (
+    <div style={pageStyle}>
+      <div style={innerStyle}>
+        {/* Header */}
+        <div style={{ marginBottom: "28px" }}>
+          <Link
+            href="/admin"
+            style={{ fontSize: "13px", color: "#6b7280", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px", marginBottom: "12px" }}
+          >
+            ← Back to Admin
+          </Link>
+          <h1 style={headingStyle}>Race File Manager</h1>
+          <p style={subheadingStyle}>
+            Upload and manage GPX courses, wind analysis CSVs, and other files for each race.
+            These files power the automated pacing analysis pipeline.
+          </p>
+        </div>
+
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="Search races by name or location…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={searchStyle}
+        />
+
+        {/* States */}
+        {loading ? (
+          <div style={{ ...cardStyle, padding: "32px", textAlign: "center", color: "#6b7280" }}>
+            Loading races…
+          </div>
+        ) : error ? (
+          <div style={{ ...cardStyle, padding: "20px", background: "#fff5f5", border: "1px solid #fca5a5", color: "#b91c1c" }}>
+            {error}
+          </div>
+        ) : filteredRaces.length === 0 ? (
+          <div style={{ ...cardStyle, padding: "32px", textAlign: "center", color: "#6b7280" }}>
+            {search ? "No races match your search." : "No races found."}
+          </div>
+        ) : (
+          filteredRaces.map((race) => {
+            const isExpanded = expandedRaceId === race.id;
+            const filesByType = new Map<FileType, RaceFile>();
+            for (const f of race.files) filesByType.set(f.file_type, f);
+
+            return (
+              <div key={race.id} style={cardStyle}>
+                {/* Card header / accordion toggle */}
+                <div
+                  style={cardHeaderStyle}
+                  onClick={() => setExpandedRaceId(isExpanded ? null : race.id)}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: "16px", color: "#111" }}>
+                      {race.name}
+                    </div>
+                    {race.location && (
+                      <div style={{ fontSize: "13px", color: "#6b7280", marginTop: "2px" }}>
+                        📍 {race.location}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <span style={{
+                      padding: "3px 10px",
+                      borderRadius: "20px",
+                      background: race.files.length > 0 ? "#dcfce7" : "#f4f4f5",
+                      color: race.files.length > 0 ? "#166534" : "#6b7280",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                    }}>
+                      {race.files.length} file{race.files.length !== 1 ? "s" : ""}
+                    </span>
+                    <span style={{ color: "#9ca3af", fontSize: "16px" }}>
+                      {isExpanded ? "▲" : "▼"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Expanded card body */}
+                {isExpanded && (
+                  <div style={cardBodyStyle}>
+                    {/* Existing files */}
+                    {race.files.length === 0 ? (
+                      <p style={{ fontSize: "14px", color: "#9ca3af", margin: "0 0 16px 0" }}>
+                        No files uploaded yet for this race.
+                      </p>
+                    ) : (
+                      <div style={{ marginBottom: "4px" }}>
+                        {FILE_TYPE_ORDER.filter((ft) => filesByType.has(ft)).map((ft) => {
+                          const file = filesByType.get(ft)!;
+                          const colors = fileTypeColor(ft);
+                          return (
+                            <div key={file.id} style={fileRowStyle}>
+                              {/* Type badge */}
+                              <span style={{
+                                padding: "3px 10px",
+                                borderRadius: "20px",
+                                background: colors.bg,
+                                color: colors.text,
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                whiteSpace: "nowrap",
+                                flexShrink: 0,
+                              }}>
+                                {FILE_TYPE_LABELS[ft]}
+                              </span>
+
+                              {/* Filename + size */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: "13px", fontWeight: 500, color: "#111", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {file.file_name}
+                                </div>
+                                {file.file_size_bytes && (
+                                  <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "1px" }}>
+                                    {formatBytes(file.file_size_bytes)}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Actions */}
+                              <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                                <a
+                                  href={file.public_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={iconBtnStyle}
+                                  title="Download / open"
+                                >
+                                  ↓
+                                </a>
+                                <button
+                                  onClick={() => handleDelete(race.id, file)}
+                                  disabled={!!deleting[file.id]}
+                                  style={deleting[file.id] ? { ...deleteBtnStyle, opacity: 0.5 } : deleteBtnStyle}
+                                  title="Delete file"
+                                >
+                                  {deleting[file.id] ? "…" : "🗑"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Upload buttons */}
+                    <div style={uploadSectionStyle}>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "10px" }}>
+                        Upload
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0" }}>
+                        {FILE_TYPE_ORDER.map((ft) => {
+                          const isUploading = uploading[race.id]?.[ft];
+                          const hasExisting = filesByType.has(ft);
+                          const inputKey = `${race.id}_${ft}`;
+                          const errKey = `${race.id}_${ft}`;
+
+                          return (
+                            <div key={ft} style={{ display: "inline-block" }}>
+                              {/* Hidden file input */}
+                              <input
+                                type="file"
+                                accept={FILE_TYPE_ACCEPT[ft]}
+                                style={{ display: "none" }}
+                                ref={(el) => { inputRefs.current[inputKey] = el; }}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleFileSelected(race.id, ft, file);
+                                }}
+                              />
+                              <button
+                                disabled={isUploading}
+                                onClick={() => inputRefs.current[inputKey]?.click()}
+                                style={isUploading ? uploadBtnLoadingStyle : uploadBtnStyle}
+                                title={hasExisting ? `Replace ${FILE_TYPE_LABELS[ft]}` : `Upload ${FILE_TYPE_LABELS[ft]}`}
+                              >
+                                {isUploading ? (
+                                  <>⏳ Uploading…</>
+                                ) : hasExisting ? (
+                                  <><span style={{ fontSize: "11px" }}>↺</span> Replace {FILE_TYPE_LABELS[ft]}</>
+                                ) : (
+                                  <>+ {FILE_TYPE_LABELS[ft]}</>
+                                )}
+                              </button>
+                              {uploadError[errKey] && (
+                                <div style={{ fontSize: "12px", color: "#b91c1c", marginBottom: "6px" }}>
+                                  {uploadError[errKey]}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+
+        {/* Summary */}
+        {!loading && !error && filteredRaces.length > 0 && (
+          <div style={{ marginTop: "12px", fontSize: "13px", color: "#9ca3af", textAlign: "right" }}>
+            {filteredRaces.length} race{filteredRaces.length !== 1 ? "s" : ""} shown
+            {search ? ` (filtered from ${races.length})` : ""}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
