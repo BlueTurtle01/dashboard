@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { WindAnalysisSettings } from "@/lib/race-analysis/types";
+import { DEFAULT_WIND_SETTINGS } from "@/lib/race-analysis/types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -96,6 +98,13 @@ export default function RaceFilesPage() {
   const [uploading, setUploading] = useState<Record<string, Record<string, boolean>>>({});
   const [deleting, setDeleting] = useState<Record<string, boolean>>({});
   const [uploadError, setUploadError] = useState<Record<string, string>>({});
+
+  // Wind analysis generation
+  const [windModalRaceId, setWindModalRaceId] = useState<string | null>(null);
+  const [windSettings, setWindSettings] = useState<WindAnalysisSettings>({ ...DEFAULT_WIND_SETTINGS });
+  const [windGenerating, setWindGenerating] = useState<Record<string, boolean>>({});
+  const [windError, setWindError] = useState<Record<string, string>>({});
+  const [windSuccess, setWindSuccess] = useState<Record<string, string>>({});
 
   // Hidden file inputs per (race × fileType)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -248,6 +257,42 @@ export default function RaceFilesPage() {
       alert(err instanceof Error ? err.message : "Delete failed");
     } finally {
       setDeleting((prev) => ({ ...prev, [file.id]: false }));
+    }
+  }
+
+  // ── Wind analysis generation ──────────────────────────────────────────────
+
+  async function handleGenerateWind(raceId: string) {
+    setWindModalRaceId(null);
+    setWindGenerating((prev) => ({ ...prev, [raceId]: true }));
+    setWindError((prev) => ({ ...prev, [raceId]: "" }));
+    setWindSuccess((prev) => ({ ...prev, [raceId]: "" }));
+
+    try {
+      const res = await fetch("/api/race-analysis/wind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race_id: raceId, settings: windSettings }),
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setWindError((prev) => ({ ...prev, [raceId]: json.error ?? "Generation failed" }));
+        return;
+      }
+
+      setWindSuccess((prev) => ({
+        ...prev,
+        [raceId]: `Generated from ${json.gpx_points} GPX points → ${json.sections_count} sections.`,
+      }));
+      await loadData();
+    } catch (err) {
+      setWindError((prev) => ({
+        ...prev,
+        [raceId]: err instanceof Error ? err.message : "Network error",
+      }));
+    } finally {
+      setWindGenerating((prev) => ({ ...prev, [raceId]: false }));
     }
   }
 
@@ -576,6 +621,52 @@ export default function RaceFilesPage() {
                         })}
                       </div>
                     </div>
+
+                    {/* Generate Wind Analysis */}
+                    {filesByType.has("gpx") && (
+                      <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e4e4e7" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "10px" }}>
+                          Auto-generate
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                          <button
+                            disabled={!!windGenerating[race.id]}
+                            onClick={() => {
+                              setWindSettings({ ...DEFAULT_WIND_SETTINGS });
+                              setWindError((prev) => ({ ...prev, [race.id]: "" }));
+                              setWindSuccess((prev) => ({ ...prev, [race.id]: "" }));
+                              setWindModalRaceId(race.id);
+                            }}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "6px",
+                              padding: "7px 14px", borderRadius: "7px",
+                              border: "1px solid #a5b4fc",
+                              background: windGenerating[race.id] ? "#f5f3ff" : "#eef2ff",
+                              color: "#4338ca", fontSize: "13px", fontWeight: 600,
+                              cursor: windGenerating[race.id] ? "not-allowed" : "pointer",
+                              opacity: windGenerating[race.id] ? 0.7 : 1,
+                            }}
+                          >
+                            {windGenerating[race.id] ? "⏳ Generating…" : "⚡ Generate Wind Analysis"}
+                          </button>
+
+                          {windError[race.id] && (
+                            <span style={{ fontSize: "12px", color: "#b91c1c" }}>
+                              {windError[race.id]}
+                            </span>
+                          )}
+                          {windSuccess[race.id] && (
+                            <span style={{ fontSize: "12px", color: "#15803d" }}>
+                              ✓ {windSuccess[race.id]}
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ fontSize: "12px", color: "#9ca3af", margin: "6px 0 0 0" }}>
+                          Fetches ERA5 historical wind from Open-Meteo and saves a wind_analysis CSV automatically.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -591,6 +682,158 @@ export default function RaceFilesPage() {
           </div>
         )}
       </div>
+
+      {/* ── Wind Analysis Settings Modal ─────────────────────────────────────── */}
+      {windModalRaceId && (() => {
+        const race = races.find((r) => r.id === windModalRaceId);
+        if (!race) return null;
+
+        const labelStyle: React.CSSProperties = {
+          display: "block", fontSize: "12px", fontWeight: 600,
+          color: "#374151", marginBottom: "4px",
+        };
+        const inputStyle: React.CSSProperties = {
+          width: "100%", padding: "8px 10px", border: "1px solid #d1d5db",
+          borderRadius: "6px", fontSize: "13px", boxSizing: "border-box",
+        };
+        const gridStyle: React.CSSProperties = {
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px",
+        };
+
+        return (
+          <>
+            {/* Backdrop */}
+            <div
+              onClick={() => setWindModalRaceId(null)}
+              style={{
+                position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+                zIndex: 50,
+              }}
+            />
+
+            {/* Modal */}
+            <div style={{
+              position: "fixed", top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              background: "#fff", borderRadius: "12px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+              padding: "28px", width: "min(560px, 95vw)",
+              zIndex: 51, maxHeight: "90vh", overflowY: "auto",
+            }}>
+              <h2 style={{ margin: "0 0 4px 0", fontSize: "18px", fontWeight: 700, color: "#111" }}>
+                Generate Wind Analysis
+              </h2>
+              <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: "#6b7280" }}>
+                {race.name} — ERA5 historical data via Open-Meteo (free, no API key required)
+              </p>
+
+              {/* Race date */}
+              <div style={{ ...gridStyle, marginBottom: "14px" }}>
+                <div>
+                  <label style={labelStyle}>Race Month (1–12)</label>
+                  <input
+                    type="number" min={1} max={12} style={inputStyle}
+                    value={windSettings.race_month}
+                    onChange={(e) => setWindSettings((s) => ({ ...s, race_month: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Race Day (1–31)</label>
+                  <input
+                    type="number" min={1} max={31} style={inputStyle}
+                    value={windSettings.race_day}
+                    onChange={(e) => setWindSettings((s) => ({ ...s, race_day: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+
+              {/* Analysis window */}
+              <div style={{ ...gridStyle, marginBottom: "14px" }}>
+                <div>
+                  <label style={labelStyle}>Years of history</label>
+                  <input
+                    type="number" min={1} max={10} style={inputStyle}
+                    value={windSettings.years_back}
+                    onChange={(e) => setWindSettings((s) => ({ ...s, years_back: Number(e.target.value) }))}
+                  />
+                  <span style={{ fontSize: "11px", color: "#9ca3af" }}>More years = more data, slower</span>
+                </div>
+                <div>
+                  <label style={labelStyle}>Window days (± around race date)</label>
+                  <input
+                    type="number" min={1} max={30} style={inputStyle}
+                    value={windSettings.window_days}
+                    onChange={(e) => setWindSettings((s) => ({ ...s, window_days: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+
+              {/* Section size + race hours */}
+              <div style={{ ...gridStyle, marginBottom: "14px" }}>
+                <div>
+                  <label style={labelStyle}>Section size (km)</label>
+                  <input
+                    type="number" min={0.5} max={10} step={0.5} style={inputStyle}
+                    value={windSettings.section_km}
+                    onChange={(e) => setWindSettings((s) => ({ ...s, section_km: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Race start hour (UTC)</label>
+                  <input
+                    type="number" min={0} max={23} style={inputStyle}
+                    value={windSettings.start_hour}
+                    onChange={(e) => setWindSettings((s) => ({ ...s, start_hour: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+
+              {/* Thresholds */}
+              <div style={{ ...gridStyle, marginBottom: "20px" }}>
+                <div>
+                  <label style={labelStyle}>Headwind threshold (m/s)</label>
+                  <input
+                    type="number" min={0} max={20} step={0.5} style={inputStyle}
+                    value={windSettings.headwind_threshold_ms}
+                    onChange={(e) => setWindSettings((s) => ({ ...s, headwind_threshold_ms: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Strong headwind threshold (m/s)</label>
+                  <input
+                    type="number" min={0} max={20} step={0.5} style={inputStyle}
+                    value={windSettings.strong_headwind_threshold_ms}
+                    onChange={(e) => setWindSettings((s) => ({ ...s, strong_headwind_threshold_ms: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setWindModalRaceId(null)}
+                  style={{
+                    padding: "9px 18px", borderRadius: "7px",
+                    border: "1px solid #d1d5db", background: "#fff",
+                    fontSize: "13px", fontWeight: 500, cursor: "pointer", color: "#374151",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleGenerateWind(race.id)}
+                  style={{
+                    padding: "9px 18px", borderRadius: "7px",
+                    border: "none", background: "#4338ca",
+                    fontSize: "13px", fontWeight: 600, cursor: "pointer", color: "#fff",
+                  }}
+                >
+                  ⚡ Generate
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

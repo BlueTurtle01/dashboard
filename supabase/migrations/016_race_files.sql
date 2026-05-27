@@ -28,15 +28,18 @@ CREATE INDEX IF NOT EXISTS idx_race_files_file_type
 ALTER TABLE public.race_files ENABLE ROW LEVEL SECURITY;
 
 -- Any authenticated user can read race files (needed by future server-side processing pipelines)
-CREATE POLICY "race_files_select_authenticated"
-  ON public.race_files
-  FOR SELECT TO authenticated
-  USING (true);
+DO $$ BEGIN
+  CREATE POLICY "race_files_select_authenticated"
+    ON public.race_files
+    FOR SELECT TO authenticated
+    USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Only admins can create, update, or delete
-CREATE POLICY "race_files_admin_manage"
-  ON public.race_files
-  FOR ALL TO authenticated
+DO $$ BEGIN
+  CREATE POLICY "race_files_admin_manage"
+    ON public.race_files
+    FOR ALL TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM public.user_roles
@@ -51,6 +54,7 @@ CREATE POLICY "race_files_admin_manage"
         AND user_roles.role = 'admin'
     )
   );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- updated_at trigger
 CREATE OR REPLACE FUNCTION public.set_race_files_updated_at()
