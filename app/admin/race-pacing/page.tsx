@@ -1,14 +1,14 @@
 "use client";
 
+import { use } from "react";
 import Link from "next/link";
-import { useEffect, useState, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
 import type { PacingGuide, PacingSection } from "@/lib/race-analysis/pacing-model";
 import { gradientRowColor } from "@/lib/race-analysis/pacing-model";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function gradientBadge(gradient: number, sectionType: string): { label: string; color: string; bg: string } {
+function gradientBadge(gradient: number): { label: string; color: string; bg: string } {
   if (gradient >= 12) return { label: "Very steep ↑", color: "#991b1b", bg: "#fee2e2" };
   if (gradient >= 8)  return { label: "Major climb ↑", color: "#b45309", bg: "#fef3c7" };
   if (gradient >= 4)  return { label: "Climb ↑", color: "#a16207", bg: "#fefce8" };
@@ -17,7 +17,6 @@ function gradientBadge(gradient: number, sectionType: string): { label: string; 
   if (gradient <= -4) return { label: "Descent ↓", color: "#1d4ed8", bg: "#eff6ff" };
   if (gradient <= -2) return { label: "Gentle ↓", color: "#3b82f6", bg: "#f0f9ff" };
   return { label: "Flat ↔", color: "#374151", bg: "#f9fafb" };
-  void sectionType;
 }
 
 function windBadge(label: string | undefined): string {
@@ -29,13 +28,17 @@ function windBadge(label: string | undefined): string {
   return "💨";
 }
 
-// ── Inner component (uses useSearchParams — must be inside Suspense) ───────────
+// ── Page (client component — reads searchParams via React use()) ───────────────
 
-function PacingContent() {
-  const params = useSearchParams();
-  const raceId = params.get("race_id") ?? "";
-  const targetMinutes = parseFloat(params.get("target_minutes") ?? "0");
-  const raceName = params.get("race_name") ?? "Race";
+export default function RacePacingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const sp = use(searchParams);
+  const raceId = (sp.race_id as string | undefined) ?? "";
+  const targetMinutes = parseFloat((sp.target_minutes as string | undefined) ?? "0");
+  const raceName = (sp.race_name as string | undefined) ?? "Race";
 
   const [guide, setGuide] = useState<PacingGuide | null>(null);
   const [loading, setLoading] = useState(false);
@@ -132,13 +135,13 @@ function PacingContent() {
             {error}
           </div>
         )}
-        {!raceId || targetMinutes <= 0 ? (
+        {(!raceId || targetMinutes <= 0) && (
           <div style={{ ...card, color: "#6b7280", textAlign: "center" }}>
             Missing race or target time. Go back to{" "}
             <Link href="/admin/race-comparison" style={{ color: "#4338ca" }}>Race Comparison</Link>{" "}
             and use the &quot;View Pacing Strategy&quot; button.
           </div>
-        ) : null}
+        )}
 
         {guide && (
           <>
@@ -149,7 +152,7 @@ function PacingContent() {
               </h2>
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 {guide.highest_cost_sections.map((s, i) => {
-                  const badge = gradientBadge(s.avg_gradient_percent, s.section_type);
+                  const badge = gradientBadge(s.avg_gradient_percent);
                   const pace = (showWind && s.wind_target_pace) ? s.wind_target_pace : s.target_pace;
                   return (
                     <div key={i} style={{
@@ -209,7 +212,7 @@ function PacingContent() {
                   <tbody>
                     {guide.sections.map((s: PacingSection, i: number) => {
                       const rowBg = gradientRowColor(s.avg_gradient_percent);
-                      const badge = gradientBadge(s.avg_gradient_percent, s.section_type);
+                      const badge = gradientBadge(s.avg_gradient_percent);
                       const isExpanded = expandedNote === i;
                       const shortNote = s.strategy_note.length > 60
                         ? s.strategy_note.slice(0, 57) + "…"
@@ -313,19 +316,5 @@ function PacingContent() {
         )}
       </div>
     </div>
-  );
-}
-
-// ── Page wrapper (Suspense required for useSearchParams in Next.js App Router) ─
-
-export default function RacePacingPage() {
-  return (
-    <Suspense fallback={
-      <div style={{ minHeight: "100vh", background: "#f5f5f5", padding: "48px 24px", textAlign: "center", color: "#9ca3af" }}>
-        Loading…
-      </div>
-    }>
-      <PacingContent />
-    </Suspense>
   );
 }
