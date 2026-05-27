@@ -26,10 +26,13 @@ type RaceSustainedSeg = {
   type: "climb" | "descent" | "flat";
 };
 
+type PositionedTerrainSeg = { startKm: number; endKm: number; type: string; label: string };
+
 type RaceProfileData = {
   elevation: RaceElevProfile | null;
   terrain: RaceTerrainSeg[] | null;
   sustainedSegments: RaceSustainedSeg[] | null;
+  positionedTerrain: PositionedTerrainSeg[] | null;
 };
 
 function parseRaceElevProfile(value: string | null | undefined): RaceElevProfile | null {
@@ -91,6 +94,39 @@ function parseRaceSustainedSegs(value: string | null | undefined): RaceSustained
   } catch { return null; }
 }
 
+function parsePositionedTerrain(value: string | null | undefined): PositionedTerrainSeg[] | null {
+  if (!value) return null;
+  try {
+    const p = JSON.parse(value) as unknown;
+    if (!Array.isArray(p)) return null;
+    const segs = p.flatMap((s): PositionedTerrainSeg[] => {
+      if (!s || typeof s !== "object") return [];
+      const r = s as Record<string, unknown>;
+      if (typeof r.startKm !== "number" || typeof r.endKm !== "number" ||
+          typeof r.type !== "string" || typeof r.label !== "string") return [];
+      return [{ startKm: r.startKm, endKm: r.endKm, type: r.type, label: r.label }];
+    });
+    return segs.length > 0 ? segs : null;
+  } catch { return null; }
+}
+
+function terrainLabelsForRange(
+  positionedTerrain: PositionedTerrainSeg[] | null,
+  startKm: number, endKm: number
+): string[] {
+  if (!positionedTerrain) return [];
+  const rangeLen = endKm - startKm;
+  const coverage = new Map<string, number>();
+  for (const seg of positionedTerrain) {
+    const overlap = Math.max(0, Math.min(endKm, seg.endKm) - Math.max(startKm, seg.startKm));
+    if (overlap > 0) coverage.set(seg.label, (coverage.get(seg.label) ?? 0) + overlap);
+  }
+  return [...coverage.entries()]
+    .filter(([, v]) => v / rangeLen >= 0.1)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label]) => label);
+}
+
 /* ── DB types ── */
 type TemplateExercise = {
   id: string;
@@ -114,6 +150,7 @@ type TemplateSession = {
   intensity: string | null;
   is_key_session: boolean;
   reason: string | null;
+  tags: string[] | null;
   distance_km: number | null;
   num_sets: number | null;
   set_duration_minutes: number | null;
@@ -276,6 +313,8 @@ function ElevationChart({ profile, notable }: { profile: RaceElevProfile; notabl
 }
 
 function TerrainBar({ terrain }: { terrain: RaceTerrainSeg[] }) {
+  const sorted = [...terrain].sort((a, b) => b.percentage - a.percentage);
+  terrain = sorted;
   return (
     <div>
       {/* Stacked bar */}
@@ -465,7 +504,86 @@ function SessionSpecs({ session }: { session: TemplateSession }) {
   );
 }
 
-function SessionCard({ session }: { session: TemplateSession }) {
+function GymFocusChart({ session, raceProfile }: { session: TemplateSession; raceProfile: RaceProfileData }) {
+  const tags = (session.tags ?? []).filter((t) =>
+    /^(uphill|downhill|flat) on /i.test(t)
+  );
+  if (tags.length === 0 || !raceProfile.elevation || raceProfile.elevation.points.length < 2) return null;
+
+  // Find sustained segments that match any tag
+  const matchingSegs = (raceProfile.sustainedSegments ?? []).filter((seg) =>
+    tags.some((tag) => {
+      const lower = tag.toLowerCase();
+      const dir = lower.startsWith("uphill") ? "climb" : lower.startsWith("downhill") ? "descent" : "flat";
+      if (seg.type !== dir) return false;
+      const terrainLabel = tag.replace(/^(uphill|downhill|flat) on /i, "");
+      const labels = terrainLabelsForRange(raceProfile.positionedTerrain, seg.startKm, seg.endKm);
+      return labels.some((l) => l.toLowerCase() === terrainLabel.toLowerCase());
+    })
+  );
+  if (matchingSegs.length === 0) return null;
+
+  const { points, totalDistanceKm, minElevationM, maxElevationM } = raceProfile.elevation;
+  const W = 650; const H = 70;
+  const padL = 0; const padB = 0; const padT = 4; const padR = 0;
+  const cW = W - padL - padR; const cH = H - padT - padB;
+  const elevRange = Math.max(maxElevationM - minElevationM, 50);
+  const xS = (km: number) => padL + (km / totalDistanceKm) * cW;
+  const yS = (m: number) => padT + cH - ((m - minElevationM) / elevRange) * cH;
+
+  const pts = downsamplePoints(points, 300);
+  const first = pts[0]; const last = pts[pts.length - 1];
+  const areaD = `M${xS(first.distanceKm).toFixed(1)},${(padT + cH).toFixed(1)} ` +
+    pts.map((p) => `L${xS(p.distanceKm).toFixed(1)},${yS(p.elevationM).toFixed(1)}`).join(" ") +
+    ` L${xS(last.distanceKm).toFixed(1)},${(padT + cH).toFixed(1)} Z`;
+  const linePts = pts.map((p) => `${xS(p.distanceKm).toFixed(1)},${yS(p.elevationM).toFixed(1)}`).join(" ");
+
+  const isDescend = tags.some((t) => /^downhill/i.test(t));
+  const highlightFill = isDescend ? "#1565c022" : "#bf360c22";
+  const highlightStroke = isDescend ? "#1565c0" : "#bf360c";
+
+  return (
+    <div style={{ marginTop: "8px", marginBottom: "4px" }}>
+      <p style={{ margin: "0 0 4px", fontSize: "10px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        Course segment — {tags.join(", ")}
+      </p>
+      <svg width={W} height={H} style={{ display: "block", borderRadius: "4px", overflow: "hidden" }}>
+        {/* Background elevation area */}
+        <path d={areaD} fill="#1e3a1e10" />
+        <polyline points={linePts} fill="none" stroke="#1e3a1e60" strokeWidth="1" strokeLinejoin="round" />
+        {/* Highlighted segments */}
+        {matchingSegs.map((seg, i) => (
+          <rect key={i}
+            x={xS(seg.startKm)} y={padT}
+            width={Math.max(xS(seg.endKm) - xS(seg.startKm), 2)} height={cH}
+            fill={highlightFill}
+          />
+        ))}
+        {/* Highlighted segment outline */}
+        {matchingSegs.map((seg, i) => {
+          const segPts = pts.filter((p) => p.distanceKm >= seg.startKm && p.distanceKm <= seg.endKm);
+          if (segPts.length < 2) return null;
+          return (
+            <polyline key={`line-${i}`}
+              points={segPts.map((p) => `${xS(p.distanceKm).toFixed(1)},${yS(p.elevationM).toFixed(1)}`).join(" ")}
+              fill="none" stroke={highlightStroke} strokeWidth="2" strokeLinejoin="round"
+            />
+          );
+        })}
+        {/* Segment labels */}
+        {matchingSegs.map((seg, i) => (
+          <text key={`lbl-${i}`}
+            x={xS((seg.startKm + seg.endKm) / 2)} y={padT + 12}
+            textAnchor="middle" fontSize="8" fontWeight="700" fill={highlightStroke}>
+            {seg.type === "climb" ? "▲" : "▼"} {Math.abs(Math.round(seg.totalElevationM))}m · {seg.avgGradient.toFixed(1)}%
+          </text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+function SessionCard({ session, raceProfile }: { session: TemplateSession; raceProfile?: RaceProfileData }) {
   const isGym = session.type === "Gym";
   const isRest = session.type === "Rest";
   const col = SESSION_COLOURS[session.type] ?? SESSION_COLOURS.default;
@@ -475,7 +593,7 @@ function SessionCard({ session }: { session: TemplateSession }) {
       <div style={sessionHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <span style={{ ...typeBadge, background: col.bg, color: col.fg }}>{session.type}</span>
-          <span style={dayLabel}>{session.day_label}</span>
+          {session.day_label && <span style={dayLabel}>{session.day_label}</span>}
           {session.is_key_session && <span style={keyBadge}>★ Key Session</span>}
           <strong style={sessionName}>{session.name}</strong>
         </div>
@@ -499,6 +617,7 @@ function SessionCard({ session }: { session: TemplateSession }) {
       )}
 
       {isGym && <ExerciseTable exercises={session.program_template_session_exercises} />}
+      {isGym && raceProfile && <GymFocusChart session={session} raceProfile={raceProfile} />}
     </div>
   );
 }
@@ -579,7 +698,7 @@ function WeeklyMileagePage({ weeks, template }: { weeks: TemplateWeek[]; templat
 }
 
 
-function WeekDetailPage({ week, template }: { week: TemplateWeek; template: ProgramTemplate }) {
+function WeekDetailPage({ week, template, raceProfile }: { week: TemplateWeek; template: ProgramTemplate; raceProfile?: RaceProfileData }) {
   const sessions = sortSessions(week.program_template_sessions);
   return (
     <div style={a4Page}>
@@ -593,7 +712,7 @@ function WeekDetailPage({ week, template }: { week: TemplateWeek; template: Prog
       </div>
 
       {sessions.map((session) => (
-        <SessionCard key={session.id} session={session} />
+        <SessionCard key={session.id} session={session} raceProfile={raceProfile} />
       ))}
     </div>
   );
@@ -623,7 +742,7 @@ export default function ExportPreviewPage() {
             id, week_number, focus, notes,
             program_template_sessions (
               id, day_label, sort_order, type, name, description,
-              duration, duration_minutes, intensity, is_key_session, reason,
+              duration, duration_minutes, intensity, is_key_session, reason, tags,
               distance_km, num_sets, set_duration_minutes, interval_reps, interval_duration,
               strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg,
               program_template_session_exercises (
@@ -655,7 +774,7 @@ export default function ExportPreviewPage() {
           .from("races_meta")
           .select("meta_key, meta_value")
           .eq("race_id", sorted.race_id)
-          .in("meta_key", ["elevation_profile", "terrain_breakdown", "sustained_segments"]);
+          .in("meta_key", ["elevation_profile", "terrain_breakdown", "sustained_segments", "terrain_segments"]);
 
         const meta: Record<string, string> = {};
         for (const row of (metaRows ?? []) as { meta_key: string; meta_value: string }[]) {
@@ -665,6 +784,7 @@ export default function ExportPreviewPage() {
           elevation: parseRaceElevProfile(meta.elevation_profile),
           terrain: parseRaceTerrainSegs(meta.terrain_breakdown),
           sustainedSegments: parseRaceSustainedSegs(meta.sustained_segments),
+          positionedTerrain: parsePositionedTerrain(meta.terrain_segments),
         });
       }
 
@@ -734,7 +854,7 @@ export default function ExportPreviewPage() {
 
         {/* Detail — one week per A4 page */}
         {weeks.map((week) => (
-          <WeekDetailPage key={`det-${week.id}`} week={week} template={template} />
+          <WeekDetailPage key={`det-${week.id}`} week={week} template={template} raceProfile={raceProfile ?? undefined} />
         ))}
 
       </div>

@@ -1085,6 +1085,7 @@ type SessionSlideOverProps = {
   session: EditableSession;
   distanceUnit: DistanceUnit;
   isPersonalised: boolean;
+  raceProfile: RaceProfile | null;
   onSaveFromForm: (formData: UnifiedSessionFormData) => void;
   onFieldChange: (updater: (s: EditableSession) => EditableSession) => void;
   onAddExercise: (exerciseId: string, exerciseName: string) => void;
@@ -1097,6 +1098,7 @@ function SessionSlideOver({
   session,
   distanceUnit,
   isPersonalised,
+  raceProfile,
   onSaveFromForm,
   onFieldChange,
   onAddExercise,
@@ -1105,6 +1107,21 @@ function SessionSlideOver({
   onClose,
 }: SessionSlideOverProps) {
   const isGym = session.type === "Gym";
+
+  // Derive terrain/elevation pair tags available for this race
+  const raceFocusOptions = useMemo(() => {
+    if (!raceProfile?.positionedTerrain || !raceProfile?.sustainedSegments) return [];
+    const tags = new Set<string>();
+    for (const seg of raceProfile.sustainedSegments) {
+      if (seg.type === "flat") continue;
+      const labels = getTerrainLabelsForRange(raceProfile.positionedTerrain, seg.startKm, seg.endKm);
+      if (labels.length > 0) {
+        const dir = seg.type === "climb" ? "Uphill" : "Downhill";
+        tags.add(`${dir} on ${labels[0]}`);
+      }
+    }
+    return [...tags].sort();
+  }, [raceProfile]);
 
   // Exercise picker state
   const [supabase] = useState(() => createClient());
@@ -1432,6 +1449,47 @@ function SessionSlideOver({
                     </div>
                   )}
                 </div>
+
+                {/* Race Focus tags */}
+                {(raceFocusOptions.length > 0 || (session.tags ?? []).length > 0) && (
+                  <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                    <h5 className="mb-2 text-sm font-semibold text-violet-900">Race Focus</h5>
+                    <p className="mb-3 text-xs text-violet-700">Assign the terrain / elevation demand this session prepares for.</p>
+
+                    {/* Current tags */}
+                    {(session.tags ?? []).length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-1.5">
+                        {(session.tags ?? []).map((tag) => (
+                          <span key={tag} className="flex items-center gap-1.5 rounded-full bg-violet-100 border border-violet-300 px-3 py-1 text-xs font-medium text-violet-800">
+                            {tag}
+                            <button
+                              type="button"
+                              onClick={() => onFieldChange((s) => ({ ...s, tags: (s.tags ?? []).filter((t) => t !== tag) }))}
+                              className="text-violet-500 hover:text-violet-800 leading-none"
+                              aria-label={`Remove ${tag}`}
+                            >×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Available options */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {raceFocusOptions
+                        .filter((t) => !(session.tags ?? []).includes(t))
+                        .map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => onFieldChange((s) => ({ ...s, tags: [...(s.tags ?? []), tag] }))}
+                            className="rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
+                          >
+                            + {tag}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Gym close button */}
                 <div className="mt-4 flex justify-end gap-3">
@@ -3081,6 +3139,7 @@ export default function EditProgramTemplatePage() {
             session={slideSession}
             distanceUnit={distanceUnit}
             isPersonalised={form.isPersonalised}
+            raceProfile={raceProfile}
             onSaveFromForm={(formData) =>
               handleUpdateSessionFromForm(editingSessionSlot.weekLocalId, editingSessionSlot.sessionLocalId, formData)
             }
