@@ -162,7 +162,7 @@ type TemplateExercise = {
   reps: number | null;
   duration_seconds: number | null;
   notes: string | null;
-  exercises: { name: string; description: string; steps: string[] | null } | null;
+  exercises: { name: string; description: string; steps: string[] | null; primary_muscles: string[] | null } | null;
 };
 
 type TemplateSession = {
@@ -821,9 +821,14 @@ function ExerciseTable({ exercises }: { exercises: TemplateExercise[] }) {
               <td style={exTd}>
                 <strong>{ex.exercises?.name ?? "Unknown exercise"}</strong>
                 {exSteps.length > 0 && (
-                  <ol style={{ margin: "4px 0 0 0", paddingLeft: "16px", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
-                    {exSteps.map((step, i) => <li key={i}>{step}</li>)}
-                  </ol>
+                  <div style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
+                    {exSteps.map((step, i) => (
+                      <div key={i} style={{ display: "flex", gap: "4px" }}>
+                        <span style={{ flexShrink: 0, fontWeight: 600 }}>{i + 1}.</span>
+                        <span>{step}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </td>
               <td style={{ ...exTd, textAlign: "center", whiteSpace: "nowrap" }}>{prescription}</td>
@@ -974,6 +979,20 @@ function SessionCard({ session, raceProfile }: { session: TemplateSession; raceP
           <span style={reasonText}>{session.reason}</span>
         </div>
       )}
+
+      {isGym && (() => {
+        const muscles = [...new Set(
+          session.program_template_session_exercises
+            .flatMap((ex) => ex.exercises?.primary_muscles ?? [])
+            .filter(Boolean)
+        )];
+        return muscles.length > 0 ? (
+          <div style={musclesBox}>
+            <span style={musclesLabel}>Muscles targeted:</span>
+            <span style={musclesText}>{muscles.join(", ")}</span>
+          </div>
+        ) : null;
+      })()}
 
       {isGym && <ExerciseTable exercises={session.program_template_session_exercises} />}
     </div>
@@ -1235,7 +1254,7 @@ export default function ExportPreviewPage() {
               strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg,
               program_template_session_exercises (
                 id, sort_order, sets, reps, duration_seconds, notes,
-                exercises ( name, description, steps )
+                exercises ( name, description, steps, primary_muscles )
               )
             )
           )
@@ -1549,6 +1568,26 @@ const reasonLabel: React.CSSProperties = {
 const reasonText: React.CSSProperties = {
   color: "#444",
   fontStyle: "italic",
+};
+
+const musclesBox: React.CSSProperties = {
+  background: "#f3f0f7",
+  border: "1px solid #d1c4e9",
+  borderRadius: "5px",
+  padding: "8px 12px",
+  marginBottom: "10px",
+  fontSize: "12px",
+  lineHeight: "1.5",
+};
+
+const musclesLabel: React.CSSProperties = {
+  fontWeight: 600,
+  color: "#4527a0",
+  marginRight: "5px",
+};
+
+const musclesText: React.CSSProperties = {
+  color: "#444",
 };
 
 const exTable: React.CSSProperties = {
