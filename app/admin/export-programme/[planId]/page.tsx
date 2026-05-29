@@ -162,7 +162,7 @@ type TemplateExercise = {
   reps: number | null;
   duration_seconds: number | null;
   notes: string | null;
-  exercises: { name: string; description: string } | null;
+  exercises: { name: string; description: string; steps: string[] | null } | null;
 };
 
 type TemplateSession = {
@@ -815,9 +815,17 @@ function ExerciseTable({ exercises }: { exercises: TemplateExercise[] }) {
               : ex.sets
               ? `${ex.sets} sets`
               : "—";
+          const exSteps = ex.exercises?.steps ?? [];
           return (
             <tr key={ex.id}>
-              <td style={exTd}>{ex.exercises?.name ?? "Unknown exercise"}</td>
+              <td style={exTd}>
+                <strong>{ex.exercises?.name ?? "Unknown exercise"}</strong>
+                {exSteps.length > 0 && (
+                  <ol style={{ margin: "4px 0 0 0", paddingLeft: "16px", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
+                    {exSteps.map((step, i) => <li key={i}>{step}</li>)}
+                  </ol>
+                )}
+              </td>
               <td style={{ ...exTd, textAlign: "center", whiteSpace: "nowrap" }}>{prescription}</td>
               <td style={exTd}>{ex.notes || (ex.exercises?.description ? ex.exercises.description.slice(0, 120) : "—")}</td>
             </tr>
@@ -836,14 +844,18 @@ function SessionSpecs({ session }: { session: TemplateSession }) {
   if (session.num_sets && session.set_duration_minutes) specs.push(`${session.num_sets} sets × ${session.set_duration_minutes} min`);
   else if (session.num_sets) specs.push(`${session.num_sets} sets`);
   if (session.strides) specs.push(session.strides);
-  if (session.elevation_gain_meters) specs.push(`+${Math.round(session.elevation_gain_meters)} m`);
+  if (session.elevation_gain_meters) specs.push(`+${Math.round(session.elevation_gain_meters)} m elevation`);
   if (session.pack_weight_kg) specs.push(`${session.pack_weight_kg} kg pack`);
   if (session.cooldown_minutes) specs.push(`${session.cooldown_minutes} min cool-down`);
-  if (specs.length === 0) return null;
+  const tags = (session.tags ?? []).filter((t) => t.trim().length > 0);
+  if (specs.length === 0 && tags.length === 0) return null;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "8px" }}>
       {specs.map((p) => (
         <span key={p} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", border: "1px solid #d4d4d4", background: "#f9f9f9", color: "#333", fontVariantNumeric: "tabular-nums" }}>{p}</span>
+      ))}
+      {tags.map((tag) => (
+        <span key={tag} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", border: "1px solid #b8d4b8", background: "#f0f7f0", color: "#1e5c1e", fontVariantNumeric: "tabular-nums" }}>{tag}</span>
       ))}
     </div>
   );
@@ -1223,7 +1235,7 @@ export default function ExportPreviewPage() {
               strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg,
               program_template_session_exercises (
                 id, sort_order, sets, reps, duration_seconds, notes,
-                exercises ( name, description )
+                exercises ( name, description, steps )
               )
             )
           )

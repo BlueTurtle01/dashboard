@@ -51,6 +51,9 @@ export default function CreateExercisePage() {
   const [selectedSecondaryMuscles, setSelectedSecondaryMuscles] = useState<MuscleOption[]>([]);
   const [loadingMuscleOptions, setLoadingMuscleOptions] = useState(true);
 
+  const [steps, setSteps] = useState<string[]>([]);
+  const [newStep, setNewStep] = useState("");
+
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
@@ -294,6 +297,7 @@ export default function CreateExercisePage() {
       reps: parseOptionalPositiveInteger(defaultReps),
       photo_url: photoUrl,
       video_url: videoUrl.trim() || null,
+      steps: steps.filter((s) => s.trim().length > 0),
     };
 
     const { error } = await supabase.from("exercises").insert(payload);
@@ -326,6 +330,8 @@ export default function CreateExercisePage() {
     setPhotoUrl(null);
     setVideoUrl("");
     setUploadingVideo(false);
+    setSteps([]);
+    setNewStep("");
     setSaving(false);
   }
 
@@ -630,6 +636,40 @@ export default function CreateExercisePage() {
                 style={inputStyle}
               />
             </div>
+          </div>
+
+          <label style={labelStyle}>Steps</label>
+          <p style={helperStyle}>Numbered instructions shown on the programme export.</p>
+          {steps.map((step, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <span style={{ minWidth: "22px", fontWeight: 700, color: "#555", fontSize: "13px" }}>{i + 1}.</span>
+              <input
+                value={step}
+                onChange={(e) => setSteps(steps.map((s, j) => j === i ? e.target.value : s))}
+                style={{ ...inputStyle, marginBottom: 0, flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => setSteps(steps.filter((_, j) => j !== i))}
+                style={{ background: "none", border: "none", color: "#b00020", cursor: "pointer", fontSize: "18px", lineHeight: 1, padding: "0 4px" }}
+              >×</button>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+            <input
+              value={newStep}
+              onChange={(e) => setNewStep(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); if (newStep.trim()) { setSteps([...steps, newStep.trim()]); setNewStep(""); } }
+              }}
+              placeholder="Add a step and press Enter or click Add"
+              style={{ ...inputStyle, marginBottom: 0, flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={() => { if (newStep.trim()) { setSteps([...steps, newStep.trim()]); setNewStep(""); } }}
+              style={{ padding: "10px 16px", border: "1px solid #ccc", borderRadius: "8px", background: "#f5f5f5", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}
+            >Add</button>
           </div>
 
           <label style={labelStyle}>Photo</label>
