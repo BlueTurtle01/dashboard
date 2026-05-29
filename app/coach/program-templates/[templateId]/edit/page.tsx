@@ -50,6 +50,7 @@ type ProgramTemplateWeekRow = {
   week_number: number;
   focus: string | null;
   notes: string | null;
+  is_finished: boolean | null;
 };
 
 type ProgramTemplateSessionExerciseRow = {
@@ -190,6 +191,7 @@ type EditableWeek = {
   weekNumber: number;
   focus: string;
   notes: string;
+  isFinished: boolean;
   sessions: EditableSession[];
 };
 
@@ -830,6 +832,7 @@ function mapToForm(
         weekNumber: week.week_number,
         focus: week.focus ?? "",
         notes: week.notes ?? "",
+        isFinished: week.is_finished ?? false,
         sessions: (sessionsByWeek.get(week.id) ?? [])
           .slice()
           .sort((a, b) => {
@@ -1747,7 +1750,7 @@ export default function EditProgramTemplatePage() {
 
       const { data: weekData, error: weekError } = await supabase
         .from("program_template_weeks")
-        .select("id, program_template_id, week_number, focus, notes")
+        .select("id, program_template_id, week_number, focus, notes, is_finished")
         .eq("program_template_id", templateId)
         .order("week_number", { ascending: true });
 
@@ -2038,6 +2041,7 @@ export default function EditProgramTemplatePage() {
             weekNumber: nextWeekNumber,
             focus: "Base",
             notes: "",
+            isFinished: false,
             sessions: [],
           },
         ],
@@ -2488,6 +2492,7 @@ export default function EditProgramTemplatePage() {
             week_number: week.weekNumber,
             focus: week.focus || null,
             notes: week.notes || null,
+            is_finished: week.isFinished,
           })
           .eq("id", week.dbId);
 
@@ -2506,6 +2511,7 @@ export default function EditProgramTemplatePage() {
             week_number: week.weekNumber,
             focus: week.focus || null,
             notes: week.notes || null,
+            is_finished: week.isFinished,
           })
           .select("id")
           .single();
@@ -3280,24 +3286,40 @@ export default function EditProgramTemplatePage() {
                 });
 
               return (
-                <div key={week.localId} className={`rounded-2xl border p-4 ${theme.card}`}>
-                  <button
-                    type="button"
-                    onClick={() => toggleWeekCollapsed(week.localId)}
-                    className="mb-4 flex w-full items-center justify-between gap-4 text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <h3 className={`text-lg font-semibold ${theme.accent}`}>Week {week.weekNumber}</h3>
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${theme.badge}`}>
+                <div key={week.localId} className={`rounded-2xl border p-4 ${week.isFinished ? "border-emerald-400 bg-emerald-50" : theme.card}`}>
+                  <div className="mb-4 flex w-full items-center justify-between gap-4">
+                    <button
+                      type="button"
+                      onClick={() => toggleWeekCollapsed(week.localId)}
+                      className="flex flex-1 items-center gap-3 text-left"
+                    >
+                      <h3 className={`text-lg font-semibold ${week.isFinished ? "text-emerald-800" : theme.accent}`}>Week {week.weekNumber}</h3>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${week.isFinished ? "bg-emerald-100 text-emerald-800" : theme.badge}`}>
                         {week.focus || "Unspecified"}
                       </span>
+                      {week.isFinished && (
+                        <span className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white">✓ Finished</span>
+                      )}
                       <span className="text-xs font-medium text-zinc-500">
                         {isCollapsed ? "Show details" : "Hide details"}
                       </span>
-                    </div>
+                    </button>
 
-                    <span className={`text-lg font-semibold ${theme.accent}`}>{isCollapsed ? "+" : "−"}</span>
-                  </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateWeek(week.localId, (w) => ({ ...w, isFinished: !w.isFinished }))}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                          week.isFinished
+                            ? "border-emerald-400 bg-emerald-600 text-white hover:bg-emerald-700"
+                            : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100"
+                        }`}
+                      >
+                        {week.isFinished ? "✓ Finished" : "Mark Finished"}
+                      </button>
+                      <span className={`text-lg font-semibold ${week.isFinished ? "text-emerald-700" : theme.accent}`}>{isCollapsed ? "+" : "−"}</span>
+                    </div>
+                  </div>
 
                   {!isCollapsed ? (
                     <Fragment>
