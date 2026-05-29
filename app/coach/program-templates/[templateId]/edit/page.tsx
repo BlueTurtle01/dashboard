@@ -2374,6 +2374,7 @@ export default function EditProgramTemplatePage() {
               dayLabel: session.dayLabel,
               sortOrder: session.sortOrder,
               dayNumber: session.dayNumber,
+              reason: session.reason,
             };
           }),
         })),
