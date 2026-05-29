@@ -162,7 +162,7 @@ type TemplateExercise = {
   reps: number | null;
   duration_seconds: number | null;
   notes: string | null;
-  exercises: { name: string; description: string; steps: string[] | null; primary_muscles: string[] | null } | null;
+  exercises: { name: string; description: string; steps: string[] | null; primary_muscles: string[] | null; secondary_muscles: string[] | null } | null;
 };
 
 type TemplateSession = {
@@ -188,6 +188,7 @@ type TemplateSession = {
   cooldown_minutes: number | null;
   elevation_gain_meters: number | null;
   pack_weight_kg: number | null;
+  terrain: string | null;
   program_template_session_exercises: TemplateExercise[];
 };
 
@@ -819,7 +820,21 @@ function ExerciseTable({ exercises }: { exercises: TemplateExercise[] }) {
           return (
             <tr key={ex.id}>
               <td style={exTd}>
-                <strong>{ex.exercises?.name ?? "Unknown exercise"}</strong>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "8px", flexWrap: "wrap" }}>
+                  <strong>{ex.exercises?.name ?? "Unknown exercise"}</strong>
+                  {(() => {
+                    const primary = (ex.exercises?.primary_muscles ?? []).filter(Boolean);
+                    const secondary = (ex.exercises?.secondary_muscles ?? []).filter(Boolean);
+                    if (primary.length === 0 && secondary.length === 0) return null;
+                    return (
+                      <span style={{ fontSize: "11px", color: "#777", fontWeight: 400 }}>
+                        {primary.length > 0 && primary.join(", ")}
+                        {primary.length > 0 && secondary.length > 0 && " · "}
+                        {secondary.length > 0 && <span style={{ color: "#aaa" }}>{secondary.join(", ")}</span>}
+                      </span>
+                    );
+                  })()}
+                </div>
                 {exSteps.length > 0 && (
                   <div style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
                     {exSteps.map((step, i) => (
@@ -842,27 +857,52 @@ function ExerciseTable({ exercises }: { exercises: TemplateExercise[] }) {
 }
 
 function SessionSpecs({ session }: { session: TemplateSession }) {
-  const specs: string[] = [];
-  if (session.warmup_minutes) specs.push(`${session.warmup_minutes} min warm-up`);
-  if (session.interval_reps && session.interval_duration) specs.push(`${session.interval_reps} × ${session.interval_duration}`);
-  else if (session.interval_reps) specs.push(`${session.interval_reps} reps`);
-  if (session.num_sets && session.set_duration_minutes) specs.push(`${session.num_sets} sets × ${session.set_duration_minutes} min`);
-  else if (session.num_sets) specs.push(`${session.num_sets} sets`);
-  if (session.strides) specs.push(session.strides);
-  if (session.elevation_gain_meters) specs.push(`+${Math.round(session.elevation_gain_meters)} m elevation`);
-  if (session.pack_weight_kg) specs.push(`${session.pack_weight_kg} kg pack`);
-  if (session.cooldown_minutes) specs.push(`${session.cooldown_minutes} min cool-down`);
-  const tags = (session.tags ?? []).filter((t) => t.trim().length > 0);
-  if (specs.length === 0 && tags.length === 0) return null;
+  const isGym = session.type === "Gym";
+
+  if (isGym) {
+    // Gym sessions keep a compact pill row for training volume specs only
+    const specs: string[] = [];
+    if (session.warmup_minutes) specs.push(`${session.warmup_minutes} min warm-up`);
+    if (session.num_sets && session.set_duration_minutes) specs.push(`${session.num_sets} sets × ${session.set_duration_minutes} min`);
+    else if (session.num_sets) specs.push(`${session.num_sets} sets`);
+    if (session.cooldown_minutes) specs.push(`${session.cooldown_minutes} min cool-down`);
+    if (specs.length === 0) return null;
+    return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "8px" }}>
+        {specs.map((p) => (
+          <span key={p} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", border: "1px solid #d4d4d4", background: "#f9f9f9", color: "#333", fontVariantNumeric: "tabular-nums" }}>{p}</span>
+        ))}
+      </div>
+    );
+  }
+
+  // Running / functional sessions — key-value list
+  const rows: { label: string; value: string }[] = [];
+  if (session.distance_km) rows.push({ label: "Distance", value: `${session.distance_km} km` });
+  if (session.intensity) rows.push({ label: "Intensity", value: session.intensity });
+  if (session.terrain) rows.push({ label: "Terrain", value: session.terrain });
+  if (session.elevation_gain_meters) rows.push({ label: "Elevation gain", value: `+${Math.round(session.elevation_gain_meters)} m` });
+  if (session.pack_weight_kg) rows.push({ label: "Pack weight", value: `${session.pack_weight_kg} kg` });
+  if (session.warmup_minutes) rows.push({ label: "Warm-up", value: `${session.warmup_minutes} min` });
+  if (session.interval_reps && session.interval_duration) rows.push({ label: "Intervals", value: `${session.interval_reps} × ${session.interval_duration}` });
+  else if (session.interval_reps) rows.push({ label: "Intervals", value: `${session.interval_reps} reps` });
+  if (session.strides) rows.push({ label: "Strides", value: session.strides });
+  if (session.cooldown_minutes) rows.push({ label: "Cool-down", value: `${session.cooldown_minutes} min` });
+  if (session.description) rows.push({ label: "Notes", value: session.description });
+
+  if (rows.length === 0) return null;
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", marginBottom: "8px" }}>
-      {specs.map((p) => (
-        <span key={p} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", border: "1px solid #d4d4d4", background: "#f9f9f9", color: "#333", fontVariantNumeric: "tabular-nums" }}>{p}</span>
-      ))}
-      {tags.map((tag) => (
-        <span key={tag} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "10px", border: "1px solid #b8d4b8", background: "#f0f7f0", color: "#1e5c1e", fontVariantNumeric: "tabular-nums" }}>{tag}</span>
-      ))}
-    </div>
+    <table style={{ fontSize: "12px", borderCollapse: "collapse", width: "100%", marginBottom: "10px" }}>
+      <tbody>
+        {rows.map(({ label, value }) => (
+          <tr key={label}>
+            <td style={{ padding: "2px 12px 2px 0", fontWeight: 600, color: "#555", whiteSpace: "nowrap", verticalAlign: "top", width: "1%" }}>{label}</td>
+            <td style={{ padding: "2px 0", color: "#333", verticalAlign: "top" }}>{value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -969,7 +1009,7 @@ function SessionCard({ session, raceProfile }: { session: TemplateSession; raceP
 
       {!isRest && <SessionSpecs session={session} />}
 
-      {session.description && (
+      {isGym && session.description && (
         <p style={descriptionText}>{session.description}</p>
       )}
 
@@ -979,20 +1019,6 @@ function SessionCard({ session, raceProfile }: { session: TemplateSession; raceP
           <span style={reasonText}>{session.reason}</span>
         </div>
       )}
-
-      {isGym && (() => {
-        const muscles = [...new Set(
-          session.program_template_session_exercises
-            .flatMap((ex) => ex.exercises?.primary_muscles ?? [])
-            .filter(Boolean)
-        )];
-        return muscles.length > 0 ? (
-          <div style={musclesBox}>
-            <span style={musclesLabel}>Muscles targeted:</span>
-            <span style={musclesText}>{muscles.join(", ")}</span>
-          </div>
-        ) : null;
-      })()}
 
       {isGym && <ExerciseTable exercises={session.program_template_session_exercises} />}
     </div>
@@ -1251,10 +1277,10 @@ export default function ExportPreviewPage() {
               id, day_label, sort_order, type, name, description,
               duration, duration_minutes, intensity, is_key_session, reason, tags,
               distance_km, num_sets, set_duration_minutes, interval_reps, interval_duration,
-              strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg,
+              strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg, terrain,
               program_template_session_exercises (
                 id, sort_order, sets, reps, duration_seconds, notes,
-                exercises ( name, description, steps, primary_muscles )
+                exercises ( name, description, steps, primary_muscles, secondary_muscles )
               )
             )
           )
@@ -1570,25 +1596,6 @@ const reasonText: React.CSSProperties = {
   fontStyle: "italic",
 };
 
-const musclesBox: React.CSSProperties = {
-  background: "#f3f0f7",
-  border: "1px solid #d1c4e9",
-  borderRadius: "5px",
-  padding: "8px 12px",
-  marginBottom: "10px",
-  fontSize: "12px",
-  lineHeight: "1.5",
-};
-
-const musclesLabel: React.CSSProperties = {
-  fontWeight: 600,
-  color: "#4527a0",
-  marginRight: "5px",
-};
-
-const musclesText: React.CSSProperties = {
-  color: "#444",
-};
 
 const exTable: React.CSSProperties = {
   width: "100%",
