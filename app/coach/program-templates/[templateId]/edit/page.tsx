@@ -1383,7 +1383,6 @@ function SessionSlideOver({
                   onCancel={onClose}
                   submitButtonLabel="Save Session"
                   progressiveReveal
-                  disableActivityAutoDefault={!session.activity}
                 />
               </div>
             )}
@@ -1634,6 +1633,7 @@ export default function EditProgramTemplatePage() {
   const [loadError, setLoadError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>("km");
   const [sessionPanel, setSessionPanel] = useState<SessionPanel>(null);
   const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
@@ -2287,6 +2287,103 @@ export default function EditProgramTemplatePage() {
     return null;
   }
 
+  async function resyncSessions() {
+    if (!form) return;
+
+    const templateIds = new Set<string>();
+    for (const week of form.weeks) {
+      for (const session of week.sessions) {
+        if (session.sessionTemplateId) {
+          templateIds.add(session.sessionTemplateId);
+        }
+      }
+    }
+
+    if (templateIds.size === 0) {
+      setStatusMessage("No sessions with a linked template found — nothing to resync.");
+      return;
+    }
+
+    setIsResyncing(true);
+    setStatusMessage("");
+
+    const { data, error } = await supabase
+      .from("session_templates")
+      .select(`
+        id,
+        name,
+        description,
+        type,
+        activity,
+        subtype,
+        duration_minutes,
+        distance_km,
+        target_intensity,
+        session_data,
+        is_key_session,
+        session_template_exercises (
+          id,
+          session_template_id,
+          exercise_id,
+          exercise_order,
+          sets,
+          reps,
+          duration,
+          notes
+        )
+      `)
+      .in("id", [...templateIds]);
+
+    if (error || !data) {
+      setIsResyncing(false);
+      setStatusMessage(`Failed to fetch session templates: ${error?.message ?? "Unknown error"}`);
+      return;
+    }
+
+    const templateMap = new Map<string, SessionTemplateRow>(
+      (data as SessionTemplateRow[]).map((row) => [row.id, row]),
+    );
+
+    let syncableCount = 0;
+    for (const week of form.weeks) {
+      for (const session of week.sessions) {
+        if (session.sessionTemplateId && templateMap.has(session.sessionTemplateId)) {
+          syncableCount++;
+        }
+      }
+    }
+
+    setForm((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        weeks: current.weeks.map((week) => ({
+          ...week,
+          sessions: week.sessions.map((session) => {
+            if (!session.sessionTemplateId) return session;
+            const template = templateMap.get(session.sessionTemplateId);
+            if (!template) return session;
+
+            const rebuilt = buildEditableSessionFromTemplate(template, session.sortOrder, exerciseNameMap, distanceUnit);
+            if (!rebuilt) return session;
+
+            return {
+              ...rebuilt,
+              localId: session.localId,
+              dbId: session.dbId,
+              dayLabel: session.dayLabel,
+              sortOrder: session.sortOrder,
+              dayNumber: session.dayNumber,
+            };
+          }),
+        })),
+      };
+    });
+
+    setIsResyncing(false);
+    setStatusMessage(`Resynced ${syncableCount} session${syncableCount !== 1 ? "s" : ""} from their source templates. Review changes then save.`);
+  }
+
   async function saveTemplate() {
     if (!form || !templateId) return;
 
@@ -2681,6 +2778,14 @@ export default function EditProgramTemplatePage() {
             >
               View Template
             </Link>
+            <button
+              type="button"
+              onClick={() => void resyncSessions()}
+              disabled={isResyncing || isSaving}
+              className="rounded-lg border border-amber-400 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {isResyncing ? "Resyncing…" : "Resync Sessions"}
+            </button>
             <button
               type="button"
               onClick={() => void saveTemplate()}
