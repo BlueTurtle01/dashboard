@@ -183,6 +183,7 @@ type EditableSession = {
   intervalDuration?: string;
   reason?: string;
   tags?: string[];
+  isMobilitySession?: boolean;
 };
 
 type EditableWeek = {
@@ -743,16 +744,25 @@ function mapTemplateToEditableSessionType(row: SessionTemplateRow): EditableSess
   return "Easy";
 }
 
+function formatFocusAreaAsType(focusArea: string): string {
+  return focusArea
+    .split(/[\s-]+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 function buildEditableSessionFromMobility(
   row: MobilitySessionPickerRow,
   sortOrder: number,
 ): EditableSession {
+  const firstFocusArea = row.focus_areas?.[0];
+  const sessionType = firstFocusArea ? formatFocusAreaAsType(firstFocusArea) : "Recovery";
   return {
     localId: makeLocalId("session"),
     dbId: null,
     dayLabel: "",
     sortOrder,
-    type: "Recovery",
+    type: sessionType,
     name: row.name,
     description: row.description ?? "",
     duration: row.duration_minutes != null ? String(row.duration_minutes) : "",
@@ -778,6 +788,7 @@ function buildEditableSessionFromMobility(
     intervalDuration: "",
     reason: "",
     tags: row.focus_areas ?? [],
+    isMobilitySession: true,
   };
 }
 
@@ -1264,6 +1275,7 @@ function SessionSlideOver({
   onClose,
 }: SessionSlideOverProps) {
   const isGym = session.type === "Gym";
+  const isMobility = Boolean(session.isMobilitySession);
 
   // Derive terrain/elevation pair tags available for this race
   const raceFocusOptions = useMemo(() => {
@@ -1421,8 +1433,43 @@ function SessionSlideOver({
               />
             </label>
 
-            {/* Activity details (non-gym) */}
-            {!isGym && (
+            {/* Mobility session — show description + duration, no activity form */}
+            {isMobility && (
+              <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 space-y-3">
+                <h5 className="text-sm font-semibold text-violet-900">Mobility Session</h5>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Description
+                  <textarea
+                    value={session.description}
+                    onChange={(e) => onFieldChange((s) => ({ ...s, description: e.target.value }))}
+                    rows={3}
+                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-zinc-700">
+                  Duration (minutes)
+                  <input
+                    type="number"
+                    min="0"
+                    value={session.duration}
+                    onChange={(e) => onFieldChange((s) => ({ ...s, duration: e.target.value }))}
+                    className="mt-1 w-full rounded-xl border border-zinc-300 px-4 py-3 text-sm"
+                  />
+                </label>
+                <div className="flex justify-end gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-xl border border-violet-700 bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Activity details (non-gym, non-mobility) */}
+            {!isGym && !isMobility && (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <h5 className="mb-3 text-sm font-semibold text-zinc-900">Activity details</h5>
                 <UnifiedSessionForm
