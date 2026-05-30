@@ -232,6 +232,15 @@ type EditingSessionSlot = {
   sessionLocalId: string;
 };
 
+type MobilitySessionPickerRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  duration_minutes: number | null;
+  difficulty_level: string | null;
+  focus_areas: string[] | null;
+};
+
 type WeekTemplateSlotRow = {
   id: string;
   slot_name: string;
@@ -732,6 +741,44 @@ function mapTemplateToEditableSessionType(row: SessionTemplateRow): EditableSess
   }
 
   return "Easy";
+}
+
+function buildEditableSessionFromMobility(
+  row: MobilitySessionPickerRow,
+  sortOrder: number,
+): EditableSession {
+  return {
+    localId: makeLocalId("session"),
+    dbId: null,
+    dayLabel: "",
+    sortOrder,
+    type: "Recovery",
+    name: row.name,
+    description: row.description ?? "",
+    duration: row.duration_minutes != null ? String(row.duration_minutes) : "",
+    intensity: "",
+    isKeySession: false,
+    sessionTemplateId: "",
+    runTimeType: "any",
+    isTimeStrict: false,
+    dayNumber: "",
+    numSets: "",
+    setDurationMinutes: "",
+    exercises: [],
+    activity: "",
+    subtype: "",
+    distanceKm: "",
+    terrain: "",
+    elevation: "",
+    packWeightKg: "",
+    strides: "",
+    warmUpMinutes: "",
+    coolDownMinutes: "",
+    intervalReps: "",
+    intervalDuration: "",
+    reason: "",
+    tags: row.focus_areas ?? [],
+  };
 }
 
 function buildEditableSessionFromTemplate(
@@ -1641,6 +1688,7 @@ export default function EditProgramTemplatePage() {
   const [sessionPanel, setSessionPanel] = useState<SessionPanel>(null);
   const [sessionTemplateSearch, setSessionTemplateSearch] = useState("");
   const [sessionTemplateResults, setSessionTemplateResults] = useState<SessionTemplateRow[]>([]);
+  const [mobilitySessionResults, setMobilitySessionResults] = useState<MobilitySessionPickerRow[]>([]);
   const [pendingSessionReason, setPendingSessionReason] = useState("");
   const [searchingTemplates, setSearchingTemplates] = useState(false);
   const [races, setRaces] = useState<RaceRow[]>([]);
@@ -1916,6 +1964,7 @@ export default function EditProgramTemplatePage() {
     if (sessionPanel?.mode !== "template-picker") {
       setSessionTemplateSearch("");
       setSessionTemplateResults([]);
+      setMobilitySessionResults([]);
       setSearchingTemplates(false);
       return;
     }
@@ -1951,12 +2000,31 @@ export default function EditProgramTemplatePage() {
     if (!trimmed) {
       setSearchingTemplates(false);
       setSessionTemplateResults([]);
+      setMobilitySessionResults([]);
       return;
     }
 
     setSearchingTemplates(true);
 
     const escaped = trimmed.replace(/,/g, " ").replace(/%/g, "").replace(/\*/g, "").trim();
+
+    if (sessionType === "mobility") {
+      const { data, error } = await supabase
+        .from("mobility_sessions")
+        .select("id, name, description, duration_minutes, difficulty_level, focus_areas")
+        .or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%`)
+        .order("name", { ascending: true })
+        .limit(20);
+
+      setSearchingTemplates(false);
+      if (error) {
+        setMobilitySessionResults([]);
+        showTemporaryStatus(`Could not search mobility sessions: ${error.message}`, 4000);
+        return;
+      }
+      setMobilitySessionResults((data ?? []) as MobilitySessionPickerRow[]);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("session_templates")
@@ -2143,8 +2211,20 @@ export default function EditProgramTemplatePage() {
     setSessionPanel({ mode: "template-picker", weekLocalId, sessionType });
     setSessionTemplateSearch("");
     setSearchingTemplates(true);
+    setSessionTemplateResults([]);
+    setMobilitySessionResults([]);
 
-    // Load session templates of the specified type when picker opens
+    if (sessionType === "mobility") {
+      const { data, error } = await supabase
+        .from("mobility_sessions")
+        .select("id, name, description, duration_minutes, difficulty_level, focus_areas")
+        .order("name", { ascending: true });
+
+      setSearchingTemplates(false);
+      setMobilitySessionResults(error ? [] : ((data ?? []) as MobilitySessionPickerRow[]));
+      return;
+    }
+
     const { data, error } = await supabase
       .from("session_templates")
       .select(
@@ -2176,18 +2256,14 @@ export default function EditProgramTemplatePage() {
       .order("name", { ascending: true });
 
     setSearchingTemplates(false);
-
-    if (!error && data) {
-      setSessionTemplateResults((data ?? []) as SessionTemplateRow[]);
-    } else {
-      setSessionTemplateResults([]);
-    }
+    setSessionTemplateResults(error ? [] : ((data ?? []) as SessionTemplateRow[]));
   }
 
   function cancelPendingTemplateSession() {
     setSessionPanel(null);
     setSessionTemplateSearch("");
     setSessionTemplateResults([]);
+    setMobilitySessionResults([]);
     setSearchingTemplates(false);
     setPendingSessionReason("");
   }
@@ -2218,6 +2294,23 @@ export default function EditProgramTemplatePage() {
     cancelPendingTemplateSession();
     setPendingSessionReason("");
     showTemporaryStatus(`${template.name || "Template session"} added.`, 1500);
+  }
+
+  function createSessionFromMobilityRow(mobilitySession: MobilitySessionPickerRow, reason?: string) {
+    if (sessionPanel?.mode !== "template-picker") return;
+
+    updateWeek(sessionPanel.weekLocalId, (week) => {
+      const nextSortOrder = Math.max(0, ...week.sessions.map((session) => session.sortOrder)) + 1;
+      const builtSession = buildEditableSessionFromMobility(mobilitySession, nextSortOrder);
+      return {
+        ...week,
+        sessions: [...week.sessions, { ...builtSession, reason: reason || "" }],
+      };
+    });
+
+    cancelPendingTemplateSession();
+    setPendingSessionReason("");
+    showTemporaryStatus(`${mobilitySession.name} added.`, 1500);
   }
 
   function removeSession(weekLocalId: string, sessionLocalId: string) {
@@ -3450,8 +3543,38 @@ export default function EditProgramTemplatePage() {
                           <div className="mt-4 space-y-3">
                             {searchingTemplates ? (
                               <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-                                Loading session templates…
+                                Loading…
                               </div>
+                            ) : sessionPanel.sessionType === "mobility" ? (
+                              mobilitySessionResults.length === 0 ? (
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
+                                  {sessionTemplateSearch.trim() ? "No mobility sessions matched that search." : "No mobility sessions available."}
+                                </div>
+                              ) : (
+                                mobilitySessionResults.map((mob) => {
+                                  const detailParts = [
+                                    mob.duration_minutes != null ? `${mob.duration_minutes} min` : "",
+                                    mob.difficulty_level ?? "",
+                                    ...(mob.focus_areas ?? []),
+                                  ].filter(Boolean);
+                                  return (
+                                    <button
+                                      key={mob.id}
+                                      type="button"
+                                      onClick={() => createSessionFromMobilityRow(mob, pendingSessionReason)}
+                                      className="block w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-left transition hover:bg-zinc-100"
+                                    >
+                                      <div className="font-medium text-zinc-900">{mob.name}</div>
+                                      {mob.description && (
+                                        <div className="mt-1 text-sm text-zinc-600">{mob.description}</div>
+                                      )}
+                                      {detailParts.length > 0 && (
+                                        <div className="mt-2 text-xs text-zinc-500">{detailParts.join(" · ")}</div>
+                                      )}
+                                    </button>
+                                  );
+                                })
+                              )
                             ) : sessionTemplateResults.length === 0 ? (
                               <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
                                 {sessionTemplateSearch.trim() ? "No session templates matched that search." : "No session templates available."}
