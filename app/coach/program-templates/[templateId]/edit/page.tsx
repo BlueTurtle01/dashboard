@@ -957,6 +957,8 @@ function mapToForm(
             intervalDuration: session.interval_duration ?? "",
             reason: session.reason ?? "",
             tags: session.tags ?? [],
+            isMobilitySession: session.mobility_session_id != null,
+            mobilitySessionId: session.mobility_session_id ?? undefined,
             exercises: (session.program_template_session_exercises ?? [])
               .slice()
               .sort((a, b) => a.sort_order - b.sort_order)
@@ -2755,15 +2757,22 @@ export default function EditProgramTemplatePage() {
         }
       }
 
-      for (const [sessionIndex, session] of week.sessions
+      const sortedSessions = week.sessions
         .slice()
         .sort((a, b) => {
           const dayA = Number.parseInt(a.dayNumber || "0", 10) || 0;
           const dayB = Number.parseInt(b.dayNumber || "0", 10) || 0;
           if (dayA !== dayB) return dayA - dayB;
           return a.sortOrder - b.sortOrder;
-        })
-        .entries()) {
+        });
+
+      // Process updates before inserts to avoid sort_order unique constraint conflicts
+      const sessionSaveOrder = [
+        ...sortedSessions.map((s, i) => ({ session: s, index: i })).filter(({ session }) => session.dbId),
+        ...sortedSessions.map((s, i) => ({ session: s, index: i })).filter(({ session }) => !session.dbId),
+      ];
+
+      for (const { session, index: sessionIndex } of sessionSaveOrder) {
         const sessionPayload = {
           program_template_week_id: persistedWeekId,
           day_label: session.dayLabel,
