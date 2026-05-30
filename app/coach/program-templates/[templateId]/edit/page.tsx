@@ -2723,10 +2723,14 @@ export default function EditProgramTemplatePage() {
       }
     }
 
+    // Save sessions + exercises week by week using batch delete-and-reinsert.
+    // This avoids unique constraint conflicts on sort_order and reduces round trips
+    // from O(sessions × exercises) to O(weeks × 3).
     for (const week of form.weeks) {
       const persistedWeekId = weekIdMap.get(week.localId);
       if (!persistedWeekId) continue;
 
+      // 1. Find existing session IDs so we can delete their exercises first
       const { data: currentSessionRows, error: currentSessionError } = await supabase
         .from("program_template_sessions")
         .select("id")
@@ -2734,30 +2738,42 @@ export default function EditProgramTemplatePage() {
 
       if (currentSessionError) {
         setIsSaving(false);
-        setStatusMessage(
-          `Could not load sessions for week ${week.weekNumber}: ${currentSessionError.message}`,
-        );
+        setStatusMessage(`Could not load sessions for week ${week.weekNumber}: ${currentSessionError.message}`);
         return;
       }
 
-      const existingSessionIds = week.sessions.map((session) => session.dbId).filter(Boolean) as string[];
       const currentSessionIds = (currentSessionRows ?? []).map((row) => row.id as string);
-      const sessionIdsToDelete = currentSessionIds.filter((id) => !existingSessionIds.includes(id));
 
-      if (sessionIdsToDelete.length > 0) {
-        const { error: deleteSessionsError } = await supabase
-          .from("program_template_sessions")
+      // 2. Delete all exercises for current sessions in one query
+      if (currentSessionIds.length > 0) {
+        const { error: deleteExercisesError } = await supabase
+          .from("program_template_session_exercises")
           .delete()
-          .in("id", sessionIdsToDelete);
+          .in("program_template_session_id", currentSessionIds);
 
-        if (deleteSessionsError) {
+        if (deleteExercisesError) {
           setIsSaving(false);
-          setStatusMessage(`Could not delete removed sessions: ${deleteSessionsError.message}`);
+          setStatusMessage(`Could not clear exercises for week ${week.weekNumber}: ${deleteExercisesError.message}`);
           return;
         }
       }
 
-      const sortedSessions = week.sessions
+      // 3. Delete all sessions for this week in one query
+      const { error: deleteSessionsError } = await supabase
+        .from("program_template_sessions")
+        .delete()
+        .eq("program_template_week_id", persistedWeekId);
+
+      if (deleteSessionsError) {
+        setIsSaving(false);
+        setStatusMessage(`Could not clear sessions for week ${week.weekNumber}: ${deleteSessionsError.message}`);
+        return;
+      }
+
+      if (week.sessions.length === 0) continue;
+
+      // 4. Sort and batch-insert all sessions in one query
+      const sortedWeekSessions = week.sessions
         .slice()
         .sort((a, b) => {
           const dayA = Number.parseInt(a.dayNumber || "0", 10) || 0;
@@ -2766,155 +2782,79 @@ export default function EditProgramTemplatePage() {
           return a.sortOrder - b.sortOrder;
         });
 
-      // Process updates before inserts to avoid sort_order unique constraint conflicts
-      const sessionSaveOrder = [
-        ...sortedSessions.map((s, i) => ({ session: s, index: i })).filter(({ session }) => session.dbId),
-        ...sortedSessions.map((s, i) => ({ session: s, index: i })).filter(({ session }) => !session.dbId),
-      ];
+      const sessionPayloads = sortedWeekSessions.map((session, idx) => ({
+        program_template_week_id: persistedWeekId,
+        day_label: session.dayLabel,
+        sort_order: idx + 1,
+        type: session.type,
+        name: session.name || `Week ${week.weekNumber} Session ${idx + 1}`,
+        description: session.description || null,
+        duration: null,
+        duration_minutes: parseDurationMinutesForSave(session.duration),
+        intensity: session.intensity || null,
+        is_key_session: session.isKeySession,
+        session_template_id: session.sessionTemplateId.trim() || null,
+        mobility_session_id: session.mobilitySessionId ?? null,
+        run_time_type: session.runTimeType || null,
+        is_time_strict: session.isTimeStrict,
+        week_number: week.weekNumber,
+        day_number: Number.parseInt(session.dayNumber || "0", 10) || null,
+        num_sets: session.numSets ? Number.parseInt(session.numSets, 10) || null : null,
+        set_duration_minutes: session.setDurationMinutes ? parseFloat(session.setDurationMinutes) || null : null,
+        activity: session.activity || null,
+        subtype: session.subtype || null,
+        distance_km: parseDisplayDistanceToKm(session.distanceKm, distanceUnit),
+        terrain: session.terrain || null,
+        elevation_gain_meters: session.elevation ? parseInt(session.elevation, 10) || null : null,
+        pack_weight_kg: session.packWeightKg ? parseFloat(session.packWeightKg) || null : null,
+        strides: session.strides || null,
+        warmup_minutes: session.warmUpMinutes ? parseInt(session.warmUpMinutes, 10) || null : null,
+        cooldown_minutes: session.coolDownMinutes ? parseInt(session.coolDownMinutes, 10) || null : null,
+        interval_reps: session.intervalReps ? parseInt(session.intervalReps, 10) || null : null,
+        interval_duration: session.intervalDuration || null,
+        reason: session.reason || null,
+        tags: (session.tags && session.tags.length > 0) ? session.tags : null,
+      }));
 
-      for (const { session, index: sessionIndex } of sessionSaveOrder) {
-        const sessionPayload = {
-          program_template_week_id: persistedWeekId,
-          day_label: session.dayLabel,
-          sort_order: sessionIndex + 1,
-          type: session.type,
-          name: session.name || `Week ${week.weekNumber} Session ${sessionIndex + 1}`,
-          description: session.description || null,
-          duration: null,
-          duration_minutes: parseDurationMinutesForSave(session.duration),
-          intensity: session.intensity || null,
-          is_key_session: session.isKeySession,
-          session_template_id: session.sessionTemplateId.trim() || null,
-          mobility_session_id: session.mobilitySessionId ?? null,
-          run_time_type: session.runTimeType || null,
-          is_time_strict: session.isTimeStrict,
-          week_number: week.weekNumber,
-          day_number: Number.parseInt(session.dayNumber || "0", 10) || null,
-          num_sets: session.numSets ? Number.parseInt(session.numSets, 10) || null : null,
-          set_duration_minutes: session.setDurationMinutes ? parseFloat(session.setDurationMinutes) || null : null,
-          // Extended session fields
-          activity: session.activity || null,
-          subtype: session.subtype || null,
-          distance_km: parseDisplayDistanceToKm(session.distanceKm, distanceUnit),
-          terrain: session.terrain || null,
-          elevation_gain_meters: session.elevation ? parseInt(session.elevation, 10) || null : null,
-          pack_weight_kg: session.packWeightKg ? parseFloat(session.packWeightKg) || null : null,
-          strides: session.strides || null,
-          warmup_minutes: session.warmUpMinutes ? parseInt(session.warmUpMinutes, 10) || null : null,
-          cooldown_minutes: session.coolDownMinutes ? parseInt(session.coolDownMinutes, 10) || null : null,
-          interval_reps: session.intervalReps ? parseInt(session.intervalReps, 10) || null : null,
-          interval_duration: session.intervalDuration || null,
-          reason: session.reason || null,
-          tags: (session.tags && session.tags.length > 0) ? session.tags : null,
-        };
+      const { data: insertedSessions, error: insertSessionsError } = await supabase
+        .from("program_template_sessions")
+        .insert(sessionPayloads)
+        .select("id");
 
-        let persistedSessionId = session.dbId;
+      if (insertSessionsError || !insertedSessions) {
+        setIsSaving(false);
+        setStatusMessage(`Could not save sessions for week ${week.weekNumber}: ${insertSessionsError?.message ?? "Unknown error"}`);
+        return;
+      }
 
-        if (session.dbId) {
-          const { error: updateSessionError } = await supabase
-            .from("program_template_sessions")
-            .update(sessionPayload)
-            .eq("id", session.dbId);
-
-          if (updateSessionError) {
-            setIsSaving(false);
-            setStatusMessage(`Could not save session "${session.name}": ${updateSessionError.message}`);
-            return;
-          }
-        } else {
-          const { data: insertedSession, error: insertSessionError } = await supabase
-            .from("program_template_sessions")
-            .insert(sessionPayload)
-            .select("id")
-            .single();
-
-          if (insertSessionError || !insertedSession) {
-            setIsSaving(false);
-            setStatusMessage(
-              `Could not create session "${session.name}": ${insertSessionError?.message || "Unknown error"}`,
-            );
-            return;
-          }
-
-          persistedSessionId = insertedSession.id as string;
-        }
-
-        if (!persistedSessionId) continue;
-
-        const { data: currentExerciseRows, error: currentExerciseError } = await supabase
-          .from("program_template_session_exercises")
-          .select("id")
-          .eq("program_template_session_id", persistedSessionId);
-
-        if (currentExerciseError) {
-          setIsSaving(false);
-          setStatusMessage(
-            `Could not load exercises for session "${session.name}": ${currentExerciseError.message}`,
-          );
-          return;
-        }
-
-        const existingExerciseIds = session.exercises.map((exercise) => exercise.dbId).filter(Boolean) as string[];
-        const currentExerciseIds = (currentExerciseRows ?? []).map((row) => row.id as string);
-        const exerciseIdsToDelete = currentExerciseIds.filter((id) => !existingExerciseIds.includes(id));
-
-        if (exerciseIdsToDelete.length > 0) {
-          const { error: deleteExercisesError } = await supabase
-            .from("program_template_session_exercises")
-            .delete()
-            .in("id", exerciseIdsToDelete);
-
-          if (deleteExercisesError) {
-            setIsSaving(false);
-            setStatusMessage(`Could not delete removed exercises: ${deleteExercisesError.message}`);
-            return;
-          }
-        }
-
-        for (const [exerciseIndex, exercise] of session.exercises
+      // 5. Batch-insert all exercises for all sessions in one query
+      const allExercisePayloads = sortedWeekSessions.flatMap((session, i) => {
+        const persistedSessionId = (insertedSessions[i] as { id: string } | undefined)?.id;
+        if (!persistedSessionId) return [];
+        return session.exercises
           .slice()
           .sort((a, b) => a.sortOrder - b.sortOrder)
-          .entries()) {
-          const exercisePayload = {
+          .filter((ex) => ex.exerciseId)
+          .map((exercise, j) => ({
             program_template_session_id: persistedSessionId,
             exercise_id: exercise.exerciseId,
-            sort_order: exerciseIndex + 1,
+            sort_order: j + 1,
             sets: exercise.sets.trim() ? Number(exercise.sets) : null,
             reps: exercise.reps.trim() ? Number(exercise.reps) : null,
             duration_seconds: exercise.durationSeconds.trim() ? Number(exercise.durationSeconds) : null,
             notes: exercise.notes || null,
-          };
+          }));
+      });
 
-          if (!exercisePayload.exercise_id) {
-            continue;
-          }
+      if (allExercisePayloads.length > 0) {
+        const { error: insertExercisesError } = await supabase
+          .from("program_template_session_exercises")
+          .insert(allExercisePayloads);
 
-          if (exercise.dbId) {
-            const { error: updateExerciseError } = await supabase
-              .from("program_template_session_exercises")
-              .update(exercisePayload)
-              .eq("id", exercise.dbId);
-
-            if (updateExerciseError) {
-              setIsSaving(false);
-              setStatusMessage(
-                `Could not save an exercise in "${session.name}": ${updateExerciseError.message}`,
-              );
-              return;
-            }
-          } else {
-            const { error: insertExerciseError } = await supabase
-              .from("program_template_session_exercises")
-              .insert(exercisePayload);
-
-            if (insertExerciseError) {
-              setIsSaving(false);
-              setStatusMessage(
-                `Could not create an exercise in "${session.name}": ${insertExerciseError.message}`,
-              );
-              return;
-            }
-          }
+        if (insertExercisesError) {
+          setIsSaving(false);
+          setStatusMessage(`Could not save exercises for week ${week.weekNumber}: ${insertExercisesError.message}`);
+          return;
         }
       }
     }

@@ -1041,7 +1041,7 @@ function GymFocusChart({ session, raceProfile }: { session: TemplateSession; rac
   );
 }
 
-function SessionCard({ session, raceProfile }: { session: TemplateSession; raceProfile?: RaceProfileData }) {
+function SessionCard({ session, raceProfile, pairedWarmUp }: { session: TemplateSession; raceProfile?: RaceProfileData; pairedWarmUp?: TemplateSession }) {
   const isGym = session.type === "Gym";
   const isRest = session.type === "Rest";
   const col = SESSION_COLOURS[session.type] ?? SESSION_COLOURS.default;
@@ -1065,8 +1065,6 @@ function SessionCard({ session, raceProfile }: { session: TemplateSession; raceP
 
       {!isRest && <SessionSpecs session={session} />}
 
-      {session.mobility_sessions && <MobilityStretchList session={session} />}
-
       {isGym && session.description && (
         <p style={descriptionText}>{session.description}</p>
       )}
@@ -1075,6 +1073,16 @@ function SessionCard({ session, raceProfile }: { session: TemplateSession; raceP
         <div style={reasonBox}>
           <span style={reasonLabel}>Why this session:</span>
           <span style={reasonText}>{session.reason}</span>
+        </div>
+      )}
+
+      {isGym && pairedWarmUp && (
+        <div style={{ marginBottom: "12px", borderTop: "1px solid #e5e5e5", paddingTop: "10px" }}>
+          <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Warm-Up — {pairedWarmUp.name}
+            {pairedWarmUp.duration_minutes ? ` · ${pairedWarmUp.duration_minutes} min` : ""}
+          </p>
+          <MobilityStretchList session={pairedWarmUp} />
         </div>
       )}
 
@@ -1291,6 +1299,23 @@ function RaceStrategyPage({
 
 function WeekDetailPage({ week, template, raceProfile }: { week: TemplateWeek; template: ProgramTemplate; raceProfile?: RaceProfileData }) {
   const sessions = sortSessions(week.program_template_sessions);
+
+  // Map day_label → mobility session (sessions that have mobility_sessions data)
+  const mobilityByDay = new Map<string, TemplateSession>();
+  for (const session of sessions) {
+    if (session.mobility_sessions && session.day_label) {
+      mobilityByDay.set(session.day_label, session);
+    }
+  }
+
+  // Find which mobility sessions get merged into their paired gym session
+  const mergedMobilityIds = new Set<string>();
+  for (const session of sessions) {
+    if (session.type === "Gym" && session.day_label && mobilityByDay.has(session.day_label)) {
+      mergedMobilityIds.add(mobilityByDay.get(session.day_label)!.id);
+    }
+  }
+
   return (
     <div style={a4Page}>
       <PrintHeader template={template} />
@@ -1302,9 +1327,20 @@ function WeekDetailPage({ week, template, raceProfile }: { week: TemplateWeek; t
         {week.notes && <p style={weekNotes}>{week.notes}</p>}
       </div>
 
-      {sessions.map((session) => (
-        <SessionCard key={session.id} session={session} raceProfile={raceProfile} />
-      ))}
+      {sessions
+        .filter((s) => !mergedMobilityIds.has(s.id))
+        .map((session) => (
+          <SessionCard
+            key={session.id}
+            session={session}
+            raceProfile={raceProfile}
+            pairedWarmUp={
+              session.type === "Gym" && session.day_label
+                ? mobilityByDay.get(session.day_label)
+                : undefined
+            }
+          />
+        ))}
     </div>
   );
 }
