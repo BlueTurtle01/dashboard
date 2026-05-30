@@ -1,0 +1,1 @@
+ALTER TABLE stretches ADD COLUMN IF NOT EXISTS steps text[] NOT NULL DEFAULT '{}';

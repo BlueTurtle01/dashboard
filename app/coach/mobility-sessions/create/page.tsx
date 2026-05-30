@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 type StretchOption = {
   id: string;
   name: string;
+  stretchType: string | null;
   primaryMuscles: string[];
   secondaryMuscles: string[];
   movementTags: string[];
@@ -30,6 +31,7 @@ type StretchRow = {
   secondary_muscles: string[];
   movement_tags: string[];
   equipment: string[];
+  stretch_type: string | null;
 };
 
 const DIFFICULTY_LEVELS = ["beginner", "intermediate", "advanced"];
@@ -61,7 +63,7 @@ export default function CreateMobilitySessionPage() {
 
       const { data, error } = await supabase
         .from("stretches")
-        .select("id, name, primary_muscles, secondary_muscles, movement_tags, equipment")
+        .select("id, name, primary_muscles, secondary_muscles, movement_tags, equipment, stretch_type")
         .order("name", { ascending: true });
 
       if (error) {
@@ -72,6 +74,7 @@ export default function CreateMobilitySessionPage() {
           stretches.map((s) => ({
             id: s.id,
             name: s.name,
+            stretchType: s.stretch_type ?? null,
             primaryMuscles: s.primary_muscles || [],
             secondaryMuscles: s.secondary_muscles || [],
             movementTags: s.movement_tags || [],
@@ -339,7 +342,14 @@ export default function CreateMobilitySessionPage() {
                       onClick={() => addStretch(stretch)}
                       style={dropdownItemStyle}
                     >
-                      <div style={{ fontWeight: 600 }}>{stretch.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontWeight: 600 }}>{stretch.name}</span>
+                        {stretch.stretchType && (
+                          <span style={{ fontSize: "11px", padding: "1px 7px", borderRadius: "8px", background: stretch.stretchType === "static" ? "#e3f2fd" : "#e8f5e9", color: stretch.stretchType === "static" ? "#1565c0" : "#2e7d32", fontWeight: 600, textTransform: "capitalize" }}>
+                            {stretch.stretchType}
+                          </span>
+                        )}
+                      </div>
                       <div style={dropdownMetaStyle}>
                         {stretch.primaryMuscles.join(", ")}
                       </div>

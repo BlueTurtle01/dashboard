@@ -49,6 +49,10 @@ export default function CreateStretchPage() {
   const [selectedSecondaryMuscles, setSelectedSecondaryMuscles] = useState<MuscleOption[]>([]);
   const [loadingMuscleOptions, setLoadingMuscleOptions] = useState(true);
 
+  const [steps, setSteps] = useState<string[]>([]);
+  const [newStep, setNewStep] = useState("");
+  const [stretchType, setStretchType] = useState<"static" | "dynamic" | "">("");
+
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -239,6 +243,8 @@ export default function CreateStretchPage() {
       movement_tags: selectedMovementTags.map((item) => item.slug),
       equipment: selectedEquipmentOptions.map((item) => item.slug),
       pattern: pattern.trim() || null,
+      steps: steps.filter((s) => s.trim().length > 0),
+      stretch_type: stretchType || null,
     };
 
     const { error } = await supabase.from("stretches").insert(payload);
@@ -258,6 +264,9 @@ export default function CreateStretchPage() {
     setAlternativeNames("");
     setDescription("");
     setPattern("");
+    setSteps([]);
+    setNewStep("");
+    setStretchType("");
     setMovementTagSearch("");
     setSelectedMovementTags([]);
     setEquipmentSearch("");
@@ -528,6 +537,52 @@ export default function CreateStretchPage() {
               </div>
             )}
           </div>
+
+          <label style={labelStyle}>Steps</label>
+          <p style={helperStyle}>Numbered instructions shown on the programme export.</p>
+          {steps.map((step, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <span style={{ minWidth: "22px", fontWeight: 700, color: "#555", fontSize: "13px" }}>{i + 1}.</span>
+              <input
+                value={step}
+                onChange={(e) => setSteps(steps.map((s, j) => j === i ? e.target.value : s))}
+                style={{ ...inputStyle, marginBottom: 0, flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={() => setSteps(steps.filter((_, j) => j !== i))}
+                style={{ background: "none", border: "none", color: "#b00020", cursor: "pointer", fontSize: "18px", lineHeight: 1, padding: "0 4px" }}
+              >×</button>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+            <input
+              value={newStep}
+              onChange={(e) => setNewStep(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); if (newStep.trim()) { setSteps([...steps, newStep.trim()]); setNewStep(""); } }
+              }}
+              placeholder="Add a step and press Enter or click Add"
+              style={{ ...inputStyle, marginBottom: 0, flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={() => { if (newStep.trim()) { setSteps([...steps, newStep.trim()]); setNewStep(""); } }}
+              style={{ padding: "10px 16px", border: "1px solid #ccc", borderRadius: "8px", background: "#f5f5f5", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}
+            >Add</button>
+          </div>
+
+          <label htmlFor="stretch-type" style={labelStyle}>Type</label>
+          <select
+            id="stretch-type"
+            value={stretchType}
+            onChange={(e) => setStretchType(e.target.value as "static" | "dynamic" | "")}
+            style={inputStyle}
+          >
+            <option value="">— select type —</option>
+            <option value="static">Static</option>
+            <option value="dynamic">Dynamic</option>
+          </select>
 
           <label htmlFor="pattern" style={labelStyle}>
             Pattern

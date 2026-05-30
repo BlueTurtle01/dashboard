@@ -8,6 +8,7 @@ type StretchOption = {
   id: string;
   name: string;
   description: string;
+  stretchType: string | null;
   primaryMuscles: string[];
   secondaryMuscles: string[];
   movementTags: string[];
@@ -33,6 +34,7 @@ type StretchRow = {
   secondary_muscles: string[];
   movement_tags: string[];
   equipment: string[];
+  stretch_type: string | null;
 };
 
 type SessionTemplateOption = {
@@ -94,7 +96,7 @@ export default function EditMobilitySessionPage() {
           .single(),
         supabase
           .from("stretches")
-          .select("id, name, description, primary_muscles, secondary_muscles, movement_tags, equipment")
+          .select("id, name, description, primary_muscles, secondary_muscles, movement_tags, equipment, stretch_type")
           .order("name"),
         supabase
           .from("mobility_session_stretches")
@@ -133,6 +135,7 @@ export default function EditMobilitySessionPage() {
             id: r.id,
             name: r.name,
             description: r.description ?? "",
+            stretchType: r.stretch_type ?? null,
             primaryMuscles: r.primary_muscles ?? [],
             secondaryMuscles: r.secondary_muscles ?? [],
             movementTags: r.movement_tags ?? [],
@@ -475,7 +478,14 @@ export default function EditMobilitySessionPage() {
                 ) : filteredStretches.length > 0 ? (
                   filteredStretches.map((stretch) => (
                     <button key={stretch.id} type="button" onClick={() => addStretch(stretch)} style={dropdownItemStyle}>
-                      <div style={{ fontWeight: 600 }}>{stretch.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontWeight: 600 }}>{stretch.name}</span>
+                        {stretch.stretchType && (
+                          <span style={{ fontSize: "11px", padding: "1px 7px", borderRadius: "8px", background: stretch.stretchType === "static" ? "#e3f2fd" : "#e8f5e9", color: stretch.stretchType === "static" ? "#1565c0" : "#2e7d32", fontWeight: 600, textTransform: "capitalize" }}>
+                            {stretch.stretchType}
+                          </span>
+                        )}
+                      </div>
                       {stretch.description && <div style={dropdownMetaStyle}>{stretch.description}</div>}
                       <div style={dropdownMetaStyle}>{stretch.primaryMuscles.join(", ")}</div>
                     </button>
