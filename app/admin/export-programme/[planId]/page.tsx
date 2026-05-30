@@ -165,6 +165,12 @@ type TemplateExercise = {
   exercises: { name: string; description: string; steps: string[] | null; primary_muscles: string[] | null; secondary_muscles: string[] | null } | null;
 };
 
+type MobilityStretch = {
+  sort_order: number;
+  hold_duration_seconds: number | null;
+  stretches: { name: string; steps: string[] | null } | { name: string; steps: string[] | null }[] | null;
+};
+
 type TemplateSession = {
   id: string;
   day_label: string;
@@ -189,6 +195,9 @@ type TemplateSession = {
   elevation_gain_meters: number | null;
   pack_weight_kg: number | null;
   terrain: string | null;
+  mobility_sessions: {
+    mobility_session_stretches: MobilityStretch[];
+  } | null;
   program_template_session_exercises: TemplateExercise[];
 };
 
@@ -856,6 +865,53 @@ function ExerciseTable({ exercises }: { exercises: TemplateExercise[] }) {
   );
 }
 
+function MobilityStretchList({ session }: { session: TemplateSession }) {
+  const stretches = (session.mobility_sessions?.mobility_session_stretches ?? [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((s) => {
+      const stretch = Array.isArray(s.stretches) ? s.stretches[0] : s.stretches;
+      return { name: stretch?.name ?? "Unknown", steps: stretch?.steps ?? [], holdDurationSeconds: s.hold_duration_seconds };
+    });
+
+  if (stretches.length === 0) return null;
+
+  return (
+    <table style={{ fontSize: "12px", borderCollapse: "collapse", width: "100%", marginBottom: "10px" }}>
+      <thead>
+        <tr>
+          <th style={{ ...exTh, width: "30px" }}>#</th>
+          <th style={exTh}>Stretch</th>
+          <th style={{ ...exTh, width: "80px", textAlign: "center" }}>Hold</th>
+        </tr>
+      </thead>
+      <tbody>
+        {stretches.map((s, i) => (
+          <tr key={i}>
+            <td style={{ ...exTd, color: "#888" }}>{i + 1}</td>
+            <td style={exTd}>
+              <strong>{s.name}</strong>
+              {s.steps.length > 0 && (
+                <div style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
+                  {s.steps.map((step, si) => (
+                    <div key={si} style={{ display: "flex", gap: "4px" }}>
+                      <span style={{ flexShrink: 0, fontWeight: 600 }}>{si + 1}.</span>
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </td>
+            <td style={{ ...exTd, textAlign: "center", whiteSpace: "nowrap" }}>
+              {s.holdDurationSeconds ? `${s.holdDurationSeconds}s` : "—"}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function SessionSpecs({ session }: { session: TemplateSession }) {
   const isGym = session.type === "Gym";
 
@@ -1008,6 +1064,8 @@ function SessionCard({ session, raceProfile }: { session: TemplateSession; raceP
       {isGym && raceProfile && <GymFocusChart session={session} raceProfile={raceProfile} />}
 
       {!isRest && <SessionSpecs session={session} />}
+
+      {session.mobility_sessions && <MobilityStretchList session={session} />}
 
       {isGym && session.description && (
         <p style={descriptionText}>{session.description}</p>
@@ -1278,6 +1336,12 @@ export default function ExportPreviewPage() {
               duration, duration_minutes, intensity, is_key_session, reason, tags,
               distance_km, num_sets, set_duration_minutes, interval_reps, interval_duration,
               strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg, terrain,
+              mobility_sessions (
+                mobility_session_stretches (
+                  sort_order, hold_duration_seconds,
+                  stretches ( name, steps )
+                )
+              ),
               program_template_session_exercises (
                 id, sort_order, sets, reps, duration_seconds, notes,
                 exercises ( name, description, steps, primary_muscles, secondary_muscles )

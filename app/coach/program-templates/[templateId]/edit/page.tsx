@@ -96,6 +96,7 @@ type ProgramTemplateSessionRow = {
   interval_duration: string | null;
   reason: string | null;
   tags: string[] | null;
+  mobility_session_id: string | null;
   program_template_session_exercises: ProgramTemplateSessionExerciseRow[] | null;
 };
 
@@ -184,6 +185,8 @@ type EditableSession = {
   reason?: string;
   tags?: string[];
   isMobilitySession?: boolean;
+  mobilitySessionId?: string;
+  mobilityStretches?: MobilityStretchItem[];
 };
 
 type EditableWeek = {
@@ -233,6 +236,11 @@ type EditingSessionSlot = {
   sessionLocalId: string;
 };
 
+type MobilityStretchItem = {
+  name: string;
+  holdDurationSeconds: number | null;
+};
+
 type MobilitySessionPickerRow = {
   id: string;
   name: string;
@@ -240,6 +248,11 @@ type MobilitySessionPickerRow = {
   duration_minutes: number | null;
   difficulty_level: string | null;
   focus_areas: string[] | null;
+  mobility_session_stretches?: Array<{
+    sort_order: number;
+    hold_duration_seconds: number | null;
+    stretches: { name: string } | { name: string }[] | null;
+  }>;
 };
 
 type WeekTemplateSlotRow = {
@@ -744,6 +757,16 @@ function mapTemplateToEditableSessionType(row: SessionTemplateRow): EditableSess
   return "Easy";
 }
 
+function extractMobilityStretches(row: MobilitySessionPickerRow): MobilityStretchItem[] {
+  return (row.mobility_session_stretches ?? [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((s) => {
+      const stretchData = Array.isArray(s.stretches) ? s.stretches[0] : s.stretches;
+      return { name: stretchData?.name ?? "Unknown", holdDurationSeconds: s.hold_duration_seconds };
+    });
+}
+
 function formatFocusAreaAsType(focusArea: string): string {
   return focusArea
     .split(/[\s-]+/)
@@ -789,6 +812,8 @@ function buildEditableSessionFromMobility(
     reason: "",
     tags: row.focus_areas ?? [],
     isMobilitySession: true,
+    mobilitySessionId: row.id,
+    mobilityStretches: extractMobilityStretches(row),
   };
 }
 
@@ -1437,6 +1462,19 @@ function SessionSlideOver({
             {isMobility && (
               <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 space-y-3">
                 <h5 className="text-sm font-semibold text-violet-900">Mobility Session</h5>
+                {(session.mobilityStretches ?? []).length > 0 && (
+                  <div className="rounded-xl border border-violet-200 bg-white px-4 py-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-700">Stretches</p>
+                    <ol className="space-y-1 pl-4 text-sm text-zinc-700 list-decimal">
+                      {(session.mobilityStretches ?? []).map((s, i) => (
+                        <li key={i}>
+                          {s.name}
+                          {s.holdDurationSeconds ? <span className="ml-2 text-xs text-zinc-400">{s.holdDurationSeconds}s</span> : null}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
                 <label className="block text-sm font-medium text-zinc-700">
                   Description
                   <textarea
@@ -1897,6 +1935,7 @@ export default function EditProgramTemplatePage() {
             interval_duration,
             reason,
             tags,
+            mobility_session_id,
             program_template_session_exercises (
               id,
               program_template_session_id,
@@ -2058,7 +2097,13 @@ export default function EditProgramTemplatePage() {
     if (sessionType === "mobility") {
       const { data, error } = await supabase
         .from("mobility_sessions")
-        .select("id, name, description, duration_minutes, difficulty_level, focus_areas")
+        .select(`
+          id, name, description, duration_minutes, difficulty_level, focus_areas,
+          mobility_session_stretches (
+            sort_order, hold_duration_seconds,
+            stretches ( name )
+          )
+        `)
         .or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%`)
         .order("name", { ascending: true })
         .limit(20);
@@ -2264,7 +2309,13 @@ export default function EditProgramTemplatePage() {
     if (sessionType === "mobility") {
       const { data, error } = await supabase
         .from("mobility_sessions")
-        .select("id, name, description, duration_minutes, difficulty_level, focus_areas")
+        .select(`
+          id, name, description, duration_minutes, difficulty_level, focus_areas,
+          mobility_session_stretches (
+            sort_order, hold_duration_seconds,
+            stretches ( name )
+          )
+        `)
         .order("name", { ascending: true });
 
       setSearchingTemplates(false);
@@ -2725,6 +2776,7 @@ export default function EditProgramTemplatePage() {
           intensity: session.intensity || null,
           is_key_session: session.isKeySession,
           session_template_id: session.sessionTemplateId.trim() || null,
+          mobility_session_id: session.mobilitySessionId ?? null,
           run_time_type: session.runTimeType || null,
           is_time_strict: session.isTimeStrict,
           week_number: week.weekNumber,
@@ -3676,12 +3728,21 @@ export default function EditProgramTemplatePage() {
                       ) : null}
 
                       <div className="space-y-4">
-                        {sortedSessions.map((session) => (
-                          <div key={session.localId} className="rounded-2xl border border-zinc-200 bg-white p-4">
+                        {sortedSessions.map((session) => {
+                          const mobilitySessionsInWeek = week.sessions.filter((s) => s.isMobilitySession);
+                          const pairedMobility = mobilitySessionsInWeek.find(
+                            (s) => s.dayLabel === session.dayLabel && s.localId !== session.localId,
+                          );
+
+                          return (
+                          <div key={session.localId} className={`rounded-2xl border p-4 ${session.isMobilitySession ? "border-violet-200 bg-violet-50" : "border-zinc-200 bg-white"}`}>
                             <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <h4 className="text-base font-semibold">{session.name || "Untitled Session"}</h4>
+                                  {session.isMobilitySession && (
+                                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">Mobility</span>
+                                  )}
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500">
                                   <span>{session.type}</span>
@@ -3691,11 +3752,70 @@ export default function EditProgramTemplatePage() {
                                     <span>{session.exercises.length} exercise{session.exercises.length !== 1 ? "s" : ""}</span>
                                   )}
                                 </div>
-                                {session.description && (
+                                {session.description && !session.isMobilitySession && (
                                   <p className="mt-2 line-clamp-2 text-sm text-zinc-600">{session.description}</p>
                                 )}
                                 {session.reason && (
                                   <p className="mt-1 line-clamp-1 text-xs italic text-zinc-400">{session.reason}</p>
+                                )}
+                                {session.isMobilitySession && (session.mobilityStretches ?? []).length > 0 && (
+                                  <ol className="mt-2 space-y-0.5 pl-4 text-xs text-zinc-500 list-decimal">
+                                    {(session.mobilityStretches ?? []).map((s, i) => (
+                                      <li key={i}>
+                                        {s.name}
+                                        {s.holdDurationSeconds ? <span className="ml-1 text-zinc-400">{s.holdDurationSeconds}s</span> : null}
+                                      </li>
+                                    ))}
+                                  </ol>
+                                )}
+
+                                {/* Pair Warm-Up selector — shown on gym sessions */}
+                                {session.type === "Gym" && mobilitySessionsInWeek.length > 0 && (
+                                  <div className="mt-3">
+                                    <label className="text-xs font-medium text-zinc-500">
+                                      Warm-up before this session:
+                                      <select
+                                        className="ml-2 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs"
+                                        value={pairedMobility?.localId ?? ""}
+                                        onChange={(e) => {
+                                          const selectedLocalId = e.target.value;
+                                          setForm((current) => {
+                                            if (!current) return current;
+                                            return {
+                                              ...current,
+                                              weeks: current.weeks.map((w) => {
+                                                if (w.localId !== week.localId) return w;
+                                                // Clear existing pairing for this gym session's day first
+                                                const cleared = w.sessions.map((s) =>
+                                                  s.isMobilitySession && s.dayLabel === session.dayLabel
+                                                    ? { ...s, dayLabel: "" }
+                                                    : s,
+                                                );
+                                                if (!selectedLocalId) return { ...w, sessions: cleared };
+                                                // Set the chosen mobility session to same day, sort before gym
+                                                const gymOrder = session.sortOrder;
+                                                const updated = cleared.map((s) => {
+                                                  if (s.localId !== selectedLocalId) return s;
+                                                  return { ...s, dayLabel: session.dayLabel, sortOrder: gymOrder - 0.5 };
+                                                });
+                                                // Normalise sort orders
+                                                const reordered = updated
+                                                  .slice()
+                                                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                                                  .map((s, idx) => ({ ...s, sortOrder: idx + 1 }));
+                                                return { ...w, sessions: reordered };
+                                              }),
+                                            };
+                                          });
+                                        }}
+                                      >
+                                        <option value="">— none —</option>
+                                        {mobilitySessionsInWeek.map((mob) => (
+                                          <option key={mob.localId} value={mob.localId}>{mob.name}</option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                  </div>
                                 )}
                               </div>
                               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -3716,7 +3836,8 @@ export default function EditProgramTemplatePage() {
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
 
                         {sortedSessions.length === 0 ? (
                           <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-5 text-sm text-zinc-500">
