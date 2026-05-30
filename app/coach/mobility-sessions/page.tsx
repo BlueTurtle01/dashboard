@@ -56,6 +56,7 @@ export default function MobilitySessionsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -169,6 +170,38 @@ export default function MobilitySessionsPage() {
     });
   }, [sessions, search]);
 
+  async function deleteSession(id: string, name: string) {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+
+    setDeletingId(id);
+    setErrorMessage("");
+
+    const { error: stretchError } = await supabase
+      .from("mobility_session_stretches")
+      .delete()
+      .eq("mobility_session_id", id);
+
+    if (stretchError) {
+      setErrorMessage(`Could not delete session: ${stretchError.message}`);
+      setDeletingId(null);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("mobility_sessions")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      setErrorMessage(`Could not delete session: ${error.message}`);
+      setDeletingId(null);
+      return;
+    }
+
+    setSessions((current) => current.filter((s) => s.id !== id));
+    setDeletingId(null);
+  }
+
   return (
     <main style={pageStyle}>
       <div style={containerStyle}>
@@ -273,10 +306,18 @@ export default function MobilitySessionsPage() {
                     </ol>
                   </div>
 
-                  <div style={actionStyle}>
+                  <div style={{ ...actionStyle, display: "flex", gap: "16px", alignItems: "center" }}>
                     <Link href={`/coach/mobility-sessions/${session.id}/edit`} style={editLinkStyle}>
                       Edit
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => void deleteSession(session.id, session.name)}
+                      disabled={deletingId === session.id}
+                      style={deleteLinkStyle}
+                    >
+                      {deletingId === session.id ? "Deleting…" : "Delete"}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -541,6 +582,16 @@ const actionStyle: React.CSSProperties = {
 const editLinkStyle: React.CSSProperties = {
   color: "#2563eb",
   textDecoration: "none",
+  fontWeight: 500,
+  fontSize: "13px",
+  cursor: "pointer",
+};
+
+const deleteLinkStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  color: "#dc2626",
   fontWeight: 500,
   fontSize: "13px",
   cursor: "pointer",
