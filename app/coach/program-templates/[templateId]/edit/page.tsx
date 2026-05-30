@@ -1927,8 +1927,9 @@ export default function EditProgramTemplatePage() {
       return;
     }
 
+    const sessionType = sessionPanel.sessionType;
     const timeoutId = window.setTimeout(() => {
-      void searchSessionTemplates(trimmed);
+      void searchSessionTemplates(trimmed, sessionType);
     }, 200);
 
     return () => window.clearTimeout(timeoutId);
@@ -1945,7 +1946,7 @@ export default function EditProgramTemplatePage() {
     setDistanceUnit(nextUnit);
   }
 
-  async function searchSessionTemplates(searchTerm: string) {
+  async function searchSessionTemplates(searchTerm: string, sessionType: "gym" | "functional" | "mobility") {
     const trimmed = searchTerm.trim();
     if (!trimmed) {
       setSearchingTemplates(false);
@@ -1984,8 +1985,9 @@ export default function EditProgramTemplatePage() {
         )
       `,
       )
+      .eq("type", sessionType)
       .or(
-        `name.ilike.%${escaped}%,description.ilike.%${escaped}%,type.ilike.%${escaped}%,activity.ilike.%${escaped}%,subtype.ilike.%${escaped}%,target_intensity.ilike.%${escaped}%`,
+        `name.ilike.%${escaped}%,description.ilike.%${escaped}%,activity.ilike.%${escaped}%,subtype.ilike.%${escaped}%,target_intensity.ilike.%${escaped}%`,
       )
       .order("name", { ascending: true })
       .limit(10);
