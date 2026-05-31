@@ -94,6 +94,7 @@ type ProgramTemplateSessionRow = {
   cooldown_minutes: number | null;
   interval_reps: number | null;
   interval_duration: string | null;
+  perceived_effort: number | null;
   reason: string | null;
   tags: string[] | null;
   mobility_session_id: string | null;
@@ -182,6 +183,7 @@ type EditableSession = {
   coolDownMinutes?: string;
   intervalReps?: string;
   intervalDuration?: string;
+  perceivedEffort?: string;
   reason?: string;
   tags?: string[];
   isMobilitySession?: boolean;
@@ -461,6 +463,7 @@ function mapSessionToUnifiedFormData(session: EditableSession): Partial<UnifiedS
     coolDownMinutes: session.coolDownMinutes ?? "",
     intervalReps: session.intervalReps ?? "",
     intervalDuration: session.intervalDuration ?? "",
+    perceivedEffort: session.perceivedEffort ?? "",
     timeOfDay: session.runTimeType || "any",
     sets: session.numSets,
     setDurationSeconds: session.setDurationMinutes && !Number.isNaN(Number.parseFloat(session.setDurationMinutes))
@@ -502,6 +505,7 @@ function applyUnifiedFormDataToSession(
     coolDownMinutes: formData.coolDownMinutes,
     intervalReps: formData.intervalReps,
     intervalDuration: formData.intervalDuration,
+    perceivedEffort: formData.perceivedEffort,
     reason: formData.reason,
     tags: formData.tags,
   };
@@ -809,6 +813,7 @@ function buildEditableSessionFromMobility(
     coolDownMinutes: "",
     intervalReps: "",
     intervalDuration: "",
+    perceivedEffort: "",
     reason: "",
     tags: row.focus_areas ?? [],
     isMobilitySession: true,
@@ -955,6 +960,7 @@ function mapToForm(
             coolDownMinutes: session.cooldown_minutes?.toString() ?? "",
             intervalReps: session.interval_reps?.toString() ?? "",
             intervalDuration: session.interval_duration ?? "",
+            perceivedEffort: session.perceived_effort?.toString() ?? "",
             reason: session.reason ?? "",
             tags: session.tags ?? [],
             isMobilitySession: session.mobility_session_id != null,
@@ -2279,6 +2285,7 @@ export default function EditProgramTemplatePage() {
             coolDownMinutes: "",
             intervalReps: "",
             intervalDuration: "",
+            perceivedEffort: "",
             reason: "",
             tags: [],
           },
@@ -2812,6 +2819,7 @@ export default function EditProgramTemplatePage() {
         cooldown_minutes: session.coolDownMinutes ? parseInt(session.coolDownMinutes, 10) || null : null,
         interval_reps: session.intervalReps ? parseInt(session.intervalReps, 10) || null : null,
         interval_duration: session.intervalDuration || null,
+        perceived_effort: session.perceivedEffort ? parseInt(session.perceivedEffort, 10) || null : null,
         reason: session.reason || null,
         tags: (session.tags && session.tags.length > 0) ? session.tags : null,
       }));

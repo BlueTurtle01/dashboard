@@ -19,6 +19,7 @@ export type UnifiedSessionFormData = {
   intervalReps: string;
   intervalDuration: string;
   intervalDistanceMeters: string;
+  perceivedEffort: string;
   timeOfDay: string;
   sets: string;
   setDurationSeconds: string;
@@ -910,6 +911,26 @@ export function UnifiedSessionForm({
             />
             <p className="mt-1 text-xs text-zinc-500">
               Recovery period between intervals
+            </p>
+          </label>
+        ) : null}
+
+        {fieldVis.show_interval_reps ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Perceived Effort (%)
+            </span>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.perceivedEffort}
+              onChange={(e) => updateForm("perceivedEffort", e.target.value)}
+              placeholder="e.g. 80"
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Target perceived effort as a percentage (0–100)
             </p>
           </label>
         ) : null}

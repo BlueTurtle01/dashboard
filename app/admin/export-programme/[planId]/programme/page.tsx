@@ -189,6 +189,7 @@ type TemplateSession = {
   set_duration_minutes: number | null;
   interval_reps: number | null;
   interval_duration: string | null;
+  perceived_effort: number | null;
   strides: string | null;
   warmup_minutes: number | null;
   cooldown_minutes: number | null;
@@ -932,12 +933,13 @@ function SessionSpecs({ session }: { session: TemplateSession }) {
   const rows: { label: string; value: string }[] = [];
   if (session.distance_km) rows.push({ label: "Distance", value: `${session.distance_km} km` });
   if (session.intensity) rows.push({ label: "Intensity", value: session.intensity });
-  if (session.terrain) rows.push({ label: "Terrain", value: session.terrain });
+  if (session.terrain) rows.push({ label: "Terrain", value: session.terrain.charAt(0).toUpperCase() + session.terrain.slice(1) });
   if (session.elevation_gain_meters) rows.push({ label: "Elevation gain", value: `+${Math.round(session.elevation_gain_meters)} m` });
   if (session.pack_weight_kg) rows.push({ label: "Pack weight", value: `${session.pack_weight_kg} kg` });
   if (session.warmup_minutes) rows.push({ label: "Warm-up", value: `${session.warmup_minutes} min` });
-  if (session.interval_reps && session.interval_duration) rows.push({ label: "Intervals", value: `${session.interval_reps} × ${session.interval_duration}` });
-  else if (session.interval_reps) rows.push({ label: "Intervals", value: `${session.interval_reps} reps` });
+  if (session.interval_reps) rows.push({ label: "Intervals", value: String(session.interval_reps) });
+  if (session.interval_duration) rows.push({ label: "Recovery", value: session.interval_duration });
+  if (session.perceived_effort) rows.push({ label: "Perceived effort", value: `${session.perceived_effort}%` });
   if (session.strides) rows.push({ label: "Strides", value: session.strides });
   if (session.cooldown_minutes) rows.push({ label: "Cool-down", value: `${session.cooldown_minutes} min` });
   if (session.description) rows.push({ label: "Notes", value: session.description });
@@ -1383,7 +1385,7 @@ export default function ExportPreviewPage() {
             program_template_sessions (
               id, day_label, sort_order, type, name, description,
               duration, duration_minutes, intensity, is_key_session, reason, tags,
-              distance_km, num_sets, set_duration_minutes, interval_reps, interval_duration,
+              distance_km, num_sets, set_duration_minutes, interval_reps, interval_duration, perceived_effort,
               strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg, terrain,
               mobility_sessions (
                 mobility_session_stretches (
