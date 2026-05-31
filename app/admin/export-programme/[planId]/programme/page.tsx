@@ -1157,7 +1157,7 @@ function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, 
   const col = SESSION_COLOURS[session.type] ?? SESSION_COLOURS.default;
 
   const racePace = !isGym ? racePaceForSession(session, raceProfile, pacingSections) : null;
-  const showPaceBlock = !isGym && (session.target_pace || racePace);
+  const showPaceBlock = !isGym && !!(session.target_pace || racePace);
 
   return (
     <div style={sessionCard}>
