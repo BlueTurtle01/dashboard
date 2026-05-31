@@ -482,7 +482,6 @@ function mapSessionToUnifiedFormData(session: EditableSession): Partial<UnifiedS
       : "",
     reason: session.reason ?? "",
     tags: session.tags ?? [],
-    targetPace: session.targetPace ?? "",
     sourceSessionTemplateId: session.sessionTemplateId || undefined,
   };
 }
@@ -523,7 +522,8 @@ function applyUnifiedFormDataToSession(
     perceivedEffort: formData.perceivedEffort,
     reason: formData.reason,
     tags: formData.tags,
-    targetPace: formData.targetPace || undefined,
+    // targetPace is managed directly via onFieldChange in the Race Focus section,
+    // not through the unified form, so it is intentionally not mapped here.
   };
 }
 
@@ -1640,9 +1640,9 @@ function SessionSlideOver({
               <>
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                   <h5 className="mb-3 text-sm font-semibold text-zinc-900">Activity details</h5>
-                  {/* Key includes tags + targetPace so form re-initialises when either changes */}
+                  {/* Key includes tags so form re-initialises when race focus tags change */}
                   <UnifiedSessionForm
-                    key={`modal-${session.localId}-${distanceUnit}-${(session.tags ?? []).join(",")}-${session.targetPace ?? ""}`}
+                    key={`modal-${session.localId}-${distanceUnit}-${(session.tags ?? []).join(",")}`}
                     distanceUnit={distanceUnit}
                     initialData={mapSessionToUnifiedFormData(session)}
                     onSave={onSaveFromForm}
@@ -1704,6 +1704,29 @@ function SessionSlideOver({
                               )}
                             </button>
                           ))}
+                      </div>
+
+                      {/* Direct target pace input — always visible, persists immediately via onFieldChange */}
+                      <div className="mt-4 flex items-center gap-3">
+                        <label className="flex flex-col gap-1 flex-1">
+                          <span className="text-xs font-semibold text-violet-800">Target Pace (min/km)</span>
+                          <input
+                            type="text"
+                            value={session.targetPace ?? ""}
+                            onChange={(e) => onFieldChange((s) => ({ ...s, targetPace: e.target.value || undefined }))}
+                            placeholder="e.g. 6:30"
+                            className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm w-28"
+                          />
+                        </label>
+                        {session.targetPace && (
+                          <button
+                            type="button"
+                            onClick={() => onFieldChange((s) => ({ ...s, targetPace: undefined }))}
+                            className="mt-4 text-xs text-violet-400 hover:text-violet-700"
+                          >
+                            Clear
+                          </button>
+                        )}
                       </div>
 
                       {/* % of Race Pace helper — only shown when a race pace can be resolved */}

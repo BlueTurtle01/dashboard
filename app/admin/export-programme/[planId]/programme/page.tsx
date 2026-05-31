@@ -913,7 +913,7 @@ function MobilityStretchList({ session }: { session: TemplateSession }) {
   );
 }
 
-function SessionSpecs({ session }: { session: TemplateSession }) {
+function SessionSpecs({ session, hideIntensity = false }: { session: TemplateSession; hideIntensity?: boolean }) {
   const isGym = session.type === "Gym";
 
   if (isGym) {
@@ -936,7 +936,7 @@ function SessionSpecs({ session }: { session: TemplateSession }) {
   // Running / functional sessions — key-value list
   const rows: { label: string; value: string }[] = [];
   if (session.distance_km) rows.push({ label: "Distance", value: `${session.distance_km} km` });
-  if (session.intensity) rows.push({ label: "Intensity", value: session.intensity });
+  if (!hideIntensity && session.intensity) rows.push({ label: "Intensity", value: session.intensity });
   if (session.terrain) rows.push({ label: "Terrain", value: session.terrain.charAt(0).toUpperCase() + session.terrain.slice(1) });
   if (session.elevation_gain_meters) {
     const elevLabel = { 0: "Flat / none", 100: "Rolling / light climb", 250: "Hilly", 500: "Steep", 1000: "Mountainous / very steep" }[session.elevation_gain_meters];
@@ -1170,27 +1170,30 @@ function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, 
         </div>
         <div style={sessionMeta}>
           {sessionDuration(session) !== "—" && <span>{sessionDuration(session)}</span>}
-          {session.intensity && <span style={{ textTransform: "capitalize" }}>{session.intensity}</span>}
+          {/* Suppress intensity when a pace block is shown — pace is more specific */}
+          {!showPaceBlock && session.intensity && <span style={{ textTransform: "capitalize" }}>{session.intensity}</span>}
         </div>
       </div>
 
       {raceProfile && <GymFocusChart session={session} raceProfile={raceProfile} />}
 
-      {!isRest && <SessionSpecs session={session} />}
+      {!isRest && <SessionSpecs session={session} hideIntensity={showPaceBlock} />}
 
       {/* Pace context block for running sessions */}
       {showPaceBlock && (
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", margin: "6px 0 4px", borderTop: "1px solid #f0f0f0", paddingTop: "8px" }}>
-          {session.target_pace && (
-            <div style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "5px 12px", fontSize: "11px", background: "#fafafa" }}>
-              <div style={{ color: "#888", marginBottom: "1px" }}>Target Pace</div>
-              <div style={{ fontWeight: 700, color: "#1e3a1e", fontSize: "14px" }}>{session.target_pace}/km</div>
+          {/* Target Pace — always shown so absence is obvious */}
+          <div style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "5px 12px", fontSize: "11px", background: "#fafafa" }}>
+            <div style={{ color: "#888", marginBottom: "1px" }}>Target Pace</div>
+            <div style={{ fontWeight: 700, color: "#1e3a1e", fontSize: "14px" }}>
+              {session.target_pace ? `${session.target_pace}/km` : "—"}
             </div>
-          )}
+          </div>
           {racePace && (
             <div style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "5px 12px", fontSize: "11px", background: "#fafafa" }}>
               <div style={{ color: "#888", marginBottom: "1px" }}>Race Pace · {racePace.kmRange}</div>
-              <div style={{ fontWeight: 700, color: "#c0392b", fontSize: "14px" }}>{racePace.pace}/km</div>
+              {/* racePace.pace already contains "/km" from the pacing table */}
+              <div style={{ fontWeight: 700, color: "#c0392b", fontSize: "14px" }}>{racePace.pace}</div>
             </div>
           )}
         </div>
