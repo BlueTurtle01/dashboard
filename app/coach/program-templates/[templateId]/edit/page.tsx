@@ -1306,7 +1306,8 @@ function parseSegmentNotesData(value: string | null | undefined): SegmentNote[] 
    ───────────────────────────────────────────────────────────── */
 
 function paceStringToSeconds(pace: string): number | null {
-  const m = pace.trim().match(/^(\d+):(\d{2})$/);
+  const cleaned = pace.trim().replace(/\/km$/i, "").trim();
+  const m = cleaned.match(/^(\d+):(\d{2})$/);
   if (!m) return null;
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 }
