@@ -100,6 +100,7 @@ type ProgramTemplateSessionRow = {
   perceived_effort: number | null;
   reason: string | null;
   tags: string[] | null;
+  target_pace: string | null;
   mobility_session_id: string | null;
   program_template_session_exercises: ProgramTemplateSessionExerciseRow[] | null;
 };
@@ -192,6 +193,7 @@ type EditableSession = {
   perceivedEffort?: string;
   reason?: string;
   tags?: string[];
+  targetPace?: string;
   isMobilitySession?: boolean;
   mobilitySessionId?: string;
   mobilityStretches?: MobilityStretchItem[];
@@ -480,6 +482,7 @@ function mapSessionToUnifiedFormData(session: EditableSession): Partial<UnifiedS
       : "",
     reason: session.reason ?? "",
     tags: session.tags ?? [],
+    targetPace: session.targetPace ?? "",
     sourceSessionTemplateId: session.sessionTemplateId || undefined,
   };
 }
@@ -520,6 +523,7 @@ function applyUnifiedFormDataToSession(
     perceivedEffort: formData.perceivedEffort,
     reason: formData.reason,
     tags: formData.tags,
+    targetPace: formData.targetPace || undefined,
   };
 }
 
@@ -981,6 +985,7 @@ function mapToForm(
             perceivedEffort: session.perceived_effort?.toString() ?? "",
             reason: session.reason ?? "",
             tags: session.tags ?? [],
+            targetPace: session.target_pace ?? undefined,
             isMobilitySession: session.mobility_session_id != null,
             mobilitySessionId: session.mobility_session_id ?? undefined,
             exercises: (session.program_template_session_exercises ?? [])
@@ -1297,6 +1302,71 @@ function parseSegmentNotesData(value: string | null | undefined): SegmentNote[] 
 }
 
 /* ─────────────────────────────────────────────────────────────
+   Pace utilities
+   ───────────────────────────────────────────────────────────── */
+
+function paceStringToSeconds(pace: string): number | null {
+  const m = pace.trim().match(/^(\d+):(\d{2})$/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+function secondsToPaceString(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function racePaceFromTags(
+  tags: string[],
+  raceProfile: RaceProfile | null,
+  pacingData: PacingSection[] | null
+): string | null {
+  if (!pacingData || pacingData.length === 0) return null;
+  const terrainTags = tags.filter((t) => /^(uphill|downhill|flat) on /i.test(t));
+  const numberedTags = tags.filter((t) => /^(Climb|Descent) \d+$/i.test(t));
+  if (terrainTags.length === 0 && numberedTags.length === 0) return null;
+
+  const segs = raceProfile?.sustainedSegments ?? [];
+  const climbs = [...segs].filter((s) => s.type === "climb").sort((a, b) => a.startKm - b.startKm);
+  const descents = [...segs].filter((s) => s.type === "descent").sort((a, b) => a.startKm - b.startKm);
+
+  const resolvedSegs = [
+    ...segs.filter((seg) =>
+      terrainTags.some((tag) => {
+        const lower = tag.toLowerCase();
+        const dir = lower.startsWith("uphill") ? "climb" : lower.startsWith("downhill") ? "descent" : "flat";
+        if (seg.type !== dir) return false;
+        const terrainLabel = tag.replace(/^(uphill|downhill|flat) on /i, "");
+        const labels = getTerrainLabelsForRange(raceProfile?.positionedTerrain ?? null, seg.startKm, seg.endKm);
+        return labels.some((l) => l.toLowerCase() === terrainLabel.toLowerCase());
+      })
+    ),
+    ...numberedTags.flatMap((tag) => {
+      const m = tag.match(/^(Climb|Descent) (\d+)$/i);
+      if (!m) return [];
+      const list = m[1].toLowerCase() === "climb" ? climbs : descents;
+      const idx = parseInt(m[2], 10) - 1;
+      return idx >= 0 && idx < list.length ? [list[idx]] : [];
+    }),
+  ];
+  if (resolvedSegs.length === 0) return null;
+
+  let bestPace: string | null = null;
+  let bestOverlap = 0;
+  for (const seg of resolvedSegs) {
+    for (const ps of pacingData) {
+      const overlap = Math.max(0, Math.min(seg.endKm, ps.end_km) - Math.max(seg.startKm, ps.start_km));
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        bestPace = ps.wind_adjusted_pace || ps.target_pace;
+      }
+    }
+  }
+  return bestPace;
+}
+
+/* ─────────────────────────────────────────────────────────────
    SessionModal — centered dialog for editing a session
    ───────────────────────────────────────────────────────────── */
 
@@ -1305,6 +1375,7 @@ type SessionSlideOverProps = {
   distanceUnit: DistanceUnit;
   isPersonalised: boolean;
   raceProfile: RaceProfile | null;
+  pacingData: PacingSection[] | null;
   onSaveFromForm: (formData: UnifiedSessionFormData) => void;
   onFieldChange: (updater: (s: EditableSession) => EditableSession) => void;
   onAddExercise: (exerciseId: string, exerciseName: string) => void;
@@ -1318,6 +1389,7 @@ function SessionSlideOver({
   distanceUnit,
   isPersonalised,
   raceProfile,
+  pacingData,
   onSaveFromForm,
   onFieldChange,
   onAddExercise,
@@ -1327,6 +1399,7 @@ function SessionSlideOver({
 }: SessionSlideOverProps) {
   const isGym = session.type === "Gym";
   const isMobility = Boolean(session.isMobilitySession);
+  const [pacePercent, setPacePercent] = useState(100);
 
   // Derive terrain/elevation pair tags available for this race
   const raceFocusOptions = useMemo(() => {
@@ -1567,9 +1640,9 @@ function SessionSlideOver({
               <>
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                   <h5 className="mb-3 text-sm font-semibold text-zinc-900">Activity details</h5>
-                  {/* Key includes tags so form re-initialises when race focus tags change */}
+                  {/* Key includes tags + targetPace so form re-initialises when either changes */}
                   <UnifiedSessionForm
-                    key={`modal-${session.localId}-${distanceUnit}-${(session.tags ?? []).join(",")}`}
+                    key={`modal-${session.localId}-${distanceUnit}-${(session.tags ?? []).join(",")}-${session.targetPace ?? ""}`}
                     distanceUnit={distanceUnit}
                     initialData={mapSessionToUnifiedFormData(session)}
                     onSave={onSaveFromForm}
@@ -1580,54 +1653,116 @@ function SessionSlideOver({
                 </div>
 
                 {/* Race Focus tags for running / functional sessions */}
-                {(raceFocusOptions.length > 0 || (session.tags ?? []).length > 0) && (
-                  <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
-                    <h5 className="mb-2 text-sm font-semibold text-violet-900">Race Focus</h5>
-                    <p className="mb-3 text-xs text-violet-700">
-                      Tag this session to a course segment. Use terrain tags for general demands, or numbered tags (Climb 1, Descent 2…) to target a specific section of the race.
-                    </p>
+                {(raceFocusOptions.length > 0 || (session.tags ?? []).length > 0) && (() => {
+                  const resolvedRacePace = racePaceFromTags(session.tags ?? [], raceProfile, pacingData);
+                  const racePaceSeconds = resolvedRacePace ? paceStringToSeconds(resolvedRacePace) : null;
+                  const computedPaceSeconds = racePaceSeconds !== null ? Math.round(racePaceSeconds * (pacePercent / 100)) : null;
+                  const computedPaceStr = computedPaceSeconds !== null ? secondsToPaceString(computedPaceSeconds) : null;
 
-                    {/* Current tags */}
-                    {(session.tags ?? []).length > 0 && (
-                      <div className="mb-3 flex flex-wrap gap-1.5">
-                        {(session.tags ?? []).map((tag) => (
-                          <span key={tag} className="flex items-center gap-1.5 rounded-full bg-violet-100 border border-violet-300 px-3 py-1 text-xs font-medium text-violet-800">
-                            {tag}
-                            {raceFocusTagKmLabels.get(tag) && (
-                              <span className="text-violet-500">{raceFocusTagKmLabels.get(tag)}</span>
+                  return (
+                    <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                      <h5 className="mb-2 text-sm font-semibold text-violet-900">Race Focus</h5>
+                      <p className="mb-3 text-xs text-violet-700">
+                        Tag this session to a course segment. Use terrain tags for general demands, or numbered tags (Climb 1, Descent 2…) to target a specific section of the race.
+                      </p>
+
+                      {/* Current tags */}
+                      {(session.tags ?? []).length > 0 && (
+                        <div className="mb-3 flex flex-wrap gap-1.5">
+                          {(session.tags ?? []).map((tag) => (
+                            <span key={tag} className="flex items-center gap-1.5 rounded-full bg-violet-100 border border-violet-300 px-3 py-1 text-xs font-medium text-violet-800">
+                              {tag}
+                              {raceFocusTagKmLabels.get(tag) && (
+                                <span className="text-violet-500">{raceFocusTagKmLabels.get(tag)}</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => onFieldChange((s) => ({ ...s, tags: (s.tags ?? []).filter((t) => t !== tag) }))}
+                                className="text-violet-500 hover:text-violet-800 leading-none"
+                                aria-label={`Remove ${tag}`}
+                              >×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Available options */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {raceFocusOptions
+                          .filter((t) => !(session.tags ?? []).includes(t))
+                          .map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              title={raceFocusTagKmLabels.get(tag)}
+                              onClick={() => onFieldChange((s) => ({ ...s, tags: [...(s.tags ?? []), tag] }))}
+                              className="rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
+                            >
+                              + {tag}
+                              {raceFocusTagKmLabels.get(tag) && (
+                                <span className="ml-1 text-violet-400">{raceFocusTagKmLabels.get(tag)}</span>
+                              )}
+                            </button>
+                          ))}
+                      </div>
+
+                      {/* % of Race Pace helper — only shown when a race pace can be resolved */}
+                      {resolvedRacePace && (
+                        <div className="mt-4 rounded-xl border border-violet-200 bg-white px-4 py-3">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-700">
+                            Target Pace from Race Pace
+                          </p>
+                          <p className="mb-3 text-xs text-zinc-500">
+                            Race pace for this segment: <span className="font-semibold text-zinc-700">{resolvedRacePace}/km</span>
+                            {session.targetPace && (
+                              <span className="ml-2 text-violet-600">· Current target: {session.targetPace}/km</span>
                             )}
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
                             <button
                               type="button"
-                              onClick={() => onFieldChange((s) => ({ ...s, tags: (s.tags ?? []).filter((t) => t !== tag) }))}
-                              className="text-violet-500 hover:text-violet-800 leading-none"
-                              aria-label={`Remove ${tag}`}
-                            >×</button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Available options */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {raceFocusOptions
-                        .filter((t) => !(session.tags ?? []).includes(t))
-                        .map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            title={raceFocusTagKmLabels.get(tag)}
-                            onClick={() => onFieldChange((s) => ({ ...s, tags: [...(s.tags ?? []), tag] }))}
-                            className="rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
-                          >
-                            + {tag}
-                            {raceFocusTagKmLabels.get(tag) && (
-                              <span className="ml-1 text-violet-400">{raceFocusTagKmLabels.get(tag)}</span>
+                              onClick={() => setPacePercent((p) => Math.max(50, p - 5))}
+                              className="h-8 w-8 rounded-lg border border-zinc-300 bg-zinc-50 text-sm font-bold text-zinc-700 hover:bg-zinc-100"
+                            >−</button>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={50}
+                                max={200}
+                                step={5}
+                                value={pacePercent}
+                                onChange={(e) => setPacePercent(Math.max(50, Math.min(200, parseInt(e.target.value, 10) || 100)))}
+                                className="w-16 rounded-lg border border-zinc-300 px-2 py-1.5 text-center text-sm font-semibold"
+                              />
+                              <span className="text-sm text-zinc-600">%</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setPacePercent((p) => Math.min(200, p + 5))}
+                              className="h-8 w-8 rounded-lg border border-zinc-300 bg-zinc-50 text-sm font-bold text-zinc-700 hover:bg-zinc-100"
+                            >+</button>
+                            {computedPaceStr && (
+                              <>
+                                <span className="text-sm text-zinc-400">→</span>
+                                <span className="text-sm font-semibold text-zinc-800">{computedPaceStr}/km</span>
+                                <button
+                                  type="button"
+                                  onClick={() => onFieldChange((s) => ({ ...s, targetPace: computedPaceStr }))}
+                                  className="rounded-lg border border-violet-400 bg-violet-100 px-3 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-200"
+                                >
+                                  Set as Target Pace
+                                </button>
+                              </>
                             )}
-                          </button>
-                        ))}
+                          </div>
+                          <p className="mt-2 text-xs text-zinc-400">
+                            {pacePercent < 100 ? `${100 - pacePercent}% faster than race pace` : pacePercent > 100 ? `${pacePercent - 100}% slower than race pace` : "Same as race pace"}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </>
             )}
 
@@ -2057,6 +2192,7 @@ export default function EditProgramTemplatePage() {
             perceived_effort,
             reason,
             tags,
+            target_pace,
             mobility_session_id,
             program_template_session_exercises (
               id,
@@ -2942,6 +3078,7 @@ export default function EditProgramTemplatePage() {
         perceived_effort: session.perceivedEffort ? parseInt(session.perceivedEffort, 10) || null : null,
         reason: session.reason || null,
         tags: (session.tags && session.tags.length > 0) ? session.tags : null,
+        target_pace: session.targetPace || null,
       }));
 
       const { data: insertedSessions, error: insertSessionsError } = await supabase
@@ -3942,6 +4079,7 @@ export default function EditProgramTemplatePage() {
             distanceUnit={distanceUnit}
             isPersonalised={form.isPersonalised}
             raceProfile={raceProfile}
+            pacingData={form.pacingData ?? null}
             onSaveFromForm={(formData) =>
               handleUpdateSessionFromForm(editingSessionSlot.weekLocalId, editingSessionSlot.sessionLocalId, formData)
             }

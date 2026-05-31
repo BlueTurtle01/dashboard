@@ -184,6 +184,7 @@ type TemplateSession = {
   is_key_session: boolean;
   reason: string | null;
   tags: string[] | null;
+  target_pace: string | null;
   distance_km: number | null;
   num_sets: number | null;
   set_duration_minutes: number | null;
@@ -1096,10 +1097,67 @@ function GymFocusChart({ session, raceProfile }: { session: TemplateSession; rac
   );
 }
 
-function SessionCard({ session, raceProfile, pairedWarmUp, exercisePageMap }: { session: TemplateSession; raceProfile?: RaceProfileData; pairedWarmUp?: TemplateSession; exercisePageMap?: Map<string, number> }) {
+function racePaceForSession(
+  session: TemplateSession,
+  raceProfile: RaceProfileData | undefined,
+  pacingSections: PacingSection[]
+): { pace: string; kmRange: string } | null {
+  if (pacingSections.length === 0) return null;
+  const allTags = session.tags ?? [];
+  const terrainTags = allTags.filter((t) => /^(uphill|downhill|flat) on /i.test(t));
+  const numberedTags = allTags.filter((t) => /^(Climb|Descent) \d+$/i.test(t));
+  if (terrainTags.length === 0 && numberedTags.length === 0) return null;
+
+  // Resolve tagged sustained segments (same logic as GymFocusChart)
+  const sustainedSegments = raceProfile?.sustainedSegments ?? [];
+  const climbs = [...sustainedSegments].filter((s) => s.type === "climb").sort((a, b) => a.startKm - b.startKm);
+  const descents = [...sustainedSegments].filter((s) => s.type === "descent").sort((a, b) => a.startKm - b.startKm);
+
+  const resolvedSegs = [
+    ...sustainedSegments.filter((seg) =>
+      terrainTags.some((tag) => {
+        const lower = tag.toLowerCase();
+        const dir = lower.startsWith("uphill") ? "climb" : lower.startsWith("downhill") ? "descent" : "flat";
+        if (seg.type !== dir) return false;
+        const terrainLabel = tag.replace(/^(uphill|downhill|flat) on /i, "");
+        const labels = terrainLabelsForRange(raceProfile?.positionedTerrain ?? null, seg.startKm, seg.endKm);
+        return labels.some((l) => l.toLowerCase() === terrainLabel.toLowerCase());
+      })
+    ),
+    ...numberedTags.flatMap((tag) => {
+      const m = tag.match(/^(Climb|Descent) (\d+)$/i);
+      if (!m) return [];
+      const list = m[1].toLowerCase() === "climb" ? climbs : descents;
+      const idx = parseInt(m[2], 10) - 1;
+      return idx >= 0 && idx < list.length ? [list[idx]] : [];
+    }),
+  ];
+
+  if (resolvedSegs.length === 0) return null;
+
+  // Find the pacing section with the most overlap against any resolved segment
+  let best: { pace: string; kmRange: string } | null = null;
+  let bestOverlap = 0;
+  for (const seg of resolvedSegs) {
+    for (const ps of pacingSections) {
+      const overlap = Math.max(0, Math.min(seg.endKm, ps.end_km) - Math.max(seg.startKm, ps.start_km));
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        const pace = ps.wind_adjusted_pace || ps.target_pace;
+        best = { pace, kmRange: `${ps.start_km.toFixed(1)}–${ps.end_km.toFixed(1)} km` };
+      }
+    }
+  }
+  return best;
+}
+
+function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, exercisePageMap }: { session: TemplateSession; raceProfile?: RaceProfileData; pacingSections?: PacingSection[]; pairedWarmUp?: TemplateSession; exercisePageMap?: Map<string, number> }) {
   const isGym = session.type === "Gym";
   const isRest = session.type === "Rest";
   const col = SESSION_COLOURS[session.type] ?? SESSION_COLOURS.default;
+
+  const racePace = !isGym ? racePaceForSession(session, raceProfile, pacingSections) : null;
+  const showPaceBlock = !isGym && (session.target_pace || racePace);
 
   return (
     <div style={sessionCard}>
@@ -1119,6 +1177,24 @@ function SessionCard({ session, raceProfile, pairedWarmUp, exercisePageMap }: { 
       {raceProfile && <GymFocusChart session={session} raceProfile={raceProfile} />}
 
       {!isRest && <SessionSpecs session={session} />}
+
+      {/* Pace context block for running sessions */}
+      {showPaceBlock && (
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", margin: "6px 0 4px", borderTop: "1px solid #f0f0f0", paddingTop: "8px" }}>
+          {session.target_pace && (
+            <div style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "5px 12px", fontSize: "11px", background: "#fafafa" }}>
+              <div style={{ color: "#888", marginBottom: "1px" }}>Target Pace</div>
+              <div style={{ fontWeight: 700, color: "#1e3a1e", fontSize: "14px" }}>{session.target_pace}/km</div>
+            </div>
+          )}
+          {racePace && (
+            <div style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "5px 12px", fontSize: "11px", background: "#fafafa" }}>
+              <div style={{ color: "#888", marginBottom: "1px" }}>Race Pace · {racePace.kmRange}</div>
+              <div style={{ fontWeight: 700, color: "#c0392b", fontSize: "14px" }}>{racePace.pace}/km</div>
+            </div>
+          )}
+        </div>
+      )}
 
       {isGym && session.description && (
         <p style={descriptionText}>{session.description}</p>
@@ -1354,6 +1430,7 @@ function RaceStrategyPage({
 
 function WeekDetailPage({ week, template, raceProfile, exercisePageMap }: { week: TemplateWeek; template: ProgramTemplate; raceProfile?: RaceProfileData; exercisePageMap?: Map<string, number> }) {
   const sessions = sortSessions(week.program_template_sessions);
+  const pacingSections = template.pacing_data ?? [];
 
   // Map day_label → mobility session (sessions that have mobility_sessions data)
   const mobilityByDay = new Map<string, TemplateSession>();
@@ -1389,6 +1466,7 @@ function WeekDetailPage({ week, template, raceProfile, exercisePageMap }: { week
             key={session.id}
             session={session}
             raceProfile={raceProfile}
+            pacingSections={pacingSections}
             exercisePageMap={exercisePageMap}
             pairedWarmUp={
               session.type === "Gym" && session.day_label
@@ -1441,7 +1519,7 @@ export default function ExportPreviewPage() {
             id, week_number, focus, notes,
             program_template_sessions (
               id, day_label, sort_order, type, name, description,
-              duration, duration_minutes, intensity, is_key_session, reason, tags,
+              duration, duration_minutes, intensity, is_key_session, reason, tags, target_pace,
               distance_km, num_sets, set_duration_minutes, interval_reps, interval_duration, interval_distance_meters, rest_seconds, gradient_percent, perceived_effort,
               strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg, terrain,
               mobility_sessions (

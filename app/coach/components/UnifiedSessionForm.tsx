@@ -30,6 +30,7 @@ export type UnifiedSessionFormData = {
   notes: string;
   tags: string[];
   reason: string;
+  targetPace: string;
   sourceSessionTemplateId?: string;
   selectedMobilitySessionId?: string;
 };
@@ -209,6 +210,7 @@ function createEmptyForm(): UnifiedSessionFormData {
     notes: "",
     reason: "",
     tags: [],
+    targetPace: "",
   };
 }
 
@@ -647,6 +649,17 @@ export function UnifiedSessionForm({
             />
           </label>
         ) : null}
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold text-zinc-900">Target Pace (min/km)</span>
+          <input
+            type="text"
+            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+            value={form.targetPace}
+            onChange={(e) => updateForm("targetPace", e.target.value)}
+            placeholder="e.g. 6:30"
+          />
+        </label>
 
         {fieldVis.show_sets ? (
           <label className="block">
