@@ -1,9 +1,14 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+
+type StretchSuggestion = {
+  id: string;
+  name: string;
+};
 
 type MovementTag = {
   id: string;
@@ -57,6 +62,12 @@ export default function CreateStretchPage() {
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  // Stretch name combobox
+  const [stretchSuggestions, setStretchSuggestions] = useState<StretchSuggestion[]>([]);
+  const [nameDropdownOpen, setNameDropdownOpen] = useState(false);
+  const [searchingStretches, setSearchingStretches] = useState(false);
+  const nameWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function loadOptions() {
@@ -112,6 +123,44 @@ export default function CreateStretchPage() {
 
     loadOptions();
   }, [supabase]);
+
+  // Debounced search for existing stretches
+  useEffect(() => {
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
+      setStretchSuggestions([]);
+      setNameDropdownOpen(false);
+      return;
+    }
+    setSearchingStretches(true);
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from("stretches")
+        .select("id, name")
+        .ilike("name", `%${trimmed}%`)
+        .order("name")
+        .limit(8);
+      setStretchSuggestions((data ?? []) as StretchSuggestion[]);
+      setNameDropdownOpen(true);
+      setSearchingStretches(false);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [name, supabase]);
+
+  // Close name dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (nameWrapRef.current && !nameWrapRef.current.contains(e.target as Node)) {
+        setNameDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const exactMatch = stretchSuggestions.find(
+    (s) => s.name.toLowerCase() === name.trim().toLowerCase()
+  );
 
   const filteredMovementTags = useMemo(() => {
     const query = movementTagSearch.trim().toLowerCase();
@@ -290,13 +339,62 @@ export default function CreateStretchPage() {
           <label htmlFor="name" style={labelStyle}>
             Stretch name
           </label>
-          <input
-            id="name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            style={inputStyle}
-            required
-          />
+          <div ref={nameWrapRef} style={pickerWrapStyle}>
+            <input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onFocus={() => { if (stretchSuggestions.length > 0) setNameDropdownOpen(true); }}
+              onKeyDown={(e) => { if (e.key === "Escape") setNameDropdownOpen(false); }}
+              placeholder="Type to search existing stretches or enter a new name"
+              autoComplete="off"
+              style={inputStyle}
+              required
+            />
+
+            {/* Existing-stretch suggestions */}
+            {nameDropdownOpen && name.trim().length >= 2 && (
+              <div style={dropdownStyle}>
+                {searchingStretches ? (
+                  <div style={dropdownMessageStyle}>Searching…</div>
+                ) : (
+                  <>
+                    {stretchSuggestions.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()} // keep focus on input
+                        onClick={() => router.push(`/admin/stretches/${s.id}/edit`)}
+                        style={dropdownItemStyle}
+                      >
+                        <div style={{ fontWeight: 600 }}>{s.name}</div>
+                        <div style={dropdownMetaStyle}>Stretch exists — click to edit it</div>
+                      </button>
+                    ))}
+                    {stretchSuggestions.length === 0 && (
+                      <div style={{ ...dropdownMessageStyle, color: "#2e7d32", fontWeight: 600 }}>
+                        No existing stretch matches — continue typing to create &ldquo;{name.trim()}&rdquo;
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Duplicate warning when name matches exactly */}
+            {exactMatch && (
+              <div style={duplicateWarningStyle}>
+                A stretch named &ldquo;{exactMatch.name}&rdquo; already exists.{" "}
+                <button
+                  type="button"
+                  onClick={() => router.push(`/admin/stretches/${exactMatch.id}/edit`)}
+                  style={warningLinkStyle}
+                >
+                  Edit it instead →
+                </button>
+              </div>
+            )}
+          </div>
 
           <label htmlFor="alternative-names" style={labelStyle}>
             Alternative names
@@ -808,4 +906,26 @@ const secondaryButtonStyle: React.CSSProperties = {
   color: "#111111",
   fontWeight: 700,
   cursor: "pointer",
+};
+
+const duplicateWarningStyle: React.CSSProperties = {
+  marginTop: "-10px",
+  marginBottom: "16px",
+  padding: "10px 12px",
+  borderRadius: "6px",
+  background: "#fff8e1",
+  border: "1px solid #f9a825",
+  color: "#7c5800",
+  fontSize: "13px",
+};
+
+const warningLinkStyle: React.CSSProperties = {
+  border: "none",
+  background: "none",
+  color: "#7c5800",
+  fontWeight: 700,
+  cursor: "pointer",
+  padding: 0,
+  textDecoration: "underline",
+  fontSize: "13px",
 };
