@@ -2037,6 +2037,130 @@ function SessionSlideOver({
   );
 }
 
+/* ─────────────────────────────────────────────────────────────
+   CopyToWeeksModal
+   ───────────────────────────────────────────────────────────── */
+
+function CopyToWeeksModal({
+  sessionName,
+  sourceWeekNumber,
+  weeks,
+  onCopy,
+  onClose,
+}: {
+  sessionName: string;
+  sourceWeekNumber: number;
+  weeks: Pick<EditableWeek, "localId" | "weekNumber" | "focus">[];
+  onCopy: (targetLocalIds: string[]) => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  function toggle(localId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(localId) ? next.delete(localId) : next.add(localId);
+      return next;
+    });
+  }
+
+  function selectAll() { setSelected(new Set(weeks.map((w) => w.localId))); }
+  function clearAll() { setSelected(new Set()); }
+
+  // Group weeks by focus for display
+  const grouped: { focus: string; weeks: typeof weeks }[] = [];
+  const seen = new Set<string>();
+  for (const w of weeks) {
+    const focus = w.focus || "No focus";
+    if (!seen.has(focus)) {
+      seen.add(focus);
+      grouped.push({ focus, weeks: [] });
+    }
+    grouped.find((g) => g.focus === focus)!.weeks.push(w);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 px-6 py-5">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900">Copy to weeks</h2>
+            <p className="mt-0.5 text-sm text-zinc-500">
+              <span className="font-medium text-zinc-700">{sessionName}</span>
+              {" "}from Week {sourceWeekNumber} will be copied to the end of each selected week.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="mt-0.5 text-zinc-400 hover:text-zinc-700 text-xl leading-none">×</button>
+        </div>
+
+        {/* Week list */}
+        <div className="max-h-80 overflow-y-auto px-6 py-4 space-y-4">
+          {weeks.length === 0 ? (
+            <p className="text-sm text-zinc-500">This template only has one week.</p>
+          ) : (
+            grouped.map(({ focus, weeks: groupWeeks }) => (
+              <div key={focus}>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">{focus}</p>
+                <div className="space-y-1">
+                  {groupWeeks.map((w) => (
+                    <label
+                      key={w.localId}
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                        selected.has(w.localId)
+                          ? "border-sky-300 bg-sky-50"
+                          : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(w.localId)}
+                        onChange={() => toggle(w.localId)}
+                        className="h-4 w-4 rounded accent-sky-600"
+                      />
+                      <span className="text-sm font-medium text-zinc-800">
+                        Week {w.weekNumber}
+                        {w.focus && (
+                          <span className="ml-2 text-xs font-normal text-zinc-400">{w.focus}</span>
+                        )}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-6 py-4">
+          <div className="flex gap-2">
+            <button type="button" onClick={selectAll} className="text-xs text-sky-600 hover:underline">Select all</button>
+            <span className="text-zinc-300">·</span>
+            <button type="button" onClick={clearAll} className="text-xs text-zinc-500 hover:underline">Clear</button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50">
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={selected.size === 0}
+              onClick={() => onCopy(Array.from(selected))}
+              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Copy to {selected.size > 0 ? `${selected.size} week${selected.size !== 1 ? "s" : ""}` : "…"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EditProgramTemplatePage() {
   const supabase = createClient();
   const params = useParams();
@@ -2071,6 +2195,7 @@ export default function EditProgramTemplatePage() {
 
   const [collapsedWeekLocalIds, setCollapsedWeekLocalIds] = useState<Record<string, boolean>>({});
   const [editingSessionSlot, setEditingSessionSlot] = useState<EditingSessionSlot | null>(null);
+  const [copySlot, setCopySlot] = useState<{ weekLocalId: string; sessionLocalId: string } | null>(null);
 
   const filteredRaces = useMemo(() => {
     const query = raceSearchQuery.trim().toLowerCase();
@@ -2580,6 +2705,37 @@ export default function EditProgramTemplatePage() {
     });
     setSessionPanel(null);
     setEditingSessionSlot({ weekLocalId, sessionLocalId: newLocalId });
+  }
+
+  function copySessionToWeeks(sourceWeekLocalId: string, sourceSessionLocalId: string, targetWeekLocalIds: string[]) {
+    if (targetWeekLocalIds.length === 0) return;
+    setForm((current) => {
+      if (!current) return current;
+      const sourceWeek = current.weeks.find((w) => w.localId === sourceWeekLocalId);
+      const sourceSession = sourceWeek?.sessions.find((s) => s.localId === sourceSessionLocalId);
+      if (!sourceSession) return current;
+      return {
+        ...current,
+        weeks: current.weeks.map((week) => {
+          if (!targetWeekLocalIds.includes(week.localId)) return week;
+          const nextSort = Math.max(0, ...week.sessions.map((s) => s.sortOrder)) + 1;
+          const copy: EditableSession = {
+            ...sourceSession,
+            localId: makeLocalId("session"),
+            dbId: null,
+            sortOrder: nextSort,
+            exercises: sourceSession.exercises.map((ex) => ({
+              ...ex,
+              localId: makeLocalId("exercise"),
+              dbId: null,
+            })),
+          };
+          return { ...week, sessions: [...week.sessions, copy] };
+        }),
+      };
+    });
+    setCopySlot(null);
+    showTemporaryStatus(`Copied to ${targetWeekLocalIds.length} week${targetWeekLocalIds.length !== 1 ? "s" : ""}.`, 2000);
   }
 
   function handleUpdateSessionFromForm(
@@ -4080,6 +4236,14 @@ export default function EditProgramTemplatePage() {
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => setCopySlot({ weekLocalId: week.localId, sessionLocalId: session.localId })}
+                                  className="rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50"
+                                  title="Copy this session to other weeks"
+                                >
+                                  Copy to weeks
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => removeSession(week.localId, session.localId)}
                                   className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
                                 >
@@ -4105,6 +4269,25 @@ export default function EditProgramTemplatePage() {
           </div>
         </section>
       </div>
+
+      {/* Copy-to-weeks modal */}
+      {copySlot && (() => {
+        const sourceWeek = form.weeks.find((w) => w.localId === copySlot.weekLocalId);
+        const sourceSession = sourceWeek?.sessions.find((s) => s.localId === copySlot.sessionLocalId);
+        if (!sourceSession) return null;
+        const otherWeeks = form.weeks
+          .filter((w) => w.localId !== copySlot.weekLocalId)
+          .sort((a, b) => a.weekNumber - b.weekNumber);
+        return (
+          <CopyToWeeksModal
+            sessionName={sourceSession.name || "Session"}
+            sourceWeekNumber={sourceWeek?.weekNumber ?? 0}
+            weeks={otherWeeks}
+            onCopy={(targetLocalIds) => copySessionToWeeks(copySlot.weekLocalId, copySlot.sessionLocalId, targetLocalIds)}
+            onClose={() => setCopySlot(null)}
+          />
+        );
+      })()}
 
       {/* Session slide-over panel — rendered at page root so it's not clipped by overflow */}
       {editingSessionSlot && (() => {
