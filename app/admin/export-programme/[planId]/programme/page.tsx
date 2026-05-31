@@ -980,8 +980,8 @@ function GymFocusChart({ session, raceProfile }: { session: TemplateSession; rac
   // Terrain-based tags: "Uphill on gravel", "Downhill on track", etc.
   const terrainTags = allTags.filter((t) => /^(uphill|downhill|flat) on /i.test(t));
 
-  // Numbered segment tags: "Climb 1", "Climb 2", "Descent 1", etc.
-  const numberedTags = allTags.filter((t) => /^(Climb|Descent) \d+$/i.test(t));
+  // Numbered segment tags: "Climb 1", "Climb 2", "Descent 1", "Flat 1", etc.
+  const numberedTags = allTags.filter((t) => /^(Climb|Descent|Flat) \d+$/i.test(t));
 
   if (terrainTags.length === 0 && numberedTags.length === 0) return null;
   if (!raceProfile.elevation || raceProfile.elevation.points.length < 2) return null;
@@ -1000,13 +1000,15 @@ function GymFocusChart({ session, raceProfile }: { session: TemplateSession; rac
     })
   );
 
-  // Numbered segment matching: "Climb 1" → 1st climb by km order, "Descent 2" → 2nd descent, etc.
+  // Numbered segment matching: "Climb 1", "Descent 2", "Flat 1", etc.
   const climbs = [...sustainedSegments].filter((s) => s.type === "climb").sort((a, b) => a.startKm - b.startKm);
   const descents = [...sustainedSegments].filter((s) => s.type === "descent").sort((a, b) => a.startKm - b.startKm);
+  const flats = [...sustainedSegments].filter((s) => s.type === "flat").sort((a, b) => a.startKm - b.startKm);
   const numberedMatchingSegs = numberedTags.flatMap((tag) => {
-    const m = tag.match(/^(Climb|Descent) (\d+)$/i);
+    const m = tag.match(/^(Climb|Descent|Flat) (\d+)$/i);
     if (!m) return [];
-    const list = m[1].toLowerCase() === "climb" ? climbs : descents;
+    const kind = m[1].toLowerCase();
+    const list = kind === "climb" ? climbs : kind === "descent" ? descents : flats;
     const idx = parseInt(m[2], 10) - 1;
     return idx >= 0 && idx < list.length ? [list[idx]] : [];
   });
@@ -1058,8 +1060,8 @@ function GymFocusChart({ session, raceProfile }: { session: TemplateSession; rac
         <polyline points={linePts} fill="none" stroke="#1e3a1e60" strokeWidth="1" strokeLinejoin="round" />
         {/* Highlighted segments */}
         {matchingSegs.map((seg, i) => {
-          const segFill = seg.type === "descent" ? "#1565c022" : "#bf360c22";
-          const segStroke = seg.type === "descent" ? "#1565c0" : "#bf360c";
+          const segFill = seg.type === "descent" ? "#1565c022" : seg.type === "flat" ? "#1e6a3022" : "#bf360c22";
+          const segStroke = seg.type === "descent" ? "#1565c0" : seg.type === "flat" ? "#1e6a30" : "#bf360c";
           return (
             <rect key={i}
               x={xS(seg.startKm)} y={padT}
@@ -1073,7 +1075,7 @@ function GymFocusChart({ session, raceProfile }: { session: TemplateSession; rac
         {matchingSegs.map((seg, i) => {
           const segPts = pts.filter((p) => p.distanceKm >= seg.startKm && p.distanceKm <= seg.endKm);
           if (segPts.length < 2) return null;
-          const segStroke = seg.type === "descent" ? "#1565c0" : "#bf360c";
+          const segStroke = seg.type === "descent" ? "#1565c0" : seg.type === "flat" ? "#1e6a30" : "#bf360c";
           return (
             <polyline key={`line-${i}`}
               points={segPts.map((p) => `${xS(p.distanceKm).toFixed(1)},${yS(p.elevationM).toFixed(1)}`).join(" ")}
@@ -1083,12 +1085,13 @@ function GymFocusChart({ session, raceProfile }: { session: TemplateSession; rac
         })}
         {/* Segment labels */}
         {matchingSegs.map((seg, i) => {
-          const segStroke = seg.type === "descent" ? "#1565c0" : "#bf360c";
+          const segStroke = seg.type === "descent" ? "#1565c0" : seg.type === "flat" ? "#1e6a30" : "#bf360c";
+          const icon = seg.type === "climb" ? "▲" : seg.type === "descent" ? "▼" : "→";
           return (
             <text key={`lbl-${i}`}
               x={xS((seg.startKm + seg.endKm) / 2)} y={padT + 12}
               textAnchor="middle" fontSize="8" fontWeight="700" fill={segStroke}>
-              {seg.type === "climb" ? "▲" : "▼"} {Math.abs(Math.round(seg.totalElevationM))}m · {seg.avgGradient.toFixed(1)}%
+              {icon} {seg.type === "flat" ? `${seg.lengthKm.toFixed(1)}km` : `${Math.abs(Math.round(seg.totalElevationM))}m · ${seg.avgGradient.toFixed(1)}%`}
             </text>
           );
         })}
@@ -1112,6 +1115,7 @@ function racePaceForSession(
   const sustainedSegments = raceProfile?.sustainedSegments ?? [];
   const climbs = [...sustainedSegments].filter((s) => s.type === "climb").sort((a, b) => a.startKm - b.startKm);
   const descents = [...sustainedSegments].filter((s) => s.type === "descent").sort((a, b) => a.startKm - b.startKm);
+  const flats = [...sustainedSegments].filter((s) => s.type === "flat").sort((a, b) => a.startKm - b.startKm);
 
   const resolvedSegs = [
     ...sustainedSegments.filter((seg) =>
@@ -1125,9 +1129,10 @@ function racePaceForSession(
       })
     ),
     ...numberedTags.flatMap((tag) => {
-      const m = tag.match(/^(Climb|Descent) (\d+)$/i);
+      const m = tag.match(/^(Climb|Descent|Flat) (\d+)$/i);
       if (!m) return [];
-      const list = m[1].toLowerCase() === "climb" ? climbs : descents;
+      const kind = m[1].toLowerCase();
+      const list = kind === "climb" ? climbs : kind === "descent" ? descents : flats;
       const idx = parseInt(m[2], 10) - 1;
       return idx >= 0 && idx < list.length ? [list[idx]] : [];
     }),

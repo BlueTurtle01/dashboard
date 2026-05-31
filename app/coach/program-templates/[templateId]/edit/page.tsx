@@ -1325,12 +1325,13 @@ function racePaceFromTags(
 ): string | null {
   if (!pacingData || pacingData.length === 0) return null;
   const terrainTags = tags.filter((t) => /^(uphill|downhill|flat) on /i.test(t));
-  const numberedTags = tags.filter((t) => /^(Climb|Descent) \d+$/i.test(t));
+  const numberedTags = tags.filter((t) => /^(Climb|Descent|Flat) \d+$/i.test(t));
   if (terrainTags.length === 0 && numberedTags.length === 0) return null;
 
   const segs = raceProfile?.sustainedSegments ?? [];
   const climbs = [...segs].filter((s) => s.type === "climb").sort((a, b) => a.startKm - b.startKm);
   const descents = [...segs].filter((s) => s.type === "descent").sort((a, b) => a.startKm - b.startKm);
+  const flats = [...segs].filter((s) => s.type === "flat").sort((a, b) => a.startKm - b.startKm);
 
   const resolvedSegs = [
     ...segs.filter((seg) =>
@@ -1344,9 +1345,10 @@ function racePaceFromTags(
       })
     ),
     ...numberedTags.flatMap((tag) => {
-      const m = tag.match(/^(Climb|Descent) (\d+)$/i);
+      const m = tag.match(/^(Climb|Descent|Flat) (\d+)$/i);
       if (!m) return [];
-      const list = m[1].toLowerCase() === "climb" ? climbs : descents;
+      const kind = m[1].toLowerCase();
+      const list = kind === "climb" ? climbs : kind === "descent" ? descents : flats;
       const idx = parseInt(m[2], 10) - 1;
       return idx >= 0 && idx < list.length ? [list[idx]] : [];
     }),
@@ -1407,27 +1409,30 @@ function SessionSlideOver({
     if (!raceProfile?.sustainedSegments) return [];
     const tags = new Set<string>();
 
-    // Terrain-based options (existing): "Uphill on gravel", "Downhill on track", etc.
+    // Terrain-based options: "Uphill on gravel", "Downhill on track", "Flat on grass", etc.
     if (raceProfile.positionedTerrain) {
       for (const seg of raceProfile.sustainedSegments) {
-        if (seg.type === "flat") continue;
         const labels = getTerrainLabelsForRange(raceProfile.positionedTerrain, seg.startKm, seg.endKm);
         if (labels.length > 0) {
-          const dir = seg.type === "climb" ? "Uphill" : "Downhill";
+          const dir = seg.type === "climb" ? "Uphill" : seg.type === "descent" ? "Downhill" : "Flat";
           tags.add(`${dir} on ${labels[0]}`);
         }
       }
     }
 
-    // Numbered options: "Climb 1", "Climb 2", "Descent 1", etc. for pinpointing a specific segment
+    // Numbered options: "Climb 1", "Descent 1", "Flat 1", etc. for pinpointing a specific segment
     const climbs = raceProfile.sustainedSegments
       .filter((s) => s.type === "climb")
       .sort((a, b) => a.startKm - b.startKm);
     const descents = raceProfile.sustainedSegments
       .filter((s) => s.type === "descent")
       .sort((a, b) => a.startKm - b.startKm);
+    const flats = raceProfile.sustainedSegments
+      .filter((s) => s.type === "flat")
+      .sort((a, b) => a.startKm - b.startKm);
     climbs.forEach((_, i) => tags.add(`Climb ${i + 1}`));
     descents.forEach((_, i) => tags.add(`Descent ${i + 1}`));
+    flats.forEach((_, i) => tags.add(`Flat ${i + 1}`));
 
     return [...tags].sort();
   }, [raceProfile]);
@@ -1442,8 +1447,12 @@ function SessionSlideOver({
     const descents = raceProfile.sustainedSegments
       .filter((s) => s.type === "descent")
       .sort((a, b) => a.startKm - b.startKm);
-    climbs.forEach((seg, i) => map.set(`Climb ${i + 1}`, `km ${seg.startKm.toFixed(1)}–${seg.endKm.toFixed(1)}, ${seg.totalElevationM > 0 ? "+" : ""}${Math.round(seg.totalElevationM)}m`));
+    const flats = raceProfile.sustainedSegments
+      .filter((s) => s.type === "flat")
+      .sort((a, b) => a.startKm - b.startKm);
+    climbs.forEach((seg, i) => map.set(`Climb ${i + 1}`, `km ${seg.startKm.toFixed(1)}–${seg.endKm.toFixed(1)}, +${Math.round(seg.totalElevationM)}m`));
     descents.forEach((seg, i) => map.set(`Descent ${i + 1}`, `km ${seg.startKm.toFixed(1)}–${seg.endKm.toFixed(1)}, ${Math.round(Math.abs(seg.totalElevationM))}m loss`));
+    flats.forEach((seg, i) => map.set(`Flat ${i + 1}`, `km ${seg.startKm.toFixed(1)}–${seg.endKm.toFixed(1)}, ${seg.lengthKm.toFixed(1)}km`));
     return map;
   }, [raceProfile]);
 
