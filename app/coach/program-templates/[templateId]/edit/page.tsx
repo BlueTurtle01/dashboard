@@ -94,6 +94,8 @@ type ProgramTemplateSessionRow = {
   cooldown_minutes: number | null;
   interval_reps: number | null;
   interval_duration: string | null;
+  interval_distance_meters: number | null;
+  rest_seconds: number | null;
   perceived_effort: number | null;
   reason: string | null;
   tags: string[] | null;
@@ -183,6 +185,8 @@ type EditableSession = {
   coolDownMinutes?: string;
   intervalReps?: string;
   intervalDuration?: string;
+  intervalDistanceMeters?: string;
+  restSeconds?: string;
   perceivedEffort?: string;
   reason?: string;
   tags?: string[];
@@ -463,6 +467,8 @@ function mapSessionToUnifiedFormData(session: EditableSession): Partial<UnifiedS
     coolDownMinutes: session.coolDownMinutes ?? "",
     intervalReps: session.intervalReps ?? "",
     intervalDuration: session.intervalDuration ?? "",
+    intervalDistanceMeters: session.intervalDistanceMeters ?? "",
+    restSeconds: session.restSeconds ?? "",
     perceivedEffort: session.perceivedEffort ?? "",
     timeOfDay: session.runTimeType || "any",
     sets: session.numSets,
@@ -505,6 +511,8 @@ function applyUnifiedFormDataToSession(
     coolDownMinutes: formData.coolDownMinutes,
     intervalReps: formData.intervalReps,
     intervalDuration: formData.intervalDuration,
+    intervalDistanceMeters: formData.intervalDistanceMeters,
+    restSeconds: formData.restSeconds,
     perceivedEffort: formData.perceivedEffort,
     reason: formData.reason,
     tags: formData.tags,
@@ -813,6 +821,8 @@ function buildEditableSessionFromMobility(
     coolDownMinutes: "",
     intervalReps: "",
     intervalDuration: "",
+    intervalDistanceMeters: "",
+    restSeconds: "",
     perceivedEffort: "",
     reason: "",
     tags: row.focus_areas ?? [],
@@ -960,6 +970,8 @@ function mapToForm(
             coolDownMinutes: session.cooldown_minutes?.toString() ?? "",
             intervalReps: session.interval_reps?.toString() ?? "",
             intervalDuration: session.interval_duration ?? "",
+            intervalDistanceMeters: session.interval_distance_meters?.toString() ?? "",
+            restSeconds: session.rest_seconds?.toString() ?? "",
             perceivedEffort: session.perceived_effort?.toString() ?? "",
             reason: session.reason ?? "",
             tags: session.tags ?? [],
@@ -2285,6 +2297,8 @@ export default function EditProgramTemplatePage() {
             coolDownMinutes: "",
             intervalReps: "",
             intervalDuration: "",
+            intervalDistanceMeters: "",
+            restSeconds: "",
             perceivedEffort: "",
             reason: "",
             tags: [],
@@ -2819,6 +2833,8 @@ export default function EditProgramTemplatePage() {
         cooldown_minutes: session.coolDownMinutes ? parseInt(session.coolDownMinutes, 10) || null : null,
         interval_reps: session.intervalReps ? parseInt(session.intervalReps, 10) || null : null,
         interval_duration: session.intervalDuration || null,
+        interval_distance_meters: session.intervalDistanceMeters ? parseInt(session.intervalDistanceMeters, 10) || null : null,
+        rest_seconds: session.restSeconds ? parseInt(session.restSeconds, 10) || null : null,
         perceived_effort: session.perceivedEffort ? parseInt(session.perceivedEffort, 10) || null : null,
         reason: session.reason || null,
         tags: (session.tags && session.tags.length > 0) ? session.tags : null,
