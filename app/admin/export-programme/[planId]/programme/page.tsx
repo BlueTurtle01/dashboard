@@ -1230,6 +1230,182 @@ function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, 
   );
 }
 
+/* ── Training Calendar ── */
+
+const CALENDAR_CAT = {
+  run:       { bg: "#dbeafe", fg: "#1e3a8a", border: "#93c5fd", label: "Run"       },
+  gym:       { bg: "#fff3e0", fg: "#e65100", border: "#ffcc80", label: "Gym"       },
+  intervals: { bg: "#fce7f3", fg: "#9d174d", border: "#f9a8d4", label: "Intervals" },
+  hills:     { bg: "#fef9c3", fg: "#854d0e", border: "#fde047", label: "Hills"     },
+  loaded:    { bg: "#fbe9e7", fg: "#bf360c", border: "#ffab91", label: "Loaded"    },
+  mobility:  { bg: "#f0fdf4", fg: "#14532d", border: "#86efac", label: "Mobility"  },
+  rest:      { bg: "#f9fafb", fg: "#9ca3af", border: "#e5e7eb", label: "Rest"      },
+};
+type CalendarCat = keyof typeof CALENDAR_CAT;
+
+function calendarCat(session: TemplateSession): CalendarCat {
+  if (session.type === "Rest") return "rest";
+  if (session.type === "Gym") return "gym";
+  if (session.mobility_sessions) return "mobility";
+
+  const text = [session.name ?? "", ...(session.tags ?? [])].join(" ").toLowerCase();
+
+  if (
+    session.interval_reps ||
+    text.includes("interval") ||
+    text.includes("tempo") ||
+    text.includes("fartlek") ||
+    session.type === "Intervals"
+  ) return "intervals";
+
+  if (
+    text.includes("hill") ||
+    text.includes("uphill") ||
+    (session.elevation_gain_meters != null && session.elevation_gain_meters >= 300) ||
+    (session.gradient_percent != null && session.gradient_percent > 6)
+  ) return "hills";
+
+  if (session.type === "Loaded" || (session.pack_weight_kg != null && session.pack_weight_kg > 0)) {
+    return "loaded";
+  }
+
+  return "run";
+}
+
+function calendarCellDetail(session: TemplateSession): string {
+  if (session.distance_km) return `${session.distance_km}km`;
+  if (session.duration_minutes) return `${session.duration_minutes}m`;
+  return "";
+}
+
+function TrainingCalendarPage({ weeks, template }: { weeks: TemplateWeek[]; template: ProgramTemplate }) {
+  const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const sorted = [...weeks].sort((a, b) => a.week_number - b.week_number);
+
+  // Content width = 794 - 2*48 = 698px; week col = 42px; day cols = (698-42)/7 = ~94px each
+  const wkW = 42;
+  const dayW = Math.floor((698 - wkW) / 7);
+
+  const thBase: React.CSSProperties = {
+    padding: "5px 4px",
+    fontSize: "10px",
+    fontWeight: 700,
+    textAlign: "center",
+    color: "#555",
+    borderBottom: "2px solid #1e3a1e",
+    background: "#f9f9f9",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+  };
+
+  const tdBase: React.CSSProperties = {
+    padding: "3px",
+    verticalAlign: "top",
+    borderBottom: "1px solid #f0f0f0",
+    borderRight: "1px solid #f0f0f0",
+  };
+
+  return (
+    <div style={a4Page}>
+      <PrintHeader template={template} />
+      <h2 style={{ margin: "0 0 14px", fontSize: "18px", fontWeight: 700, color: "#1e3a1e" }}>
+        Training Plan Overview
+      </h2>
+
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: "11px" }}>
+        <colgroup>
+          <col style={{ width: `${wkW}px` }} />
+          {DAYS.map((d) => <col key={d} style={{ width: `${dayW}px` }} />)}
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={{ ...thBase, textAlign: "left", paddingLeft: "6px" }}>Wk</th>
+            {DAYS.map((d) => (
+              <th key={d} style={thBase}>{d}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((week) => {
+            const byDay = new Map<string, TemplateSession[]>();
+            for (const s of week.program_template_sessions) {
+              if (!byDay.has(s.day_label)) byDay.set(s.day_label, []);
+              byDay.get(s.day_label)!.push(s);
+            }
+
+            return (
+              <tr key={week.id}>
+                {/* Week number + focus label */}
+                <td style={{ ...tdBase, textAlign: "center", verticalAlign: "middle", background: "#fafafa", borderRight: "2px solid #1e3a1e" }}>
+                  <div style={{ fontWeight: 700, color: "#1e3a1e", fontSize: "11px" }}>W{week.week_number}</div>
+                  {week.focus && (
+                    <div style={{ fontSize: "7.5px", color: "#666", marginTop: "2px", lineHeight: 1.2 }}>
+                      {week.focus}
+                    </div>
+                  )}
+                </td>
+
+                {DAYS.map((day) => {
+                  const sessions = (byDay.get(day) ?? []).filter((s) => s.type !== "Rest");
+                  const hasRest = (byDay.get(day) ?? []).some((s) => s.type === "Rest");
+
+                  return (
+                    <td key={day} style={tdBase}>
+                      {sessions.length === 0 && (
+                        <div style={{ textAlign: "center", color: hasRest ? "#bbb" : "#e5e7eb", fontSize: "9px", paddingTop: "4px" }}>
+                          {hasRest ? "Rest" : "—"}
+                        </div>
+                      )}
+                      {sessions.map((s) => {
+                        const cat = calendarCat(s);
+                        const col = CALENDAR_CAT[cat];
+                        const detail = calendarCellDetail(s);
+                        return (
+                          <div
+                            key={s.id}
+                            style={{
+                              background: col.bg,
+                              color: col.fg,
+                              border: `1px solid ${col.border}`,
+                              borderRadius: "4px",
+                              padding: "2px 4px",
+                              marginBottom: "2px",
+                              lineHeight: 1.3,
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, fontSize: "10px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {s.type}
+                            </div>
+                            {detail && (
+                              <div style={{ fontSize: "9px", opacity: 0.8 }}>{detail}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* Legend */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px", marginTop: "14px", paddingTop: "10px", borderTop: "1px solid #eee" }}>
+        {(Object.entries(CALENDAR_CAT) as [CalendarCat, typeof CALENDAR_CAT[CalendarCat]][])
+          .filter(([cat]) => cat !== "rest")
+          .map(([cat, col]) => (
+            <div key={cat} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "#444" }}>
+              <div style={{ width: "12px", height: "12px", background: col.bg, border: `1px solid ${col.border}`, borderRadius: "2px", flexShrink: 0 }} />
+              {col.label}
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 function WeeklyMileagePage({ weeks, template }: { weeks: TemplateWeek[]; template: ProgramTemplate }) {
   const sorted = weeks.slice().sort((a, b) => a.week_number - b.week_number);
   const weekMiles = sorted.map((week) => {
@@ -1636,6 +1812,9 @@ export default function ExportPreviewPage() {
             <p style={{ fontSize: "14px", color: "#666", marginTop: "20px", maxWidth: "480px", lineHeight: "1.6" }}>{template.description}</p>
           )}
         </div>
+
+        {/* Training calendar overview — one row per week */}
+        <TrainingCalendarPage weeks={weeks} template={template} />
 
         {/* Race course profile page */}
         {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} />}
