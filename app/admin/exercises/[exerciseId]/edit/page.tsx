@@ -38,6 +38,7 @@ type ExerciseRow = {
   photo_url: string | null;
   video_url: string | null;
   steps: string[] | null;
+  info_link: string | null;
 };
 
 export default function EditExercisePage() {
@@ -79,6 +80,7 @@ export default function EditExercisePage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [infoLink, setInfoLink] = useState("");
 
   const [loadingExercise, setLoadingExercise] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -115,7 +117,7 @@ export default function EditExercisePage() {
           supabase
             .from("exercises")
             .select(
-              "id, name, alternative_names, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern, sets, reps, photo_url, video_url, steps"
+              "id, name, alternative_names, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern, sets, reps, photo_url, video_url, steps, info_link"
             )
             .eq("id", exerciseId)
             .single(),
@@ -195,6 +197,7 @@ export default function EditExercisePage() {
         setPhotoUrl(exercise.photo_url ?? null);
         setVideoUrl(exercise.video_url ?? "");
         setSteps(exercise.steps ?? []);
+        setInfoLink(exercise.info_link ?? "");
 
         setSelectedMovementTags(
           movementTags.filter((tag) => (exercise.movement_tags || []).includes(tag.slug))
@@ -469,6 +472,7 @@ export default function EditExercisePage() {
       photo_url: photoUrl,
       video_url: videoUrl.trim() || null,
       steps: steps.filter((s) => s.trim().length > 0),
+      info_link: infoLink.trim() || null,
     };
 
     const { error } = await supabase
@@ -917,6 +921,16 @@ export default function EditExercisePage() {
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
             placeholder="https://youtube.com/watch?v=…"
+            style={inputStyle}
+          />
+
+          <label htmlFor="info-link" style={labelStyle}>Reference link (admin only)</label>
+          <input
+            id="info-link"
+            type="url"
+            value={infoLink}
+            onChange={(e) => setInfoLink(e.target.value)}
+            placeholder="https://…"
             style={inputStyle}
           />
 

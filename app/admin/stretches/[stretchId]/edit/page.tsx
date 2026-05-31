@@ -35,6 +35,7 @@ type StretchRow = {
   pattern: string | null;
   steps: string[] | null;
   stretch_type: string | null;
+  default_weight: string | null;
 };
 
 export default function EditStretchPage() {
@@ -70,6 +71,7 @@ export default function EditStretchPage() {
   const [steps, setSteps] = useState<string[]>([]);
   const [newStep, setNewStep] = useState("");
   const [stretchType, setStretchType] = useState<"static" | "dynamic" | "">("");
+  const [defaultWeight, setDefaultWeight] = useState("");
 
   const [loadingStretch, setLoadingStretch] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -99,7 +101,7 @@ export default function EditStretchPage() {
           supabase
             .from("stretches")
             .select(
-              "id, name, alternative_names, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern, steps, stretch_type"
+              "id, name, alternative_names, description, primary_muscles, secondary_muscles, movement_tags, equipment, pattern, steps, stretch_type, default_weight"
             )
             .eq("id", stretchId)
             .single(),
@@ -158,6 +160,7 @@ export default function EditStretchPage() {
         setPattern(stretch.pattern || "");
         setSteps(stretch.steps ?? []);
         setStretchType((stretch.stretch_type as "static" | "dynamic" | "") ?? "");
+        setDefaultWeight(stretch.default_weight ?? "Bodyweight");
 
         setSelectedMovementTags(
           movementTags.filter((tag) => (stretch.movement_tags || []).includes(tag.slug))
@@ -324,6 +327,7 @@ export default function EditStretchPage() {
       pattern: pattern.trim() || null,
       steps: steps.filter((s) => s.trim().length > 0),
       stretch_type: stretchType || null,
+      default_weight: defaultWeight.trim() || null,
     };
 
     const { error } = await supabase
@@ -672,6 +676,17 @@ export default function EditStretchPage() {
             value={pattern}
             onChange={(event) => setPattern(event.target.value)}
             placeholder="e.g. static, dynamic, PNF"
+            style={inputStyle}
+          />
+
+          <label htmlFor="default-weight" style={labelStyle}>
+            Default weight
+          </label>
+          <input
+            id="default-weight"
+            value={defaultWeight}
+            onChange={(event) => setDefaultWeight(event.target.value)}
+            placeholder="e.g. Bodyweight"
             style={inputStyle}
           />
 

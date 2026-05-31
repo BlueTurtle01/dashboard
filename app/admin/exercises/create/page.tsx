@@ -59,6 +59,8 @@ export default function CreateExercisePage() {
   const [videoUrl, setVideoUrl] = useState("");
   const [uploadingVideo, setUploadingVideo] = useState(false);
 
+  const [infoLink, setInfoLink] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -298,6 +300,7 @@ export default function CreateExercisePage() {
       photo_url: photoUrl,
       video_url: videoUrl.trim() || null,
       steps: steps.filter((s) => s.trim().length > 0),
+      info_link: infoLink.trim() || null,
     };
 
     const { error } = await supabase.from("exercises").insert(payload);
@@ -332,6 +335,7 @@ export default function CreateExercisePage() {
     setUploadingVideo(false);
     setSteps([]);
     setNewStep("");
+    setInfoLink("");
     setSaving(false);
   }
 
@@ -749,6 +753,16 @@ export default function CreateExercisePage() {
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
             placeholder="https://youtube.com/watch?v=…"
+            style={inputStyle}
+          />
+
+          <label htmlFor="info-link" style={labelStyle}>Reference link (admin only)</label>
+          <input
+            id="info-link"
+            type="url"
+            value={infoLink}
+            onChange={(e) => setInfoLink(e.target.value)}
+            placeholder="https://…"
             style={inputStyle}
           />
 

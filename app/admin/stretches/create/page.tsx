@@ -52,6 +52,7 @@ export default function CreateStretchPage() {
   const [steps, setSteps] = useState<string[]>([]);
   const [newStep, setNewStep] = useState("");
   const [stretchType, setStretchType] = useState<"static" | "dynamic" | "">("");
+  const [defaultWeight, setDefaultWeight] = useState("Bodyweight");
 
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -245,6 +246,7 @@ export default function CreateStretchPage() {
       pattern: pattern.trim() || null,
       steps: steps.filter((s) => s.trim().length > 0),
       stretch_type: stretchType || null,
+      default_weight: defaultWeight.trim() || null,
     };
 
     const { error } = await supabase.from("stretches").insert(payload);
@@ -267,6 +269,7 @@ export default function CreateStretchPage() {
     setSteps([]);
     setNewStep("");
     setStretchType("");
+    setDefaultWeight("Bodyweight");
     setMovementTagSearch("");
     setSelectedMovementTags([]);
     setEquipmentSearch("");
@@ -592,6 +595,17 @@ export default function CreateStretchPage() {
             value={pattern}
             onChange={(event) => setPattern(event.target.value)}
             placeholder="e.g. static, dynamic, PNF"
+            style={inputStyle}
+          />
+
+          <label htmlFor="default-weight" style={labelStyle}>
+            Default weight
+          </label>
+          <input
+            id="default-weight"
+            value={defaultWeight}
+            onChange={(event) => setDefaultWeight(event.target.value)}
+            placeholder="e.g. Bodyweight"
             style={inputStyle}
           />
 
