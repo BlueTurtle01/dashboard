@@ -974,14 +974,22 @@ function SessionSpecs({ session }: { session: TemplateSession }) {
 }
 
 function GymFocusChart({ session, raceProfile }: { session: TemplateSession; raceProfile: RaceProfileData }) {
-  const tags = (session.tags ?? []).filter((t) =>
-    /^(uphill|downhill|flat) on /i.test(t)
-  );
-  if (tags.length === 0 || !raceProfile.elevation || raceProfile.elevation.points.length < 2) return null;
+  const allTags = session.tags ?? [];
 
-  // Find sustained segments that match any tag
-  const matchingSegs = (raceProfile.sustainedSegments ?? []).filter((seg) =>
-    tags.some((tag) => {
+  // Terrain-based tags: "Uphill on gravel", "Downhill on track", etc.
+  const terrainTags = allTags.filter((t) => /^(uphill|downhill|flat) on /i.test(t));
+
+  // Numbered segment tags: "Climb 1", "Climb 2", "Descent 1", etc.
+  const numberedTags = allTags.filter((t) => /^(Climb|Descent) \d+$/i.test(t));
+
+  if (terrainTags.length === 0 && numberedTags.length === 0) return null;
+  if (!raceProfile.elevation || raceProfile.elevation.points.length < 2) return null;
+
+  const sustainedSegments = raceProfile.sustainedSegments ?? [];
+
+  // Terrain-based matching (existing behaviour)
+  const terrainMatchingSegs = sustainedSegments.filter((seg) =>
+    terrainTags.some((tag) => {
       const lower = tag.toLowerCase();
       const dir = lower.startsWith("uphill") ? "climb" : lower.startsWith("downhill") ? "descent" : "flat";
       if (seg.type !== dir) return false;
@@ -990,7 +998,34 @@ function GymFocusChart({ session, raceProfile }: { session: TemplateSession; rac
       return labels.some((l) => l.toLowerCase() === terrainLabel.toLowerCase());
     })
   );
+
+  // Numbered segment matching: "Climb 1" → 1st climb by km order, "Descent 2" → 2nd descent, etc.
+  const climbs = [...sustainedSegments].filter((s) => s.type === "climb").sort((a, b) => a.startKm - b.startKm);
+  const descents = [...sustainedSegments].filter((s) => s.type === "descent").sort((a, b) => a.startKm - b.startKm);
+  const numberedMatchingSegs = numberedTags.flatMap((tag) => {
+    const m = tag.match(/^(Climb|Descent) (\d+)$/i);
+    if (!m) return [];
+    const list = m[1].toLowerCase() === "climb" ? climbs : descents;
+    const idx = parseInt(m[2], 10) - 1;
+    return idx >= 0 && idx < list.length ? [list[idx]] : [];
+  });
+
+  // Deduplicate (in case a terrain tag and a numbered tag resolve to the same segment)
+  const seen = new Set<string>();
+  const matchingSegs = [...terrainMatchingSegs, ...numberedMatchingSegs].filter((seg) => {
+    const key = `${seg.startKm}-${seg.endKm}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   if (matchingSegs.length === 0) return null;
+
+  // Build subtitle label
+  const labelParts: string[] = [];
+  if (terrainTags.length > 0) labelParts.push(terrainTags.join(" / "));
+  if (numberedTags.length > 0) labelParts.push(numberedTags.join(", "));
+  const subtitleLabel = labelParts.join(" · ");
 
   const { points, totalDistanceKm, minElevationM, maxElevationM } = raceProfile.elevation;
   const W = 650; const H = 70;
@@ -1007,46 +1042,55 @@ function GymFocusChart({ session, raceProfile }: { session: TemplateSession; rac
     ` L${xS(last.distanceKm).toFixed(1)},${(padT + cH).toFixed(1)} Z`;
   const linePts = pts.map((p) => `${xS(p.distanceKm).toFixed(1)},${yS(p.elevationM).toFixed(1)}`).join(" ");
 
-  const isDescend = tags.some((t) => /^downhill/i.test(t));
-  const highlightFill = isDescend ? "#1565c022" : "#bf360c22";
-  const highlightStroke = isDescend ? "#1565c0" : "#bf360c";
+  const hasOnlyDescents = matchingSegs.every((s) => s.type === "descent");
+  const highlightFill = hasOnlyDescents ? "#1565c022" : "#bf360c22";
+  const highlightStroke = hasOnlyDescents ? "#1565c0" : "#bf360c";
 
   return (
     <div style={{ marginTop: "8px", marginBottom: "4px" }}>
       <p style={{ margin: "0 0 4px", fontSize: "10px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-        Course segment — {tags.join(", ")}
+        Course segment — {subtitleLabel}
       </p>
       <svg width={W} height={H} style={{ display: "block", borderRadius: "4px", overflow: "hidden" }}>
         {/* Background elevation area */}
         <path d={areaD} fill="#1e3a1e10" />
         <polyline points={linePts} fill="none" stroke="#1e3a1e60" strokeWidth="1" strokeLinejoin="round" />
         {/* Highlighted segments */}
-        {matchingSegs.map((seg, i) => (
-          <rect key={i}
-            x={xS(seg.startKm)} y={padT}
-            width={Math.max(xS(seg.endKm) - xS(seg.startKm), 2)} height={cH}
-            fill={highlightFill}
-          />
-        ))}
-        {/* Highlighted segment outline */}
+        {matchingSegs.map((seg, i) => {
+          const segFill = seg.type === "descent" ? "#1565c022" : "#bf360c22";
+          const segStroke = seg.type === "descent" ? "#1565c0" : "#bf360c";
+          return (
+            <rect key={i}
+              x={xS(seg.startKm)} y={padT}
+              width={Math.max(xS(seg.endKm) - xS(seg.startKm), 2)} height={cH}
+              fill={segFill}
+              stroke={segStroke} strokeWidth="0.5"
+            />
+          );
+        })}
+        {/* Highlighted segment elevation line */}
         {matchingSegs.map((seg, i) => {
           const segPts = pts.filter((p) => p.distanceKm >= seg.startKm && p.distanceKm <= seg.endKm);
           if (segPts.length < 2) return null;
+          const segStroke = seg.type === "descent" ? "#1565c0" : "#bf360c";
           return (
             <polyline key={`line-${i}`}
               points={segPts.map((p) => `${xS(p.distanceKm).toFixed(1)},${yS(p.elevationM).toFixed(1)}`).join(" ")}
-              fill="none" stroke={highlightStroke} strokeWidth="2" strokeLinejoin="round"
+              fill="none" stroke={segStroke} strokeWidth="2" strokeLinejoin="round"
             />
           );
         })}
         {/* Segment labels */}
-        {matchingSegs.map((seg, i) => (
-          <text key={`lbl-${i}`}
-            x={xS((seg.startKm + seg.endKm) / 2)} y={padT + 12}
-            textAnchor="middle" fontSize="8" fontWeight="700" fill={highlightStroke}>
-            {seg.type === "climb" ? "▲" : "▼"} {Math.abs(Math.round(seg.totalElevationM))}m · {seg.avgGradient.toFixed(1)}%
-          </text>
-        ))}
+        {matchingSegs.map((seg, i) => {
+          const segStroke = seg.type === "descent" ? "#1565c0" : "#bf360c";
+          return (
+            <text key={`lbl-${i}`}
+              x={xS((seg.startKm + seg.endKm) / 2)} y={padT + 12}
+              textAnchor="middle" fontSize="8" fontWeight="700" fill={segStroke}>
+              {seg.type === "climb" ? "▲" : "▼"} {Math.abs(Math.round(seg.totalElevationM))}m · {seg.avgGradient.toFixed(1)}%
+            </text>
+          );
+        })}
       </svg>
     </div>
   );
@@ -1072,7 +1116,7 @@ function SessionCard({ session, raceProfile, pairedWarmUp, exercisePageMap }: { 
         </div>
       </div>
 
-      {isGym && raceProfile && <GymFocusChart session={session} raceProfile={raceProfile} />}
+      {raceProfile && <GymFocusChart session={session} raceProfile={raceProfile} />}
 
       {!isRest && <SessionSpecs session={session} />}
 

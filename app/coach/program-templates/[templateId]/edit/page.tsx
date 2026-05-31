@@ -1330,17 +1330,47 @@ function SessionSlideOver({
 
   // Derive terrain/elevation pair tags available for this race
   const raceFocusOptions = useMemo(() => {
-    if (!raceProfile?.positionedTerrain || !raceProfile?.sustainedSegments) return [];
+    if (!raceProfile?.sustainedSegments) return [];
     const tags = new Set<string>();
-    for (const seg of raceProfile.sustainedSegments) {
-      if (seg.type === "flat") continue;
-      const labels = getTerrainLabelsForRange(raceProfile.positionedTerrain, seg.startKm, seg.endKm);
-      if (labels.length > 0) {
-        const dir = seg.type === "climb" ? "Uphill" : "Downhill";
-        tags.add(`${dir} on ${labels[0]}`);
+
+    // Terrain-based options (existing): "Uphill on gravel", "Downhill on track", etc.
+    if (raceProfile.positionedTerrain) {
+      for (const seg of raceProfile.sustainedSegments) {
+        if (seg.type === "flat") continue;
+        const labels = getTerrainLabelsForRange(raceProfile.positionedTerrain, seg.startKm, seg.endKm);
+        if (labels.length > 0) {
+          const dir = seg.type === "climb" ? "Uphill" : "Downhill";
+          tags.add(`${dir} on ${labels[0]}`);
+        }
       }
     }
+
+    // Numbered options: "Climb 1", "Climb 2", "Descent 1", etc. for pinpointing a specific segment
+    const climbs = raceProfile.sustainedSegments
+      .filter((s) => s.type === "climb")
+      .sort((a, b) => a.startKm - b.startKm);
+    const descents = raceProfile.sustainedSegments
+      .filter((s) => s.type === "descent")
+      .sort((a, b) => a.startKm - b.startKm);
+    climbs.forEach((_, i) => tags.add(`Climb ${i + 1}`));
+    descents.forEach((_, i) => tags.add(`Descent ${i + 1}`));
+
     return [...tags].sort();
+  }, [raceProfile]);
+
+  // Lookup map for numbered tags → km range label (display only, not stored in DB)
+  const raceFocusTagKmLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!raceProfile?.sustainedSegments) return map;
+    const climbs = raceProfile.sustainedSegments
+      .filter((s) => s.type === "climb")
+      .sort((a, b) => a.startKm - b.startKm);
+    const descents = raceProfile.sustainedSegments
+      .filter((s) => s.type === "descent")
+      .sort((a, b) => a.startKm - b.startKm);
+    climbs.forEach((seg, i) => map.set(`Climb ${i + 1}`, `km ${seg.startKm.toFixed(1)}–${seg.endKm.toFixed(1)}, ${seg.totalElevationM > 0 ? "+" : ""}${Math.round(seg.totalElevationM)}m`));
+    descents.forEach((seg, i) => map.set(`Descent ${i + 1}`, `km ${seg.startKm.toFixed(1)}–${seg.endKm.toFixed(1)}, ${Math.round(Math.abs(seg.totalElevationM))}m loss`));
+    return map;
   }, [raceProfile]);
 
   // Exercise picker state
@@ -1534,18 +1564,71 @@ function SessionSlideOver({
 
             {/* Activity details (non-gym, non-mobility) */}
             {!isGym && !isMobility && (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <h5 className="mb-3 text-sm font-semibold text-zinc-900">Activity details</h5>
-                <UnifiedSessionForm
-                  key={`modal-${session.localId}-${distanceUnit}`}
-                  distanceUnit={distanceUnit}
-                  initialData={mapSessionToUnifiedFormData(session)}
-                  onSave={onSaveFromForm}
-                  onCancel={onClose}
-                  submitButtonLabel="Save Session"
-                  progressiveReveal
-                />
-              </div>
+              <>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <h5 className="mb-3 text-sm font-semibold text-zinc-900">Activity details</h5>
+                  {/* Key includes tags so form re-initialises when race focus tags change */}
+                  <UnifiedSessionForm
+                    key={`modal-${session.localId}-${distanceUnit}-${(session.tags ?? []).join(",")}`}
+                    distanceUnit={distanceUnit}
+                    initialData={mapSessionToUnifiedFormData(session)}
+                    onSave={onSaveFromForm}
+                    onCancel={onClose}
+                    submitButtonLabel="Save Session"
+                    progressiveReveal
+                  />
+                </div>
+
+                {/* Race Focus tags for running / functional sessions */}
+                {(raceFocusOptions.length > 0 || (session.tags ?? []).length > 0) && (
+                  <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                    <h5 className="mb-2 text-sm font-semibold text-violet-900">Race Focus</h5>
+                    <p className="mb-3 text-xs text-violet-700">
+                      Tag this session to a course segment. Use terrain tags for general demands, or numbered tags (Climb 1, Descent 2…) to target a specific section of the race.
+                    </p>
+
+                    {/* Current tags */}
+                    {(session.tags ?? []).length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-1.5">
+                        {(session.tags ?? []).map((tag) => (
+                          <span key={tag} className="flex items-center gap-1.5 rounded-full bg-violet-100 border border-violet-300 px-3 py-1 text-xs font-medium text-violet-800">
+                            {tag}
+                            {raceFocusTagKmLabels.get(tag) && (
+                              <span className="text-violet-500">{raceFocusTagKmLabels.get(tag)}</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => onFieldChange((s) => ({ ...s, tags: (s.tags ?? []).filter((t) => t !== tag) }))}
+                              className="text-violet-500 hover:text-violet-800 leading-none"
+                              aria-label={`Remove ${tag}`}
+                            >×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Available options */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {raceFocusOptions
+                        .filter((t) => !(session.tags ?? []).includes(t))
+                        .map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            title={raceFocusTagKmLabels.get(tag)}
+                            onClick={() => onFieldChange((s) => ({ ...s, tags: [...(s.tags ?? []), tag] }))}
+                            className="rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
+                          >
+                            + {tag}
+                            {raceFocusTagKmLabels.get(tag) && (
+                              <span className="ml-1 text-violet-400">{raceFocusTagKmLabels.get(tag)}</span>
+                            )}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Exercises (gym sessions) */}
@@ -1721,7 +1804,9 @@ function SessionSlideOver({
                 {(raceFocusOptions.length > 0 || (session.tags ?? []).length > 0) && (
                   <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
                     <h5 className="mb-2 text-sm font-semibold text-violet-900">Race Focus</h5>
-                    <p className="mb-3 text-xs text-violet-700">Assign the terrain / elevation demand this session prepares for.</p>
+                    <p className="mb-3 text-xs text-violet-700">
+                      Tag this session to a course segment. Use terrain tags for general demands, or numbered tags (Climb 1, Descent 2…) to target a specific section of the race.
+                    </p>
 
                     {/* Current tags */}
                     {(session.tags ?? []).length > 0 && (
@@ -1729,6 +1814,9 @@ function SessionSlideOver({
                         {(session.tags ?? []).map((tag) => (
                           <span key={tag} className="flex items-center gap-1.5 rounded-full bg-violet-100 border border-violet-300 px-3 py-1 text-xs font-medium text-violet-800">
                             {tag}
+                            {raceFocusTagKmLabels.get(tag) && (
+                              <span className="text-violet-500">{raceFocusTagKmLabels.get(tag)}</span>
+                            )}
                             <button
                               type="button"
                               onClick={() => onFieldChange((s) => ({ ...s, tags: (s.tags ?? []).filter((t) => t !== tag) }))}
@@ -1748,10 +1836,14 @@ function SessionSlideOver({
                           <button
                             key={tag}
                             type="button"
+                            title={raceFocusTagKmLabels.get(tag)}
                             onClick={() => onFieldChange((s) => ({ ...s, tags: [...(s.tags ?? []), tag] }))}
                             className="rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
                           >
                             + {tag}
+                            {raceFocusTagKmLabels.get(tag) && (
+                              <span className="ml-1 text-violet-400">{raceFocusTagKmLabels.get(tag)}</span>
+                            )}
                           </button>
                         ))}
                     </div>
