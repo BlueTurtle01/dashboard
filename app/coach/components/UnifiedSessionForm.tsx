@@ -478,6 +478,8 @@ export function UnifiedSessionForm({
     );
   }, [form.activity, form.subtype, fieldConfigMap]);
 
+  const isInterval = form.subtype.toLowerCase().includes("interval");
+
   const autoName = useMemo(
     () => buildSessionName(form.activity, form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm, distanceUnit),
     [form.activity, form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm, distanceUnit],
@@ -783,7 +785,7 @@ export function UnifiedSessionForm({
           </label>
         ) : null}
 
-        {fieldVis.show_elevation ? (
+        {(fieldVis.show_elevation || isInterval) ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
               Elevation / Steepness
@@ -880,7 +882,7 @@ export function UnifiedSessionForm({
           </label>
         ) : null}
 
-        {fieldVis.show_interval_reps ? (
+        {(fieldVis.show_interval_reps || isInterval) ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
               Interval Reps
@@ -898,7 +900,7 @@ export function UnifiedSessionForm({
           </label>
         ) : null}
 
-        {fieldVis.show_interval_duration ? (
+        {(fieldVis.show_interval_duration || isInterval) ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
               Recovery / Interval Duration
@@ -916,7 +918,7 @@ export function UnifiedSessionForm({
           </label>
         ) : null}
 
-        {fieldVis.show_interval_reps ? (
+        {(fieldVis.show_interval_reps || isInterval) ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
               Perceived Effort (%)

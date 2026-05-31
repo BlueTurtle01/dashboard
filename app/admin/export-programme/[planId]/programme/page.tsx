@@ -934,7 +934,10 @@ function SessionSpecs({ session }: { session: TemplateSession }) {
   if (session.distance_km) rows.push({ label: "Distance", value: `${session.distance_km} km` });
   if (session.intensity) rows.push({ label: "Intensity", value: session.intensity });
   if (session.terrain) rows.push({ label: "Terrain", value: session.terrain.charAt(0).toUpperCase() + session.terrain.slice(1) });
-  if (session.elevation_gain_meters) rows.push({ label: "Elevation gain", value: `+${Math.round(session.elevation_gain_meters)} m` });
+  if (session.elevation_gain_meters) {
+    const elevLabel = { 0: "Flat / none", 100: "Rolling / light climb", 250: "Hilly", 500: "Steep", 1000: "Mountainous / very steep" }[session.elevation_gain_meters];
+    rows.push({ label: "Elevation", value: elevLabel ?? `+${Math.round(session.elevation_gain_meters)} m` });
+  }
   if (session.pack_weight_kg) rows.push({ label: "Pack weight", value: `${session.pack_weight_kg} kg` });
   if (session.warmup_minutes) rows.push({ label: "Warm-up", value: `${session.warmup_minutes} min` });
   if (session.interval_reps) rows.push({ label: "Intervals", value: String(session.interval_reps) });
