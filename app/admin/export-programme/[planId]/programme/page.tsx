@@ -162,7 +162,7 @@ type TemplateExercise = {
   reps: number | null;
   duration_seconds: number | null;
   notes: string | null;
-  exercises: { name: string; description: string; steps: string[] | null; primary_muscles: string[] | null; secondary_muscles: string[] | null } | null;
+  exercises: { name: string; description: string; steps: string[] | null; primary_muscles: string[] | null; secondary_muscles: string[] | null; equipment: string[] | null } | null;
 };
 
 type MobilityStretch = {
@@ -222,6 +222,16 @@ type ProgramTemplate = {
   discipline: string | null;
   plan_length_weeks: number;
   training_days_per_week: number;
+  starting_fitness: string | null;
+  suitable_race_goals: string[] | null;
+  min_weekly_training_hours: number | null;
+  min_longest_recent_session_minutes: number | null;
+  min_training_consistency_weeks: number | null;
+  min_back_to_back_days: number | null;
+  requires_hills: boolean;
+  requires_gym: boolean;
+  requires_load_carriage: boolean;
+  requires_heat_acclimation: boolean;
   race_id: string | null;
   pacing_data: PacingSection[] | null;
   gpx_data: RoutePoint[] | null;
@@ -1231,6 +1241,183 @@ function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, 
   );
 }
 
+/* ── Athlete Profile / Plan suitability page ── */
+
+const EQUIPMENT_LABELS: Record<string, string> = {
+  barbell: "Barbell",
+  dumbbells: "Dumbbells",
+  dumbbell: "Dumbbells",
+  kettlebell: "Kettlebell",
+  kettlebells: "Kettlebells",
+  resistance_band: "Resistance bands",
+  resistance_bands: "Resistance bands",
+  pull_up_bar: "Pull-up bar",
+  box: "Plyo box / step",
+  bench: "Bench",
+  machine: "Gym machine",
+  cable: "Cable machine",
+  foam_roller: "Foam roller",
+  mat: "Exercise mat",
+  treadmill: "Treadmill",
+  rucksack: "Running pack / rucksack",
+  pack: "Running pack / rucksack",
+  sandbag: "Sandbag",
+  trx: "TRX / suspension trainer",
+  bands: "Resistance bands",
+  band: "Resistance band",
+  loop_band: "Loop band",
+  ankle_weights: "Ankle weights",
+  step: "Step / box",
+};
+
+const SKIP_EQUIPMENT = new Set(["bodyweight", "none", ""]);
+
+function collectEquipment(weeks: TemplateWeek[]): string[] {
+  const raw = new Set<string>();
+  for (const week of weeks) {
+    for (const session of week.program_template_sessions) {
+      for (const ex of session.program_template_session_exercises) {
+        for (const piece of ex.exercises?.equipment ?? []) {
+          if (!SKIP_EQUIPMENT.has(piece.toLowerCase())) raw.add(piece.toLowerCase());
+        }
+      }
+    }
+  }
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const piece of raw) {
+    const label = EQUIPMENT_LABELS[piece] ?? piece.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    if (!seen.has(label)) { seen.add(label); result.push(label); }
+  }
+  return result.sort();
+}
+
+function AthleteProfilePage({ template, weeks }: { template: ProgramTemplate; weeks: TemplateWeek[] }) {
+  const requirements: { label: string; value: string }[] = [];
+
+  if (template.min_training_consistency_weeks) {
+    requirements.push({ label: "Training history", value: `${template.min_training_consistency_weeks}+ weeks of consistent training` });
+  }
+  if (template.min_weekly_training_hours) {
+    requirements.push({ label: "Weekly time", value: `${template.min_weekly_training_hours}+ hours available per week` });
+  }
+  if (template.min_longest_recent_session_minutes) {
+    const h = Math.floor(template.min_longest_recent_session_minutes / 60);
+    const m = template.min_longest_recent_session_minutes % 60;
+    const dur = h > 0 ? (m > 0 ? `${h}h ${m}min` : `${h}h`) : `${m}min`;
+    requirements.push({ label: "Longest recent session", value: `Can already complete a ${dur} session` });
+  }
+  if (template.min_back_to_back_days) {
+    requirements.push({ label: "Back-to-back days", value: `Comfortable with ${template.min_back_to_back_days} consecutive training days` });
+  }
+  if (template.requires_hills) requirements.push({ label: "Terrain", value: "Regular access to hills or trails" });
+  if (template.requires_gym) requirements.push({ label: "Gym", value: "Access to a gym (strength sessions)" });
+  if (template.requires_load_carriage) requirements.push({ label: "Pack training", value: "Ability to train with a running pack" });
+  if (template.requires_heat_acclimation) requirements.push({ label: "Heat access", value: "Ability to train in hot conditions or a sauna" });
+
+  const equipment = collectEquipment(weeks);
+
+  const goals = template.suitable_race_goals ?? [];
+  const hasWhoSection = goals.length > 0 || template.starting_fitness || template.description;
+
+  if (!hasWhoSection && requirements.length === 0 && equipment.length === 0) return null;
+
+  const hdStyle: React.CSSProperties = {
+    fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em",
+    color: "#888", marginBottom: "8px",
+  };
+  const divider: React.CSSProperties = {
+    borderTop: "1px solid #eee", margin: "18px 0",
+  };
+
+  return (
+    <div style={a4Page}>
+      <PrintHeader template={template} />
+      <h2 style={{ margin: "0 0 18px", fontSize: "18px", fontWeight: 700, color: "#1e3a1e" }}>
+        Is This Plan Right For You?
+      </h2>
+
+      {/* Who it's for */}
+      {hasWhoSection && (
+        <>
+          <p style={hdStyle}>Who it&apos;s for</p>
+          {template.description && (
+            <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#333", lineHeight: "1.7" }}>
+              {template.description}
+            </p>
+          )}
+          {(template.starting_fitness || goals.length > 0) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "4px" }}>
+              {template.starting_fitness && (
+                <span style={{ fontSize: "11px", padding: "3px 10px", borderRadius: "10px", background: "#e8f5e9", color: "#2e7d32", fontWeight: 500 }}>
+                  {template.starting_fitness}
+                </span>
+              )}
+              {goals.map((g) => (
+                <span key={g} style={{ fontSize: "11px", padding: "3px 10px", borderRadius: "10px", background: "#e8f5e9", color: "#2e7d32", fontWeight: 500 }}>
+                  {g}
+                </span>
+              ))}
+            </div>
+          )}
+          {(requirements.length > 0 || equipment.length > 0) && <div style={divider} />}
+        </>
+      )}
+
+      {/* Minimum requirements */}
+      {requirements.length > 0 && (
+        <>
+          <p style={hdStyle}>Minimum requirements</p>
+          <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#666" }}>
+            Before starting this programme, you should already be able to meet the following:
+          </p>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", marginBottom: "4px" }}>
+            <tbody>
+              {requirements.map((r, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? "#fafafa" : "#fff" }}>
+                  <td style={{ padding: "6px 10px", color: "#888", fontWeight: 600, width: "180px", fontSize: "11px" }}>
+                    {r.label}
+                  </td>
+                  <td style={{ padding: "6px 10px", color: "#222" }}>{r.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {equipment.length > 0 && <div style={divider} />}
+        </>
+      )}
+
+      {/* Equipment */}
+      {equipment.length > 0 && (
+        <>
+          <p style={hdStyle}>Equipment needed</p>
+          <p style={{ margin: "0 0 12px", fontSize: "11px", color: "#666" }}>
+            The following equipment is used across gym and strength sessions in this programme:
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px" }}>
+            {equipment.map((item) => (
+              <div
+                key={item}
+                style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  fontSize: "12px", color: "#222",
+                  padding: "5px 12px",
+                  border: "1px solid #e0e0e0",
+                  borderRadius: "6px",
+                  background: "#fafafa",
+                }}
+              >
+                <span style={{ color: "#1e3a1e", fontWeight: 700, fontSize: "13px" }}>·</span>
+                {item}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ── Week Focuses / Phase descriptions ── */
 
 function WeekFocusesPage({ weeks, template }: { weeks: TemplateWeek[]; template: ProgramTemplate }) {
@@ -1764,7 +1951,11 @@ export default function ExportPreviewPage() {
       const { data, error: err } = await supabase
         .from("program_templates")
         .select(`
-          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week, race_id, pacing_data, gpx_data, wind_data, focus_descriptions,
+          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week,
+          starting_fitness, suitable_race_goals,
+          min_weekly_training_hours, min_longest_recent_session_minutes, min_training_consistency_weeks, min_back_to_back_days,
+          requires_hills, requires_gym, requires_load_carriage, requires_heat_acclimation,
+          race_id, pacing_data, gpx_data, wind_data, focus_descriptions,
           program_template_weeks (
             id, week_number, focus, notes,
             program_template_sessions (
@@ -1780,7 +1971,7 @@ export default function ExportPreviewPage() {
               ),
               program_template_session_exercises (
                 id, sort_order, sets, reps, duration_seconds, notes,
-                exercises ( name, description, steps, primary_muscles, secondary_muscles )
+                exercises ( name, description, steps, primary_muscles, secondary_muscles, equipment )
               )
             )
           )
@@ -1878,6 +2069,9 @@ export default function ExportPreviewPage() {
             <p style={{ fontSize: "14px", color: "#666", marginTop: "20px", maxWidth: "480px", lineHeight: "1.6" }}>{template.description}</p>
           )}
         </div>
+
+        {/* Plan suitability / athlete profile page */}
+        <AthleteProfilePage template={template} weeks={weeks} />
 
         {/* Training calendar overview — one row per week */}
         <TrainingCalendarPage weeks={weeks} template={template} />

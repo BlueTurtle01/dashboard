@@ -2895,9 +2895,14 @@ export default function EditProgramTemplatePage() {
     // Derive plan length from actual week count (min 1 to satisfy check constraint)
     const derivedPlanLength = Math.max(1, form.weeks.length);
 
-    // Derive training days per week as max non-rest sessions across weeks (min 1 to satisfy check constraint)
-    const dayCounts = form.weeks.map((w) => w.sessions.filter((s) => s.type !== "Rest").length);
-    const derivedTrainingDays = dayCounts.length > 0 ? Math.max(1, Math.max(...dayCounts)) : 1;
+    // Derive training days per week as max distinct active days across weeks (capped at 7)
+    const dayCounts = form.weeks.map((w) => {
+      const activeDays = new Set(
+        w.sessions.filter((s) => s.type !== "Rest").map((s) => s.dayLabel)
+      );
+      return activeDays.size;
+    });
+    const derivedTrainingDays = dayCounts.length > 0 ? Math.min(7, Math.max(1, Math.max(...dayCounts))) : 1;
 
     const templatePayload = {
       name: finalName,
