@@ -226,6 +226,7 @@ type ProgramTemplate = {
   pacing_data: PacingSection[] | null;
   gpx_data: RoutePoint[] | null;
   wind_data: WindSection[] | null;
+  focus_descriptions: Record<string, string> | null;
   program_template_weeks: TemplateWeek[];
 };
 
@@ -1230,6 +1231,71 @@ function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, 
   );
 }
 
+/* ── Week Focuses / Phase descriptions ── */
+
+function WeekFocusesPage({ weeks, template }: { weeks: TemplateWeek[]; template: ProgramTemplate }) {
+  const descriptions = template.focus_descriptions ?? {};
+
+  // Build ordered list of unique focuses with their week ranges
+  const phases: { label: string; weekNumbers: number[] }[] = [];
+  const seen = new Set<string>();
+  for (const w of [...weeks].sort((a, b) => a.week_number - b.week_number)) {
+    if (!w.focus) continue;
+    if (!seen.has(w.focus)) {
+      seen.add(w.focus);
+      phases.push({ label: w.focus, weekNumbers: [] });
+    }
+    phases.find((p) => p.label === w.focus)!.weekNumbers.push(w.week_number);
+  }
+
+  // Only render this page if at least one focus has a description set
+  const hasAny = phases.some((p) => descriptions[p.label]);
+  if (!hasAny) return null;
+
+  return (
+    <div style={a4Page}>
+      <PrintHeader template={template} />
+      <h2 style={{ margin: "0 0 6px", fontSize: "18px", fontWeight: 700, color: "#1e3a1e" }}>
+        Programme Phases
+      </h2>
+      <p style={{ margin: "0 0 24px", fontSize: "12px", color: "#888" }}>
+        Each phase of the programme has a distinct purpose. Understanding what you are training for — and why — helps you approach each week with the right mindset and effort level.
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        {phases
+          .filter((p) => descriptions[p.label])
+          .map((p) => {
+            const wkMin = Math.min(...p.weekNumbers);
+            const wkMax = Math.max(...p.weekNumbers);
+            const wkRange = p.weekNumbers.length === 1 ? `Week ${wkMin}` : `Weeks ${wkMin}–${wkMax}`;
+            return (
+              <div
+                key={p.label}
+                style={{
+                  borderLeft: "3px solid #1e3a1e",
+                  paddingLeft: "16px",
+                  paddingTop: "2px",
+                  paddingBottom: "2px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: "#1e3a1e" }}>{p.label}</span>
+                  <span style={{ fontSize: "11px", color: "#888", fontStyle: "italic" }}>
+                    {wkRange} · {p.weekNumbers.length} week{p.weekNumbers.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: "12px", color: "#333", lineHeight: "1.7", whiteSpace: "pre-wrap" }}>
+                  {descriptions[p.label]}
+                </p>
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  );
+}
+
 /* ── Training Calendar ── */
 
 const CALENDAR_CAT = {
@@ -1698,7 +1764,7 @@ export default function ExportPreviewPage() {
       const { data, error: err } = await supabase
         .from("program_templates")
         .select(`
-          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week, race_id, pacing_data, gpx_data, wind_data,
+          id, name, description, event_goal, discipline, plan_length_weeks, training_days_per_week, race_id, pacing_data, gpx_data, wind_data, focus_descriptions,
           program_template_weeks (
             id, week_number, focus, notes,
             program_template_sessions (
@@ -1815,6 +1881,9 @@ export default function ExportPreviewPage() {
 
         {/* Training calendar overview — one row per week */}
         <TrainingCalendarPage weeks={weeks} template={template} />
+
+        {/* Phase descriptions — only renders if descriptions have been set in the hub */}
+        <WeekFocusesPage weeks={weeks} template={template} />
 
         {/* Race course profile page */}
         {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} />}
