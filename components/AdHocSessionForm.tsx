@@ -54,6 +54,7 @@ type AdHocForm = {
   warmUpMinutes: string;
   coolDownMinutes: string;
   intervalReps: string;
+  perceivedEffort: string;
   /** Seconds between individual reps (replaces old free-text intervalDuration) */
   recoveryBetweenRepsSecs: string;
   /** Seconds of rest between sets */
@@ -109,6 +110,7 @@ function createEmptyForm(): AdHocForm {
     warmUpMinutes: "",
     coolDownMinutes: "",
     intervalReps: "",
+    perceivedEffort: "",
     recoveryBetweenRepsSecs: "",
     restBetweenSetsSecs: "",
     setDistanceMetres: "",
@@ -336,6 +338,7 @@ export default function AdHocSessionForm({ onCreated, onCancel }: AdHocSessionFo
       warm_up_minutes: parseNullableInteger(form.warmUpMinutes),
       cool_down_minutes: parseNullableInteger(form.coolDownMinutes),
       interval_reps: form.intervalReps.trim() || null,
+      perceived_effort: parseNullableInteger(form.perceivedEffort),
       recovery_between_reps_secs: parseNullableInteger(form.recoveryBetweenRepsSecs),
       rest_between_sets_secs: parseNullableInteger(form.restBetweenSetsSecs),
       set_distance_metres: parseNullableInteger(form.setDistanceMetres),
@@ -679,6 +682,22 @@ export default function AdHocSessionForm({ onCreated, onCancel }: AdHocSessionFo
               value={form.intervalReps}
               onChange={(e) => update("intervalReps", e.target.value)}
               placeholder="e.g. 10x1min or 6x3min"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm"
+            />
+          </div>
+        )}
+
+        {/* Perceived effort — interval sessions only */}
+        {isRun && isInterval && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Perceived Effort (%)</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={form.perceivedEffort}
+              onChange={(e) => update("perceivedEffort", e.target.value)}
+              placeholder="e.g. 80"
               className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm"
             />
           </div>

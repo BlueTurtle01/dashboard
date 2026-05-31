@@ -33,6 +33,7 @@ type FunctionalTemplateForm = {
   coolDownMinutes: string;
   intervalReps: string;
   intervalDuration: string;
+  perceivedEffort: string;
   timeOfDay: string;
   startTime: string;
   isTimeStrict: boolean;
@@ -170,6 +171,7 @@ function createEmptyForm(): FunctionalTemplateForm {
     coolDownMinutes: "",
     intervalReps: "",
     intervalDuration: "",
+    perceivedEffort: "",
     timeOfDay: "any",
     startTime: "",
     isTimeStrict: false,
@@ -215,6 +217,7 @@ function buildSessionData(form: FunctionalTemplateForm) {
     cool_down_minutes: parseNullableInteger(form.coolDownMinutes),
     interval_reps: form.intervalReps.trim() || null,
     interval_duration: form.intervalDuration.trim() || null,
+    perceived_effort: parseNullableInteger(form.perceivedEffort),
     time_of_day: form.timeOfDay || null,
     start_time: form.startTime || null,
     is_time_strict: form.isTimeStrict,
@@ -235,6 +238,7 @@ function formFromRow(row: FunctionalTemplateRow): FunctionalTemplateForm {
   const coolDownValue = sessionData["cool_down_minutes"];
   const intervalRepsValue = sessionData["interval_reps"];
   const intervalDurationValue = sessionData["interval_duration"];
+  const perceivedEffortValue = sessionData["perceived_effort"];
   const tagValue = sessionData["tags"];
   const aimTagValue = sessionData["aim_tags"];
 
@@ -276,6 +280,7 @@ function formFromRow(row: FunctionalTemplateRow): FunctionalTemplateForm {
           : "",
     intervalReps: typeof intervalRepsValue === "string" ? intervalRepsValue : "",
     intervalDuration: typeof intervalDurationValue === "string" ? intervalDurationValue : "",
+    perceivedEffort: typeof perceivedEffortValue === "number" ? String(perceivedEffortValue) : typeof perceivedEffortValue === "string" ? perceivedEffortValue : "",
     timeOfDay:
       typeof sessionData["time_of_day"] === "string" && sessionData["time_of_day"]
         ? sessionData["time_of_day"]
@@ -1181,6 +1186,24 @@ const generatedNamePreview = useMemo(() => {
                           />
                           <p className="mt-1 text-xs text-zinc-500">
                             Recovery period between intervals
+                          </p>
+                        </label>
+
+                        <label className="block">
+                          <span className="mb-1 block text-sm font-semibold text-zinc-900">
+                            Perceived Effort (%)
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+                            value={form.perceivedEffort}
+                            onChange={(e) => updateForm("perceivedEffort", e.target.value)}
+                            placeholder="e.g. 80"
+                          />
+                          <p className="mt-1 text-xs text-zinc-500">
+                            Target perceived effort as a percentage (0–100)
                           </p>
                         </label>
                       </>
