@@ -1167,7 +1167,7 @@ function racePaceForSession(
   return best;
 }
 
-function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, exercisePageMap }: { session: TemplateSession; raceProfile?: RaceProfileData; pacingSections?: PacingSection[]; pairedWarmUp?: TemplateSession; exercisePageMap?: Map<string, number> }) {
+function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, exercisePageMap, mobilityAllDays }: { session: TemplateSession; raceProfile?: RaceProfileData; pacingSections?: PacingSection[]; pairedWarmUp?: TemplateSession; exercisePageMap?: Map<string, number>; mobilityAllDays?: string[] }) {
   const isGym = session.type === "Gym";
   const isRest = session.type === "Rest";
   const col = SESSION_COLOURS[session.type] ?? SESSION_COLOURS.default;
@@ -1180,7 +1180,10 @@ function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, 
       <div style={sessionHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <span style={{ ...typeBadge, background: col.bg, color: col.fg }}>{session.type}</span>
-          {session.day_label && <span style={dayLabel}>{session.day_label}</span>}
+          {mobilityAllDays && mobilityAllDays.length > 1
+            ? <span style={dayLabel}>{mobilityAllDays.join(" · ")}</span>
+            : session.day_label && <span style={dayLabel}>{session.day_label}</span>
+          }
           {session.is_key_session && <span style={keyBadge}>★ Key Session</span>}
           <strong style={sessionName}>{session.name}</strong>
         </div>
@@ -1225,6 +1228,8 @@ function SessionCard({ session, raceProfile, pacingSections = [], pairedWarmUp, 
           <span style={reasonText}>{session.reason}</span>
         </div>
       )}
+
+      {!isGym && session.mobility_sessions && <MobilityStretchList session={session} />}
 
       {isGym && pairedWarmUp && (
         <div style={{ marginBottom: "12px", borderTop: "1px solid #e5e5e5", paddingTop: "10px" }}>
@@ -1885,6 +1890,24 @@ function WeekDetailPage({ week, template, raceProfile, exercisePageMap }: { week
     }
   }
 
+  // Group standalone mobility sessions by name — show repeated ones once with all days listed
+  const standaloneMobility = sessions.filter(s => !mergedMobilityIds.has(s.id) && s.mobility_sessions);
+  const mobilityGroupsByName = new Map<string, TemplateSession[]>();
+  for (const s of standaloneMobility) {
+    const key = s.name ?? "__unnamed__";
+    if (!mobilityGroupsByName.has(key)) mobilityGroupsByName.set(key, []);
+    mobilityGroupsByName.get(key)!.push(s);
+  }
+  const secondaryMobilityIds = new Set<string>();
+  const mobilityAllDaysMap = new Map<string, string[]>();
+  for (const [, group] of mobilityGroupsByName) {
+    if (group.length > 1) {
+      const days = group.map(s => s.day_label).filter((d): d is string => !!d);
+      mobilityAllDaysMap.set(group[0].id, days);
+      for (const s of group.slice(1)) secondaryMobilityIds.add(s.id);
+    }
+  }
+
   return (
     <div style={a4Page}>
       <PrintHeader template={template} />
@@ -1897,7 +1920,7 @@ function WeekDetailPage({ week, template, raceProfile, exercisePageMap }: { week
       </div>
 
       {sessions
-        .filter((s) => !mergedMobilityIds.has(s.id))
+        .filter((s) => !mergedMobilityIds.has(s.id) && !secondaryMobilityIds.has(s.id))
         .map((session) => (
           <SessionCard
             key={session.id}
@@ -1910,6 +1933,7 @@ function WeekDetailPage({ week, template, raceProfile, exercisePageMap }: { week
                 ? mobilityByDay.get(session.day_label)
                 : undefined
             }
+            mobilityAllDays={mobilityAllDaysMap.get(session.id)}
           />
         ))}
     </div>
