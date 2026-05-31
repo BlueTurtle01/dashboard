@@ -197,6 +197,7 @@ function createEmptyForm(): UnifiedSessionFormData {
     intervalReps: "",
     intervalDuration: "",
     intervalDistanceMeters: "",
+    perceivedEffort: "",
     timeOfDay: "any",
     sets: "",
     setDurationSeconds: "",
