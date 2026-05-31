@@ -96,6 +96,7 @@ type ProgramTemplateSessionRow = {
   interval_duration: string | null;
   interval_distance_meters: number | null;
   rest_seconds: number | null;
+  gradient_percent: number | null;
   perceived_effort: number | null;
   reason: string | null;
   tags: string[] | null;
@@ -187,6 +188,7 @@ type EditableSession = {
   intervalDuration?: string;
   intervalDistanceMeters?: string;
   restSeconds?: string;
+  gradientPercent?: string;
   perceivedEffort?: string;
   reason?: string;
   tags?: string[];
@@ -469,6 +471,7 @@ function mapSessionToUnifiedFormData(session: EditableSession): Partial<UnifiedS
     intervalDuration: session.intervalDuration ?? "",
     intervalDistanceMeters: session.intervalDistanceMeters ?? "",
     restSeconds: session.restSeconds ?? "",
+    gradientPercent: session.gradientPercent ?? "",
     perceivedEffort: session.perceivedEffort ?? "",
     timeOfDay: session.runTimeType || "any",
     sets: session.numSets,
@@ -513,6 +516,7 @@ function applyUnifiedFormDataToSession(
     intervalDuration: formData.intervalDuration,
     intervalDistanceMeters: formData.intervalDistanceMeters,
     restSeconds: formData.restSeconds,
+    gradientPercent: formData.gradientPercent,
     perceivedEffort: formData.perceivedEffort,
     reason: formData.reason,
     tags: formData.tags,
@@ -823,6 +827,7 @@ function buildEditableSessionFromMobility(
     intervalDuration: "",
     intervalDistanceMeters: "",
     restSeconds: "",
+    gradientPercent: "",
     perceivedEffort: "",
     reason: "",
     tags: row.focus_areas ?? [],
@@ -972,6 +977,7 @@ function mapToForm(
             intervalDuration: session.interval_duration ?? "",
             intervalDistanceMeters: session.interval_distance_meters?.toString() ?? "",
             restSeconds: session.rest_seconds?.toString() ?? "",
+            gradientPercent: session.gradient_percent?.toString() ?? "",
             perceivedEffort: session.perceived_effort?.toString() ?? "",
             reason: session.reason ?? "",
             tags: session.tags ?? [],
@@ -1955,6 +1961,7 @@ export default function EditProgramTemplatePage() {
             interval_duration,
             interval_distance_meters,
             rest_seconds,
+            gradient_percent,
             perceived_effort,
             reason,
             tags,
@@ -2302,6 +2309,7 @@ export default function EditProgramTemplatePage() {
             intervalDuration: "",
             intervalDistanceMeters: "",
             restSeconds: "",
+            gradientPercent: "",
             perceivedEffort: "",
             reason: "",
             tags: [],
@@ -2838,6 +2846,7 @@ export default function EditProgramTemplatePage() {
         interval_duration: session.intervalDuration || null,
         interval_distance_meters: session.intervalDistanceMeters ? parseInt(session.intervalDistanceMeters, 10) || null : null,
         rest_seconds: session.restSeconds ? parseInt(session.restSeconds, 10) || null : null,
+        gradient_percent: session.gradientPercent ? parseFloat(session.gradientPercent) || null : null,
         perceived_effort: session.perceivedEffort ? parseInt(session.perceivedEffort, 10) || null : null,
         reason: session.reason || null,
         tags: (session.tags && session.tags.length > 0) ? session.tags : null,

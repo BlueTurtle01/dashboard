@@ -19,6 +19,7 @@ export type UnifiedSessionFormData = {
   intervalReps: string;
   intervalDuration: string;
   intervalDistanceMeters: string;
+  gradientPercent: string;
   perceivedEffort: string;
   timeOfDay: string;
   sets: string;
@@ -197,6 +198,7 @@ function createEmptyForm(): UnifiedSessionFormData {
     intervalReps: "",
     intervalDuration: "",
     intervalDistanceMeters: "",
+    gradientPercent: "",
     perceivedEffort: "",
     timeOfDay: "any",
     sets: "",
@@ -879,6 +881,27 @@ export function UnifiedSessionForm({
               <option value="15">15 minutes</option>
               <option value="20">20 minutes</option>
             </select>
+          </label>
+        ) : null}
+
+        {(fieldVis.show_interval_distance || isInterval) ? (
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-zinc-900">
+              Gradient (%)
+            </span>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.5"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm"
+              value={form.gradientPercent}
+              onChange={(e) => updateForm("gradientPercent", e.target.value)}
+              placeholder="e.g. 8"
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Hill gradient as a percentage
+            </p>
           </label>
         ) : null}
 

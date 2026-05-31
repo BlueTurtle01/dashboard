@@ -54,6 +54,7 @@ type AdHocForm = {
   warmUpMinutes: string;
   coolDownMinutes: string;
   intervalReps: string;
+  gradientPercent: string;
   perceivedEffort: string;
   /** Seconds between individual reps (replaces old free-text intervalDuration) */
   recoveryBetweenRepsSecs: string;
@@ -110,6 +111,7 @@ function createEmptyForm(): AdHocForm {
     warmUpMinutes: "",
     coolDownMinutes: "",
     intervalReps: "",
+    gradientPercent: "",
     perceivedEffort: "",
     recoveryBetweenRepsSecs: "",
     restBetweenSetsSecs: "",
@@ -338,6 +340,7 @@ export default function AdHocSessionForm({ onCreated, onCancel }: AdHocSessionFo
       warm_up_minutes: parseNullableInteger(form.warmUpMinutes),
       cool_down_minutes: parseNullableInteger(form.coolDownMinutes),
       interval_reps: form.intervalReps.trim() || null,
+      gradient_percent: parseNullableNumber(form.gradientPercent),
       perceived_effort: parseNullableInteger(form.perceivedEffort),
       recovery_between_reps_secs: parseNullableInteger(form.recoveryBetweenRepsSecs),
       rest_between_sets_secs: parseNullableInteger(form.restBetweenSetsSecs),
@@ -682,6 +685,23 @@ export default function AdHocSessionForm({ onCreated, onCancel }: AdHocSessionFo
               value={form.intervalReps}
               onChange={(e) => update("intervalReps", e.target.value)}
               placeholder="e.g. 10x1min or 6x3min"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm"
+            />
+          </div>
+        )}
+
+        {/* Gradient — interval sessions only */}
+        {isRun && isInterval && (
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Gradient (%)</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.5"
+              value={form.gradientPercent}
+              onChange={(e) => update("gradientPercent", e.target.value)}
+              placeholder="e.g. 8"
               className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm"
             />
           </div>
