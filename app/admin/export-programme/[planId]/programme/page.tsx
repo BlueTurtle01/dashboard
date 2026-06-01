@@ -202,6 +202,8 @@ type TemplateSession = {
   elevation_gain_meters: number | null;
   pack_weight_kg: number | null;
   terrain: string | null;
+  activity: string | null;
+  subtype: string | null;
   mobility_sessions: {
     mobility_session_stretches: MobilityStretch[];
   } | null;
@@ -1507,6 +1509,8 @@ function WeekFocusesPage({ weeks, template, pageNumber }: { weeks: TemplateWeek[
 
 const CALENDAR_CAT = {
   run:       { bg: "#dbeafe", fg: "#1e3a8a", border: "#93c5fd", label: "Run"       },
+  hike:      { bg: "#d1fae5", fg: "#065f46", border: "#34d399", label: "Hike"      },
+  cycle:     { bg: "#e0f2fe", fg: "#0c4a6e", border: "#38bdf8", label: "Cycle"     },
   gym:       { bg: "#fff3e0", fg: "#e65100", border: "#ffcc80", label: "Gym"       },
   intervals: { bg: "#fce7f3", fg: "#9d174d", border: "#f9a8d4", label: "Intervals" },
   hills:     { bg: "#fef9c3", fg: "#854d0e", border: "#fde047", label: "Hills"     },
@@ -1520,6 +1524,11 @@ function calendarCat(session: TemplateSession): CalendarCat {
   if (session.type === "Rest") return "rest";
   if (session.type === "Gym") return "gym";
   if (session.mobility_sessions) return "mobility";
+
+  // Activity field takes priority over effort-level classification
+  const activity = (session.activity ?? "").trim().toLowerCase();
+  if (["hike", "hiking", "trail_hike", "trail hike", "walk", "walking"].includes(activity)) return "hike";
+  if (["cycle", "cycling", "bike", "biking", "bicycle"].includes(activity)) return "cycle";
 
   const text = [session.name ?? "", ...(session.tags ?? [])].join(" ").toLowerCase();
 
@@ -1543,6 +1552,15 @@ function calendarCat(session: TemplateSession): CalendarCat {
   }
 
   return "run";
+}
+
+function calendarCellLabel(session: TemplateSession): string {
+  const cat = calendarCat(session);
+  if (cat === "hike") return "Hike";
+  if (cat === "cycle") return "Cycle";
+  // Normalise "Endurance" → "Long" — they are the same effort level
+  if (session.type === "Endurance") return "Long";
+  return session.type;
 }
 
 function calendarCellDetail(session: TemplateSession): string {
@@ -1647,7 +1665,7 @@ function TrainingCalendarPage({ weeks, template, pageNumber }: { weeks: Template
                             }}
                           >
                             <div style={{ fontWeight: 700, fontSize: "10px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {s.type}
+                              {calendarCellLabel(s)}
                             </div>
                             {detail && (
                               <div style={{ fontSize: "9px", opacity: 0.8 }}>{detail}</div>
@@ -2094,7 +2112,7 @@ export default function ExportPreviewPage() {
               duration, duration_minutes, intensity, is_key_session, reason, tags, target_pace,
               distance_km, num_sets, set_duration_minutes, interval_reps, interval_duration, interval_distance_meters, rest_seconds, gradient_percent, perceived_effort,
               time_up_seconds, time_down_seconds,
-              strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg, terrain,
+              strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg, terrain, activity, subtype,
               mobility_sessions (
                 mobility_session_stretches (
                   sort_order, hold_duration_seconds,
