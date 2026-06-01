@@ -98,6 +98,8 @@ type ProgramTemplateSessionRow = {
   rest_seconds: number | null;
   gradient_percent: number | null;
   perceived_effort: number | null;
+  time_up_seconds: number | null;
+  time_down_seconds: number | null;
   reason: string | null;
   tags: string[] | null;
   target_pace: string | null;
@@ -191,6 +193,8 @@ type EditableSession = {
   restSeconds?: string;
   gradientPercent?: string;
   perceivedEffort?: string;
+  timeUpSeconds?: string;
+  timeDownSeconds?: string;
   reason?: string;
   tags?: string[];
   targetPace?: string;
@@ -475,6 +479,8 @@ function mapSessionToUnifiedFormData(session: EditableSession): Partial<UnifiedS
     restSeconds: session.restSeconds ?? "",
     gradientPercent: session.gradientPercent ?? "",
     perceivedEffort: session.perceivedEffort ?? "",
+    timeUpSeconds: session.timeUpSeconds ?? "",
+    timeDownSeconds: session.timeDownSeconds ?? "",
     timeOfDay: session.runTimeType || "any",
     sets: session.numSets,
     setDurationSeconds: session.setDurationMinutes && !Number.isNaN(Number.parseFloat(session.setDurationMinutes))
@@ -520,6 +526,8 @@ function applyUnifiedFormDataToSession(
     restSeconds: formData.restSeconds,
     gradientPercent: formData.gradientPercent,
     perceivedEffort: formData.perceivedEffort,
+    timeUpSeconds: formData.timeUpSeconds,
+    timeDownSeconds: formData.timeDownSeconds,
     reason: formData.reason,
     tags: formData.tags,
     // targetPace is managed directly via onFieldChange in the Race Focus section,
@@ -983,6 +991,8 @@ function mapToForm(
             restSeconds: session.rest_seconds?.toString() ?? "",
             gradientPercent: session.gradient_percent?.toString() ?? "",
             perceivedEffort: session.perceived_effort?.toString() ?? "",
+            timeUpSeconds: session.time_up_seconds?.toString() ?? "",
+            timeDownSeconds: session.time_down_seconds?.toString() ?? "",
             reason: session.reason ?? "",
             tags: session.tags ?? [],
             targetPace: session.target_pace ?? undefined,
@@ -2349,6 +2359,8 @@ export default function EditProgramTemplatePage() {
             rest_seconds,
             gradient_percent,
             perceived_effort,
+            time_up_seconds,
+            time_down_seconds,
             reason,
             tags,
             target_pace,
@@ -3276,6 +3288,8 @@ export default function EditProgramTemplatePage() {
         rest_seconds: session.restSeconds ? parseInt(session.restSeconds, 10) || null : null,
         gradient_percent: session.gradientPercent ? parseFloat(session.gradientPercent) || null : null,
         perceived_effort: session.perceivedEffort ? parseInt(session.perceivedEffort, 10) || null : null,
+        time_up_seconds: session.timeUpSeconds ? parseInt(session.timeUpSeconds, 10) || null : null,
+        time_down_seconds: session.timeDownSeconds ? parseInt(session.timeDownSeconds, 10) || null : null,
         reason: session.reason || null,
         tags: (session.tags && session.tags.length > 0) ? session.tags : null,
         target_pace: session.targetPace || null,

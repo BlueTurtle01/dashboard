@@ -194,6 +194,8 @@ type TemplateSession = {
   rest_seconds: number | null;
   gradient_percent: number | null;
   perceived_effort: number | null;
+  time_up_seconds: number | null;
+  time_down_seconds: number | null;
   strides: string | null;
   warmup_minutes: number | null;
   cooldown_minutes: number | null;
@@ -962,6 +964,8 @@ function SessionSpecs({ session, hideIntensity = false }: { session: TemplateSes
   if (session.interval_reps) rows.push({ label: "Intervals", value: String(session.interval_reps) });
   if (session.interval_distance_meters) rows.push({ label: "Interval distance", value: `${session.interval_distance_meters}m` });
   if (session.gradient_percent) rows.push({ label: "Gradient", value: `${session.gradient_percent}%` });
+  if (session.time_up_seconds) rows.push({ label: "Time up", value: `${Math.round(session.time_up_seconds / 60 * 10) / 10} min` });
+  if (session.time_down_seconds) rows.push({ label: "Time down", value: `${Math.round(session.time_down_seconds / 60 * 10) / 10} min` });
   if (session.interval_duration) rows.push({ label: "Recovery", value: session.interval_duration });
   if (session.rest_seconds) rows.push({ label: "Rest between sets", value: `${session.rest_seconds}s` });
   if (session.perceived_effort) rows.push({ label: "Perceived effort", value: `${session.perceived_effort}%` });
@@ -1986,6 +1990,7 @@ export default function ExportPreviewPage() {
               id, day_label, sort_order, type, name, description,
               duration, duration_minutes, intensity, is_key_session, reason, tags, target_pace,
               distance_km, num_sets, set_duration_minutes, interval_reps, interval_duration, interval_distance_meters, rest_seconds, gradient_percent, perceived_effort,
+              time_up_seconds, time_down_seconds,
               strides, warmup_minutes, cooldown_minutes, elevation_gain_meters, pack_weight_kg, terrain,
               mobility_sessions (
                 mobility_session_stretches (

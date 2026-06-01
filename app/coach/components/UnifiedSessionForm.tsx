@@ -481,6 +481,7 @@ export function UnifiedSessionForm({
   }, [form.activity, form.subtype, fieldConfigMap]);
 
   const isInterval = form.subtype.toLowerCase().includes("interval");
+  const isHillReps = form.subtype.toLowerCase().includes("hill");
 
   const autoName = useMemo(
     () => buildSessionName(form.activity, form.subtype, form.targetIntensity, form.durationMinutes, form.distanceKm, distanceUnit),
@@ -884,7 +885,7 @@ export function UnifiedSessionForm({
           </label>
         ) : null}
 
-        {(fieldVis.show_interval_distance || isInterval) ? (
+        {(fieldVis.show_interval_distance || isInterval || isHillReps) ? (
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-zinc-900">
               Gradient (%)
