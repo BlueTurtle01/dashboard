@@ -700,7 +700,15 @@ function RouteMap({
   );
 }
 
-function RaceSummaryPage({ template, profile }: { template: ProgramTemplate; profile: RaceProfileData }) {
+function PageNumber({ n }: { n: number }) {
+  return (
+    <div style={{ position: "absolute", bottom: "24px", right: "48px", fontSize: "11px", color: "#aaa" }}>
+      {n}
+    </div>
+  );
+}
+
+function RaceSummaryPage({ template, profile, pageNumber }: { template: ProgramTemplate; profile: RaceProfileData; pageNumber?: number }) {
   const { elevation, terrain, sustainedSegments } = profile;
 
   // Top 3–5 notable segments by absolute elevation change, excluding flats
@@ -800,6 +808,7 @@ function RaceSummaryPage({ template, profile }: { template: ProgramTemplate; pro
           <TerrainBar terrain={terrain} />
         </div>
       )}
+      {pageNumber !== undefined && <PageNumber n={pageNumber} />}
     </div>
   );
 }
@@ -1301,7 +1310,7 @@ function collectEquipment(weeks: TemplateWeek[]): string[] {
   return result.sort();
 }
 
-function AthleteProfilePage({ template, weeks }: { template: ProgramTemplate; weeks: TemplateWeek[] }) {
+function AthleteProfilePage({ template, weeks, pageNumber }: { template: ProgramTemplate; weeks: TemplateWeek[]; pageNumber?: number }) {
   const requirements: { label: string; value: string }[] = [];
 
   if (template.min_training_consistency_weeks) {
@@ -1423,13 +1432,14 @@ function AthleteProfilePage({ template, weeks }: { template: ProgramTemplate; we
           </div>
         </>
       )}
+      {pageNumber !== undefined && <PageNumber n={pageNumber} />}
     </div>
   );
 }
 
 /* ── Week Focuses / Phase descriptions ── */
 
-function WeekFocusesPage({ weeks, template }: { weeks: TemplateWeek[]; template: ProgramTemplate }) {
+function WeekFocusesPage({ weeks, template, pageNumber }: { weeks: TemplateWeek[]; template: ProgramTemplate; pageNumber?: number }) {
   const descriptions = template.focus_descriptions ?? {};
 
   // Build ordered list of unique focuses with their week ranges
@@ -1488,6 +1498,7 @@ function WeekFocusesPage({ weeks, template }: { weeks: TemplateWeek[]; template:
             );
           })}
       </div>
+      {pageNumber !== undefined && <PageNumber n={pageNumber} />}
     </div>
   );
 }
@@ -1540,7 +1551,7 @@ function calendarCellDetail(session: TemplateSession): string {
   return "";
 }
 
-function TrainingCalendarPage({ weeks, template }: { weeks: TemplateWeek[]; template: ProgramTemplate }) {
+function TrainingCalendarPage({ weeks, template, pageNumber }: { weeks: TemplateWeek[]; template: ProgramTemplate; pageNumber?: number }) {
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const sorted = [...weeks].sort((a, b) => a.week_number - b.week_number);
 
@@ -1664,11 +1675,12 @@ function TrainingCalendarPage({ weeks, template }: { weeks: TemplateWeek[]; temp
             </div>
           ))}
       </div>
+      {pageNumber !== undefined && <PageNumber n={pageNumber} />}
     </div>
   );
 }
 
-function WeeklyMileagePage({ weeks, template }: { weeks: TemplateWeek[]; template: ProgramTemplate }) {
+function WeeklyMileagePage({ weeks, template, pageNumber }: { weeks: TemplateWeek[]; template: ProgramTemplate; pageNumber?: number }) {
   const sorted = weeks.slice().sort((a, b) => a.week_number - b.week_number);
   const weekMiles = sorted.map((week) => {
     const totalKm = week.program_template_sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
@@ -1739,6 +1751,7 @@ function WeeklyMileagePage({ weeks, template }: { weeks: TemplateWeek[]; templat
           </div>
         ))}
       </div>
+      {pageNumber !== undefined && <PageNumber n={pageNumber} />}
     </div>
   );
 }
@@ -1760,10 +1773,12 @@ function RaceStrategyPage({
   template,
   profile,
   pacingSections,
+  pageNumber,
 }: {
   template: ProgramTemplate;
   profile: RaceProfileData | null;
   pacingSections: PacingSection[];
+  pageNumber?: number;
 }) {
   // Compute estimated total race time
   const totalMinutes = pacingSections.reduce((sum, sec) => {
@@ -1870,11 +1885,12 @@ function RaceStrategyPage({
           })}
         </tbody>
       </table>
+      {pageNumber !== undefined && <PageNumber n={pageNumber} />}
     </div>
   );
 }
 
-function WeekDetailPage({ week, template, raceProfile, exercisePageMap }: { week: TemplateWeek; template: ProgramTemplate; raceProfile?: RaceProfileData; exercisePageMap?: Map<string, number> }) {
+function WeekDetailPage({ week, template, raceProfile, exercisePageMap, pageNumber }: { week: TemplateWeek; template: ProgramTemplate; raceProfile?: RaceProfileData; exercisePageMap?: Map<string, number>; pageNumber?: number }) {
   const sessions = sortSessions(week.program_template_sessions);
   const pacingSections = template.pacing_data ?? [];
 
@@ -1940,6 +1956,93 @@ function WeekDetailPage({ week, template, raceProfile, exercisePageMap }: { week
             mobilityAllDays={mobilityAllDaysMap.get(session.id)}
           />
         ))}
+      {pageNumber !== undefined && <PageNumber n={pageNumber} />}
+    </div>
+  );
+}
+
+/* ── Contents page ── */
+
+function ContentsPage({
+  template,
+  weeks,
+  pages,
+  pageNumber,
+}: {
+  template: ProgramTemplate;
+  weeks: TemplateWeek[];
+  pages: {
+    athleteProfile: number;
+    trainingCalendar: number;
+    phases: number | null;
+    raceProfile: number | null;
+    weeklyMileage: number | null;
+    raceStrategy: number | null;
+    weekDetails: number[];
+  };
+  pageNumber: number;
+}) {
+  const sortedWeeks = [...weeks].sort((a, b) => a.week_number - b.week_number);
+
+  const fixedSections: { label: string; page: number }[] = [
+    { label: "Athlete Profile", page: pages.athleteProfile },
+    { label: "Training Plan Overview", page: pages.trainingCalendar },
+    ...(pages.phases !== null ? [{ label: "Programme Phases", page: pages.phases }] : []),
+    ...(pages.raceProfile !== null ? [{ label: "Race Course Profile", page: pages.raceProfile }] : []),
+    ...(pages.weeklyMileage !== null ? [{ label: "Weekly Mileage", page: pages.weeklyMileage }] : []),
+    ...(pages.raceStrategy !== null ? [{ label: "Race Strategy", page: pages.raceStrategy }] : []),
+  ];
+
+  const rowStyle: React.CSSProperties = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    padding: "7px 0",
+    borderBottom: "1px solid #f0f0f0",
+    fontSize: "13px",
+    color: "#333",
+  };
+
+  const pgStyle: React.CSSProperties = {
+    fontWeight: 600,
+    color: "#1e3a1e",
+    minWidth: "32px",
+    textAlign: "right",
+    flexShrink: 0,
+  };
+
+  return (
+    <div style={a4Page}>
+      <PrintHeader template={template} />
+      <h2 style={{ margin: "0 0 24px", fontSize: "18px", fontWeight: 700, color: "#1e3a1e" }}>Contents</h2>
+
+      <div style={{ marginBottom: "32px" }}>
+        {fixedSections.map((s) => (
+          <div key={s.label} style={rowStyle}>
+            <span>{s.label}</span>
+            <span style={pgStyle}>{s.page}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ borderTop: "2px solid #1e3a1e", paddingTop: "16px" }}>
+        <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          Weekly Detail
+        </p>
+        {sortedWeeks.map((week, i) => (
+          <div key={week.id} style={rowStyle}>
+            <span>
+              Week {week.week_number}
+              {week.focus && (
+                <span style={{ color: "#888", marginLeft: "10px", fontSize: "12px" }}>— {week.focus}</span>
+              )}
+            </span>
+            <span style={pgStyle}>{pages.weekDetails[i]}</span>
+          </div>
+        ))}
+      </div>
+
+      <PageNumber n={pageNumber} />
     </div>
   );
 }
@@ -2061,6 +2164,31 @@ export default function ExportPreviewPage() {
 
   const weeks = template.program_template_weeks;
 
+  const hasPhaseDescriptions = (() => {
+    const descriptions = template.focus_descriptions ?? {};
+    const phaseLabels = [...new Set(weeks.map(w => w.focus).filter((f): f is string => !!f))];
+    return phaseLabels.some(label => !!descriptions[label]);
+  })();
+  const hasWeeklyMileage = weeks.some(w =>
+    w.program_template_sessions.some(s => (s.distance_km ?? 0) > 0)
+  );
+  let _pg = 3;
+  const _inc = () => _pg++;
+  const pageNums: {
+    athleteProfile: number; trainingCalendar: number;
+    phases: number | null; raceProfile: number | null;
+    weeklyMileage: number | null; raceStrategy: number | null;
+    weekDetails: number[];
+  } = {
+    athleteProfile:   _inc(),
+    trainingCalendar: _inc(),
+    phases:           hasPhaseDescriptions ? _inc() : null,
+    raceProfile:      raceProfile          ? _inc() : null,
+    weeklyMileage:    hasWeeklyMileage     ? _inc() : null,
+    raceStrategy:     (template.pacing_data && template.pacing_data.length > 0) ? _inc() : null,
+    weekDetails:      weeks.map(() => _inc()),
+  };
+
   return (
     <>
       {/* ── Screen toolbar (hidden on print) ── */}
@@ -2097,31 +2225,35 @@ export default function ExportPreviewPage() {
           {template.description && (
             <p style={{ fontSize: "14px", color: "#666", marginTop: "20px", maxWidth: "480px", lineHeight: "1.6" }}>{template.description}</p>
           )}
+          <PageNumber n={1} />
         </div>
 
+        {/* Contents page */}
+        <ContentsPage template={template} weeks={weeks} pages={pageNums} pageNumber={2} />
+
         {/* Plan suitability / athlete profile page */}
-        <AthleteProfilePage template={template} weeks={weeks} />
+        <AthleteProfilePage template={template} weeks={weeks} pageNumber={pageNums.athleteProfile} />
 
         {/* Training calendar overview — one row per week */}
-        <TrainingCalendarPage weeks={weeks} template={template} />
+        <TrainingCalendarPage weeks={weeks} template={template} pageNumber={pageNums.trainingCalendar} />
 
         {/* Phase descriptions — only renders if descriptions have been set in the hub */}
-        <WeekFocusesPage weeks={weeks} template={template} />
+        <WeekFocusesPage weeks={weeks} template={template} pageNumber={pageNums.phases ?? undefined} />
 
         {/* Race course profile page */}
-        {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} />}
+        {raceProfile && <RaceSummaryPage template={template} profile={raceProfile} pageNumber={pageNums.raceProfile ?? undefined} />}
 
         {/* Weekly mileage chart */}
-        <WeeklyMileagePage weeks={weeks} template={template} />
+        <WeeklyMileagePage weeks={weeks} template={template} pageNumber={pageNums.weeklyMileage ?? undefined} />
 
         {/* Race strategy page */}
         {template.pacing_data && template.pacing_data.length > 0 && (
-          <RaceStrategyPage template={template} profile={raceProfile} pacingSections={template.pacing_data} />
+          <RaceStrategyPage template={template} profile={raceProfile} pacingSections={template.pacing_data} pageNumber={pageNums.raceStrategy ?? undefined} />
         )}
 
         {/* Detail — one week per A4 page */}
-        {weeks.map((week) => (
-          <WeekDetailPage key={`det-${week.id}`} week={week} template={template} raceProfile={raceProfile ?? undefined} exercisePageMap={exercisePageMap} />
+        {weeks.map((week, idx) => (
+          <WeekDetailPage key={`det-${week.id}`} week={week} template={template} raceProfile={raceProfile ?? undefined} exercisePageMap={exercisePageMap} pageNumber={pageNums.weekDetails[idx]} />
         ))}
 
       </div>
