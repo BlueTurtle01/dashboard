@@ -2196,6 +2196,7 @@ export default function EditProgramTemplatePage() {
   const [collapsedWeekLocalIds, setCollapsedWeekLocalIds] = useState<Record<string, boolean>>({});
   const [editingSessionSlot, setEditingSessionSlot] = useState<EditingSessionSlot | null>(null);
   const [copySlot, setCopySlot] = useState<{ weekLocalId: string; sessionLocalId: string } | null>(null);
+  const [confirmClearWeekId, setConfirmClearWeekId] = useState<string | null>(null);
 
   const filteredRaces = useMemo(() => {
     const query = raceSearchQuery.trim().toLowerCase();
@@ -2869,6 +2870,11 @@ export default function EditProgramTemplatePage() {
         .filter((session) => session.localId !== sessionLocalId)
         .map((session, index) => ({ ...session, sortOrder: index + 1 })),
     }));
+  }
+
+  function clearWeekSessions(weekLocalId: string) {
+    updateWeek(weekLocalId, (week) => ({ ...week, sessions: [] }));
+    setConfirmClearWeekId(null);
   }
 
   function updateExercise(
@@ -3908,6 +3914,35 @@ export default function EditProgramTemplatePage() {
                     </button>
 
                     <div className="flex items-center gap-2">
+                      {week.sessions.length > 0 && (
+                        confirmClearWeekId === week.localId ? (
+                          <span className="flex items-center gap-1.5 text-xs">
+                            <span className="text-zinc-600">Remove {week.sessions.length} session{week.sessions.length !== 1 ? "s" : ""}?</span>
+                            <button
+                              type="button"
+                              onClick={() => clearWeekSessions(week.localId)}
+                              className="rounded-md bg-rose-600 px-2 py-1 font-semibold text-white hover:bg-rose-700"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmClearWeekId(null)}
+                              className="rounded-md border border-zinc-300 bg-white px-2 py-1 font-semibold text-zinc-700 hover:bg-zinc-100"
+                            >
+                              Cancel
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmClearWeekId(week.localId)}
+                            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-500 hover:border-rose-300 hover:text-rose-600"
+                          >
+                            Clear sessions
+                          </button>
+                        )
+                      )}
                       <button
                         type="button"
                         onClick={() => updateWeek(week.localId, (w) => ({ ...w, isFinished: !w.isFinished }))}
@@ -4154,7 +4189,10 @@ export default function EditProgramTemplatePage() {
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500">
                                   <span>{session.type}</span>
-                                  {session.dayLabel && <span>{session.dayLabel}</span>}
+                                  {session.dayLabel
+                                    ? <span>{session.dayLabel}</span>
+                                    : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">No day assigned</span>
+                                  }
                                   {session.duration && <span>{session.duration} min</span>}
                                   {session.type === "Gym" && (
                                     <span>{session.exercises.length} exercise{session.exercises.length !== 1 ? "s" : ""}</span>
