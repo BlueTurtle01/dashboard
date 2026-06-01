@@ -2171,6 +2171,91 @@ function CopyToWeeksModal({
   );
 }
 
+function MoveSessionModal({
+  sessionName,
+  sourceWeekLocalId,
+  currentDayLabel,
+  weeks,
+  onMove,
+  onClose,
+}: {
+  sessionName: string;
+  sourceWeekLocalId: string;
+  currentDayLabel: string;
+  weeks: Pick<EditableWeek, "localId" | "weekNumber" | "focus">[];
+  onMove: (targetWeekLocalId: string, dayLabel: string) => void;
+  onClose: () => void;
+}) {
+  const [targetWeekLocalId, setTargetWeekLocalId] = useState(sourceWeekLocalId);
+  const [dayLabel, setDayLabel] = useState(currentDayLabel || "Mon");
+
+  const sortedWeeks = [...weeks].sort((a, b) => a.weekNumber - b.weekNumber);
+  const canConfirm = targetWeekLocalId !== sourceWeekLocalId || dayLabel !== currentDayLabel;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 px-6 py-5">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900">Move session</h2>
+            <p className="mt-0.5 text-sm text-zinc-500">
+              Move <span className="font-medium text-zinc-700">{sessionName}</span> to a different week or day.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="mt-0.5 text-xl leading-none text-zinc-400 hover:text-zinc-700">×</button>
+        </div>
+
+        <div className="space-y-4 px-6 py-5">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700">Week</label>
+            <select
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              value={targetWeekLocalId}
+              onChange={(e) => setTargetWeekLocalId(e.target.value)}
+            >
+              {sortedWeeks.map((w) => (
+                <option key={w.localId} value={w.localId}>
+                  Week {w.weekNumber}{w.focus ? ` — ${w.focus}` : ""}{w.localId === sourceWeekLocalId ? " (current)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700">Day</label>
+            <select
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+              value={dayLabel}
+              onChange={(e) => setDayLabel(e.target.value)}
+            >
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-zinc-100 px-6 py-4">
+          <button type="button" onClick={onClose} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canConfirm}
+            onClick={() => onMove(targetWeekLocalId, dayLabel)}
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40"
+          >
+            Move
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EditProgramTemplatePage() {
   const supabase = createClient();
   const params = useParams();
@@ -2206,6 +2291,7 @@ export default function EditProgramTemplatePage() {
   const [collapsedWeekLocalIds, setCollapsedWeekLocalIds] = useState<Record<string, boolean>>({});
   const [editingSessionSlot, setEditingSessionSlot] = useState<EditingSessionSlot | null>(null);
   const [copySlot, setCopySlot] = useState<{ weekLocalId: string; sessionLocalId: string } | null>(null);
+  const [moveSlot, setMoveSlot] = useState<{ weekLocalId: string; sessionLocalId: string } | null>(null);
   const [confirmClearWeekId, setConfirmClearWeekId] = useState<string | null>(null);
 
   const filteredRaces = useMemo(() => {
@@ -2749,6 +2835,53 @@ export default function EditProgramTemplatePage() {
     });
     setCopySlot(null);
     showTemporaryStatus(`Copied to ${targetWeekLocalIds.length} week${targetWeekLocalIds.length !== 1 ? "s" : ""}.`, 2000);
+  }
+
+  function moveSession(sourceWeekLocalId: string, sessionLocalId: string, targetWeekLocalId: string, newDayLabel: string) {
+    setForm((current) => {
+      if (!current) return current;
+      const sourceWeek = current.weeks.find((w) => w.localId === sourceWeekLocalId);
+      const session = sourceWeek?.sessions.find((s) => s.localId === sessionLocalId);
+      if (!session) return current;
+
+      if (sourceWeekLocalId === targetWeekLocalId) {
+        return {
+          ...current,
+          weeks: current.weeks.map((w) =>
+            w.localId !== sourceWeekLocalId ? w : {
+              ...w,
+              sessions: w.sessions.map((s) =>
+                s.localId === sessionLocalId ? { ...s, dayLabel: newDayLabel } : s
+              ),
+            }
+          ),
+        };
+      }
+
+      return {
+        ...current,
+        weeks: current.weeks.map((w) => {
+          if (w.localId === sourceWeekLocalId) {
+            return {
+              ...w,
+              sessions: w.sessions
+                .filter((s) => s.localId !== sessionLocalId)
+                .map((s, i) => ({ ...s, sortOrder: i + 1 })),
+            };
+          }
+          if (w.localId === targetWeekLocalId) {
+            const nextSort = Math.max(0, ...w.sessions.map((s) => s.sortOrder)) + 1;
+            return {
+              ...w,
+              sessions: [...w.sessions, { ...session, dayLabel: newDayLabel, sortOrder: nextSort }],
+            };
+          }
+          return w;
+        }),
+      };
+    });
+    setMoveSlot(null);
+    showTemporaryStatus("Session moved.", 1500);
   }
 
   function handleUpdateSessionFromForm(
@@ -4288,6 +4421,14 @@ export default function EditProgramTemplatePage() {
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => setMoveSlot({ weekLocalId: week.localId, sessionLocalId: session.localId })}
+                                  className="rounded-lg border border-violet-300 bg-white px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50"
+                                  title="Move this session to a different week or day"
+                                >
+                                  Move
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => setCopySlot({ weekLocalId: week.localId, sessionLocalId: session.localId })}
                                   className="rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50"
                                   title="Copy this session to other weeks"
@@ -4321,6 +4462,26 @@ export default function EditProgramTemplatePage() {
           </div>
         </section>
       </div>
+
+      {/* Move session modal */}
+      {moveSlot && (() => {
+        const sourceWeek = form.weeks.find((w) => w.localId === moveSlot.weekLocalId);
+        const sourceSession = sourceWeek?.sessions.find((s) => s.localId === moveSlot.sessionLocalId);
+        if (!sourceSession) return null;
+        const allWeeks = [...form.weeks].sort((a, b) => a.weekNumber - b.weekNumber);
+        return (
+          <MoveSessionModal
+            sessionName={sourceSession.name || "Session"}
+            sourceWeekLocalId={moveSlot.weekLocalId}
+            currentDayLabel={sourceSession.dayLabel}
+            weeks={allWeeks}
+            onMove={(targetWeekLocalId, dayLabel) =>
+              moveSession(moveSlot.weekLocalId, moveSlot.sessionLocalId, targetWeekLocalId, dayLabel)
+            }
+            onClose={() => setMoveSlot(null)}
+          />
+        );
+      })()}
 
       {/* Copy-to-weeks modal */}
       {copySlot && (() => {
