@@ -364,7 +364,7 @@ export default async function Navbar() {
           </Link>
 
           {/* Admin section */}
-          {can("admin_panel") || can("admin_library") || can("admin_templates") || can("admin_destinations") || can("admin_config") ? (
+          {can("admin_panel") || can("admin_library") || can("admin_templates") || can("admin_destinations") || can("admin_config") || can("admin_tools") ? (
             <>
               <span className="app-sidebar__group-label">Admin</span>
               {can("admin_panel") && (
@@ -420,6 +420,14 @@ export default async function Navbar() {
                     { href: "/admin/coach-athlete-links", label: "Coach-Athlete Links" },
                     { href: "/admin/chat/phrases", label: "Chat Moderation" },
                     { href: "/admin/chat/moderation", label: "Review Flagged Messages" },
+                  ]}
+                />
+              )}
+              {can("admin_tools") && (
+                <SidebarDropdown
+                  label="Tools"
+                  items={[
+                    { href: "/admin/race-strategy", label: "Race Strategy" },
                   ]}
                 />
               )}
