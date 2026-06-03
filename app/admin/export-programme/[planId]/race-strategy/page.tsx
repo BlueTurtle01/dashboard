@@ -593,9 +593,16 @@ export default function RaceStrategyExportPage() {
     padding: "5px 8px", borderBottom: "1px solid #eee", fontSize: "12px",
   };
 
+  const totalEffortMinutes = hasWindData ? pacingSections.reduce((sum, sec) => {
+    const ep = computeEffortPace(sec, windData);
+    const epMin = ep ? parsePaceToMinutes(ep) : null;
+    if (epMin === null) return sum;
+    return sum + (sec.end_km - sec.start_km) * epMin;
+  }, 0) : 0;
+
   const tableHeaders = [
     "#", "km Range", "Distance", "Section Type",
-    "Target Pace", "Wind Adj. Pace",
+    "Target Pace",
     ...(hasWindData ? ["Effort Pace"] : []),
     "Pace Band", "Section Time",
   ];
@@ -711,9 +718,6 @@ export default function RaceStrategyExportPage() {
                         <td style={tdStyle}>{dist.toFixed(1)} km</td>
                         <td style={tdStyle}>{formatSectionType(sec.section_type)}</td>
                         <td style={{ ...tdStyle, fontWeight: 600, color: "#c0392b" }}>{sec.target_pace}</td>
-                        <td style={{ ...tdStyle, fontWeight: 600, color: sec.wind_adjusted_pace && sec.wind_adjusted_pace !== sec.target_pace ? "#1565c0" : "#c0392b" }}>
-                          {sec.wind_adjusted_pace || sec.target_pace}
-                        </td>
                         {hasWindData && (
                           <td style={{ ...tdStyle, fontWeight: 600, color: effortColor }}>
                             {effortPace ?? "—"}
@@ -727,6 +731,32 @@ export default function RaceStrategyExportPage() {
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr style={{ background: "#f9f9f9", borderTop: "2px solid #1e3a1e" }}>
+                    <td
+                      colSpan={tableHeaders.length - 1}
+                      style={{ ...tdStyle, fontWeight: 600, color: "#1e3a1e", textAlign: "right", paddingRight: "16px", borderBottom: "none" }}
+                    >
+                      Total — Target Pace
+                    </td>
+                    <td style={{ ...tdStyle, fontWeight: 700, color: "#1e3a1e", borderBottom: "none" }}>
+                      {totalMinutes > 0 ? formatRaceTime(totalMinutes) : "—"}
+                    </td>
+                  </tr>
+                  {hasWindData && totalEffortMinutes > 0 && (
+                    <tr style={{ background: "#fff8f5" }}>
+                      <td
+                        colSpan={tableHeaders.length - 1}
+                        style={{ ...tdStyle, fontWeight: 600, color: "#e65100", textAlign: "right", paddingRight: "16px", borderBottom: "none" }}
+                      >
+                        Total — Effort Pace
+                      </td>
+                      <td style={{ ...tdStyle, fontWeight: 700, color: "#e65100", borderBottom: "none" }}>
+                        {formatRaceTime(totalEffortMinutes)}
+                      </td>
+                    </tr>
+                  )}
+                </tfoot>
               </table>
 
               {/* Citations */}
