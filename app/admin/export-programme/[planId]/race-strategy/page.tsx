@@ -191,6 +191,63 @@ function computeEffortPace(section: PacingSection, windData: WindSection[]): str
   return `${m}:${secs.toString().padStart(2, "0")}/km`;
 }
 
+/* ── Checkpoint table ── */
+type Checkpoint = {
+  label: string;
+  distanceKm: number;
+  targetMinutes: number;
+  effortMinutes: number;
+  isHighlight: boolean;
+};
+
+function buildCheckpoints(pacingSections: PacingSection[], windData: WindSection[]): Checkpoint[] {
+  if (pacingSections.length === 0) return [];
+  const totalKm = pacingSections[pacingSections.length - 1].end_km;
+  const halfwayKm = totalKm / 2;
+
+  // Collect 5km interval marks, marking whichever is closest to halfway as the halfway point
+  const marks: { km: number; label?: string }[] = [];
+  for (let km = 5; km < totalKm - 0.5; km += 5) {
+    marks.push({ km });
+  }
+
+  // Insert halfway if it doesn't coincide with an existing mark (within 1 km)
+  const halfwayCovered = marks.some(m => Math.abs(m.km - halfwayKm) < 1);
+  if (!halfwayCovered) {
+    marks.push({ km: halfwayKm });
+    marks.sort((a, b) => a.km - b.km);
+  }
+
+  // Always include finish
+  marks.push({ km: totalKm });
+
+  return marks.map(({ km }) => {
+    let targetMin = 0;
+    let effortMin = 0;
+
+    for (const sec of pacingSections) {
+      if (sec.start_km >= km) break;
+      const dist = Math.min(sec.end_km, km) - sec.start_km;
+      const tPace = parsePaceToMinutes(sec.target_pace);
+      if (tPace !== null) {
+        targetMin += dist * tPace;
+        if (windData.length > 0) {
+          effortMin += dist * tPace * effortWindMultiplier(avgHeadwindForSection(sec, windData));
+        }
+      }
+    }
+
+    const isFinish = km >= totalKm - 0.01;
+    const isHalfway = !isFinish && Math.abs(km - halfwayKm) < 1;
+    let label: string;
+    if (isFinish) label = "Finish";
+    else if (isHalfway) label = `Halfway · ${Number.isInteger(Math.round(km * 10) / 10) ? km.toFixed(0) : km.toFixed(1)} km`;
+    else label = `${km % 1 === 0 ? km.toFixed(0) : km.toFixed(1)} km`;
+
+    return { label, distanceKm: km, targetMinutes: targetMin, effortMinutes: effortMin, isHighlight: isFinish || isHalfway };
+  });
+}
+
 /* ── ElevationChart ── */
 function downsamplePoints(points: ElevationPoint[], maxPts: number): ElevationPoint[] {
   if (points.length <= maxPts) return points;
@@ -593,6 +650,8 @@ export default function RaceStrategyExportPage() {
     padding: "5px 8px", borderBottom: "1px solid #eee", fontSize: "12px",
   };
 
+  const checkpoints = buildCheckpoints(pacingSections, hasWindData ? windData : []);
+
   const totalEffortMinutes = hasWindData ? pacingSections.reduce((sum, sec) => {
     const ep = computeEffortPace(sec, windData);
     const epMin = ep ? parsePaceToMinutes(ep) : null;
@@ -758,6 +817,45 @@ export default function RaceStrategyExportPage() {
                   )}
                 </tfoot>
               </table>
+
+              {/* Checkpoint table */}
+              {checkpoints.length > 0 && (
+                <div style={{ marginTop: "24px" }}>
+                  <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Time Checkpoints
+                  </p>
+                  <table style={{ borderCollapse: "collapse", fontSize: "12px" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...thStyle, minWidth: "140px" }}>Point</th>
+                        <th style={thStyle}>Target Pace Arrival</th>
+                        {hasWindData && <th style={thStyle}>Effort Pace Arrival</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {checkpoints.map((cp, i) => {
+                        const rowBg = cp.isHighlight ? "#f0f7f0" : i % 2 === 0 ? "#fff" : "#fafafa";
+                        const labelWeight = cp.isHighlight ? 700 : 400;
+                        return (
+                          <tr key={i} style={{ background: rowBg }}>
+                            <td style={{ ...tdStyle, fontWeight: labelWeight, color: cp.isHighlight ? "#1e3a1e" : "#333" }}>
+                              {cp.label}
+                            </td>
+                            <td style={{ ...tdStyle, fontWeight: 600, color: "#1e3a1e" }}>
+                              {formatRaceTime(cp.targetMinutes)}
+                            </td>
+                            {hasWindData && (
+                              <td style={{ ...tdStyle, fontWeight: 600, color: "#e65100" }}>
+                                {formatRaceTime(cp.effortMinutes)}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {/* Citations */}
               {hasWindData && (
