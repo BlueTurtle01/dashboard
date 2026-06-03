@@ -7,6 +7,33 @@ import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
 
 /* ── API response types ── */
 interface RaceMeta { id: string; name: string; total_distance_km: number; total_ascent_m: number; total_descent_m: number; race_date: string | null; weather_lat: number | null; weather_lon: number | null; }
+
+interface RaceIntelResponse {
+  has_data: boolean;
+  latest_year?: number;
+  total_finishers?: number;
+  overall_position?: number;
+  overall_top_pct?: number;
+  gender_position?: number | null;
+  gender_total?: number | null;
+  gender_top_pct?: number | null;
+  age_group_label?: string | null;
+  age_group_position?: number | null;
+  age_group_total?: number | null;
+  age_group_top_pct?: number | null;
+  halfway_analysis?: {
+    key: string; label: string;
+    recommended_seconds: number; aggressive_seconds: number;
+    typical_ratio: number; pct_positive_split: number; band_size: number;
+  } | null;
+  late_analysis?: {
+    key: string; label: string;
+    avg_final_section_minutes: number;
+    avg_fade_pct: number; controlled_pct: number; final_dist_note: string;
+  } | null;
+  distribution?: { min_min: number; max_min: number; count: number; }[];
+  error?: string;
+}
 interface PacingSection { start_km: number; end_km: number; section_type: string; target_pace: string; pace_band: string; }
 interface WindSection { section_id: number; start_km: number; end_km: number; mid_lat: number; mid_lon: number; bearing_deg: number; median_wind_speed_ms: number; median_headwind_ms: number; median_crosswind_ms: number; wind_risk_label: string; }
 interface GenerateResponse { race: RaceMeta; pacing: PacingSection[]; route: { lat: number; lon: number }[]; wind_sections: WindSection[] | null; elevation_profile: string | null; sustained_segments: string | null; }
@@ -89,17 +116,6 @@ function effortWindMultiplier(headwindMs: number): number {
   if (headwindMs <= 0) return Math.max(0.955, 1 - Math.min(0.0045 * Math.abs(headwindMs), 0.045));
   return Math.min(1.20, 1 + 0.018 * headwindMs + 0.002 * headwindMs ** 2);
 }
-function computeEffortPace(sec: PacingSection, windData: WindSection[]): string | null {
-  const targetMin = parsePaceToMinutes(sec.target_pace);
-  if (targetMin === null) return null;
-  const adj = targetMin * effortWindMultiplier(avgHeadwindForSection(sec, windData));
-  const mins = Math.floor(adj);
-  const secsRaw = Math.round((adj - mins) * 60);
-  const s = secsRaw === 60 ? 0 : secsRaw;
-  const m = secsRaw === 60 ? mins + 1 : mins;
-  return `${m}:${s.toString().padStart(2, "0")}/km`;
-}
-
 /* ── Combined race-day conditions model ── */
 
 /**
@@ -496,11 +512,14 @@ export default function StandaloneRaceStrategyPage() {
   const [hours, setHours]               = useState("");
   const [minutes, setMinutes]           = useState("");
   const [raceDate, setRaceDate]         = useState("");   // "YYYY-MM-DD"
+  const [age, setAge]                   = useState("");
+  const [gender, setGender]             = useState("");   // "Male" | "Female" | ""
   const [generating, setGenerating]     = useState(false);
   const [genError, setGenError]         = useState("");
   const [result, setResult]             = useState<GenerateResponse | null>(null);
   const [weather, setWeather]           = useState<WeatherDayRecord[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [raceIntel, setRaceIntel]       = useState<RaceIntelResponse | null>(null);
 
   // Derived
   const elevProfile  = result ? parseElevProfile(result.elevation_profile) : null;
@@ -581,6 +600,7 @@ export default function StandaloneRaceStrategyPage() {
     setGenError("");
     setResult(null);
     setWeather([]);
+    setRaceIntel(null);
 
     const res = await fetch("/api/race-strategy/generate", {
       method: "POST",
@@ -619,6 +639,24 @@ export default function StandaloneRaceStrategyPage() {
       } catch { /* weather is optional */ }
       setWeatherLoading(false);
     }
+
+    // Fetch race intelligence (results analysis) — fire-and-forget
+    try {
+      const riRes = await fetch("/api/race-strategy/results", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          race_id: selectedRaceId,
+          target_minutes: target_minutes,
+          gender: gender || undefined,
+          age: age ? parseInt(age, 10) : undefined,
+        }),
+      });
+      if (riRes.ok) {
+        const riJson = await riRes.json() as RaceIntelResponse;
+        if (riJson.has_data) setRaceIntel(riJson);
+      }
+    } catch { /* results are optional */ }
   }
 
   const thStyle: React.CSSProperties = { textAlign: "left", padding: "5px 8px", borderBottom: "2px solid #1e3a1e", color: "#1e3a1e", fontWeight: 600, background: "#f9f9f9", fontSize: "11px" };
@@ -649,8 +687,20 @@ export default function StandaloneRaceStrategyPage() {
           </div>
         </div>
         <div>
-          <div style={labelStyle}>Race date <span style={{ color: "#aaa", fontWeight: 400 }}>(auto-filled from database · used for weather history)</span></div>
+          <div style={labelStyle}>Race date <span style={{ color: "#aaa", fontWeight: 400 }}>(auto-filled · for weather history)</span></div>
           <input type="date" value={raceDate} onChange={e => setRaceDate(e.target.value)} style={inputStyle} />
+        </div>
+        <div>
+          <div style={labelStyle}>Gender <span style={{ color: "#aaa", fontWeight: 400 }}>(for results analysis)</span></div>
+          <select value={gender} onChange={e => setGender(e.target.value)} style={inputStyle}>
+            <option value="">— optional —</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+        </div>
+        <div>
+          <div style={labelStyle}>Age <span style={{ color: "#aaa", fontWeight: 400 }}>(for category ranking)</span></div>
+          <input type="number" min={16} max={90} value={age} onChange={e => setAge(e.target.value)} placeholder="e.g. 43" style={{ ...inputStyle, width: "80px" }} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <button type="button" onClick={() => void handleGenerate()} disabled={generating} style={generateBtn}>
@@ -882,6 +932,161 @@ export default function StandaloneRaceStrategyPage() {
               <PageNumber n={2} />
             </div>
           )}
+
+          {/* ── Page 3: Race Intelligence ── */}
+          {raceIntel?.has_data && (() => {
+            const ri = raceIntel;
+            const targetLabel = formatRaceTime(totalMinutes);
+            const pageNum = (weather.length > 0 || weatherLoading) ? 3 : 2;
+
+            // Distribution chart
+            const dist = ri.distribution ?? [];
+            const maxCount = Math.max(...dist.map(b => b.count), 1);
+            const chartW = 640, chartH = 80, padL = 8, padR = 8, padBot = 18;
+            const barW = (chartW - padL - padR) / (dist.length || 1) - 2;
+            const targetBand = dist.findIndex(b => totalMinutes >= b.min_min && totalMinutes < b.max_min);
+
+            return (
+              <div style={a4Page}>
+                {/* Header */}
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result!.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Race Intelligence · {ri.latest_year} results</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 6px", fontSize: "18px", fontWeight: 700, color: "#1e3a1e" }}>Race Intelligence</h2>
+                <p style={{ margin: "0 0 20px", fontSize: "13px", color: "#666" }}>
+                  How a <strong>{targetLabel}</strong> target compares against {ri.latest_year} finishers
+                  {gender ? ` · ${gender}` : ""}{age ? ` · Age ${age}` : ""}
+                </p>
+
+                {/* ── Ranking context ── */}
+                <p style={sectionLabel}>Where your target places you</p>
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "24px" }}>
+                  {[
+                    {
+                      label: "Overall",
+                      position: ri.overall_position,
+                      total: ri.total_finishers,
+                      pct: ri.overall_top_pct,
+                    },
+                    ...(ri.gender_position != null ? [{
+                      label: gender ?? "Gender",
+                      position: ri.gender_position,
+                      total: ri.gender_total!,
+                      pct: ri.gender_top_pct!,
+                    }] : []),
+                    ...(ri.age_group_position != null ? [{
+                      label: `${gender ?? ""} ${ri.age_group_label ?? ""}`.trim(),
+                      position: ri.age_group_position,
+                      total: ri.age_group_total!,
+                      pct: ri.age_group_top_pct!,
+                    }] : []),
+                  ].map(({ label, position, total, pct }) => (
+                    <div key={label} style={{ border: "1px solid #e0e0e0", borderRadius: "8px", padding: "12px 16px", background: "#fafafa", minWidth: "140px" }}>
+                      <div style={{ fontSize: "11px", color: "#888", marginBottom: "4px" }}>{label}</div>
+                      <div style={{ fontSize: "22px", fontWeight: 800, color: "#1e3a1e", lineHeight: 1 }}>
+                        {position?.toLocaleString()}
+                        <span style={{ fontSize: "13px", fontWeight: 400, color: "#888" }}> / {total?.toLocaleString()}</span>
+                      </div>
+                      <div style={{ fontSize: "12px", color: pct! <= 25 ? "#2e7d32" : pct! <= 50 ? "#1565c0" : "#888", fontWeight: 600, marginTop: "4px" }}>
+                        top {pct}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Finish time distribution ── */}
+                {dist.length > 0 && (
+                  <div style={{ marginBottom: "24px" }}>
+                    <p style={sectionLabel}>Finish time distribution — {ri.latest_year}</p>
+                    <svg width={chartW} height={chartH} style={{ display: "block", overflow: "visible" }}>
+                      {dist.map((b, i) => {
+                        const bH   = Math.max((b.count / maxCount) * (chartH - padBot), 2);
+                        const x    = padL + i * ((chartW - padL - padR) / dist.length);
+                        const isTarget = i === targetBand;
+                        return (
+                          <g key={i}>
+                            <rect x={x} y={chartH - padBot - bH} width={barW} height={bH}
+                              fill={isTarget ? "#1e3a1e" : "#b0c4b0"} rx={2} />
+                            <text x={x + barW / 2} y={chartH - padBot + 12} textAnchor="middle" fontSize="7.5" fill={isTarget ? "#1e3a1e" : "#888"} fontWeight={isTarget ? 700 : 400}>
+                              {Math.floor(b.min_min / 60)}h{(b.min_min % 60).toString().padStart(2, "0")}
+                            </text>
+                            {b.count > 0 && <text x={x + barW / 2} y={chartH - padBot - bH - 2} textAnchor="middle" fontSize="7" fill={isTarget ? "#1e3a1e" : "#aaa"}>{b.count}</text>}
+                          </g>
+                        );
+                      })}
+                      {/* Target marker */}
+                      {targetBand >= 0 && (() => {
+                        const x = padL + targetBand * ((chartW - padL - padR) / dist.length) + barW / 2;
+                        return <text x={x} y={8} textAnchor="middle" fontSize="8" fontWeight="700" fill="#1e3a1e">▼ {targetLabel}</text>;
+                      })()}
+                    </svg>
+                  </div>
+                )}
+
+                {/* ── Halfway pacing ── */}
+                {ri.halfway_analysis && (() => {
+                  const ha = ri.halfway_analysis;
+                  const recH = Math.floor(ha.recommended_seconds / 3600);
+                  const recM = Math.floor((ha.recommended_seconds % 3600) / 60);
+                  const aggH = Math.floor(ha.aggressive_seconds / 3600);
+                  const aggM = Math.floor((ha.aggressive_seconds % 3600) / 60);
+                  const recLabel = `${recH}h ${recM.toString().padStart(2, "0")}m`;
+                  const aggLabel = `${aggH}h ${aggM.toString().padStart(2, "0")}m`;
+                  return (
+                    <div style={{ marginBottom: "24px" }}>
+                      <p style={sectionLabel}>Halfway pacing guidance — {ha.label}</p>
+                      <div style={{ background: "#f0f7f0", border: "1px solid #c8e6c9", borderRadius: "8px", padding: "14px 16px", marginBottom: "10px" }}>
+                        <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#1e3a1e", fontWeight: 700 }}>
+                          Recommended {ha.label}: {recLabel}
+                        </p>
+                        <p style={{ margin: 0, fontSize: "12px", color: "#444", lineHeight: "1.6" }}>
+                          The typical runner finishing around {targetLabel} passes halfway in {Math.round(ha.typical_ratio * 100)}% of their finish time.
+                          For your target that means approximately {recLabel}.
+                        </p>
+                      </div>
+                      <div style={{ background: "#fff8f0", border: "1px solid #ffcc80", borderRadius: "8px", padding: "12px 16px", marginBottom: "10px" }}>
+                        <p style={{ margin: "0 0 4px", fontSize: "12px", fontWeight: 700, color: "#e65100" }}>
+                          Caution: passing halfway faster than {aggLabel} is high-risk
+                        </p>
+                        <p style={{ margin: 0, fontSize: "12px", color: "#555", lineHeight: "1.5" }}>
+                          {ha.pct_positive_split}% of runners finishing around {targetLabel} had a positive split (second half slower than first).
+                          Going through halfway in under {aggLabel} — which only the fastest {15}% in this band achieved — is associated with significant fade in the second half on this course.
+                        </p>
+                      </div>
+                      <p style={{ margin: 0, fontSize: "11px", color: "#888", fontStyle: "italic" }}>
+                        Based on {ha.band_size} finishers within ±12% of your target time in {ri.latest_year}.
+                      </p>
+                    </div>
+                  );
+                })()}
+
+                {/* ── Late-race fade ── */}
+                {ri.late_analysis && (() => {
+                  const la = ri.late_analysis;
+                  return (
+                    <div style={{ marginBottom: "20px" }}>
+                      <p style={sectionLabel}>Late-race pattern — final section ({la.final_dist_note})</p>
+                      <div style={{ border: "1px solid #e0e0e0", borderRadius: "8px", padding: "14px 16px", background: "#fafafa" }}>
+                        <p style={{ margin: "0 0 8px", fontSize: "13px", color: "#333", lineHeight: "1.6" }}>
+                          For runners finishing around {targetLabel} in {ri.latest_year}, the final section ({la.final_dist_note}) took an average of <strong>{la.avg_final_section_minutes.toFixed(0)} minutes</strong> — roughly <strong>{la.avg_fade_pct.toFixed(0)}% slower</strong> than their first-half pace.
+                        </p>
+                        <p style={{ margin: 0, fontSize: "12px", color: "#555", lineHeight: "1.6" }}>
+                          {la.controlled_pct}% of runners in this band kept their final section within 15% of their first-half pace, suggesting that controlled early effort is strongly associated with a strong finish on this course.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <PageNumber n={pageNum} />
+              </div>
+            );
+          })()}
         </div>
       )}
 
