@@ -310,6 +310,61 @@ function RouteMap({ route, windSections, width = 694, height = 240 }: { route: {
   );
 }
 
+/* ── Weather insights ── */
+function generateWeatherInsights(data: WeatherDayRecord[]): { tempInsight: string; rainInsight: string } {
+  if (data.length === 0) return { tempInsight: "", rainInsight: "" };
+
+  const avgTemps   = data.map(d => ((d.temp_max_c ?? 0) + (d.temp_min_c ?? 0)) / 2);
+  const maxTemps   = data.map(d => d.temp_max_c ?? 0);
+  const minTemps   = data.map(d => d.temp_min_c ?? 0);
+  const precips    = data.map(d => d.precipitation_mm ?? 0);
+  const n = data.length;
+
+  const meanAvgTemp = avgTemps.reduce((s, t) => s + t, 0) / n;
+  const meanMax     = maxTemps.reduce((s, t) => s + t, 0) / n;
+  const meanMin     = minTemps.reduce((s, t) => s + t, 0) / n;
+  const absMax      = Math.max(...maxTemps);
+  const absMin      = Math.min(...minTemps);
+  const tempStdDev  = Math.sqrt(avgTemps.reduce((s, t) => s + (t - meanAvgTemp) ** 2, 0) / n);
+
+  const meanPrecip  = precips.reduce((s, p) => s + p, 0) / n;
+  const maxPrecip   = Math.max(...precips);
+  const wetYears    = precips.filter(p => p > 1).length;
+  const wetPct      = Math.round((wetYears / n) * 100);
+  const precipStdDev = Math.sqrt(precips.reduce((s, p) => s + (p - meanPrecip) ** 2, 0) / n);
+
+  // Temperature summary
+  let tempCondition: string;
+  if (meanAvgTemp < 5)       tempCondition = "Cold conditions are typical. Muscles will take longer to warm up — build in a proper warm-up routine and layer accordingly.";
+  else if (meanAvgTemp <= 13) tempCondition = "Near-optimal conditions for running performance. No significant heat or cold management should be needed.";
+  else if (meanAvgTemp <= 18) tempCondition = `Mild warmth (avg ${meanAvgTemp.toFixed(1)}°C) will add a modest effort penalty. Good hydration strategy will cover it without major pace changes.`;
+  else if (meanAvgTemp <= 24) tempCondition = `Warm conditions (avg ${meanAvgTemp.toFixed(1)}°C) will meaningfully increase effort. Plan for heat management — make full use of aid stations, consider pre-cooling, and expect a noticeable pace penalty.`;
+  else                        tempCondition = `Hot race conditions (avg ${meanAvgTemp.toFixed(1)}°C). Significant performance reduction expected. Aggressive cooling, early hydration, and a conservative early pace are essential.`;
+
+  let tempConsistency: string;
+  if (tempStdDev < 1.5)       tempConsistency = `Temperature is highly consistent year-to-year (±${tempStdDev.toFixed(1)}°C). The effort pace adjustments shown are a reliable guide.`;
+  else if (tempStdDev < 3.0)  tempConsistency = `Moderate year-to-year variation (±${tempStdDev.toFixed(1)}°C, range ${absMin.toFixed(0)}–${absMax.toFixed(0)}°C). Conditions are broadly predictable but check the forecast in race week.`;
+  else                        tempConsistency = `Temperature varies substantially year-to-year (±${tempStdDev.toFixed(1)}°C, ranging from ${absMin.toFixed(0)}°C to ${absMax.toFixed(0)}°C). Race-day conditions could differ significantly from the historical average — monitor the forecast closely.`;
+
+  const tempInsight = `Average high ${meanMax.toFixed(1)}°C · low ${meanMin.toFixed(1)}°C on race day. ${tempCondition} ${tempConsistency}`;
+
+  // Rainfall summary
+  let rainCondition: string;
+  if (wetPct < 30)       rainCondition = `Rain is uncommon on this date (${wetPct}% of years had measurable rainfall). Dry conditions are the norm and no specific wet-weather preparation should be required.`;
+  else if (wetPct < 60)  rainCondition = `Rain occurs in roughly ${wetPct}% of years — worth packing wet-weather kit as a precaution, but a dry race day is equally plausible.`;
+  else if (wetPct < 85)  rainCondition = `Rain is common on this date (${wetPct}% of years). Wet-weather kit, grip-focused footwear, and adjusted expectations for technical terrain are recommended.`;
+  else                   rainCondition = `Rain is very likely (${wetPct}% of years had measurable rainfall). Plan firmly for wet conditions — waterproofs, appropriate grip, and a conservative approach on slippery sections.`;
+
+  let rainConsistency: string;
+  if (precipStdDev < 3 && meanPrecip < 5)  rainConsistency = `When rain does fall it is typically light (avg ${meanPrecip.toFixed(1)} mm), so the impact on pace should be minimal.`;
+  else if (maxPrecip < 10)                  rainConsistency = `Amounts have been modest historically (max ${maxPrecip.toFixed(1)} mm), suggesting light to moderate rain rather than heavy downpours.`;
+  else                                      rainConsistency = `Rainfall is variable — the wettest recorded year for this date saw ${maxPrecip.toFixed(1)} mm. While average conditions are more moderate, a significantly wet race is a real possibility.`;
+
+  const rainInsight = `Average ${meanPrecip.toFixed(1)} mm on race day (0–${maxPrecip.toFixed(1)} mm range). ${rainCondition} ${rainConsistency}`;
+
+  return { tempInsight, rainInsight };
+}
+
 /* ── Weather chart ── */
 function WeatherChart({ data }: { data: WeatherDayRecord[] }) {
   if (data.length === 0) return null;
@@ -328,10 +383,12 @@ function WeatherChart({ data }: { data: WeatherDayRecord[] }) {
   const tempRange = Math.max(tempMax - tempMin, 10);
   const precipMax = allPrecips.length ? Math.ceil(Math.max(...allPrecips) / 5) * 5 + 5 : 20;
 
-  const tH = tempH - padTop - padBot;
-  const pHinner = precH - 4 - padBot;
+  const tH        = tempH - padTop - padBot;
+  const pyBaseline = precH - padBot;        // y of the x-axis within the precip panel
+  const pyTop      = 6;                     // top margin within precip panel
+  const pHinner    = pyBaseline - pyTop;    // usable height for bars
   const tyS = (c: number) => padTop + tH - ((c - tempMin) / tempRange) * tH;
-  const pyS = (mm: number) => (precH - 4) - (mm / precipMax) * pHinner;
+  const pyS = (mm: number) => pyBaseline - (mm / precipMax) * pHinner;
 
   const tempTicks: number[] = [];
   const tickStep = tempRange > 30 ? 10 : 5;
@@ -369,21 +426,26 @@ function WeatherChart({ data }: { data: WeatherDayRecord[] }) {
 
       {/* Precip panel */}
       <g transform={`translate(0,${tempH + gap})`}>
-        <line x1={padL} y1={0} x2={padL} y2={precH - padBot} stroke="#bbb" strokeWidth="1" />
-        <line x1={padL} y1={precH - padBot} x2={W - padR} y2={precH - padBot} stroke="#bbb" strokeWidth="1" />
-        <text x={padL - 4} y={4} textAnchor="end" fontSize="7.5" fill="#888">mm</text>
+        {/* Top gridline + max label */}
+        <line x1={padL} y1={pyTop} x2={W - padR} y2={pyTop} stroke="#eee" strokeWidth="1" />
+        <text x={padL - 4} y={pyTop + 3.5} textAnchor="end" fontSize="7.5" fill="#aaa">{precipMax}</text>
+        {/* Y-axis + baseline */}
+        <line x1={padL} y1={pyTop} x2={padL} y2={pyBaseline} stroke="#bbb" strokeWidth="1" />
+        <line x1={padL} y1={pyBaseline} x2={W - padR} y2={pyBaseline} stroke="#bbb" strokeWidth="1" />
+        {/* "mm" unit label */}
+        <text x={padL + 4} y={pyTop - 2} textAnchor="start" fontSize="7.5" fill="#888">mm</text>
         {data.map((d, i) => {
           const cx = padL + (i + 0.5) * colW;
           const mm = d.precipitation_mm ?? 0;
           const barH = Math.max((mm / precipMax) * pHinner, mm > 0 ? 2 : 0);
+          const yTop = pyS(mm);
           return (
             <g key={i}>
-              <rect x={cx - barW / 2} y={pyS(mm)} width={barW} height={barH} fill="#1565c0" opacity={0.65} rx={1} />
-              {mm > 0 && <text x={cx} y={pyS(mm) - 2} textAnchor="middle" fontSize="7" fill="#1565c0">{mm.toFixed(1)}</text>}
+              <rect x={cx - barW / 2} y={yTop} width={barW} height={barH} fill="#1565c0" opacity={0.65} rx={1} />
+              {mm > 0 && <text x={cx} y={yTop - 2} textAnchor="middle" fontSize="7" fill="#1565c0">{mm.toFixed(1)}</text>}
             </g>
           );
         })}
-        <text x={padL - 4} y={precH - padBot + 12} textAnchor="end" fontSize="7.5" fill="#888">{precipMax}</text>
       </g>
     </svg>
   );
@@ -766,7 +828,24 @@ export default function StandaloneRaceStrategyPage() {
                     ))}
                   </div>
 
-                  <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #eee" }}>
+                  {/* Insight summaries */}
+                  {(() => {
+                    const { tempInsight, rainInsight } = generateWeatherInsights(weather);
+                    return (
+                      <div style={{ marginTop: "20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                        <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "8px", padding: "14px 16px" }}>
+                          <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.05em" }}>Temperature outlook</p>
+                          <p style={{ margin: 0, fontSize: "12px", color: "#444", lineHeight: "1.6" }}>{tempInsight}</p>
+                        </div>
+                        <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "8px", padding: "14px 16px" }}>
+                          <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.05em" }}>Rainfall outlook</p>
+                          <p style={{ margin: 0, fontSize: "12px", color: "#444", lineHeight: "1.6" }}>{rainInsight}</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px solid #eee" }}>
                     <p style={{ margin: "0 0 5px", fontSize: "10px", fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>Data source</p>
                     <p style={{ margin: 0, fontSize: "10px", color: "#aaa", lineHeight: "1.5" }}>
                       Hersbach, H. et al. (2023). ERA5 hourly data on single levels from 1940 to present. Copernicus Climate Change Service (C3S) Climate Data Store (CDS). Retrieved via Open-Meteo Historical Weather API (archive-api.open-meteo.com).
