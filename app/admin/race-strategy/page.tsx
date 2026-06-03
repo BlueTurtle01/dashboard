@@ -627,7 +627,7 @@ export default function StandaloneRaceStrategyPage() {
   return (
     <main style={{ minHeight: "100vh", background: "#f9f9f9" }}>
       {/* Config panel */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e5e5e5", padding: "24px 32px", display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-end" }}>
+      <div className="no-print" style={{ background: "#fff", borderBottom: "1px solid #e5e5e5", padding: "24px 32px", display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-end" }}>
         <div>
           <div style={labelStyle}>Race</div>
           <select value={selectedRaceId} onChange={e => setSelectedRaceId(e.target.value)} style={inputStyle}>
@@ -665,7 +665,7 @@ export default function StandaloneRaceStrategyPage() {
 
       {/* A4 canvas */}
       {result && (
-        <div style={canvas}>
+        <div style={canvas} className="race-strategy-canvas">
           {/* ── Page 1: Race Strategy ── */}
           <div style={a4Page}>
             {/* Header */}
@@ -891,8 +891,9 @@ export default function StandaloneRaceStrategyPage() {
           .no-print { display: none !important; }
           .app-sidebar { display: none !important; }
           .app-topbar { display: none !important; }
-          body { margin: 0 !important; padding: 0 !important; background: #fff; }
+          body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
           .app-content { margin: 0 !important; padding: 0 !important; }
+          .race-strategy-canvas { background: #fff !important; padding: 0 !important; gap: 0 !important; }
           @page { size: A4 portrait; margin: 0; }
         }
       `}</style>
