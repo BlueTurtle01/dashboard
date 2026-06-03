@@ -57,18 +57,28 @@ function percentile(arr: number[], p: number): number {
   return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
 }
 
+// Keys that are finish times or metadata — never intermediate splits
+const NON_SPLIT_KEYS = new Set([
+  "gap", "club", "Club", "gender_total", "age_group_total",
+  "gender_position", "age_group_position",
+  // Finish time fields — ratios ≈ 1.0, should be excluded anyway but listed explicitly
+  "chip_time", "gun_time", "finish_time", "net_time", "clock_time",
+  // Very early checkpoint — ratio too low to be halfway (~0.15-0.25)
+  // pen_y and similar early splits are excluded by the fraction range check
+]);
+
 /**
  * Identifies which additional_data key contains an elapsed halfway-ish split.
- * Heuristic: the key whose values, when parsed as HH:MM:SS, are consistently
- * 30–70% of each runner's finish_seconds.
+ * Looks for a time-string key (HH:MM:SS) whose value is consistently 35–65%
+ * of each runner's finish_seconds. chip_time, gun_time, and other non-split
+ * keys are explicitly excluded.
  */
 function identifyHalfwaySplit(results: RawResult[]): string | null {
-  const sample = results.filter(r => r.additional_data).slice(0, 100);
+  const sample = results.filter(r => r.additional_data).slice(0, 150);
   if (sample.length === 0) return null;
 
   const keys = Object.keys(sample[0].additional_data ?? {}).filter(
-    k => !["gap", "club", "Club", "gender_total", "age_group_total",
-            "gender_position", "age_group_position"].includes(k)
+    k => !NON_SPLIT_KEYS.has(k)
   );
 
   let bestKey: string | null = null;
@@ -82,7 +92,9 @@ function identifyHalfwaySplit(results: RawResult[]): string | null {
       const secs = parseTimeHMS(raw);
       if (secs === null || r.finish_seconds <= 0) continue;
       const frac = secs / r.finish_seconds;
-      if (frac > 0.30 && frac < 0.70) fractions.push(frac);
+      // Tighter range (0.35–0.65) to exclude early checkpoints like Pen y Pass (~0.15)
+      // and late splits (>0.65)
+      if (frac >= 0.35 && frac <= 0.65) fractions.push(frac);
     }
     const score = fractions.length;
     if (score > bestScore) { bestScore = score; bestKey = key; }
@@ -92,16 +104,15 @@ function identifyHalfwaySplit(results: RawResult[]): string | null {
 }
 
 /**
- * Identifies the latest elapsed split (closest to, but before, the finish).
- * Used for late-race fade analysis.
+ * Identifies the latest elapsed intermediate split (0.65–0.95 of finish time).
+ * chip_time and gun_time are explicitly excluded.
  */
 function identifyLateSplit(results: RawResult[], halfwayKey: string | null): string | null {
-  const sample = results.filter(r => r.additional_data).slice(0, 100);
+  const sample = results.filter(r => r.additional_data).slice(0, 150);
   if (sample.length === 0) return null;
 
   const keys = Object.keys(sample[0].additional_data ?? {}).filter(
-    k => !["gap", "club", "Club", "gender_total", "age_group_total",
-            "gender_position", "age_group_position"].includes(k) && k !== halfwayKey
+    k => !NON_SPLIT_KEYS.has(k) && k !== halfwayKey
   );
 
   let bestKey: string | null = null;
@@ -115,7 +126,7 @@ function identifyLateSplit(results: RawResult[], halfwayKey: string | null): str
       const secs = parseTimeHMS(raw);
       if (secs === null || r.finish_seconds <= 0) continue;
       const frac = secs / r.finish_seconds;
-      if (frac > 0.70 && frac < 0.98) fractions.push(frac);
+      if (frac >= 0.65 && frac <= 0.95) fractions.push(frac);
     }
     const score = fractions.length;
     if (score > bestScore) { bestScore = score; bestKey = key; }
@@ -124,20 +135,47 @@ function identifyLateSplit(results: RawResult[], halfwayKey: string | null): str
   return bestScore > sample.length * 0.3 ? bestKey : null;
 }
 
-/** Map a numeric age to the age group label used in this race's data. */
-function mapAgeToGroup(age: number, distinctGroups: string[]): string | null {
-  const brackets = [80, 75, 70, 65, 60, 55, 50, 45, 40];
-  const bracket = brackets.find(b => age >= b) ?? 0;
+/**
+ * Maps a numeric age + gender to the age group label used in this race's data.
+ *
+ * Handles multiple naming conventions:
+ *   - Gender-prefixed: MOpen, M40, M45 … / FOpen, F35, F40, F45 …
+ *   - Generic suffixed: OPEN, 40+, 45+, 35+ …
+ *   - Veteran prefix: V40, V45 …
+ *
+ * Female veteran categories start at 35 (not 40) in many UK races.
+ * Male veteran categories start at 40.
+ */
+function mapAgeToGroup(age: number, gender: string | undefined, distinctGroups: string[]): string | null {
+  const gPrefix  = gender === "Female" ? "F" : gender === "Male" ? "M" : "";
+  const isFemale = gender === "Female";
+
+  // Female categories typically start a veteran bracket at 35; males at 40
+  const bracketStarts = isFemale
+    ? [80, 75, 70, 65, 60, 55, 50, 45, 40, 35]
+    : [80, 75, 70, 65, 60, 55, 50, 45, 40];
+
+  const bracket = bracketStarts.find(b => age >= b) ?? 0;
 
   if (bracket === 0) {
-    return distinctGroups.find(g =>
-      g === "OPEN" || g.toLowerCase() === "open" || g === "Senior" || g === "U40"
-    ) ?? null;
+    // Open category
+    const openCandidates = [
+      `${gPrefix}Open`, `${gPrefix}OPEN`,
+      "OPEN", "Open", "Senior", "U40",
+    ];
+    return distinctGroups.find(g => openCandidates.includes(g)) ?? null;
   }
 
+  // Veteran category — try gender-prefixed forms first, then generic
   const candidates = [
-    `${bracket}+`, `V${bracket}`, `${bracket}`, `${bracket}-${bracket + 4}`,
+    `${gPrefix}${bracket}`,            // "M40", "F35"
+    `${bracket}+`,                     // "40+", "35+"
+    `V${bracket}`,                     // "V40"
+    `${bracket}-${bracket + 4}`,       // "40-44"
+    `${gPrefix}${bracket}-${bracket + 4}`, // "M40-44"
+    String(bracket),                   // "40"
   ];
+
   for (const c of candidates) {
     if (distinctGroups.includes(c)) return c;
   }
@@ -228,7 +266,7 @@ export async function POST(req: NextRequest) {
 
     if (age != null) {
       const distinctGroups = [...new Set(results.map(r => r.age_group).filter(Boolean))] as string[];
-      ageGroupLabel = mapAgeToGroup(age, distinctGroups);
+      ageGroupLabel = mapAgeToGroup(age, gender, distinctGroups);
       if (ageGroupLabel && gender) {
         // Filter by both gender AND age_group for accurate category position
         const catFinishers = results.filter(r => r.gender === gender && r.age_group === ageGroupLabel);
