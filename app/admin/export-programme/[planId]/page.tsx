@@ -139,7 +139,7 @@ export default function ExportHubPage() {
             <div style={docIcon}>📋</div>
             <div style={docTitle}>Programme PDF</div>
             <div style={docDesc}>
-              The full training programme: cover page, weekly calendar overview, phase descriptions, race profile, mileage chart, race strategy, and week-by-week session detail.
+              The full training programme: cover page, weekly calendar overview, phase descriptions, race profile, mileage chart, and week-by-week session detail.
             </div>
             <div style={docAction}>Open →</div>
           </button>
@@ -153,6 +153,19 @@ export default function ExportHubPage() {
             <div style={docTitle}>Exercise Manual</div>
             <div style={docDesc}>
               A reference guide containing the description and step-by-step instructions for every exercise used in this programme. Consistent branding and page numbers for cross-referencing.
+            </div>
+            <div style={docAction}>Open →</div>
+          </button>
+
+          <button
+            type="button"
+            style={docCard}
+            onClick={() => router.push(`/admin/export-programme/${templateId}/race-strategy`)}
+          >
+            <div style={docIcon}>🗺️</div>
+            <div style={docTitle}>Race Strategy</div>
+            <div style={docDesc}>
+              Pacing plan with section targets, wind-adjusted and effort-equivalent paces, elevation & pace overlay chart, and route map with wind conditions.
             </div>
             <div style={docAction}>Open →</div>
           </button>
