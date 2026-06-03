@@ -100,33 +100,57 @@ function computeEffortPace(sec: PacingSection, windData: WindSection[]): string 
   return `${m}:${s.toString().padStart(2, "0")}/km`;
 }
 
-/* ── Temperature & precipitation effort models ── */
+/* ── Combined race-day conditions model ── */
 
 /**
- * Pace multiplier for ambient temperature, based on Ely et al. (2007).
- * Optimal range 5–13°C; penalty scales above 13°C. Mild cold penalty below 5°C.
+ * Thermal stress multiplier (Ely et al. 2007; Mantzios et al. 2021).
+ * Optimal range 5–13°C air temperature. Mild cold penalty below 5°C;
+ * heat penalty scales progressively above 13°C.
  */
 function tempMultiplier(avgTempC: number): number {
-  if (avgTempC < 5)  return Math.min(1.03, 1 + 0.003 * (5 - avgTempC));
+  if (avgTempC < 5)   return Math.min(1.03, 1 + 0.003 * (5 - avgTempC));
   if (avgTempC <= 13) return 1.0;
   return Math.min(1.20, 1 + 0.004 * (avgTempC - 13));
 }
 
 /**
- * Pace multiplier for precipitation. Light rain provides negligible effect;
- * heavier rain degrades traction and increases drag (especially on trail).
+ * Precipitation multiplier — section-type aware (Vihma 2010).
+ * Rain impacts trail conditions differently by terrain: wet steep descents
+ * cause significantly more slowdown than climbs or flat sections.
  */
-function precipMultiplier(precipMm: number): number {
-  if (precipMm < 1)  return 1.0;
-  if (precipMm < 5)  return 1 + 0.003 * precipMm;
-  if (precipMm < 20) return 1.015 + 0.002 * (precipMm - 5);
-  return 1.045;
+function precipMultiplierForSection(precipMm: number, sectionType: string): number {
+  if (precipMm < 1) return 1.0;
+  // Terrain sensitivity: descents are most affected by wet surfaces
+  const sensitivity =
+    sectionType === "steep_descent"    ? 1.8 :
+    sectionType === "runnable_descent" ? 1.4 :
+    sectionType === "gentle_descent"   ? 1.2 :
+    sectionType.includes("descent")    ? 1.3 :
+    sectionType.includes("climb")      ? 0.7 :   // uphill traction less affected
+    1.0;                                          // flat/rolling
+  const base =
+    precipMm < 5  ? 0.003 * precipMm :
+    precipMm < 20 ? 0.015 + 0.002 * (precipMm - 5) :
+    0.045;
+  return Math.min(1.15, 1 + base * sensitivity);
 }
 
-function applyMultiplierToPace(targetPace: string, multiplier: number): string | null {
-  const targetMin = parsePaceToMinutes(targetPace);
+/**
+ * Combined race-day pace: applies wind, thermal stress, and precipitation
+ * multipliers to the target pace for a given section.
+ */
+function computeRaceDayPace(
+  sec: PacingSection,
+  windData: WindSection[],
+  avgTempC: number | null,
+  avgPrecipMm: number | null,
+): string | null {
+  const targetMin = parsePaceToMinutes(sec.target_pace);
   if (targetMin === null) return null;
-  const adj = targetMin * multiplier;
+  const wMult = windData.length > 0 ? effortWindMultiplier(avgHeadwindForSection(sec, windData)) : 1;
+  const tMult = avgTempC    !== null ? tempMultiplier(avgTempC)                                   : 1;
+  const rMult = avgPrecipMm !== null ? precipMultiplierForSection(avgPrecipMm, sec.section_type)  : 1;
+  const adj = targetMin * wMult * tMult * rMult;
   const mins = Math.floor(adj);
   const secsRaw = Math.round((adj - mins) * 60);
   const s = secsRaw === 60 ? 0 : secsRaw;
@@ -135,8 +159,13 @@ function applyMultiplierToPace(targetPace: string, multiplier: number): string |
 }
 
 /* ── Checkpoint builder ── */
-interface Checkpoint { label: string; distanceKm: number; targetMinutes: number; effortMinutes: number; isHighlight: boolean; }
-function buildCheckpoints(pacing: PacingSection[], windData: WindSection[]): Checkpoint[] {
+interface Checkpoint { label: string; distanceKm: number; targetMinutes: number; raceDayMinutes: number; isHighlight: boolean; }
+function buildCheckpoints(
+  pacing: PacingSection[],
+  windData: WindSection[],
+  avgTempC: number | null,
+  avgPrecipMm: number | null,
+): Checkpoint[] {
   if (pacing.length === 0) return [];
   const totalKm = pacing[pacing.length - 1].end_km;
   const halfwayKm = totalKm / 2;
@@ -148,22 +177,25 @@ function buildCheckpoints(pacing: PacingSection[], windData: WindSection[]): Che
   }
   marks.push(totalKm);
   return marks.map(km => {
-    let tMin = 0, eMin = 0;
+    let tMin = 0, rdMin = 0;
     for (const sec of pacing) {
       if (sec.start_km >= km) break;
       const dist = Math.min(sec.end_km, km) - sec.start_km;
       const tPace = parsePaceToMinutes(sec.target_pace);
       if (tPace !== null) {
         tMin += dist * tPace;
-        if (windData.length > 0) eMin += dist * tPace * effortWindMultiplier(avgHeadwindForSection(sec, windData));
+        const wMult = windData.length > 0 ? effortWindMultiplier(avgHeadwindForSection(sec, windData)) : 1;
+        const tMult = avgTempC    !== null ? tempMultiplier(avgTempC)                                   : 1;
+        const rMult = avgPrecipMm !== null ? precipMultiplierForSection(avgPrecipMm, sec.section_type)  : 1;
+        rdMin += dist * tPace * wMult * tMult * rMult;
       }
     }
-    const isFinish = km >= totalKm - 0.01;
+    const isFinish  = km >= totalKm - 0.01;
     const isHalfway = !isFinish && Math.abs(km - halfwayKm) < 1;
     const label = isFinish ? "Finish" : isHalfway
       ? `Halfway · ${km % 1 === 0 ? km.toFixed(0) : km.toFixed(1)} km`
       : `${km % 1 === 0 ? km.toFixed(0) : km.toFixed(1)} km`;
-    return { label, distanceKm: km, targetMinutes: tMin, effortMinutes: eMin, isHighlight: isFinish || isHalfway };
+    return { label, distanceKm: km, targetMinutes: tMin, raceDayMinutes: rdMin, isHighlight: isFinish || isHalfway };
   });
 }
 
@@ -478,26 +510,36 @@ export default function StandaloneRaceStrategyPage() {
   const hasWind  = windData.length > 0;
   const pacing   = result?.pacing ?? [];
   const totalMinutes = pacing.reduce((sum, sec) => { const p = parsePaceToMinutes(sec.target_pace); return p ? sum + (sec.end_km - sec.start_km) * p : sum; }, 0);
-  const totalEffortMinutes = hasWind ? pacing.reduce((sum, sec) => { const ep = computeEffortPace(sec, windData); const epMin = ep ? parsePaceToMinutes(ep) : null; return epMin ? sum + (sec.end_km - sec.start_km) * epMin : sum; }, 0) : 0;
-  const checkpoints = buildCheckpoints(pacing, hasWind ? windData : []);
 
-  // Weather-derived averages for temp/rain effort columns
+  // Weather-derived averages
   const avgTempC = weather.length > 0
     ? weather.reduce((s, d) => s + ((d.temp_max_c ?? 0) + (d.temp_min_c ?? 0)) / 2, 0) / weather.length
     : null;
   const avgPrecipMm = weather.length > 0
     ? weather.reduce((s, d) => s + (d.precipitation_mm ?? 0), 0) / weather.length
     : null;
-  const hasTemp  = avgTempC  !== null;
+  const hasTemp  = avgTempC    !== null;
   const hasRain  = avgPrecipMm !== null;
-  const tMult    = hasTemp  ? tempMultiplier(avgTempC!)    : 1;
-  const pMult    = hasRain  ? precipMultiplier(avgPrecipMm!) : 1;
+  const hasConditions = hasWind || hasTemp || hasRain;
+
+  const totalRaceDayMinutes = hasConditions
+    ? pacing.reduce((sum, sec) => {
+        const rd = computeRaceDayPace(sec, hasWind ? windData : [], hasTemp ? avgTempC : null, hasRain ? avgPrecipMm : null);
+        const rdMin = rd ? parsePaceToMinutes(rd) : null;
+        return rdMin !== null ? sum + (sec.end_km - sec.start_km) * rdMin : sum;
+      }, 0)
+    : 0;
+
+  const checkpoints = buildCheckpoints(
+    pacing,
+    hasWind ? windData : [],
+    hasTemp ? avgTempC : null,
+    hasRain ? avgPrecipMm : null,
+  );
 
   const tableHeaders = [
     "#", "km Range", "Distance", "Section Type", "Target Pace",
-    ...(hasWind  ? ["Wind Effort"]  : []),
-    ...(hasTemp  ? ["Temp Effort"]  : []),
-    ...(hasRain  ? ["Rain Effort"]  : []),
+    ...(hasConditions ? ["Race-Day Pace"] : []),
     "Pace Band", "Section Time",
   ];
   const totalCols = tableHeaders.length;
@@ -680,14 +722,15 @@ export default function StandaloneRaceStrategyPage() {
                   const tPaceMin = parsePaceToMinutes(sec.target_pace);
                   const sectionMins = tPaceMin !== null ? dist * tPaceMin : null;
                   const rowBg = i % 2 === 0 ? "#fff" : "#fafafa";
-                  const windPace    = hasWind ? computeEffortPace(sec, windData) : null;
-                  const tempPace    = hasTemp ? applyMultiplierToPace(sec.target_pace, tMult) : null;
-                  const rainPace    = hasRain ? applyMultiplierToPace(sec.target_pace, pMult) : null;
-                  const paceColor = (pace: string | null) => {
-                    const pm = pace ? parsePaceToMinutes(pace) : null;
-                    if (pm === null || tPaceMin === null) return "#777";
-                    return pm > tPaceMin + 0.01 ? "#e65100" : pm < tPaceMin - 0.01 ? "#2e7d32" : "#777";
-                  };
+                  const raceDayPace = hasConditions
+                    ? computeRaceDayPace(sec, hasWind ? windData : [], hasTemp ? avgTempC : null, hasRain ? avgPrecipMm : null)
+                    : null;
+                  const raceDayPaceMin = raceDayPace ? parsePaceToMinutes(raceDayPace) : null;
+                  const raceDayColor = raceDayPaceMin !== null && tPaceMin !== null
+                    ? raceDayPaceMin > tPaceMin + 0.01 ? "#e65100"
+                    : raceDayPaceMin < tPaceMin - 0.01 ? "#2e7d32"
+                    : "#777"
+                    : "#777";
                   return (
                     <tr key={i} style={{ background: rowBg }}>
                       <td style={{ ...tdStyle, color: "#888" }}>{i + 1}</td>
@@ -695,9 +738,7 @@ export default function StandaloneRaceStrategyPage() {
                       <td style={tdStyle}>{dist.toFixed(1)} km</td>
                       <td style={tdStyle}>{formatSectionType(sec.section_type)}</td>
                       <td style={{ ...tdStyle, fontWeight: 600, color: "#c0392b" }}>{sec.target_pace}</td>
-                      {hasWind && <td style={{ ...tdStyle, fontWeight: 600, color: paceColor(windPace) }}>{windPace ?? "—"}</td>}
-                      {hasTemp && <td style={{ ...tdStyle, fontWeight: 600, color: paceColor(tempPace) }}>{tempPace ?? "—"}</td>}
-                      {hasRain && <td style={{ ...tdStyle, fontWeight: 600, color: paceColor(rainPace) }}>{rainPace ?? "—"}</td>}
+                      {hasConditions && <td style={{ ...tdStyle, fontWeight: 700, color: raceDayColor }}>{raceDayPace ?? "—"}</td>}
                       <td style={{ ...tdStyle, color: "#777" }}>{sec.pace_band}</td>
                       <td style={{ ...tdStyle, color: "#555" }}>{sectionMins !== null ? formatRaceTime(sectionMins) : "—"}</td>
                     </tr>
@@ -709,22 +750,10 @@ export default function StandaloneRaceStrategyPage() {
                   <td colSpan={totalCols - 1} style={{ ...tdStyle, fontWeight: 600, color: "#1e3a1e", textAlign: "right", paddingRight: "16px", borderBottom: "none" }}>Total — Target Pace</td>
                   <td style={{ ...tdStyle, fontWeight: 700, color: "#1e3a1e", borderBottom: "none" }}>{totalMinutes > 0 ? formatRaceTime(totalMinutes) : "—"}</td>
                 </tr>
-                {hasWind && totalEffortMinutes > 0 && (
+                {hasConditions && totalRaceDayMinutes > 0 && (
                   <tr style={{ background: "#fff8f5" }}>
-                    <td colSpan={totalCols - 1} style={{ ...tdStyle, fontWeight: 600, color: "#e65100", textAlign: "right", paddingRight: "16px", borderBottom: "none" }}>Total — Wind Effort</td>
-                    <td style={{ ...tdStyle, fontWeight: 700, color: "#e65100", borderBottom: "none" }}>{formatRaceTime(totalEffortMinutes)}</td>
-                  </tr>
-                )}
-                {hasTemp && totalMinutes > 0 && (
-                  <tr style={{ background: "#fff8f5" }}>
-                    <td colSpan={totalCols - 1} style={{ ...tdStyle, fontWeight: 600, color: "#e65100", textAlign: "right", paddingRight: "16px", borderBottom: "none" }}>Total — Temp Effort</td>
-                    <td style={{ ...tdStyle, fontWeight: 700, color: "#e65100", borderBottom: "none" }}>{formatRaceTime(totalMinutes * tMult)}</td>
-                  </tr>
-                )}
-                {hasRain && totalMinutes > 0 && (
-                  <tr style={{ background: "#fff8f5" }}>
-                    <td colSpan={totalCols - 1} style={{ ...tdStyle, fontWeight: 600, color: "#e65100", textAlign: "right", paddingRight: "16px", borderBottom: "none" }}>Total — Rain Effort</td>
-                    <td style={{ ...tdStyle, fontWeight: 700, color: "#e65100", borderBottom: "none" }}>{formatRaceTime(totalMinutes * pMult)}</td>
+                    <td colSpan={totalCols - 1} style={{ ...tdStyle, fontWeight: 600, color: "#e65100", textAlign: "right", paddingRight: "16px", borderBottom: "none" }}>Total — Race-Day Pace</td>
+                    <td style={{ ...tdStyle, fontWeight: 700, color: "#e65100", borderBottom: "none" }}>{formatRaceTime(totalRaceDayMinutes)}</td>
                   </tr>
                 )}
               </tfoot>
@@ -739,9 +768,7 @@ export default function StandaloneRaceStrategyPage() {
                     <tr>
                       <th style={{ ...thStyle, minWidth: "140px" }}>Point</th>
                       <th style={thStyle}>Target Pace</th>
-                      {hasWind && <th style={thStyle}>Wind Effort</th>}
-                      {hasTemp && <th style={thStyle}>Temp Effort</th>}
-                      {hasRain && <th style={thStyle}>Rain Effort</th>}
+                      {hasConditions && <th style={thStyle}>Race-Day Pace</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -749,9 +776,7 @@ export default function StandaloneRaceStrategyPage() {
                       <tr key={i} style={{ background: cp.isHighlight ? "#f0f7f0" : i % 2 === 0 ? "#fff" : "#fafafa" }}>
                         <td style={{ ...tdStyle, fontWeight: cp.isHighlight ? 700 : 400, color: cp.isHighlight ? "#1e3a1e" : "#333" }}>{cp.label}</td>
                         <td style={{ ...tdStyle, fontWeight: 600, color: "#1e3a1e" }}>{formatRaceTime(cp.targetMinutes)}</td>
-                        {hasWind && <td style={{ ...tdStyle, fontWeight: 600, color: "#e65100" }}>{formatRaceTime(cp.effortMinutes)}</td>}
-                        {hasTemp && <td style={{ ...tdStyle, fontWeight: 600, color: "#e65100" }}>{formatRaceTime(cp.targetMinutes * tMult)}</td>}
-                        {hasRain && <td style={{ ...tdStyle, fontWeight: 600, color: "#e65100" }}>{formatRaceTime(cp.targetMinutes * pMult)}</td>}
+                        {hasConditions && <td style={{ ...tdStyle, fontWeight: 700, color: "#e65100" }}>{formatRaceTime(cp.raceDayMinutes)}</td>}
                       </tr>
                     ))}
                   </tbody>
@@ -759,28 +784,28 @@ export default function StandaloneRaceStrategyPage() {
               </div>
             )}
 
-            {/* Conditions summary note */}
-            {(hasTemp || hasRain) && (
-              <p style={{ margin: "16px 0 0", fontSize: "11px", color: "#888", fontStyle: "italic" }}>
-                Effort paces based on historical averages for this race date:{" "}
-                {hasTemp && `avg temperature ${avgTempC!.toFixed(1)}°C`}
-                {hasTemp && hasRain && " · "}
-                {hasRain && `avg rainfall ${avgPrecipMm!.toFixed(1)} mm`}
-                {". "}
-                Wind effort varies per section.
+            {/* Conditions note */}
+            {hasConditions && (
+              <p style={{ margin: "16px 0 0", fontSize: "11px", color: "#666", lineHeight: "1.6" }}>
+                <strong>Race-Day Pace</strong> combines{" "}
+                {[
+                  hasWind ? "section-specific wind resistance" : null,
+                  hasTemp ? `thermal stress (avg ${avgTempC!.toFixed(1)}°C)` : null,
+                  hasRain ? `surface conditions (avg ${avgPrecipMm!.toFixed(1)} mm rainfall, terrain-weighted)` : null,
+                ].filter(Boolean).join(", ")}.
+                {" "}Rain penalty is higher for wet descents and lower for climbs.
+                Paces are estimates — not exact predictions.
               </p>
             )}
 
             {/* Citations */}
-            {(hasWind || hasTemp || hasRain) && (
-              <div style={{ marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #eee" }}>
-                <p style={{ margin: "0 0 5px", fontSize: "10px", fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>Performance models</p>
-                {hasWind && <>
-                  <p style={{ margin: "0 0 3px", fontSize: "10px", color: "#aaa", lineHeight: "1.5" }}>Pugh, L.G.C.E. (1971). The influence of wind resistance in running and walking and the mechanical efficiency of work against horizontal or vertical forces. <em>Journal of Physiology</em>, 213(2), 255–276.</p>
-                  <p style={{ margin: "0 0 5px", fontSize: "10px", color: "#aaa", lineHeight: "1.5" }}>Davies, C.T.M. (1980). Effects of wind assistance and resistance on the forward motion of a runner. <em>Journal of Applied Physiology</em>, 48(4), 702–709.</p>
-                </>}
-                {hasTemp && <p style={{ margin: "0 0 3px", fontSize: "10px", color: "#aaa", lineHeight: "1.5" }}>Ely, M.R. et al. (2007). Impact of weather on marathon-running performance. <em>Medicine &amp; Science in Sports &amp; Exercise</em>, 39(3), 487–493.</p>}
-                {hasTemp && <p style={{ margin: "0 0 3px", fontSize: "10px", color: "#aaa", lineHeight: "1.5" }}>Vihma, T. (2010). Effects of weather on the performance of marathon runners. <em>International Journal of Biometeorology</em>, 54(3), 297–306.</p>}
+            {hasConditions && (
+              <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px solid #eee" }}>
+                <p style={{ margin: "0 0 5px", fontSize: "10px", fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>Research-informed calculations</p>
+                <p style={{ margin: "0 0 2px", fontSize: "10px", color: "#aaa", lineHeight: "1.5" }}>Our race-day pace estimates combine section-level grade-adjusted energy cost, wind exposure, thermal stress, and surface condition modelling, informed by peer-reviewed research:</p>
+                {hasWind && <p style={{ margin: "0 0 2px", fontSize: "10px", color: "#aaa", lineHeight: "1.5" }}>Pugh, L.G.C.E. (1971). The influence of wind resistance in running. <em>Journal of Physiology</em>, 213(2), 255–276. · Davies, C.T.M. (1980). Effects of wind assistance and resistance on the forward motion of a runner. <em>Journal of Applied Physiology</em>, 48(4), 702–709.</p>}
+                {hasTemp && <p style={{ margin: "0 0 2px", fontSize: "10px", color: "#aaa", lineHeight: "1.5" }}>Ely, M.R. et al. (2007). Impact of weather on marathon-running performance. <em>Medicine &amp; Science in Sports &amp; Exercise</em>, 39(3), 487–493. · Mantzios, K. et al. (2021). Effects of weather parameters on endurance running performance. <em>PMC</em>, 8677617.</p>}
+                {hasRain && <p style={{ margin: 0, fontSize: "10px", color: "#aaa", lineHeight: "1.5" }}>Vihma, T. (2010). Effects of weather on the performance of marathon runners. <em>International Journal of Biometeorology</em>, 54(3), 297–306.</p>}
               </div>
             )}
 
