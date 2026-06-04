@@ -53,7 +53,8 @@ export async function GET(req: NextRequest) {
   const rows: EntrantEntry[] = (data ?? []).map((r) => {
     const ad = r.additional_data as Record<string, string> | null;
     const club = ad?.["Club"] || ad?.["club"] || null;
-    const race = r.races as { name: string; slug: string } | null;
+    const raceRaw = r.races;
+    const race = (Array.isArray(raceRaw) ? raceRaw[0] : raceRaw) as { name: string; slug: string } | null | undefined;
     return {
       id: r.id,
       result_year: r.result_year,

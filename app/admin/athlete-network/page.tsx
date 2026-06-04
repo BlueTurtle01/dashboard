@@ -97,6 +97,12 @@ export default function AthleteNetworkPage() {
             badge="Active"
           />
           <ToolCard
+            href="/admin/athlete-network/race-paths"
+            title="Race Paths"
+            description="Common progressions between races — how many athletes did Race A before Race B, with probability and average time gap."
+            badge="Active"
+          />
+          <ToolCard
             href="#"
             title="Network Graph"
             description="Visual network showing connections between entrants across races. Coming in a future iteration."
