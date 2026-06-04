@@ -135,7 +135,7 @@ export default function AppNav() {
                   href="/admin/athlete-network"
                   className="px-3 py-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900 rounded hover:bg-zinc-50"
                 >
-                  Athlete Network
+                  Data Analysis
                 </Link>
               </>
             )}

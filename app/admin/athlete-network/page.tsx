@@ -56,7 +56,7 @@ export default function AthleteNetworkPage() {
       <div style={containerStyle}>
         <div style={headerRowStyle}>
           <div>
-            <h1 style={titleStyle}>Athlete Network</h1>
+            <h1 style={titleStyle}>Data Analysis</h1>
             <p style={subtitleStyle}>
               Probabilistic identity matching across race results. Links entrants
               who appear in multiple races using name, club, gender, and age group

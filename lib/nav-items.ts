@@ -50,7 +50,7 @@ export const NAV_ITEMS: NavItemDef[] = [
   { key: "admin_destinations",     label: "Destinations",     section: "Admin" },
   { key: "admin_config",           label: "Config",           section: "Admin" },
   { key: "admin_tools",            label: "Tools",            section: "Admin" },
-  { key: "admin_athlete_network", label: "Athlete Network",  section: "Admin" },
+  { key: "admin_athlete_network", label: "Data Analysis",    section: "Admin" },
 ];
 
 export const ALL_ROLES = ["admin", "coach", "athlete", "creator"] as const;
