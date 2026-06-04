@@ -109,6 +109,12 @@ export default function AthleteNetworkPage() {
             badge="Active"
           />
           <ToolCard
+            href="/admin/athlete-network/race-impact-all"
+            title="Impact Rankings"
+            description="Pre-compute significance tests for every race pair at once. See the top 50 pairs ranked by p-value so the most material race relationships surface immediately."
+            badge="Active"
+          />
+          <ToolCard
             href="/admin/athlete-network/race-impact"
             title="Race Impact"
             description="Statistical significance test: does completing Race A before Race B improve finish time or DNF rate? Mann-Whitney U + Fisher's exact at 95% confidence."
