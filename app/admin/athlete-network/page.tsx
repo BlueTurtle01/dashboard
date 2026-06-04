@@ -134,6 +134,18 @@ export default function AthleteNetworkPage() {
             badge="Coming soon"
             disabled
           />
+          <ToolCard
+            href="/admin/results-import"
+            title="Import Results"
+            description="Bulk upload race result CSVs and GPX files. Imported races are stored for analysis but not shown on the athlete-facing site until published."
+            badge="Active"
+          />
+          <ToolCard
+            href="/admin/raw-races"
+            title="Raw Races"
+            description="Manage imported races that are not yet published. Publish to make them athlete-facing, or link their results to an existing race entry."
+            badge="Active"
+          />
         </div>
 
         <div style={noticeStyle}>

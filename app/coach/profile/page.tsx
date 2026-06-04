@@ -149,6 +149,7 @@ export default function CoachProfilePage() {
         supabase
           .from("races")
           .select("id, name, distance_km, terrain_type, climate_type")
+          .eq("is_published", true)
           .order("name"),
         supabase
           .from("coach_completed_races")

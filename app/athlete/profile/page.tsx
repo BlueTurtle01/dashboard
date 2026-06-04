@@ -329,6 +329,7 @@ function AthleteProfileContent() {
           supabase
             .from("races")
             .select("id, name, distance_km, location, event_type, terrain_type, climate_type, race_conditions")
+            .eq("is_published", true)
             .order("name"),
           supabase
             .from("preparation_races")
@@ -760,6 +761,7 @@ function AthleteProfileContent() {
       const { data, error } = await supabase
         .from("races")
         .select("id, name, distance_km, location, event_type, terrain_type, climate_type, race_conditions")
+        .eq("is_published", true)
         .ilike("name", `%${query}%`)
         .order("name")
         .limit(10);

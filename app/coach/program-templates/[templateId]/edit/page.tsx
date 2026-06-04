@@ -2501,6 +2501,7 @@ export default function EditProgramTemplatePage() {
       const { data, error } = await supabase
         .from("races")
         .select("id, name, distance_km, terrain_type, climate_type")
+        .eq("is_published", true)
         .order("name");
 
       if (cancelled) return;

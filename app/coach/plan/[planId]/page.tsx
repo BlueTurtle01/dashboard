@@ -1149,6 +1149,7 @@ export default function PlanEditorPage() {
     const { data, error } = await supabase
       .from("races")
       .select("id, name, distance_km")
+      .eq("is_published", true)
       .or(`name.ilike.%${query}%,location.ilike.%${query}%`)
       .limit(8);
 

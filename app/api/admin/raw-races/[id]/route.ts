@@ -1,0 +1,41 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getUserRoles } from "@/lib/auth/core";
+import { createClient } from "@/lib/supabase/server";
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const roles = await getUserRoles();
+  if (!roles.includes("admin")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const supabase = await createClient();
+
+  // Safety: refuse to delete published races
+  const { data: race } = await supabase
+    .from("races")
+    .select("is_published")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!race) {
+    return NextResponse.json({ error: "Race not found" }, { status: 404 });
+  }
+  if (race.is_published) {
+    return NextResponse.json({ error: "Cannot delete a published race via this endpoint" }, { status: 409 });
+  }
+
+  // Delete results first (in case FK lacks ON DELETE CASCADE)
+  await supabase.from("race_results").delete().eq("race_id", id);
+  await supabase.from("race_result_imports").delete().eq("race_id", id);
+
+  const { error } = await supabase.from("races").delete().eq("id", id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
