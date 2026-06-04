@@ -117,6 +117,8 @@ export async function GET(req: NextRequest) {
   const firstTimeOnly = req.nextUrl.searchParams.get("first_time_only") !== "false";
   const maxYearGapRaw = req.nextUrl.searchParams.get("max_year_gap");
   const maxYearGap = maxYearGapRaw && maxYearGapRaw !== "null" ? parseInt(maxYearGapRaw, 10) : null;
+  const maxRaceCountRaw = req.nextUrl.searchParams.get("max_race_count");
+  const maxRaceCount = maxRaceCountRaw && maxRaceCountRaw !== "null" ? parseInt(maxRaceCountRaw, 10) : null;
 
   if (!race_a_id || !race_b_id) {
     return NextResponse.json(
@@ -168,9 +170,14 @@ export async function GET(req: NextRequest) {
   }));
 
   // Apply first-time-only filter if requested
-  const rows = firstTimeOnly
+  const ftRows = firstTimeOnly
     ? allRows.filter((r) => toBool(r.is_first_race_b))
     : allRows;
+
+  // Apply experience cap — exclude athletes whose total race count exceeds threshold
+  const rows = maxRaceCount === null
+    ? ftRows
+    : ftRows.filter((r) => r.athlete_race_count <= maxRaceCount);
 
   const treatment = rows.filter((r) => toBool(r.did_race_a_before));
   const control = rows.filter((r) => !toBool(r.did_race_a_before));

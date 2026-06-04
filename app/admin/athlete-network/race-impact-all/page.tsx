@@ -44,6 +44,7 @@ export default function RaceImpactAllPage() {
   const [firstTimeOnly, setFirstTimeOnly] = useState(true);
   const [minN, setMinN] = useState(5);
   const [maxYearGap, setMaxYearGap] = useState<number | null>(3);
+  const [maxRaceCount, setMaxRaceCount] = useState<number | null>(null);
   const [sigOnly, setSigOnly] = useState(false);
 
   // Sort
@@ -66,7 +67,7 @@ export default function RaceImpactAllPage() {
   async function loadCache(silent = false) {
     if (!silent) setLoadState("loading");
     try {
-      const res = await fetch(`/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}&max_year_gap=${maxYearGap ?? "null"}`);
+      const res = await fetch(`/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}&max_year_gap=${maxYearGap ?? "null"}&max_race_count=${maxRaceCount ?? "null"}`);
       const body = await res.json() as CachedResponse & { error?: string };
       if (!res.ok) { setError(body.error ?? "Failed"); return; }
       if (body.results) {
@@ -88,7 +89,7 @@ export default function RaceImpactAllPage() {
     setError("");
     try {
       const res = await fetch(
-        `/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}&max_year_gap=${maxYearGap ?? "null"}&limit=100`,
+        `/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}&max_year_gap=${maxYearGap ?? "null"}&max_race_count=${maxRaceCount ?? "null"}&limit=100`,
         { method: "POST" }
       );
       const body = await res.json() as CachedResponse & { error?: string };
@@ -191,6 +192,21 @@ export default function RaceImpactAllPage() {
                 <option value="2">2 years</option>
                 <option value="3">3 years</option>
                 <option value="5">5 years</option>
+              </select>
+            </label>
+
+            <label style={filterLabelStyle}>
+              Max experience
+              <select
+                value={maxRaceCount ?? "any"}
+                onChange={(e) => { setMaxRaceCount(e.target.value === "any" ? null : parseInt(e.target.value, 10)); setLoadState("idle"); }}
+                style={selectStyle}
+              >
+                <option value="any">Any</option>
+                <option value="3">≤ 3 races</option>
+                <option value="5">≤ 5 races</option>
+                <option value="8">≤ 8 races</option>
+                <option value="12">≤ 12 races</option>
               </select>
             </label>
 

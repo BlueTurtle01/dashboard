@@ -39,6 +39,7 @@ export default function RaceImpactPage() {
   const [raceBId, setRaceBId] = useState("");
   const [firstTimeOnly, setFirstTimeOnly] = useState(true);
   const [maxYearGap, setMaxYearGap] = useState<number | null>(3);
+  const [maxRaceCount, setMaxRaceCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RaceImpactResult | null>(null);
   const [error, setError] = useState("");
@@ -71,7 +72,7 @@ export default function RaceImpactPage() {
     setResult(null);
     try {
       const res = await fetch(
-        `/api/athlete-network/race-impact?race_a_id=${raceAId}&race_b_id=${raceBId}&first_time_only=${firstTimeOnly}&max_year_gap=${maxYearGap ?? "null"}`
+        `/api/athlete-network/race-impact?race_a_id=${raceAId}&race_b_id=${raceBId}&first_time_only=${firstTimeOnly}&max_year_gap=${maxYearGap ?? "null"}&max_race_count=${maxRaceCount ?? "null"}`
       );
       const body = await res.json();
       if (!res.ok) { setError(body.error ?? "Failed"); return; }
@@ -180,6 +181,27 @@ export default function RaceImpactPage() {
             </label>
             <span style={{ fontSize: "12px", color: "#888" }}>
               — limits treatment to athletes who did Race A recently, reducing age-decay confounding
+            </span>
+          </div>
+
+          {/* Max athlete race count */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px" }}>
+            <label style={{ fontSize: "13px", fontWeight: 600, color: "#444", display: "flex", alignItems: "center", gap: "8px" }}>
+              Max athlete experience (races in DB):
+              <select
+                value={maxRaceCount ?? "any"}
+                onChange={(e) => { setMaxRaceCount(e.target.value === "any" ? null : parseInt(e.target.value, 10)); setResult(null); }}
+                style={{ padding: "5px 8px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "13px", background: "#fafafa", cursor: "pointer" }}
+              >
+                <option value="any">Any</option>
+                <option value="3">≤ 3 races</option>
+                <option value="5">≤ 5 races</option>
+                <option value="8">≤ 8 races</option>
+                <option value="12">≤ 12 races</option>
+              </select>
+            </label>
+            <span style={{ fontSize: "12px", color: "#888" }}>
+              — caps both groups equally, removing veteran/newcomer selection bias
             </span>
           </div>
         </div>
