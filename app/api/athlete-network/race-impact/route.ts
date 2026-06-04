@@ -39,13 +39,37 @@ export interface RaceImpactResult {
     significant: boolean;
   };
   insufficient_data: boolean;
+  first_time_only_mode: boolean;
+  experience_differential: {
+    treatment_avg_races: number;
+    control_avg_races: number;
+    gap: number;
+  };
 }
 
 interface RawRow {
   result_status: string;
   finish_seconds: number | null;
   result_year: number;
-  did_race_a_before: boolean;
+  // Supabase RPC booleans can come back as boolean | number | string depending
+  // on the driver version, so we use `unknown` and coerce explicitly.
+  did_race_a_before: unknown;
+  is_first_race_b: unknown;
+  athlete_race_count: number;
+}
+
+// Supabase can return PostgreSQL BOOLEAN as JS boolean, number (0/1),
+// or string ("t"/"f"/"true"/"false") depending on the PostgREST version.
+function toBool(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") return v === "t" || v === "true" || v === "1";
+  return false;
+}
+
+function avg(arr: number[]): number {
+  if (arr.length === 0) return 0;
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
 function groupStats(rows: RawRow[], allFinishTimes: number[]): GroupStats {
@@ -57,25 +81,20 @@ function groupStats(rows: RawRow[], allFinishTimes: number[]): GroupStats {
   const n_finished = finished.length;
   const n_dnf = dnf.length;
   const dnf_rate = n > 0 ? n_dnf / n : 0;
-
   const times = finished.map((r) => r.finish_seconds!);
 
-  // Field percentile: where each finish_seconds sits in the combined finisher list
-  // (0 = fastest, 1 = slowest). Sorted ascending.
   const sortedAll = [...allFinishTimes].sort((a, b) => a - b);
   const total = sortedAll.length;
 
   const fieldPercentiles = times.map((t) => {
     if (total <= 1) return 0.5;
-    // Find position via binary search
-    let lo = 0;
-    let hi = total - 1;
+    let lo = 0, hi = total - 1;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
       if (sortedAll[mid] < t) lo = mid + 1;
       else hi = mid;
     }
-    return lo / (total - 1); // 0 = fastest, 1 = slowest
+    return lo / (total - 1);
   });
 
   return {
@@ -95,6 +114,7 @@ function groupStats(rows: RawRow[], allFinishTimes: number[]): GroupStats {
 export async function GET(req: NextRequest) {
   const race_a_id = req.nextUrl.searchParams.get("race_a_id");
   const race_b_id = req.nextUrl.searchParams.get("race_b_id");
+  const firstTimeOnly = req.nextUrl.searchParams.get("first_time_only") !== "false";
 
   if (!race_a_id || !race_b_id) {
     return NextResponse.json(
@@ -105,10 +125,7 @@ export async function GET(req: NextRequest) {
 
   const supabase = await createClient();
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
@@ -122,7 +139,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Fetch raw data from SQL function
   const { data: rawData, error: dataError } = await supabase.rpc(
     "al_race_impact_data",
     { p_race_a_id: race_a_id, p_race_b_id: race_b_id }
@@ -132,7 +148,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: dataError.message }, { status: 500 });
   }
 
-  // Fetch race names
   const { data: raceNames } = await supabase
     .from("races")
     .select("id, name")
@@ -142,12 +157,22 @@ export async function GET(req: NextRequest) {
     (raceNames ?? []).map((r: { id: string; name: string }) => [r.id, r.name])
   );
 
-  const rows = (rawData ?? []) as RawRow[];
+  // Coerce booleans explicitly — Supabase RPC can return them as various types
+  const allRows: RawRow[] = (rawData ?? []).map((r: Record<string, unknown>) => ({
+    ...r,
+    did_race_a_before: r.did_race_a_before,
+    is_first_race_b: r.is_first_race_b,
+    athlete_race_count: Number(r.athlete_race_count ?? 1),
+  }));
 
-  const treatment = rows.filter((r) => r.did_race_a_before);
-  const control = rows.filter((r) => !r.did_race_a_before);
+  // Apply first-time-only filter if requested
+  const rows = firstTimeOnly
+    ? allRows.filter((r) => toBool(r.is_first_race_b))
+    : allRows;
 
-  // Combined finisher times for field-percentile calculation
+  const treatment = rows.filter((r) => toBool(r.did_race_a_before));
+  const control = rows.filter((r) => !toBool(r.did_race_a_before));
+
   const allFinishTimes = rows
     .filter((r) => r.result_status === "FINISHED" && r.finish_seconds != null)
     .map((r) => r.finish_seconds!);
@@ -155,7 +180,10 @@ export async function GET(req: NextRequest) {
   const treatmentStats = groupStats(treatment, allFinishTimes);
   const controlStats = groupStats(control, allFinishTimes);
 
-  // Statistical tests
+  // Experience differential: avg distinct races per athlete in each group
+  const treatmentAvg = avg(treatment.map((r) => r.athlete_race_count));
+  const controlAvg = avg(control.map((r) => r.athlete_race_count));
+
   const treatmentTimes = treatment
     .filter((r) => r.result_status === "FINISHED" && r.finish_seconds != null)
     .map((r) => r.finish_seconds!);
@@ -188,6 +216,12 @@ export async function GET(req: NextRequest) {
       significant: fisherResult.pValue < 0.05,
     },
     insufficient_data: treatmentStats.n_finished < 5,
+    first_time_only_mode: firstTimeOnly,
+    experience_differential: {
+      treatment_avg_races: Math.round(treatmentAvg * 10) / 10,
+      control_avg_races: Math.round(controlAvg * 10) / 10,
+      gap: Math.round((treatmentAvg - controlAvg) * 10) / 10,
+    },
   };
 
   return NextResponse.json(result);
