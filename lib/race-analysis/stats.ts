@@ -165,6 +165,123 @@ export function fishersExactTest(a: number, b: number, c: number, d: number): Fi
   };
 }
 
+// ── Pearson correlation ───────────────────────────────────────────────────────
+
+export interface PearsonResult {
+  r: number;
+  pValue: number;
+  n: number;
+}
+
+export function pearsonCorrelation(x: number[], y: number[]): PearsonResult {
+  const n = x.length;
+  if (n !== y.length || n < 5) return { r: NaN, pValue: 1, n };
+
+  const xMean = x.reduce((s, v) => s + v, 0) / n;
+  const yMean = y.reduce((s, v) => s + v, 0) / n;
+
+  let num = 0, xVar = 0, yVar = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = x[i] - xMean;
+    const dy = y[i] - yMean;
+    num += dx * dy;
+    xVar += dx * dx;
+    yVar += dy * dy;
+  }
+
+  if (xVar === 0 || yVar === 0) return { r: NaN, pValue: 1, n };
+
+  const r = num / Math.sqrt(xVar * yVar);
+  const rClamped = Math.max(-1, Math.min(1, r));
+
+  // t-distribution approximation (two-tailed, use normal CDF for large n)
+  const t = rClamped * Math.sqrt(n - 2) / Math.sqrt(1 - rClamped * rClamped);
+  const pValue = 2 * normalCdf(-Math.abs(t));
+
+  return {
+    r: Math.round(rClamped * 10000) / 10000,
+    pValue: Math.min(1, Math.round(pValue * 10000) / 10000),
+    n,
+  };
+}
+
+// ── Linear regression (OLS) ───────────────────────────────────────────────────
+
+export interface LinearRegressionModel {
+  slope: number;
+  intercept: number;
+  rSquared: number;
+  residualSE: number;
+  xMean: number;
+  xSumSq: number;  // Σ(xi − x̄)², needed for prediction intervals
+  n: number;
+}
+
+export function linearRegression(x: number[], y: number[]): LinearRegressionModel | null {
+  const n = x.length;
+  if (n !== y.length || n < 3) return null;
+
+  const xMean = x.reduce((s, v) => s + v, 0) / n;
+  const yMean = y.reduce((s, v) => s + v, 0) / n;
+
+  let sxy = 0, sxx = 0;
+  for (let i = 0; i < n; i++) {
+    sxy += (x[i] - xMean) * (y[i] - yMean);
+    sxx += (x[i] - xMean) ** 2;
+  }
+
+  if (sxx === 0) return null;
+
+  const slope = sxy / sxx;
+  const intercept = yMean - slope * xMean;
+
+  let ssRes = 0, ssTot = 0;
+  for (let i = 0; i < n; i++) {
+    ssRes += (y[i] - (intercept + slope * x[i])) ** 2;
+    ssTot += (y[i] - yMean) ** 2;
+  }
+
+  const rSquared = ssTot > 0 ? 1 - ssRes / ssTot : 0;
+  const residualSE = n > 2 ? Math.sqrt(ssRes / (n - 2)) : 0;
+
+  return {
+    slope: Math.round(slope * 100) / 100,
+    intercept: Math.round(intercept * 100) / 100,
+    rSquared: Math.round(rSquared * 10000) / 10000,
+    residualSE: Math.round(residualSE * 100) / 100,
+    xMean: Math.round(xMean * 100) / 100,
+    xSumSq: Math.round(sxx * 100) / 100,
+    n,
+  };
+}
+
+// ── Prediction interval ───────────────────────────────────────────────────────
+//
+// 95% prediction interval for a new x value given a fitted linear regression.
+// Uses t ≈ 1.96 (valid for n > 30; slightly conservative otherwise).
+
+export interface PredictionInterval {
+  predicted: number;
+  lower: number;
+  upper: number;
+}
+
+export function predictionInterval(
+  x0: number,
+  model: LinearRegressionModel,
+  tValue = 1.96
+): PredictionInterval {
+  const { slope, intercept, residualSE, xMean, xSumSq, n } = model;
+  const predicted = intercept + slope * x0;
+  const sePred = residualSE * Math.sqrt(1 + 1 / n + (x0 - xMean) ** 2 / Math.max(xSumSq, 1e-9));
+  const margin = tValue * sePred;
+  return {
+    predicted: Math.round(predicted),
+    lower: Math.round(predicted - margin),
+    upper: Math.round(predicted + margin),
+  };
+}
+
 // ── Wilson score confidence interval ─────────────────────────────────────────
 //
 // 95% CI for a proportion (k successes out of n trials).
