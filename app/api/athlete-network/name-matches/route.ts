@@ -10,6 +10,7 @@ export interface NameMatchRow {
   distinct_years: number;
   years: number[];
   distinct_clubs: number;
+  entries_with_club: number;
   sample_club: string | null;
   gender: string | null;
   distinct_genders: number;

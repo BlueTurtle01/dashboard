@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
   const rows: EntrantEntry[] = (data ?? []).map((r) => {
     const ad = r.additional_data as Record<string, string> | null;
-    const club = ad?.["Club"] || ad?.["club"] || null;
+    const club = extractClub(ad);
     const raceRaw = r.races;
     const race = (Array.isArray(raceRaw) ? raceRaw[0] : raceRaw) as { name: string; slug: string } | null | undefined;
     return {
@@ -71,6 +71,17 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json(rows);
+}
+
+// Mirrors al_extract_club() in SQL — checks all known field name variants
+function extractClub(ad: Record<string, string> | null): string | null {
+  if (!ad) return null;
+  const keys = ["Club", "club", "Team", "team", "club_team", "club_company"];
+  for (const key of keys) {
+    const val = ad[key]?.trim();
+    if (val) return val;
+  }
+  return null;
 }
 
 function normaliseGender(g: string | null): string | null {
