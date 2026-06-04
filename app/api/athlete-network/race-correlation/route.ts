@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [dataRes, raceRes] = await Promise.all([
-    supabase.rpc("al_race_correlation_data", { p_race_id: race_id }),
+    supabase.rpc("al_race_correlation_data", { p_race_id: race_id }).range(0, 49999),
     supabase.from("races").select("name").eq("id", race_id).single(),
   ]);
 

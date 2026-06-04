@@ -105,7 +105,19 @@ export default function AthleteNetworkPage() {
           <ToolCard
             href="/admin/athlete-network/race-sequences"
             title="Trajectories"
-            description="Sequences of 2–4 races in chronological order, showing which chains of races athletes commonly progress through."
+            description="Sequences of 2+ races in chronological order, showing which chains of races athletes commonly progress through."
+            badge="Active"
+          />
+          <ToolCard
+            href="/admin/athlete-network/race-sequences-clustered"
+            title="Cluster Analysis"
+            description="GMM clustering groups athletes by career experience, then shows whether each trajectory is followed across all experience levels or only by veterans — separating genuine race relationships from experience bias."
+            badge="Active"
+          />
+          <ToolCard
+            href="/admin/athlete-network/race-correlation"
+            title="Race Correlation"
+            description="For a selected race, correlates years of running experience with finish time. Includes a target time checker: enter an athlete's experience level and goal time to see where it falls in the distribution and get a plausibility verdict."
             badge="Active"
           />
           <ToolCard
