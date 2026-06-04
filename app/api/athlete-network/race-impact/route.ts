@@ -22,6 +22,23 @@ export interface GroupStats {
   median_field_percentile: number | null;
 }
 
+export interface MatchedAnalysis {
+  n_pairs: number;
+  median_diff_seconds: number;
+  p_value: number;
+  significant: boolean;
+  match_tolerance: number;
+}
+
+export interface ExperienceStratum {
+  label: string;
+  treatment_n: number;
+  control_n: number;
+  median_diff_seconds: number;
+  p_value: number;
+  significant: boolean;
+}
+
 export interface RaceImpactResult {
   race_a_name: string;
   race_b_name: string;
@@ -45,6 +62,8 @@ export interface RaceImpactResult {
     control_avg_races: number;
     gap: number;
   };
+  matched_analysis: MatchedAnalysis | null;
+  experience_strata: ExperienceStratum[];
 }
 
 interface RawRow {
@@ -109,6 +128,83 @@ function groupStats(rows: RawRow[], allFinishTimes: number[]): GroupStats {
     median_field_percentile:
       fieldPercentiles.length > 0 ? median(fieldPercentiles) : null,
   };
+}
+
+// Greedy 1:1 nearest-neighbour matching on athlete_race_count.
+// Each treatment athlete is paired with the closest unmatched control
+// athlete whose race count is within maxGap.
+function greedyMatch(
+  treatment: RawRow[],
+  control: RawRow[],
+  maxGap = 2
+): MatchedAnalysis | null {
+  const used = new Set<number>();
+  const treatTimes: number[] = [];
+  const ctrlTimes: number[] = [];
+
+  for (const t of treatment) {
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < control.length; i++) {
+      if (used.has(i)) continue;
+      const d = Math.abs(control[i].athlete_race_count - t.athlete_race_count);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    if (bestIdx >= 0 && bestDist <= maxGap) {
+      const tTime = t.result_status === "FINISHED" ? t.finish_seconds : null;
+      const cTime = control[bestIdx].result_status === "FINISHED" ? control[bestIdx].finish_seconds : null;
+      if (tTime != null && cTime != null) {
+        treatTimes.push(tTime);
+        ctrlTimes.push(cTime);
+      }
+      used.add(bestIdx);
+    }
+  }
+
+  const n_pairs = used.size;
+  if (n_pairs < 5 || treatTimes.length < 5) return null;
+
+  const mw = mannWhitneyU(treatTimes, ctrlTimes);
+
+  return {
+    n_pairs,
+    median_diff_seconds: mw.medianDiff,
+    p_value: mw.pValue,
+    significant: !isNaN(mw.pValue) && mw.pValue < 0.05,
+    match_tolerance: maxGap,
+  };
+}
+
+// Stratify all rows into experience buckets and run per-stratum comparisons.
+const STRATA: { label: string; min: number; max: number }[] = [
+  { label: "1–2 races",  min: 1,  max: 2  },
+  { label: "3–5 races",  min: 3,  max: 5  },
+  { label: "6–10 races", min: 6,  max: 10 },
+  { label: "11+ races",  min: 11, max: Infinity },
+];
+
+function stratifyByExperience(treatment: RawRow[], control: RawRow[]): ExperienceStratum[] {
+  return STRATA.map(({ label, min, max }) => {
+    const tRows = treatment.filter(r => r.athlete_race_count >= min && r.athlete_race_count <= max);
+    const cRows = control.filter(r => r.athlete_race_count >= min && r.athlete_race_count <= max);
+
+    const tTimes = tRows.filter(r => r.result_status === "FINISHED" && r.finish_seconds != null).map(r => r.finish_seconds!);
+    const cTimes = cRows.filter(r => r.result_status === "FINISHED" && r.finish_seconds != null).map(r => r.finish_seconds!);
+
+    if (tTimes.length < 3 || cTimes.length < 3) {
+      return { label, treatment_n: tRows.length, control_n: cRows.length, median_diff_seconds: 0, p_value: 1, significant: false };
+    }
+
+    const mw = mannWhitneyU(tTimes, cTimes);
+    return {
+      label,
+      treatment_n: tRows.length,
+      control_n: cRows.length,
+      median_diff_seconds: mw.medianDiff,
+      p_value: isNaN(mw.pValue) ? 1 : mw.pValue,
+      significant: !isNaN(mw.pValue) && mw.pValue < 0.05,
+    };
+  }).filter(s => s.treatment_n > 0 || s.control_n > 0);
 }
 
 export async function GET(req: NextRequest) {
@@ -231,6 +327,8 @@ export async function GET(req: NextRequest) {
       control_avg_races: Math.round(controlAvg * 10) / 10,
       gap: Math.round((treatmentAvg - controlAvg) * 10) / 10,
     },
+    matched_analysis: greedyMatch(treatment, control),
+    experience_strata: stratifyByExperience(treatment, control),
   };
 
   return NextResponse.json(result);

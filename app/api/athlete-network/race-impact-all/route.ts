@@ -33,6 +33,7 @@ export interface PairImpactSummary {
   treatment_avg_races: number;
   control_avg_races: number;
   experience_gap: number;
+  experience_overlap_pct: number;
 }
 
 export interface CachedResponse {
