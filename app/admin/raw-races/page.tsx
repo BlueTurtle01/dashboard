@@ -18,6 +18,7 @@ interface PublishedRace {
   id: string;
   name: string;
   slug: string;
+  is_published: boolean;
 }
 
 interface PublishForm {
@@ -373,7 +374,7 @@ export default function RawRacesPage() {
           <input
             value={linkSearch}
             onChange={(e) => setLinkSearch(e.target.value)}
-            placeholder="Search published races…"
+            placeholder="Search races…"
             style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
           />
           <div style={{ maxHeight: 240, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 6 }}>
@@ -389,7 +390,13 @@ export default function RawRacesPage() {
                   fontSize: 13,
                 }}
               >
-                {r.name} <span style={{ color: "#9ca3af", fontSize: 11 }}>{r.slug}</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {r.name}
+                  <span style={{ color: "#9ca3af", fontSize: 11 }}>{r.slug}</span>
+                  {!r.is_published && (
+                    <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#fef3c7", color: "#92400e" }}>unpublished</span>
+                  )}
+                </span>
               </div>
             ))}
             {filteredPublished.length === 0 && (

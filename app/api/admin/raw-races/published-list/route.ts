@@ -13,8 +13,8 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("races")
-    .select("id, name, slug")
-    .eq("is_published", true)
+    .select("id, name, slug, is_published")
+    .order("is_published", { ascending: false })
     .order("name", { ascending: true });
 
   if (error) {
