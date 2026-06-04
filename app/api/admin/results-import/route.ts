@@ -52,34 +52,54 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // Get-or-create races row for this (dedupSlug, raceYear) combination
+      // Resolve race by name (3-step):
+      //   1. Prefer an existing published race with the same name — links directly to the
+      //      canonical course row, matching how manually-uploaded races are stored.
+      //   2. Fall back to an existing unpublished race with the same name — two CSVs for
+      //      the same course (different years) end up under one races row; result_year on
+      //      race_results distinguishes them.
+      //   3. Create a new unpublished row with no year in the slug — correct model where
+      //      the course is the identity and the year lives on race_results.result_year.
       let raceId: string;
-      const { data: existingRace } = await supabase
+
+      const { data: publishedMatch } = await supabase
         .from("races")
         .select("id")
-        .eq("slug", parsed.dedupSlug)
-        .eq("race_year", parsed.raceYear)
+        .eq("name", parsed.raceName)
+        .eq("is_published", true)
         .maybeSingle();
 
-      if (existingRace) {
-        raceId = existingRace.id;
+      if (publishedMatch) {
+        raceId = publishedMatch.id;
       } else {
-        const { data: newRace, error: raceErr } = await supabase
+        const { data: unpublishedMatch } = await supabase
           .from("races")
-          .insert({
-            name: parsed.raceName,
-            slug: parsed.dedupSlug,
-            race_year: parsed.raceYear,
-            is_published: false,
-          })
           .select("id")
-          .single();
+          .eq("name", parsed.raceName)
+          .eq("is_published", false)
+          .maybeSingle();
 
-        if (raceErr || !newRace) {
-          results.push({ filename, error: raceErr?.message ?? "Failed to create race" });
-          continue;
+        if (unpublishedMatch) {
+          raceId = unpublishedMatch.id;
+        } else {
+          // slugify(raceName) without a year suffix — the slug is the course identity
+          const courseSlug = parsed.dedupSlug.replace(/-\d{4}$/, "");
+          const { data: newRace, error: raceErr } = await supabase
+            .from("races")
+            .insert({
+              name: parsed.raceName,
+              slug: courseSlug,
+              is_published: false,
+            })
+            .select("id")
+            .single();
+
+          if (raceErr || !newRace) {
+            results.push({ filename, error: raceErr?.message ?? "Failed to create race" });
+            continue;
+          }
+          raceId = newRace.id;
         }
-        raceId = newRace.id;
       }
 
       // Create import record
