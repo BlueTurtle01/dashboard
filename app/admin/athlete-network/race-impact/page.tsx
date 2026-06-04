@@ -38,6 +38,7 @@ export default function RaceImpactPage() {
   const [raceAId, setRaceAId] = useState("");
   const [raceBId, setRaceBId] = useState("");
   const [firstTimeOnly, setFirstTimeOnly] = useState(true);
+  const [maxYearGap, setMaxYearGap] = useState<number | null>(3);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RaceImpactResult | null>(null);
   const [error, setError] = useState("");
@@ -70,7 +71,7 @@ export default function RaceImpactPage() {
     setResult(null);
     try {
       const res = await fetch(
-        `/api/athlete-network/race-impact?race_a_id=${raceAId}&race_b_id=${raceBId}&first_time_only=${firstTimeOnly}`
+        `/api/athlete-network/race-impact?race_a_id=${raceAId}&race_b_id=${raceBId}&first_time_only=${firstTimeOnly}&max_year_gap=${maxYearGap ?? "null"}`
       );
       const body = await res.json();
       if (!res.ok) { setError(body.error ?? "Failed"); return; }
@@ -160,6 +161,27 @@ export default function RaceImpactPage() {
               </span>
             </span>
           </label>
+
+          {/* Max year gap */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "12px" }}>
+            <label style={{ fontSize: "13px", fontWeight: 600, color: "#444", display: "flex", alignItems: "center", gap: "8px" }}>
+              Max years between Race A and Race B:
+              <select
+                value={maxYearGap ?? "any"}
+                onChange={(e) => { setMaxYearGap(e.target.value === "any" ? null : parseInt(e.target.value, 10)); setResult(null); }}
+                style={{ padding: "5px 8px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "13px", background: "#fafafa", cursor: "pointer" }}
+              >
+                <option value="any">Any</option>
+                <option value="1">1 year</option>
+                <option value="2">2 years</option>
+                <option value="3">3 years</option>
+                <option value="5">5 years</option>
+              </select>
+            </label>
+            <span style={{ fontSize: "12px", color: "#888" }}>
+              — limits treatment to athletes who did Race A recently, reducing age-decay confounding
+            </span>
+          </div>
         </div>
 
         {error && <p style={errorStyle}>{error}</p>}

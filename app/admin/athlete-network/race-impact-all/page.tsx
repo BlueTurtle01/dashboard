@@ -43,6 +43,7 @@ export default function RaceImpactAllPage() {
   // Controls
   const [firstTimeOnly, setFirstTimeOnly] = useState(true);
   const [minN, setMinN] = useState(5);
+  const [maxYearGap, setMaxYearGap] = useState<number | null>(3);
   const [sigOnly, setSigOnly] = useState(false);
 
   // Sort
@@ -65,7 +66,7 @@ export default function RaceImpactAllPage() {
   async function loadCache(silent = false) {
     if (!silent) setLoadState("loading");
     try {
-      const res = await fetch(`/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}`);
+      const res = await fetch(`/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}&max_year_gap=${maxYearGap ?? "null"}`);
       const body = await res.json() as CachedResponse & { error?: string };
       if (!res.ok) { setError(body.error ?? "Failed"); return; }
       if (body.results) {
@@ -87,7 +88,7 @@ export default function RaceImpactAllPage() {
     setError("");
     try {
       const res = await fetch(
-        `/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}&limit=100`,
+        `/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}&max_year_gap=${maxYearGap ?? "null"}&limit=100`,
         { method: "POST" }
       );
       const body = await res.json() as CachedResponse & { error?: string };
@@ -176,6 +177,21 @@ export default function RaceImpactAllPage() {
                 onChange={(e) => { setFirstTimeOnly(e.target.checked); setLoadState("idle"); }}
               />
               <span>First-time Race B only</span>
+            </label>
+
+            <label style={filterLabelStyle}>
+              Max year gap
+              <select
+                value={maxYearGap ?? "any"}
+                onChange={(e) => { setMaxYearGap(e.target.value === "any" ? null : parseInt(e.target.value, 10)); setLoadState("idle"); }}
+                style={selectStyle}
+              >
+                <option value="any">Any</option>
+                <option value="1">1 year</option>
+                <option value="2">2 years</option>
+                <option value="3">3 years</option>
+                <option value="5">5 years</option>
+              </select>
             </label>
 
             <button
@@ -290,6 +306,16 @@ export default function RaceImpactAllPage() {
               <span style={{ color: "#1e7c34" }}>✓ p &lt; 0.05</span>
             </div>
           </>
+        )}
+
+        {loadState === "ready" && rows.length === 0 && (
+          <div style={emptyStateStyle}>
+            <p style={emptyTextStyle}>
+              No qualifying race pairs found. This happens when fewer than <strong>{minN}</strong> athletes
+              share results across any two races in the database. Try lowering the minimum group size,
+              or import more race results.
+            </p>
+          </div>
         )}
 
         {loadState === "idle" && !error && (

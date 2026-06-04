@@ -70,8 +70,8 @@ function fieldPctFn(sortedTimes: number[]) {
   };
 }
 
-function cacheKey(firstTimeOnly: boolean, minN: number): string {
-  return `race_impact_all:ft${firstTimeOnly ? 1 : 0}:n${minN}`;
+function cacheKey(firstTimeOnly: boolean, minN: number, maxYearGap: number | null): string {
+  return `race_impact_all:ft${firstTimeOnly ? 1 : 0}:n${minN}:gap${maxYearGap ?? "any"}`;
 }
 
 async function adminCheck(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -87,7 +87,9 @@ async function adminCheck(supabase: Awaited<ReturnType<typeof createClient>>) {
 export async function GET(req: NextRequest) {
   const firstTimeOnly = req.nextUrl.searchParams.get("first_time_only") !== "false";
   const minN = Math.max(3, Number(req.nextUrl.searchParams.get("min_n") ?? "5"));
-  const key = cacheKey(firstTimeOnly, minN);
+  const maxYearGapRaw = req.nextUrl.searchParams.get("max_year_gap");
+  const maxYearGap = maxYearGapRaw && maxYearGapRaw !== "null" ? parseInt(maxYearGapRaw, 10) : null;
+  const key = cacheKey(firstTimeOnly, minN, maxYearGap);
 
   const supabase = await createClient();
   if (!(await adminCheck(supabase))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -130,7 +132,9 @@ export async function POST(req: NextRequest) {
   const firstTimeOnly = req.nextUrl.searchParams.get("first_time_only") !== "false";
   const minN = Math.max(3, Number(req.nextUrl.searchParams.get("min_n") ?? "5"));
   const limitN = Math.min(200, Number(req.nextUrl.searchParams.get("limit") ?? "100"));
-  const key = cacheKey(firstTimeOnly, minN);
+  const maxYearGapRaw = req.nextUrl.searchParams.get("max_year_gap");
+  const maxYearGap = maxYearGapRaw && maxYearGapRaw !== "null" ? parseInt(maxYearGapRaw, 10) : null;
+  const key = cacheKey(firstTimeOnly, minN, maxYearGap);
 
   const supabase = await createClient();
   if (!(await adminCheck(supabase))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -206,7 +210,9 @@ export async function POST(req: NextRequest) {
     for (const row of raceBRows) {
       if (firstTimeOnly && row.result_year !== firstRaceBYear.get(row.full_name)) continue;
       const raceAYear = athleteFirstYear.get(row.full_name)?.get(pair.race_a_id);
-      const didBefore = raceAYear != null && raceAYear <= row.result_year;
+      const didBefore = raceAYear != null
+        && raceAYear <= row.result_year
+        && (maxYearGap === null || row.result_year - raceAYear <= maxYearGap);
       if (didBefore) treatment.push(row); else control.push(row);
     }
 

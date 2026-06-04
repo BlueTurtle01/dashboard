@@ -115,6 +115,8 @@ export async function GET(req: NextRequest) {
   const race_a_id = req.nextUrl.searchParams.get("race_a_id");
   const race_b_id = req.nextUrl.searchParams.get("race_b_id");
   const firstTimeOnly = req.nextUrl.searchParams.get("first_time_only") !== "false";
+  const maxYearGapRaw = req.nextUrl.searchParams.get("max_year_gap");
+  const maxYearGap = maxYearGapRaw && maxYearGapRaw !== "null" ? parseInt(maxYearGapRaw, 10) : null;
 
   if (!race_a_id || !race_b_id) {
     return NextResponse.json(
@@ -141,7 +143,7 @@ export async function GET(req: NextRequest) {
 
   const { data: rawData, error: dataError } = await supabase.rpc(
     "al_race_impact_data",
-    { p_race_a_id: race_a_id, p_race_b_id: race_b_id }
+    { p_race_a_id: race_a_id, p_race_b_id: race_b_id, p_max_year_gap: maxYearGap }
   );
 
   if (dataError) {
