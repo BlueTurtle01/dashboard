@@ -247,6 +247,11 @@ export async function POST(req: NextRequest) {
     const treatmentAvgRaces = avg(treatment.map((r) => athleteRaceCount.get(r.full_name)?.size ?? 1));
     const controlAvgRaces = avg(control.map((r) => athleteRaceCount.get(r.full_name)?.size ?? 1));
 
+    const matchable = treatment.filter((t) =>
+      control.some((c) => Math.abs((athleteRaceCount.get(c.full_name)?.size ?? 1) - (athleteRaceCount.get(t.full_name)?.size ?? 1)) <= 2)
+    ).length;
+    const experience_overlap_pct = treatment.length > 0 ? matchable / treatment.length : 0;
+
     results.push({
       race_a_name: pair.race_a_name,
       race_b_name: pair.race_b_name,
@@ -270,6 +275,7 @@ export async function POST(req: NextRequest) {
       treatment_avg_races: Math.round(treatmentAvgRaces * 10) / 10,
       control_avg_races: Math.round(controlAvgRaces * 10) / 10,
       experience_gap: Math.round((treatmentAvgRaces - controlAvgRaces) * 10) / 10,
+      experience_overlap_pct: Math.round(experience_overlap_pct * 1000) / 1000,
     });
   }
 
