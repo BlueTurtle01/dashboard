@@ -13,8 +13,8 @@ export interface RaceSequenceRow {
 }
 
 export async function GET(req: NextRequest) {
-  const min = Math.max(2, Math.min(4, Number(req.nextUrl.searchParams.get("min") ?? "2")));
-  const max = Math.max(min, Math.min(4, Number(req.nextUrl.searchParams.get("max") ?? "4")));
+  const min = Math.max(2, Math.min(20, Number(req.nextUrl.searchParams.get("min") ?? "2")));
+  const max = Math.max(min, Math.min(20, Number(req.nextUrl.searchParams.get("max") ?? "4")));
 
   const supabase = await createClient();
 

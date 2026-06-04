@@ -10,12 +10,22 @@ export const dynamic = "force-dynamic";
 
 type SortKey = "athlete_count" | "probability" | "path_length" | "avg_span_years";
 
-const LENGTH_LABELS: Record<number, string> = { 2: "2 races", 3: "3 races", 4: "4 races" };
-const LENGTH_COLORS: Record<number, { bg: string; color: string; border: string }> = {
-  2: { bg: "#f0f4ff", color: "#2952b3", border: "#c7d7f9" },
-  3: { bg: "#fff3e6", color: "#b85c00", border: "#fdd5a0" },
-  4: { bg: "#f2fbe6", color: "#3a7a00", border: "#c3e89a" },
-};
+const LENGTH_PALETTE = [
+  { bg: "#f0f4ff", color: "#2952b3", border: "#c7d7f9" },
+  { bg: "#fff3e6", color: "#b85c00", border: "#fdd5a0" },
+  { bg: "#f2fbe6", color: "#3a7a00", border: "#c3e89a" },
+  { bg: "#fdf4ff", color: "#7b2d8b", border: "#e8b8f5" },
+  { bg: "#fff8e1", color: "#a07000", border: "#ffe082" },
+  { bg: "#fce4ec", color: "#c62828", border: "#f48fb1" },
+  { bg: "#e0f7fa", color: "#006064", border: "#80deea" },
+  { bg: "#f3e5f5", color: "#6a1b9a", border: "#ce93d8" },
+  { bg: "#e8f5e9", color: "#1b5e20", border: "#a5d6a7" },
+  { bg: "#fafafa", color: "#444",    border: "#ccc"    },
+];
+
+function getLengthColor(length: number) {
+  return LENGTH_PALETTE[(length - 2) % LENGTH_PALETTE.length] ?? LENGTH_PALETTE[0];
+}
 
 export default function RaceSequencesPage() {
   const router = useRouter();
@@ -26,6 +36,7 @@ export default function RaceSequencesPage() {
   // Filters
   const [minLength, setMinLength] = useState(2);
   const [filterRace, setFilterRace] = useState("all");
+  const [filterEndRace, setFilterEndRace] = useState("all");
   const [minAthletes, setMinAthletes] = useState(2);
 
   // Sort
@@ -44,7 +55,7 @@ export default function RaceSequencesPage() {
         router.push("/login"); return;
       }
 
-      const res = await fetch("/api/athlete-network/race-sequences?min=2&max=4");
+      const res = await fetch("/api/athlete-network/race-sequences?min=2&max=12");
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? "Failed to load");
@@ -63,12 +74,19 @@ export default function RaceSequencesPage() {
     return ["all", ...Array.from(names).sort()];
   }, [rows]);
 
+  const endRaceNames = useMemo(() => {
+    const names = new Set<string>();
+    rows.forEach((r) => { if (r.path_names.length > 0) names.add(r.path_names[r.path_names.length - 1]); });
+    return ["all", ...Array.from(names).sort()];
+  }, [rows]);
+
   const filtered = useMemo(() => {
     let out = rows.filter(
       (r) =>
         r.path_length >= minLength &&
         r.athlete_count >= minAthletes &&
-        (filterRace === "all" || r.path_names.includes(filterRace))
+        (filterRace === "all" || r.path_names.includes(filterRace)) &&
+        (filterEndRace === "all" || r.path_names[r.path_names.length - 1] === filterEndRace)
     );
     out = [...out].sort((a, b) => {
       const av = a[sortKey], bv = b[sortKey];
@@ -76,7 +94,7 @@ export default function RaceSequencesPage() {
       return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
     });
     return out;
-  }, [rows, minLength, filterRace, minAthletes, sortKey, sortAsc]);
+  }, [rows, minLength, filterRace, filterEndRace, minAthletes, sortKey, sortAsc]);
 
   // Summary stats by length
   const byLength = useMemo(() => {
@@ -84,6 +102,11 @@ export default function RaceSequencesPage() {
     rows.forEach((r) => { counts[r.path_length] = (counts[r.path_length] ?? 0) + 1; });
     return counts;
   }, [rows]);
+
+  const allLengths = useMemo(
+    () => Object.keys(byLength).map(Number).sort((a, b) => a - b),
+    [byLength]
+  );
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc((v) => !v);
@@ -110,7 +133,7 @@ export default function RaceSequencesPage() {
               <h1 style={titleStyle}>Trajectories</h1>
             </div>
             <p style={subtitleStyle}>
-              Race sequences of 2–4 steps, ordered chronologically per athlete.
+              Race sequences of 2+ steps, ordered chronologically per athlete.
               Within the same year, pairs are canonicalised by race ID to avoid double-counting.
             </p>
           </div>
@@ -122,8 +145,8 @@ export default function RaceSequencesPage() {
         {/* Length summary chips */}
         {!loading && (
           <div style={chipsRowStyle}>
-            {([2, 3, 4] as const).map((len) => {
-              const c = LENGTH_COLORS[len];
+            {allLengths.map((len) => {
+              const c = getLengthColor(len);
               const count = byLength[len] ?? 0;
               const active = minLength === len;
               return (
@@ -138,7 +161,7 @@ export default function RaceSequencesPage() {
                     fontWeight: active ? 700 : 500,
                   }}
                 >
-                  {LENGTH_LABELS[len]}+
+                  {len} races+
                   <span style={{ ...chipCountStyle, background: active ? c.border : "#f0f0f0", color: active ? c.color : "#888" }}>
                     {count}
                   </span>
@@ -153,6 +176,14 @@ export default function RaceSequencesPage() {
 
         {/* Filters */}
         <div style={filterBarStyle}>
+          <label style={filterLabelStyle}>
+            Ends at
+            <select value={filterEndRace} onChange={(e) => setFilterEndRace(e.target.value)} style={selectStyle}>
+              {endRaceNames.map((n) => (
+                <option key={n} value={n}>{n === "all" ? "Any race" : n}</option>
+              ))}
+            </select>
+          </label>
           <label style={filterLabelStyle}>
             Contains race
             <select value={filterRace} onChange={(e) => setFilterRace(e.target.value)} style={selectStyle}>
@@ -204,7 +235,7 @@ export default function RaceSequencesPage() {
                 </thead>
                 <tbody>
                   {filtered.map((row) => {
-                    const c = LENGTH_COLORS[row.path_length] ?? LENGTH_COLORS[2];
+                    const c = getLengthColor(row.path_length);
                     return (
                       <tr key={row.path_names.join("|")} style={trStyle}>
                         <td style={tdStyle}>
