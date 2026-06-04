@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import {
-  pearsonCorrelation,
-  linearRegression,
-  percentile,
-} from "@/lib/race-analysis/stats";
+import { pearsonPValue } from "@/lib/race-analysis/stats";
 import type { LinearRegressionModel, PearsonResult } from "@/lib/race-analysis/stats";
 
 export const dynamic = "force-dynamic";
@@ -31,30 +27,30 @@ export interface RaceCorrelationResult {
   scatter: { x: number; y: number }[];
 }
 
-interface RawRow {
-  full_name: string;
-  finish_seconds: number;
-  result_year: number;
-  athlete_race_count: number;
-  experience_years: number;
-  first_race_year: number;
+interface StatsRow {
+  n_finishers: number;
+  pearson_years_r: number | null;
+  pearson_count_r: number | null;
+  reg_slope: number | null;
+  reg_intercept: number | null;
+  reg_r_squared: number | null;
+  reg_residual_se: number | null;
+  reg_x_mean: number | null;
+  reg_x_sum_sq: number | null;
+  reg_n: number;
+  bands_json: ExperienceBand[] | null;
+  scatter_json: { x: number; y: number }[] | null;
 }
-
-const BANDS: { label: string; min: number; max: number }[] = [
-  { label: "Debut (0 yr)",  min: 0,  max: 0  },
-  { label: "1–2 years",     min: 1,  max: 2  },
-  { label: "3–5 years",     min: 3,  max: 5  },
-  { label: "6–9 years",     min: 6,  max: 9  },
-  { label: "10+ years",     min: 10, max: Infinity },
-];
-
-const SCATTER_CAP = 600;
 
 export async function GET(req: NextRequest) {
   const race_id = req.nextUrl.searchParams.get("race_id");
   if (!race_id) {
     return NextResponse.json({ error: "race_id is required" }, { status: 400 });
   }
+  const genderParam = req.nextUrl.searchParams.get("gender");
+  const ageGroupParam = req.nextUrl.searchParams.get("age_group");
+  const p_gender = genderParam && genderParam !== "all" ? genderParam : null;
+  const p_age_group = ageGroupParam && ageGroupParam !== "all" ? ageGroupParam : null;
 
   const supabase = await createClient();
 
@@ -72,19 +68,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const [dataRes, raceRes] = await Promise.all([
-    supabase.rpc("al_race_correlation_data", { p_race_id: race_id }).range(0, 49999),
+  const [statsRes, raceRes] = await Promise.all([
+    supabase.rpc("al_race_correlation_stats", { p_race_id: race_id, p_gender, p_age_group }),
     supabase.from("races").select("name").eq("id", race_id).single(),
   ]);
 
-  if (dataRes.error) {
-    return NextResponse.json({ error: dataRes.error.message }, { status: 500 });
+  if (statsRes.error) {
+    return NextResponse.json({ error: statsRes.error.message }, { status: 500 });
   }
 
-  const rows = (dataRes.data ?? []) as RawRow[];
   const race_name = (raceRes.data as { name: string } | null)?.name ?? "Unknown race";
+  const row = ((statsRes.data ?? []) as StatsRow[])[0];
 
-  if (rows.length === 0) {
+  if (!row || !row.n_finishers) {
     return NextResponse.json({
       race_name,
       n: 0,
@@ -96,49 +92,48 @@ export async function GET(req: NextRequest) {
     } satisfies RaceCorrelationResult);
   }
 
-  const expYears = rows.map((r) => r.experience_years);
-  const raceCounts = rows.map((r) => Number(r.athlete_race_count));
-  const times = rows.map((r) => r.finish_seconds);
+  const n = Number(row.n_finishers);
+  const ry = row.pearson_years_r != null ? Number(row.pearson_years_r) : NaN;
+  const rc = row.pearson_count_r != null ? Number(row.pearson_count_r) : NaN;
 
-  const years_correlation = pearsonCorrelation(expYears, times);
-  const count_correlation = pearsonCorrelation(raceCounts, times);
-  const regression = linearRegression(expYears, times);
+  const years_correlation: PearsonResult = {
+    r: isFinite(ry) ? Math.round(ry * 10000) / 10000 : NaN,
+    pValue: pearsonPValue(ry, n),
+    n,
+  };
 
-  // Experience-band quantiles
-  const experience_bands: ExperienceBand[] = BANDS.map(({ label, min, max }) => {
-    const bandTimes = rows
-      .filter((r) => r.experience_years >= min && r.experience_years <= max)
-      .map((r) => r.finish_seconds);
-    if (bandTimes.length === 0) return null;
-    return {
-      label,
-      min_years: min,
-      max_years: max,
-      n: bandTimes.length,
-      p10: percentile(bandTimes, 10),
-      p25: percentile(bandTimes, 25),
-      p50: percentile(bandTimes, 50),
-      p75: percentile(bandTimes, 75),
-      p90: percentile(bandTimes, 90),
-    };
-  }).filter((b): b is ExperienceBand => b !== null && b.n >= 3);
+  const count_correlation: PearsonResult = {
+    r: isFinite(rc) ? Math.round(rc * 10000) / 10000 : NaN,
+    pValue: pearsonPValue(rc, n),
+    n,
+  };
 
-  // Scatter sample
-  let scatter = rows.map((r) => ({ x: r.experience_years, y: r.finish_seconds }));
-  if (scatter.length > SCATTER_CAP) {
-    // Deterministic shuffle using index stride
-    const stride = Math.ceil(scatter.length / SCATTER_CAP);
-    scatter = scatter.filter((_, i) => i % stride === 0).slice(0, SCATTER_CAP);
-  }
+  const regression: LinearRegressionModel | null =
+    row.reg_slope != null
+      ? {
+          slope: Number(row.reg_slope),
+          intercept: Number(row.reg_intercept),
+          rSquared: Number(row.reg_r_squared),
+          residualSE: Number(row.reg_residual_se),
+          xMean: Number(row.reg_x_mean),
+          xSumSq: Number(row.reg_x_sum_sq),
+          n: Number(row.reg_n),
+        }
+      : null;
 
   const result: RaceCorrelationResult = {
     race_name,
-    n: rows.length,
+    n,
     years_correlation,
     count_correlation,
     regression,
-    experience_bands,
-    scatter,
+    experience_bands: (row.bands_json ?? []).map((b) => ({
+      ...b,
+      n: Number(b.n),
+      p10: Number(b.p10), p25: Number(b.p25), p50: Number(b.p50),
+      p75: Number(b.p75), p90: Number(b.p90),
+    })),
+    scatter: (row.scatter_json ?? []).map((p) => ({ x: Number(p.x), y: Number(p.y) })),
   };
 
   return NextResponse.json(result);

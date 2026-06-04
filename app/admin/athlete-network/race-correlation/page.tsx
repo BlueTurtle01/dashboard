@@ -84,6 +84,11 @@ export default function RaceCorrelationPage() {
   const [racesLoading, setRacesLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Filters
+  const [filterGender, setFilterGender] = useState("all");
+  const [filterAgeGroup, setFilterAgeGroup] = useState("all");
+  const [ageGroups, setAgeGroups] = useState<string[]>([]);
+
   // Target time checker state
   const [targetExp, setTargetExp] = useState("");
   const [targetTime, setTargetTime] = useState("");
@@ -102,13 +107,38 @@ export default function RaceCorrelationPage() {
     init().catch(() => setRacesLoading(false));
   }, [router]);
 
+  // Load available age groups when race changes
+  useEffect(() => {
+    if (!selectedRaceId) { setAgeGroups([]); setFilterAgeGroup("all"); return; }
+    const supabase = createClient();
+    supabase
+      .from("race_results")
+      .select("age_group")
+      .eq("race_id", selectedRaceId)
+      .eq("result_status", "FINISHED")
+      .not("age_group", "is", null)
+      .neq("age_group", "")
+      .then(({ data }) => {
+        const unique = Array.from(new Set((data ?? []).map((r: { age_group: string }) => r.age_group)))
+          .sort((a, b) => {
+            const na = parseInt(a) || 0, nb = parseInt(b) || 0;
+            return na - nb || a.localeCompare(b);
+          });
+        setAgeGroups(unique);
+        setFilterAgeGroup("all");
+      });
+  }, [selectedRaceId]);
+
   async function analyse() {
     if (!selectedRaceId) return;
     setLoading(true);
     setError("");
     setResult(null);
     try {
-      const res = await fetch(`/api/athlete-network/race-correlation?race_id=${selectedRaceId}`);
+      const params = new URLSearchParams({ race_id: selectedRaceId });
+      if (filterGender !== "all") params.set("gender", filterGender);
+      if (filterAgeGroup !== "all") params.set("age_group", filterAgeGroup);
+      const res = await fetch(`/api/athlete-network/race-correlation?${params}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? "Failed to load");
@@ -169,12 +199,39 @@ export default function RaceCorrelationPage() {
             <select
               value={selectedRaceId}
               onChange={(e) => setSelectedRaceId(e.target.value)}
-              style={{ ...selectStyle, minWidth: "280px" }}
+              style={{ ...selectStyle, minWidth: "260px" }}
               disabled={racesLoading}
             >
               <option value="">— select a race —</option>
               {races.map((r) => (
                 <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+          </label>
+          <label style={filterLabelStyle}>
+            Gender
+            <select
+              value={filterGender}
+              onChange={(e) => setFilterGender(e.target.value)}
+              style={selectStyle}
+              disabled={!selectedRaceId}
+            >
+              <option value="all">All</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </label>
+          <label style={filterLabelStyle}>
+            Age group
+            <select
+              value={filterAgeGroup}
+              onChange={(e) => setFilterAgeGroup(e.target.value)}
+              style={selectStyle}
+              disabled={!selectedRaceId || ageGroups.length === 0}
+            >
+              <option value="all">All</option>
+              {ageGroups.map((ag) => (
+                <option key={ag} value={ag}>{ag}</option>
               ))}
             </select>
           </label>
@@ -186,6 +243,13 @@ export default function RaceCorrelationPage() {
             {loading ? "Computing…" : "Analyse"}
           </button>
         </div>
+
+        {/* Small-n warning */}
+        {result && result.n > 0 && result.n < 20 && (
+          <div style={smallNWarningStyle}>
+            Only {result.n} finisher{result.n === 1 ? "" : "s"} match this filter combination — results may not be reliable.
+          </div>
+        )}
 
         {error && <p style={errorStyle}>{error}</p>}
 
@@ -427,6 +491,11 @@ const analyseButtonStyle: React.CSSProperties = {
   background: "#2952b3", color: "#fff", fontWeight: 700, fontSize: "13px",
 };
 const errorStyle: React.CSSProperties = { color: "#b00020", marginBottom: "16px" };
+const smallNWarningStyle: React.CSSProperties = {
+  padding: "10px 16px", marginBottom: "12px", borderRadius: "8px",
+  background: "#fffde7", border: "1px solid #ffe58f",
+  fontSize: "13px", color: "#7a5c00",
+};
 const helperStyle: React.CSSProperties = { color: "#666", fontSize: "14px" };
 
 const statRowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "12px", marginBottom: "12px" };

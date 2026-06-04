@@ -173,6 +173,13 @@ export interface PearsonResult {
   n: number;
 }
 
+export function pearsonPValue(r: number, n: number): number {
+  if (!isFinite(r) || isNaN(r) || n < 5) return 1;
+  const rC = Math.max(-1, Math.min(1, r));
+  const t = rC * Math.sqrt(n - 2) / Math.sqrt(Math.max(1e-15, 1 - rC * rC));
+  return Math.min(1, Math.round(2 * normalCdf(-Math.abs(t)) * 10000) / 10000);
+}
+
 export function pearsonCorrelation(x: number[], y: number[]): PearsonResult {
   const n = x.length;
   if (n !== y.length || n < 5) return { r: NaN, pValue: 1, n };
