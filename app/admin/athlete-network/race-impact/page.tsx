@@ -382,7 +382,7 @@ export default function RaceImpactPage() {
                       {result.matched_analysis.median_diff_seconds === 0 ? "±0 min"
                         : `${result.matched_analysis.median_diff_seconds < 0 ? "−" : "+"}${Math.round(Math.abs(result.matched_analysis.median_diff_seconds) / 60)} min`}
                     </div>
-                    <div style={{ fontSize: 12, color: "#888" }}>median diff (treatment vs control)</div>
+                    <div style={{ fontSize: 12, color: "#888" }}>median diff (− = treatment faster)</div>
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 20, fontWeight: 700, color: result.matched_analysis.significant ? "#1e7c34" : "#aaa" }}>
@@ -418,7 +418,7 @@ export default function RaceImpactPage() {
                         <th style={thStyle}>Experience</th>
                         <th style={{ ...thStyle, textAlign: "right" }}>Treatment n</th>
                         <th style={{ ...thStyle, textAlign: "right" }}>Control n</th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>Median diff</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>Median diff (− = treatment faster)</th>
                         <th style={{ ...thStyle, textAlign: "right" }}>p-value</th>
                         <th style={{ ...thStyle, textAlign: "right" }}>Sig?</th>
                       </tr>

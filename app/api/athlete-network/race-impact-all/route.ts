@@ -172,7 +172,8 @@ export async function POST(req: NextRequest) {
     .in("race_id", raceIds)
     .not("full_name", "is", null)
     .neq("full_name", "")
-    .neq("full_name", "Anonymous");
+    .neq("full_name", "Anonymous")
+    .limit(100000);
 
   if (dataError) return NextResponse.json({ error: dataError.message }, { status: 500 });
 
