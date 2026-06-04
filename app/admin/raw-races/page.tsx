@@ -194,8 +194,21 @@ export default function RawRacesPage() {
     if (!confirm(`Delete "${race.name}" and all ${race.result_count.toLocaleString()} result rows? This cannot be undone.`)) return;
     setDeleteError((e) => { const next = { ...e }; delete next[race.id]; return next; });
     try {
-      const res = await fetch(`/api/admin/raw-races/${race.id}`, { method: "DELETE" });
-      const body = await res.json();
+      // First attempt — server will block if race has ≥50 results and confirm not set
+      let res = await fetch(`/api/admin/raw-races/${race.id}`, { method: "DELETE" });
+      let body = await res.json();
+
+      if (res.status === 422 && body.error === "CONFIRM_REQUIRED") {
+        // Hard second confirmation for races with significant data
+        if (!confirm(
+          `⚠️ WARNING: This will permanently delete ${body.result_count.toLocaleString()} result rows for "${body.race_name}".\n\n` +
+          `If you imported these from CSV files, you can re-import them later.\n\n` +
+          `Type OK to confirm permanent deletion.`
+        )) return;
+        res = await fetch(`/api/admin/raw-races/${race.id}?confirm=true`, { method: "DELETE" });
+        body = await res.json();
+      }
+
       if (!res.ok) throw new Error(body.error ?? "Failed");
       setRaces((prev) => prev.filter((r) => r.id !== race.id));
       setSelected((prev) => { const next = new Set(prev); next.delete(race.id); return next; });
@@ -218,8 +231,13 @@ export default function RawRacesPage() {
     await Promise.all(
       ids.map(async (id) => {
         try {
-          const res = await fetch(`/api/admin/raw-races/${id}`, { method: "DELETE" });
-          const body = await res.json();
+          let res = await fetch(`/api/admin/raw-races/${id}`, { method: "DELETE" });
+          let body = await res.json();
+          // Bulk delete always passes confirm=true — the bulk prompt already warned
+          if (res.status === 422 && body.error === "CONFIRM_REQUIRED") {
+            res = await fetch(`/api/admin/raw-races/${id}?confirm=true`, { method: "DELETE" });
+            body = await res.json();
+          }
           if (!res.ok) throw new Error(body.error ?? "Failed");
         } catch (e) {
           errors[id] = String(e);
