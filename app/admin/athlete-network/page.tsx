@@ -109,6 +109,12 @@ export default function AthleteNetworkPage() {
             badge="Active"
           />
           <ToolCard
+            href="/admin/athlete-network/race-impact"
+            title="Race Impact"
+            description="Statistical significance test: does completing Race A before Race B improve finish time or DNF rate? Mann-Whitney U + Fisher's exact at 95% confidence."
+            badge="Active"
+          />
+          <ToolCard
             href="#"
             title="Network Graph"
             description="Visual network showing connections between entrants across races. Coming in a future iteration."
