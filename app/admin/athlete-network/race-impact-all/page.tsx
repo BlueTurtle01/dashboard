@@ -66,8 +66,8 @@ export default function RaceImpactAllPage() {
     if (!silent) setLoadState("loading");
     try {
       const res = await fetch(`/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}`);
-      const body: CachedResponse = await res.json();
-      if (!res.ok) { setError((body as { error: string }).error ?? "Failed"); return; }
+      const body = await res.json() as CachedResponse & { error?: string };
+      if (!res.ok) { setError(body.error ?? "Failed"); return; }
       if (body.results) {
         setRows(body.results);
         setComputedAt(body.computed_at);
