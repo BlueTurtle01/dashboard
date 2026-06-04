@@ -103,6 +103,12 @@ export default function AthleteNetworkPage() {
             badge="Active"
           />
           <ToolCard
+            href="/admin/athlete-network/race-sequences"
+            title="Trajectories"
+            description="Sequences of 2–4 races in chronological order, showing which chains of races athletes commonly progress through."
+            badge="Active"
+          />
+          <ToolCard
             href="#"
             title="Network Graph"
             description="Visual network showing connections between entrants across races. Coming in a future iteration."

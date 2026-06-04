@@ -115,9 +115,14 @@ export default function RacePathsPage() {
               Same-year pairs are counted but flagged.
             </p>
           </div>
-          <button onClick={() => router.push("/admin/athlete-network")} style={backButtonStyle}>
-            ← Back
-          </button>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <Link href="/admin/athlete-network/race-sequences" style={sequencesButtonStyle}>
+              Longer trajectories →
+            </Link>
+            <button onClick={() => router.push("/admin/athlete-network")} style={backButtonStyle}>
+              ← Back
+            </button>
+          </div>
         </div>
 
         {/* Stat cards */}
@@ -300,6 +305,11 @@ const subtitleStyle: React.CSSProperties = { margin: "6px 0 0", color: "#555", f
 const backButtonStyle: React.CSSProperties = {
   padding: "10px 16px", border: "1px solid #ccc", borderRadius: "8px",
   background: "#fff", color: "#111", fontWeight: 600, cursor: "pointer", fontSize: "14px", whiteSpace: "nowrap",
+};
+const sequencesButtonStyle: React.CSSProperties = {
+  padding: "10px 16px", border: "1px solid #c7d7f9", borderRadius: "8px",
+  background: "#f0f4ff", color: "#2952b3", fontWeight: 600, fontSize: "14px",
+  textDecoration: "none", whiteSpace: "nowrap", display: "inline-block",
 };
 
 const statsRowStyle: React.CSSProperties = {
