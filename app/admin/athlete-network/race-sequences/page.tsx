@@ -137,9 +137,14 @@ export default function RaceSequencesPage() {
               Within the same year, pairs are canonicalised by race ID to avoid double-counting.
             </p>
           </div>
-          <button onClick={() => router.push("/admin/athlete-network/race-paths")} style={backButtonStyle}>
-            ← Race Paths
-          </button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Link href="/admin/athlete-network/race-sequences-clustered" style={clusterButtonStyle}>
+              Cluster Analysis →
+            </Link>
+            <button onClick={() => router.push("/admin/athlete-network/race-paths")} style={backButtonStyle}>
+              ← Race Paths
+            </button>
+          </div>
         </div>
 
         {/* Length summary chips */}
@@ -329,6 +334,11 @@ const subtitleStyle: React.CSSProperties = { margin: "6px 0 0", color: "#555", f
 const backButtonStyle: React.CSSProperties = {
   padding: "10px 16px", border: "1px solid #ccc", borderRadius: "8px",
   background: "#fff", color: "#111", fontWeight: 600, cursor: "pointer", fontSize: "14px", whiteSpace: "nowrap",
+};
+const clusterButtonStyle: React.CSSProperties = {
+  padding: "10px 16px", border: "1.5px solid #c7d7f9", borderRadius: "8px",
+  background: "#f0f4ff", color: "#2952b3", fontWeight: 600, fontSize: "14px",
+  whiteSpace: "nowrap", textDecoration: "none", display: "inline-flex", alignItems: "center",
 };
 
 const chipsRowStyle: React.CSSProperties = {
