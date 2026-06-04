@@ -1,10 +1,9 @@
 /**
  * POST /api/race-strategy/results
  *
- * Analyses race_results data for a given race and target finish time,
- * returning percentile context, pacing guidance from split data, and
- * late-race fade analysis. All heavy computation runs server-side so
- * the client only receives pre-digested stats.
+ * Analyses race_results data for a given race and target finish time.
+ * Uses RACE_SPLIT_CONFIGS for known races so checkpoint names and time formats
+ * are exactly right. Falls back to auto-detection for unlisted races.
  *
  * Body: { race_id, target_minutes, gender?, age? }
  */
@@ -12,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserRoles } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
+import { RACE_SPLIT_CONFIGS, type SplitInfo, type TimeFormat } from "@/lib/race-analysis/split-config";
 
 export const maxDuration = 30;
 
@@ -24,23 +24,40 @@ interface RawResult {
   additional_data: Record<string, string> | null;
 }
 
-/* ── Helpers ── */
-function parseTimeHMS(s: string): number | null {
-  const parts = s.split(":");
-  if (parts.length !== 3) return null;
-  const h = parseInt(parts[0], 10);
-  const m = parseInt(parts[1], 10);
-  const sec = parseInt(parts[2], 10);
-  if (isNaN(h) || isNaN(m) || isNaN(sec)) return null;
-  return h * 3600 + m * 60 + sec;
+export interface SplitAnalysis {
+  key: string;
+  label: string;
+  distance_km?: number;
+  role: "early" | "halfway" | "late";
+  recommended_seconds: number;       // median split time for target band
+  aggressive_seconds?: number;       // P15 (only for halfway: going faster = high risk)
+  typical_ratio: number;             // median split / finish
+  pct_positive_split?: number;       // % who went out faster than 49% of finish (halfway only)
+  band_size: number;                 // finishers within ±12% of target
 }
 
-function formatMMSS(totalSeconds: number): string {
+/* ── Time parsing ── */
+function parseElapsedTime(s: string, fmt: TimeFormat = "HH:MM:SS"): number | null {
+  const parts = s.split(":");
+  if (parts.length !== 3) return null;
+  const a = parseInt(parts[0], 10);
+  const b = parseInt(parts[1], 10);
+  const c = parseInt(parts[2], 10);
+  if (isNaN(a) || isNaN(b) || isNaN(c)) return null;
+
+  if (fmt === "MM:SS") return a * 60 + b;
+
+  // Auto-detect: if first part > 12 and last part is 0, treat as MM:SS:00
+  if (a > 12 && c === 0) return a * 60 + b;
+
+  return a * 3600 + b * 60 + c;
+}
+
+function formatHhMm(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = Math.round(totalSeconds % 60);
   if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
-  return `${m}m ${s.toString().padStart(2, "0")}s`;
+  return `${m}m`;
 }
 
 function median(arr: number[]): number {
@@ -50,146 +67,119 @@ function median(arr: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-function percentile(arr: number[], p: number): number {
+function pctile(arr: number[], p: number): number {
   if (arr.length === 0) return 0;
   const sorted = [...arr].sort((a, b) => a - b);
-  const idx = Math.floor((p / 100) * sorted.length);
-  return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
+  const idx = Math.max(0, Math.floor((p / 100) * sorted.length) - 1);
+  return sorted[idx];
 }
 
-// Keys that are finish times or metadata — never intermediate splits
+/* ── Auto-detect splits for races without config ── */
 const NON_SPLIT_KEYS = new Set([
   "gap", "club", "Club", "gender_total", "age_group_total",
   "gender_position", "age_group_position",
-  // Finish time fields — ratios ≈ 1.0, should be excluded anyway but listed explicitly
-  "chip_time", "gun_time", "finish_time", "net_time", "clock_time",
-  // Very early checkpoint — ratio too low to be halfway (~0.15-0.25)
-  // pen_y and similar early splits are excluded by the fraction range check
+  "chip_time", "gun_time", "finish_time", "net_time",
 ]);
 
-/**
- * Identifies which additional_data key contains an elapsed halfway-ish split.
- * Looks for a time-string key (HH:MM:SS) whose value is consistently 35–65%
- * of each runner's finish_seconds. chip_time, gun_time, and other non-split
- * keys are explicitly excluded.
- */
-function identifyHalfwaySplit(results: RawResult[]): string | null {
+function autoDetectSplits(results: RawResult[]): SplitInfo[] {
   const sample = results.filter(r => r.additional_data).slice(0, 150);
-  if (sample.length === 0) return null;
+  if (sample.length === 0) return [];
 
-  const keys = Object.keys(sample[0].additional_data ?? {}).filter(
-    k => !NON_SPLIT_KEYS.has(k)
-  );
-
-  let bestKey: string | null = null;
-  let bestScore = 0;
+  const keys = Object.keys(sample[0].additional_data ?? {}).filter(k => !NON_SPLIT_KEYS.has(k));
+  const detected: { key: string; medianRatio: number; score: number }[] = [];
 
   for (const key of keys) {
     const fractions: number[] = [];
     for (const r of sample) {
       const raw = r.additional_data?.[key];
-      if (!raw) continue;
-      const secs = parseTimeHMS(raw);
-      if (secs === null || r.finish_seconds <= 0) continue;
+      if (!raw || r.finish_seconds <= 0) continue;
+      const secs = parseElapsedTime(raw);
+      if (secs === null) continue;
       const frac = secs / r.finish_seconds;
-      // Tighter range (0.35–0.65) to exclude early checkpoints like Pen y Pass (~0.15)
-      // and late splits (>0.65)
-      if (frac >= 0.35 && frac <= 0.65) fractions.push(frac);
+      if (frac > 0.10 && frac < 0.95) fractions.push(frac);
     }
-    const score = fractions.length;
-    if (score > bestScore) { bestScore = score; bestKey = key; }
+    if (fractions.length > sample.length * 0.3) {
+      detected.push({ key, medianRatio: median(fractions), score: fractions.length });
+    }
   }
 
-  return bestScore > sample.length * 0.4 ? bestKey : null;
+  // Sort by median ratio → early to late
+  detected.sort((a, b) => a.medianRatio - b.medianRatio);
+
+  return detected.map(({ key, medianRatio }) => ({
+    key,
+    label: key.replace(/_/g, " "),
+    role: medianRatio < 0.40 ? "early" : medianRatio < 0.62 ? "halfway" : "late",
+  }));
 }
 
-/**
- * Identifies the latest elapsed intermediate split (0.65–0.95 of finish time).
- * chip_time and gun_time are explicitly excluded.
- */
-function identifyLateSplit(results: RawResult[], halfwayKey: string | null): string | null {
-  const sample = results.filter(r => r.additional_data).slice(0, 150);
-  if (sample.length === 0) return null;
-
-  const keys = Object.keys(sample[0].additional_data ?? {}).filter(
-    k => !NON_SPLIT_KEYS.has(k) && k !== halfwayKey
-  );
-
-  let bestKey: string | null = null;
-  let bestScore = 0;
-
-  for (const key of keys) {
-    const fractions: number[] = [];
-    for (const r of sample) {
-      const raw = r.additional_data?.[key];
-      if (!raw) continue;
-      const secs = parseTimeHMS(raw);
-      if (secs === null || r.finish_seconds <= 0) continue;
-      const frac = secs / r.finish_seconds;
-      if (frac >= 0.65 && frac <= 0.95) fractions.push(frac);
-    }
-    const score = fractions.length;
-    if (score > bestScore) { bestScore = score; bestKey = key; }
-  }
-
-  return bestScore > sample.length * 0.3 ? bestKey : null;
-}
-
-/**
- * Maps a numeric age + gender to the age group label used in this race's data.
- *
- * Handles multiple naming conventions:
- *   - Gender-prefixed: MOpen, M40, M45 … / FOpen, F35, F40, F45 …
- *   - Generic suffixed: OPEN, 40+, 45+, 35+ …
- *   - Veteran prefix: V40, V45 …
- *
- * Female veteran categories start at 35 (not 40) in many UK races.
- * Male veteran categories start at 40.
- */
+/* ── Age group mapping ── */
 function mapAgeToGroup(age: number, gender: string | undefined, distinctGroups: string[]): string | null {
   const gPrefix  = gender === "Female" ? "F" : gender === "Male" ? "M" : "";
   const isFemale = gender === "Female";
-
-  // Female categories typically start a veteran bracket at 35; males at 40
   const bracketStarts = isFemale
     ? [80, 75, 70, 65, 60, 55, 50, 45, 40, 35]
     : [80, 75, 70, 65, 60, 55, 50, 45, 40];
-
   const bracket = bracketStarts.find(b => age >= b) ?? 0;
 
   if (bracket === 0) {
-    // Open category
-    const openCandidates = [
-      `${gPrefix}Open`, `${gPrefix}OPEN`,
-      "OPEN", "Open", "Senior", "U40",
-    ];
-    return distinctGroups.find(g => openCandidates.includes(g)) ?? null;
+    return distinctGroups.find(g =>
+      [`${gPrefix}Open`, `${gPrefix}OPEN`, "OPEN", "Open", "Senior", "U40"].includes(g)
+    ) ?? null;
   }
 
-  // Veteran category — try gender-prefixed forms first, then generic
   const candidates = [
-    `${gPrefix}${bracket}`,            // "M40", "F35"
-    `${bracket}+`,                     // "40+", "35+"
-    `V${bracket}`,                     // "V40"
-    `${bracket}-${bracket + 4}`,       // "40-44"
-    `${gPrefix}${bracket}-${bracket + 4}`, // "M40-44"
-    String(bracket),                   // "40"
+    `${gPrefix}${bracket}`, `${bracket}+`, `V${bracket}`,
+    `${bracket}-${bracket + 4}`, String(bracket),
   ];
+  return candidates.find(c => distinctGroups.includes(c)) ?? null;
+}
 
-  for (const c of candidates) {
-    if (distinctGroups.includes(c)) return c;
+/* ── Per-split analysis ── */
+function analyseSplit(
+  results: RawResult[],
+  split: SplitInfo,
+  targetSecs: number,
+): SplitAnalysis | null {
+  const fmt = split.timeFormat ?? "HH:MM:SS";
+  const band = results.filter(r => {
+    const raw = r.additional_data?.[split.key];
+    if (!raw) return false;
+    return parseElapsedTime(raw, fmt) !== null &&
+      Math.abs(r.finish_seconds - targetSecs) / targetSecs < 0.12;
+  });
+
+  if (band.length < 8) return null;
+
+  const splitTimes: number[] = [];
+  const ratios: number[] = [];
+  let positiveSplits = 0;
+
+  for (const r of band) {
+    const secs = parseElapsedTime(r.additional_data![split.key], fmt);
+    if (secs === null || r.finish_seconds <= 0) continue;
+    splitTimes.push(secs);
+    const ratio = secs / r.finish_seconds;
+    ratios.push(ratio);
+    if (split.role === "halfway" && ratio < 0.49) positiveSplits++;
   }
-  return null;
+
+  if (splitTimes.length === 0) return null;
+
+  return {
+    key:                  split.key,
+    label:                split.label,
+    distance_km:          split.distance_km,
+    role:                 split.role,
+    recommended_seconds:  Math.round(median(splitTimes) / 30) * 30,  // round to 30s
+    aggressive_seconds:   split.role === "halfway" ? Math.round(pctile(splitTimes, 15) / 30) * 30 : undefined,
+    typical_ratio:        Math.round(median(ratios) * 1000) / 1000,
+    pct_positive_split:   split.role === "halfway" ? Math.round((positiveSplits / ratios.length) * 100) : undefined,
+    band_size:            band.length,
+  };
 }
 
-/** Human-readable label for a split key. */
-function splitLabel(key: string): string {
-  if (key === "13_miles") return "Halfway (13 miles)";
-  if (key === "23_miles") return "23 miles";
-  if (key.toLowerCase().includes("half")) return "Halfway";
-  return key.replace(/_/g, " ");
-}
-
+/* ── Main handler ── */
 export async function POST(req: NextRequest) {
   try {
     const roles = await getUserRoles();
@@ -198,10 +188,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = (await req.json()) as {
-      race_id?: string;
-      target_minutes?: number;
-      gender?: string;
-      age?: number;
+      race_id?: string; target_minutes?: number; gender?: string; age?: number;
     };
     const { race_id, target_minutes, gender, age } = body;
 
@@ -212,7 +199,7 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
     const targetSecs = target_minutes * 60;
 
-    // ── 1. Find latest year with meaningful result count ──────────────────────
+    // ── Latest year ──────────────────────────────────────────────────────────
     const { data: yearRows } = await supabase
       .from("race_results")
       .select("result_year")
@@ -221,12 +208,10 @@ export async function POST(req: NextRequest) {
       .order("result_year", { ascending: false })
       .limit(1);
 
-    if (!yearRows?.length) {
-      return NextResponse.json({ has_data: false });
-    }
+    if (!yearRows?.length) return NextResponse.json({ has_data: false });
     const latestYear = (yearRows[0] as { result_year: number }).result_year;
 
-    // ── 2. Fetch all finishers for that year ──────────────────────────────────
+    // ── All finishers ────────────────────────────────────────────────────────
     const { data: rawRows } = await supabase
       .from("race_results")
       .select("finish_seconds, gender, age_group, position, additional_data")
@@ -238,185 +223,120 @@ export async function POST(req: NextRequest) {
     const results = (rawRows ?? []) as RawResult[];
     if (results.length === 0) return NextResponse.json({ has_data: false });
 
-    // ── 3. Overall percentile ─────────────────────────────────────────────────
     const totalFinishers = results.length;
-    const fasterCount    = results.filter(r => r.finish_seconds < targetSecs).length;
-    const overallPos     = fasterCount + 1;
-    // "top X%" = top fraction = position / total
-    const overallTopPct  = Math.round((overallPos / totalFinishers) * 100);
 
-    // ── 4. Gender stats ───────────────────────────────────────────────────────
+    // ── Overall percentile ───────────────────────────────────────────────────
+    const fasterCount = results.filter(r => r.finish_seconds < targetSecs).length;
+    const overallPos  = fasterCount + 1;
+    const overallTopPct = Math.round((overallPos / totalFinishers) * 100);
+
+    // ── Gender stats ─────────────────────────────────────────────────────────
     let genderPosition: number | null = null;
-    let genderTotal: number | null    = null;
-    let genderTopPct: number | null   = null;
+    let genderTotal:    number | null = null;
+    let genderTopPct:   number | null = null;
 
     if (gender) {
-      const genderFinishers = results.filter(r => r.gender === gender);
-      genderTotal    = genderFinishers.length;
-      const gFaster  = genderFinishers.filter(r => r.finish_seconds < targetSecs).length;
-      genderPosition = gFaster + 1;
+      const gf = results.filter(r => r.gender === gender);
+      genderTotal    = gf.length;
+      genderPosition = gf.filter(r => r.finish_seconds < targetSecs).length + 1;
       genderTopPct   = Math.round((genderPosition / genderTotal) * 100);
     }
 
-    // ── 5. Age group stats ────────────────────────────────────────────────────
-    let ageGroupLabel: string | null    = null;
+    // ── Age group stats ──────────────────────────────────────────────────────
+    let ageGroupLabel:    string | null = null;
     let ageGroupPosition: number | null = null;
-    let ageGroupTotal: number | null    = null;
-    let ageGroupTopPct: number | null   = null;
+    let ageGroupTotal:    number | null = null;
+    let ageGroupTopPct:   number | null = null;
 
     if (age != null) {
       const distinctGroups = [...new Set(results.map(r => r.age_group).filter(Boolean))] as string[];
       ageGroupLabel = mapAgeToGroup(age, gender, distinctGroups);
-      if (ageGroupLabel && gender) {
-        // Filter by both gender AND age_group for accurate category position
-        const catFinishers = results.filter(r => r.gender === gender && r.age_group === ageGroupLabel);
-        ageGroupTotal    = catFinishers.length;
-        const catFaster  = catFinishers.filter(r => r.finish_seconds < targetSecs).length;
-        ageGroupPosition = catFaster + 1;
-        ageGroupTopPct   = Math.round((ageGroupPosition / ageGroupTotal) * 100);
-      } else if (ageGroupLabel) {
-        const catFinishers = results.filter(r => r.age_group === ageGroupLabel);
-        ageGroupTotal    = catFinishers.length;
-        const catFaster  = catFinishers.filter(r => r.finish_seconds < targetSecs).length;
-        ageGroupPosition = catFaster + 1;
+      if (ageGroupLabel) {
+        const cf = gender
+          ? results.filter(r => r.gender === gender && r.age_group === ageGroupLabel)
+          : results.filter(r => r.age_group === ageGroupLabel);
+        ageGroupTotal    = cf.length;
+        ageGroupPosition = cf.filter(r => r.finish_seconds < targetSecs).length + 1;
         ageGroupTopPct   = Math.round((ageGroupPosition / ageGroupTotal) * 100);
       }
     }
 
-    // ── 6. Identify split keys ────────────────────────────────────────────────
-    const halfwayKey = identifyHalfwaySplit(results);
-    const lateKey    = identifyLateSplit(results, halfwayKey);
+    // ── Split analysis ───────────────────────────────────────────────────────
+    const config = RACE_SPLIT_CONFIGS[race_id];
+    const splitDefs: SplitInfo[] = config?.splits ?? autoDetectSplits(results);
+    const splitAnalyses: SplitAnalysis[] = splitDefs
+      .map(s => analyseSplit(results, s, targetSecs))
+      .filter((s): s is SplitAnalysis => s !== null);
 
-    // ── 7. Halfway pacing analysis ────────────────────────────────────────────
-    let halfwayAnalysis: {
-      key: string; label: string;
-      recommended_seconds: number; aggressive_seconds: number;
-      typical_ratio: number; pct_positive_split: number; band_size: number;
-    } | null = null;
-
-    if (halfwayKey) {
-      // Band: ±12% of target finish time
-      const bandResults = results.filter(r => {
-        const halfSecs = parseTimeHMS(r.additional_data?.[halfwayKey] ?? "");
-        return halfSecs !== null &&
-          Math.abs(r.finish_seconds - targetSecs) / targetSecs < 0.12;
-      });
-
-      if (bandResults.length >= 10) {
-        const ratios: number[] = [];
-        let positiveSplits = 0;
-
-        for (const r of bandResults) {
-          const halfSecs = parseTimeHMS(r.additional_data?.[halfwayKey] ?? "");
-          if (halfSecs === null) continue;
-          const ratio = halfSecs / r.finish_seconds;
-          ratios.push(ratio);
-          // Positive split = first half faster than 49% of total (went out too hard)
-          if (ratio < 0.49) positiveSplits++;
-        }
-
-        const typicalRatio   = median(ratios);
-        const aggressiveRatio = percentile(ratios, 15); // 15th pct = went out hard
-
-        halfwayAnalysis = {
-          key: halfwayKey,
-          label: splitLabel(halfwayKey),
-          recommended_seconds: Math.round(targetSecs * typicalRatio / 60) * 60,
-          aggressive_seconds:  Math.round(targetSecs * aggressiveRatio / 60) * 60,
-          typical_ratio:       Math.round(typicalRatio * 1000) / 1000,
-          pct_positive_split:  Math.round((positiveSplits / ratios.length) * 100),
-          band_size:           bandResults.length,
-        };
-      }
-    }
-
-    // ── 8. Late-race fade analysis ────────────────────────────────────────────
+    // ── Late-race fade (between last two splits if available) ────────────────
+    const halfwaySplit = splitAnalyses.find(s => s.role === "halfway");
+    const lateSplit    = splitAnalyses.find(s => s.role === "late");
     let lateAnalysis: {
-      key: string; label: string;
-      avg_final_section_minutes: number;
-      avg_fade_pct: number;
-      controlled_pct: number;
-      final_dist_note: string;
+      from_label: string; to_label: string;
+      avg_final_minutes: number; avg_fade_pct: number; controlled_pct: number;
     } | null = null;
 
-    if (lateKey && halfwayKey) {
-      const bandResults = results.filter(r => {
-        const lateSecs = parseTimeHMS(r.additional_data?.[lateKey] ?? "");
-        return lateSecs !== null &&
-          Math.abs(r.finish_seconds - targetSecs) / targetSecs < 0.12;
-      });
+    if (halfwaySplit && lateSplit) {
+      const halfFmt = config?.splits.find(s => s.key === halfwaySplit.key)?.timeFormat ?? "HH:MM:SS";
+      const lateFmt = config?.splits.find(s => s.key === lateSplit.key)?.timeFormat ?? "HH:MM:SS";
 
-      if (bandResults.length >= 10) {
-        const finalSectionTimes: number[] = [];
+      const band = results.filter(r =>
+        r.additional_data?.[halfwaySplit.key] && r.additional_data?.[lateSplit.key] &&
+        Math.abs(r.finish_seconds - targetSecs) / targetSecs < 0.12
+      );
+
+      if (band.length >= 8) {
         const fadePcts: number[] = [];
-
-        for (const r of bandResults) {
-          const halfSecs = parseTimeHMS(r.additional_data?.[halfwayKey] ?? "");
-          const lateSecs = parseTimeHMS(r.additional_data?.[lateKey] ?? "");
-          if (halfSecs === null || lateSecs === null) continue;
-
-          const finalSecs = r.finish_seconds - lateSecs;
+        const finalMins: number[] = [];
+        for (const r of band) {
+          const lSecs = parseElapsedTime(r.additional_data![lateSplit.key], lateFmt);
+          const hSecs = parseElapsedTime(r.additional_data![halfwaySplit.key], halfFmt);
+          if (lSecs === null || hSecs === null) continue;
+          const finalSecs = r.finish_seconds - lSecs;
           if (finalSecs <= 0) continue;
-          finalSectionTimes.push(finalSecs);
-
-          // Fade = how much slower the final section is vs the pace per second across the race
-          const avgPace = r.finish_seconds; // total seconds (proxy; we care about the ratio)
-          const firstPace = halfSecs;       // first-half time
-          const finalPace = finalSecs;
-          // Expressed as: final section is X% slower than first-half pace adjusted for distance
-          // Simpler: compare final section seconds to first-half seconds as ratio
-          const lateToFirstRatio = finalPace / firstPace;
-          fadePcts.push((lateToFirstRatio - 1) * 100);
-          void avgPace;
+          finalMins.push(finalSecs / 60);
+          fadePcts.push(((finalSecs / hSecs) - 1) * 100);
         }
-
-        const avgFinalMins = median(finalSectionTimes) / 60;
-        const avgFadePct   = median(fadePcts);
-        const controlled   = fadePcts.filter(f => f < 15).length;
-        const controlledPct = Math.round((controlled / fadePcts.length) * 100);
-
-        lateAnalysis = {
-          key: lateKey,
-          label: splitLabel(lateKey),
-          avg_final_section_minutes: Math.round(avgFinalMins * 10) / 10,
-          avg_fade_pct: Math.round(avgFadePct * 10) / 10,
-          controlled_pct: controlledPct,
-          final_dist_note: `from ${splitLabel(lateKey)} to finish`,
-        };
+        if (fadePcts.length >= 5) {
+          const medFade = median(fadePcts);
+          lateAnalysis = {
+            from_label:        lateSplit.label,
+            to_label:          "finish",
+            avg_final_minutes: Math.round(median(finalMins) * 10) / 10,
+            avg_fade_pct:      Math.round(medFade * 10) / 10,
+            controlled_pct:    Math.round((fadePcts.filter(f => f < 15).length / fadePcts.length) * 100),
+          };
+        }
       }
     }
 
-    // ── 9. Finish time distribution (10 buckets) ──────────────────────────────
-    const minSecs  = results[0].finish_seconds;
-    const maxSecs  = results[results.length - 1].finish_seconds;
-    const bucketW  = (maxSecs - minSecs) / 10;
-    const distribution = Array.from({ length: 10 }, (_, i) => {
-      const lo = minSecs + i * bucketW;
-      const hi = minSecs + (i + 1) * bucketW;
-      return {
-        min_min: Math.round(lo / 60),
-        max_min: Math.round(hi / 60),
-        count: results.filter(r => r.finish_seconds >= lo && r.finish_seconds < hi).length,
-      };
-    });
+    // ── Finish distribution ──────────────────────────────────────────────────
+    const minS = results[0].finish_seconds;
+    const maxS = results[results.length - 1].finish_seconds;
+    const bw   = (maxS - minS) / 10;
+    const distribution = Array.from({ length: 10 }, (_, i) => ({
+      min_min: Math.round((minS + i * bw) / 60),
+      max_min: Math.round((minS + (i + 1) * bw) / 60),
+      count:   results.filter(r => r.finish_seconds >= minS + i * bw && r.finish_seconds < minS + (i + 1) * bw).length,
+    }));
 
     return NextResponse.json({
-      has_data:              true,
-      latest_year:           latestYear,
-      total_finishers:       totalFinishers,
-      overall_position:      overallPos,
-      overall_top_pct:       overallTopPct,
-      gender_position:       genderPosition,
-      gender_total:          genderTotal,
-      gender_top_pct:        genderTopPct,
-      age_group_label:       ageGroupLabel,
-      age_group_position:    ageGroupPosition,
-      age_group_total:       ageGroupTotal,
-      age_group_top_pct:     ageGroupTopPct,
-      halfway_analysis:      halfwayAnalysis,
-      late_analysis:         lateAnalysis,
+      has_data:           true,
+      latest_year:        latestYear,
+      total_finishers:    totalFinishers,
+      overall_position:   overallPos,
+      overall_top_pct:    overallTopPct,
+      gender_position:    genderPosition,
+      gender_total:       genderTotal,
+      gender_top_pct:     genderTopPct,
+      age_group_label:    ageGroupLabel,
+      age_group_position: ageGroupPosition,
+      age_group_total:    ageGroupTotal,
+      age_group_top_pct:  ageGroupTopPct,
+      splits:             splitAnalyses,
+      late_analysis:      lateAnalysis,
       distribution,
-      format_time:           (s: number) => formatMMSS(s),
+      format_hhmm:        formatHhMm,
     });
   } catch (err) {
     console.error("[race-strategy/results]", err);

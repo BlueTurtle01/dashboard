@@ -19,7 +19,8 @@ export type NavItemKey =
   | "admin_templates"
   | "admin_destinations"
   | "admin_config"
-  | "admin_tools";
+  | "admin_tools"
+  | "admin_athlete_network";
 
 export type NavItemDef = {
   key: NavItemKey;
@@ -49,6 +50,7 @@ export const NAV_ITEMS: NavItemDef[] = [
   { key: "admin_destinations",     label: "Destinations",     section: "Admin" },
   { key: "admin_config",           label: "Config",           section: "Admin" },
   { key: "admin_tools",            label: "Tools",            section: "Admin" },
+  { key: "admin_athlete_network", label: "Athlete Network",  section: "Admin" },
 ];
 
 export const ALL_ROLES = ["admin", "coach", "athlete", "creator"] as const;
