@@ -90,8 +90,8 @@ export default function RaceImpactAllPage() {
         `/api/athlete-network/race-impact-all?first_time_only=${firstTimeOnly}&min_n=${minN}&limit=100`,
         { method: "POST" }
       );
-      const body: CachedResponse = await res.json();
-      if (!res.ok) { setError((body as { error: string }).error ?? "Failed"); setLoadState("idle"); return; }
+      const body = await res.json() as CachedResponse & { error?: string };
+      if (!res.ok) { setError(body.error ?? "Failed"); setLoadState("idle"); return; }
       setRows(body.results ?? []);
       setComputedAt(body.computed_at);
       setIsStale(false);
