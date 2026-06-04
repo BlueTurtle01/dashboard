@@ -357,6 +357,102 @@ export default function RaceImpactPage() {
               </>
             )}
 
+            {/* ── Matched Pair Analysis ── */}
+            {result.matched_analysis && result.matched_analysis.n_pairs >= 5 && (
+              <section style={cardStyle}>
+                <h2 style={sectionTitleStyle}>Matched pair analysis</h2>
+                <p style={{ fontSize: 13, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>
+                  Each treatment athlete is paired with the closest-experience control athlete (within
+                  ±{result.matched_analysis.match_tolerance} races in DB). Running the test on matched
+                  pairs removes most of the veteran/newcomer selection bias.
+                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 32, fontWeight: 700, color: "#111" }}>
+                      {result.matched_analysis.n_pairs}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#888" }}>matched pairs</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{
+                      fontSize: 28, fontWeight: 700,
+                      color: result.matched_analysis.median_diff_seconds < -30 ? "#1e7c34"
+                           : result.matched_analysis.median_diff_seconds > 30 ? "#d46b08" : "#888"
+                    }}>
+                      {result.matched_analysis.median_diff_seconds === 0 ? "±0 min"
+                        : `${result.matched_analysis.median_diff_seconds < 0 ? "−" : "+"}${Math.round(Math.abs(result.matched_analysis.median_diff_seconds) / 60)} min`}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#888" }}>median diff (treatment vs control)</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: result.matched_analysis.significant ? "#1e7c34" : "#aaa" }}>
+                      {result.matched_analysis.significant ? "✓ Significant" : "Not significant"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#888" }}>
+                      p = {isNaN(result.matched_analysis.p_value) || result.matched_analysis.p_value >= 1
+                        ? "—"
+                        : result.matched_analysis.p_value < 0.001 ? "< 0.001"
+                        : result.matched_analysis.p_value.toFixed(3)}
+                    </div>
+                  </div>
+                </div>
+                <p style={{ fontSize: 12, color: "#888", marginTop: 16, lineHeight: 1.5 }}>
+                  {result.matched_analysis.significant
+                    ? `Athletes who completed ${result.race_a_name} finished ${result.race_b_name} significantly ${result.matched_analysis.median_diff_seconds < 0 ? "faster" : "slower"} than experience-matched athletes who had not — this is the strongest evidence available from observational data.`
+                    : `No significant difference after matching for experience level. The unmatched result is likely driven by the veteran/newcomer imbalance rather than a real effect of ${result.race_a_name}.`}
+                </p>
+              </section>
+            )}
+
+            {/* ── By Experience Level ── */}
+            {result.experience_strata && result.experience_strata.some(s => s.treatment_n > 0 && s.control_n > 0) && (
+              <section style={cardStyle}>
+                <h2 style={sectionTitleStyle}>By experience level</h2>
+                <p style={{ fontSize: 13, color: "#666", marginBottom: 12, lineHeight: 1.5 }}>
+                  Results within experience bands — consistent direction across strata is stronger evidence than a single pooled result.
+                </p>
+                <div style={tableWrapStyle}>
+                  <table style={tableStyle}>
+                    <thead>
+                      <tr>
+                        <th style={thStyle}>Experience</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>Treatment n</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>Control n</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>Median diff</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>p-value</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>Sig?</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.experience_strata.map((s) => (
+                        <tr key={s.label} style={trStyle}>
+                          <td style={tdLabelStyle}>{s.label}</td>
+                          <td style={tdNumStyle}>{s.treatment_n}</td>
+                          <td style={tdNumStyle}>{s.control_n}</td>
+                          <td style={{ ...tdNumStyle, color: s.median_diff_seconds < -30 ? "#1e7c34" : s.median_diff_seconds > 30 ? "#d46b08" : "#888" }}>
+                            {s.treatment_n < 3 || s.control_n < 3 ? "—"
+                              : s.median_diff_seconds === 0 ? "±0 min"
+                              : `${s.median_diff_seconds < 0 ? "−" : "+"}${Math.round(Math.abs(s.median_diff_seconds) / 60)} min`}
+                          </td>
+                          <td style={tdNumStyle}>
+                            {s.treatment_n < 3 || s.control_n < 3 ? "—"
+                              : s.p_value >= 1 ? "—"
+                              : s.p_value < 0.001 ? "< 0.001"
+                              : s.p_value.toFixed(3)}
+                          </td>
+                          <td style={{ ...tdNumStyle }}>
+                            {s.significant
+                              ? <span style={{ color: "#1e7c34", fontWeight: 700 }}>✓</span>
+                              : <span style={{ color: "#ccc" }}>—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
             {/* Confounding caveat */}
             <div style={cautionBoxStyle}>
               <p style={cautionTextStyle}>
