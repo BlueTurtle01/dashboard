@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .from("race_results")
     .select("id, result_year, position, bib_number, gender, age_group, result_status, finish_seconds, additional_data, races(name, slug)")
-    .eq("full_name", name)
+    .ilike("full_name", name)
     .order("result_year", { ascending: false })
     .order("position", { ascending: true, nullsFirst: false });
 
