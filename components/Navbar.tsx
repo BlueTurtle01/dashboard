@@ -432,6 +432,7 @@ export default async function Navbar() {
                     { href: "/admin/race-comparison", label: "Race Comparison" },
                     { href: "/admin/races", label: "Race Tags" },
                     { href: "/admin/athlete-network", label: "Data Analysis" },
+                    { href: "/admin/tools/athlete-similarity", label: "Athlete Similarity" },
                     { href: "/admin/results-import", label: "Import Results" },
                     { href: "/admin/raw-races", label: "Raw Races" },
                   ]}
