@@ -378,6 +378,7 @@ export default async function Navbar() {
                     { href: "/admin/support", label: "Support Tickets" },
                     { href: "/admin/support/stats", label: "Support Analytics" },
                     { href: "/admin/export-programme", label: "Export Programme" },
+                    { href: "/admin/plans", label: "Plans" },
                   ]}
                 />
               )}
@@ -407,6 +408,7 @@ export default async function Navbar() {
                   label="Destinations"
                   items={[
                     { href: "/admin/countries", label: "Countries" },
+                    { href: "/admin/events", label: "Events" },
                   ]}
                 />
               )}
@@ -436,6 +438,10 @@ export default async function Navbar() {
                     { href: "/admin/tools/athlete-similarity", label: "Athlete Similarity" },
                     { href: "/admin/results-import", label: "Import Results" },
                     { href: "/admin/raw-races", label: "Raw Races" },
+                    { href: "/admin/race-rename", label: "Race Rename" },
+                    { href: "/admin/race-pacing", label: "Race Pacing" },
+                    { href: "/admin/race-readiness", label: "Race Readiness" },
+                    { href: "/admin/preparation-races", label: "Preparation Races" },
                   ]}
                 />
               )}
