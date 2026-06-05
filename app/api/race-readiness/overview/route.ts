@@ -61,6 +61,7 @@ export interface TerrainSection {
   avg_gradient_percent: number;
   ascent_m: number;
   descent_m: number;
+  flat_equivalent_km: number;
 }
 
 export async function POST(req: NextRequest) {
@@ -179,6 +180,7 @@ export async function POST(req: NextRequest) {
       avg_gradient_percent: s.avg_gradient_percent,
       ascent_m:             s.ascent_m,
       descent_m:            s.descent_m,
+      flat_equivalent_km:   s.flat_equivalent_km,
     }));
 
     return NextResponse.json({
