@@ -98,6 +98,13 @@ interface ColMap {
   // "Timed Out" can appear in the Class (2nd) column
 }
 
+// Known header keywords used to detect if row 0 is a headers row (no title row present).
+const HEADER_KEYWORDS = new Set(["name", "overall", "pos", "position", "bib", "gender", "class", "category", "time", "chip", "gun"]);
+
+function looksLikeHeaderRow(row: string[]): boolean {
+  return row.some((cell) => HEADER_KEYWORDS.has(cell.toLowerCase().trim()));
+}
+
 function buildColMap(headers: string[]): ColMap {
   const seen: Record<string, number> = {};
   const map: ColMap = {
@@ -117,11 +124,13 @@ function buildColMap(headers: string[]): ColMap {
     const occurrence = (seen[key] ?? 0) + 1;
     seen[key] = occurrence;
 
-    if (key === "overall" && occurrence === 1) map.position = i;
+    // Position aliases: overall (1st), pos, position
+    if ((key === "overall" || key === "pos" || key === "position") && occurrence === 1) map.position = i;
     else if (key === "name") map.name = i;
     else if (key === "bib") map.bib = i;
     else if (key === "nation") map.nation = i;
-    else if (key === "team") map.team = i;
+    // Club/team aliases
+    else if (key === "team" || key === "club") map.team = i;
     // 2nd Gender = actual gender value
     else if (key === "gender" && occurrence === 2) map.genderValue = i;
     // Only 1 Gender column → it IS the value
@@ -130,12 +139,13 @@ function buildColMap(headers: string[]): ColMap {
       if (map.genderValue === null) map.genderValue = i;
     }
     // 2nd Class = age group / category name
-    else if (key === "class" && occurrence === 2) map.ageGroup = i;
-    else if (key === "class" && occurrence === 1) {
+    else if ((key === "class" || key === "category" || key === "cat") && occurrence === 2) map.ageGroup = i;
+    else if ((key === "class" || key === "category" || key === "cat") && occurrence === 1) {
       if (map.ageGroup === null) map.ageGroup = i;
     }
     else if (key === "last location") map.lastLocation = i;
-    else if (key === "time") map.time = i;
+    // Time aliases: time, chip, chip time, net, net time — prefer first match
+    else if ((key === "time" || key === "chip" || key === "chip time" || key === "net" || key === "net time") && map.time === null) map.time = i;
   });
 
   return map;
@@ -148,19 +158,25 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
   const text = stripBom(rawText);
   const lines = parseLines(text).filter((l) => l.some((c) => c !== ""));
 
-  if (lines.length < 2) {
+  if (lines.length < 1) {
     return { raceName: filename, raceYear: new Date().getFullYear(), dedupSlug: slugify(filename), rows: [], parseErrors: ["File is empty or has fewer than 2 rows"] };
   }
 
-  // Row 0: race title
-  const rawTitle = lines[0][0] ?? filename;
+  // Auto-detect: if row 0 looks like a header row (no title row present), use filename as title.
+  const hasTitleRow = !looksLikeHeaderRow(lines[0]);
+
+  const rawTitle = hasTitleRow ? (lines[0][0] ?? filename) : filename;
   const { name: raceName, year: titleYear } = stripTrailingYear(rawTitle);
   const filenameYear = yearFromFilename(filename);
   const raceYear = titleYear ?? filenameYear ?? new Date().getFullYear();
   const dedupSlug = `${slugify(raceName)}-${raceYear}`;
 
-  // Row 1: headers
-  const headers = lines[1];
+  // Row 1 (or 0 if no title): headers
+  const headerRowIndex = hasTitleRow ? 1 : 0;
+  if (lines.length < headerRowIndex + 2) {
+    return { raceName, raceYear, dedupSlug, rows: [], parseErrors: ["File is empty or has fewer than 2 rows"] };
+  }
+  const headers = lines[headerRowIndex];
   const colMap = buildColMap(headers);
 
   if (colMap.name === null) {
@@ -170,7 +186,7 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
 
   const rows: ParsedRow[] = [];
 
-  for (let i = 2; i < lines.length; i++) {
+  for (let i = headerRowIndex + 1; i < lines.length; i++) {
     const cells = lines[i];
     if (cells.every((c) => c === "")) continue;
 
