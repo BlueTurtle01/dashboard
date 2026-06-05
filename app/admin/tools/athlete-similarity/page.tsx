@@ -279,7 +279,7 @@ function OverviewTab() {
                 { key: "topN",         label: "Top-N similar stored",  type: "number" },
                 { key: "simThreshold", label: "Similarity threshold",  type: "number", step: "0.05" },
                 { key: "kmeansK",      label: "KMeans k",              type: "number" },
-              ] as const
+              ] as { key: keyof typeof params; label: string; type: string; step?: string }[]
             ).map(({ key, label, type, step }) => (
               <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <label style={{ fontSize: 12, color: "#6b7280", minWidth: 160 }}>{label}</label>
