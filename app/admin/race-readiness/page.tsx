@@ -440,101 +440,104 @@ function AthleteSearchCombobox({ onSelect, selectedKey }: {
 
 /* Performance trend chart — scatter of finish time vs year */
 function PerformanceTrendChart({ races, recentThreshold }: { races: AthleteRace[]; recentThreshold: number }) {
-  const W = 698, H = 130, padL = 52, padR = 12, padT = 16, padB = 28;
+  const W = 698, H = 140, padL = 42, padR = 16, padT = 16, padB = 28;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
-  const finished = races.filter(r =>
-    r.result_status === "FINISHED" && r.finish_seconds !== null && r.finish_seconds > 0
-  );
-  if (finished.length < 2) return null;
+  // Only races with both position and total_finishers, sorted chronologically
+  type PlotPoint = { year: number; pct: number; raceName: string; pos: number; total: number; isRecent: boolean };
+  const plotPts: PlotPoint[] = races
+    .filter(r => r.result_status === "FINISHED" && r.position && r.total_finishers && r.total_finishers > 1)
+    .sort((a, b) => a.result_year !== b.result_year ? a.result_year - b.result_year : (a.position ?? 999) - (b.position ?? 999))
+    .map(r => ({
+      year:     r.result_year,
+      // % of field beaten: 100% = winner, 0% = last; higher = better
+      pct:      ((r.total_finishers! - r.position!) / (r.total_finishers! - 1)) * 100,
+      raceName: r.race_name,
+      pos:      r.position!,
+      total:    r.total_finishers!,
+      isRecent: r.result_year >= recentThreshold,
+    }));
 
-  // Use flat-equivalent normalized pace (min/eq-km) where available; fall back to raw hours
-  type PlotPoint = { year: number; value: number; normalized: boolean; raceName: string; isRecent: boolean };
-  const points: PlotPoint[] = finished.map(r => {
-    const isRecent = r.result_year >= recentThreshold;
-    if (r.flat_equivalent_km && r.flat_equivalent_km > 0) {
-      return { year: r.result_year, value: (r.finish_seconds! / 60) / r.flat_equivalent_km, normalized: true, raceName: r.race_name, isRecent };
-    }
-    return { year: r.result_year, value: r.finish_seconds! / 3600, normalized: false, raceName: r.race_name, isRecent };
-  });
-
-  // Separate normalized vs raw — prefer normalized if majority have it
-  const normCount = points.filter(p => p.normalized).length;
-  const useNorm   = normCount > points.length / 2;
-  const plotPts   = useNorm ? points.filter(p => p.normalized) : points.filter(p => !p.normalized);
   if (plotPts.length < 2) return null;
 
   const years   = plotPts.map(p => p.year);
-  const values  = plotPts.map(p => p.value);
   const minYear = Math.min(...years), maxYear = Math.max(...years);
-  const minVal  = Math.min(...values), maxVal  = Math.max(...values);
-  const valRange = Math.max(maxVal - minVal, 0.1);
-  const yPad    = valRange * 0.15;
 
-  const xS = (yr: number) => padL + (maxYear === minYear ? chartW / 2 : ((yr - minYear) / (maxYear - minYear)) * chartW);
-  const yS = (v: number)  => padT + chartH - ((v - (minVal - yPad)) / (valRange + 2 * yPad)) * chartH;
+  // X spread: if all same year use index order, otherwise spread by year
+  const singleYear = minYear === maxYear;
+  const xS = (p: PlotPoint, i: number) =>
+    padL + (singleYear ? (i / (plotPts.length - 1)) * chartW : ((p.year - minYear) / (maxYear - minYear)) * chartW);
+  // Y: 0% at bottom, 100% at top; add 5% padding each end
+  const yS = (pct: number) => padT + chartH - ((pct / 100) * chartH);
 
-  // Y-axis ticks (3-4 sensible values)
-  const yTickCount = 4;
-  const rawStep = (maxVal - minVal) / yTickCount;
-  const niceStep = rawStep < 0.5 ? 0.5 : rawStep < 1 ? 1 : rawStep < 5 ? Math.ceil(rawStep) : Math.ceil(rawStep / 5) * 5;
-  const yStart  = Math.floor((minVal - yPad) / niceStep) * niceStep;
-  const yTicks: number[] = [];
-  for (let t = yStart; t <= maxVal + yPad + niceStep; t += niceStep) yTicks.push(parseFloat(t.toFixed(2)));
+  // Fixed Y ticks at 0, 25, 50, 75, 100
+  const yTicks = [0, 25, 50, 75, 100];
 
-  // X-axis: one tick per year
+  // X ticks — one per year, thinned if needed
   const xYears = Array.from(new Set(years)).sort((a, b) => a - b);
-  // Thin out if too many
-  const xStep = xYears.length > 8 ? Math.ceil(xYears.length / 6) : 1;
+  const xStep  = xYears.length > 8 ? Math.ceil(xYears.length / 6) : 1;
 
-  // Trend line (simple linear regression)
-  const n = plotPts.length;
+  // Linear regression for trend line (on year → pct)
+  const n  = plotPts.length;
   const mx = years.reduce((s, v) => s + v, 0) / n;
-  const my = values.reduce((s, v) => s + v, 0) / n;
-  const slope = plotPts.reduce((s, p) => s + (p.year - mx) * (p.value - my), 0) /
+  const my = plotPts.map(p => p.pct).reduce((s, v) => s + v, 0) / n;
+  const slope = plotPts.reduce((s, p) => s + (p.year - mx) * (p.pct - my), 0) /
     Math.max(plotPts.reduce((s, p) => s + (p.year - mx) ** 2, 0), 0.001);
   const intercept = my - slope * mx;
-  const trendY1 = intercept + slope * minYear;
-  const trendY2 = intercept + slope * maxYear;
+  const trendPct1 = Math.min(100, Math.max(0, intercept + slope * minYear));
+  const trendPct2 = Math.min(100, Math.max(0, intercept + slope * maxYear));
 
-  const yLabel = useNorm ? "min/eq-km" : "hours";
+  // Dot colour by percentile: top 10% = gold, top 25% = green, else slate
+  function dotColor(pct: number, isRecent: boolean): string {
+    if (pct >= 90) return "#e65100";   // top 10% — standout
+    if (pct >= 75) return "#1e3a1e";   // top 25%
+    if (isRecent)  return "#546e7a";
+    return "#90a4ae";
+  }
 
   return (
     <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
-      {/* Gridlines */}
+      {/* Gridlines + Y labels */}
       {yTicks.map((t, i) => (
         <g key={i}>
-          <line x1={padL} y1={yS(t)} x2={W - padR} y2={yS(t)} stroke="#eee" strokeWidth="1" />
-          <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill="#888">
-            {useNorm ? t.toFixed(1) : t.toFixed(1)}
-          </text>
+          <line x1={padL} y1={yS(t)} x2={W - padR} y2={yS(t)}
+            stroke={t === 50 ? "#ddd" : "#f0f0f0"} strokeWidth={t === 50 ? "1.5" : "1"} strokeDasharray={t === 50 ? "4,3" : undefined} />
+          <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill="#aaa">{t}%</text>
         </g>
       ))}
       {/* Trend line */}
-      <line x1={xS(minYear)} y1={yS(trendY1)} x2={xS(maxYear)} y2={yS(trendY2)}
-        stroke={slope < 0 ? "#2e7d32" : "#c0392b"} strokeWidth="1" strokeDasharray="4,3" opacity="0.5" />
+      {!singleYear && (
+        <line
+          x1={xS(plotPts[0], 0)} y1={yS(trendPct1)}
+          x2={xS(plotPts[plotPts.length - 1], plotPts.length - 1)} y2={yS(trendPct2)}
+          stroke={slope > 0 ? "#2e7d32" : "#c0392b"} strokeWidth="1.5" strokeDasharray="5,3" opacity="0.55"
+        />
+      )}
       {/* Axes */}
-      <line x1={padL} y1={padT} x2={padL} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
-      <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
+      <line x1={padL} y1={padT} x2={padL} y2={padT + chartH} stroke="#ccc" strokeWidth="1" />
+      <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#ccc" strokeWidth="1" />
       {/* X ticks */}
       {xYears.filter((_, i) => i % xStep === 0).map((yr, i) => (
         <g key={i}>
-          <line x1={xS(yr)} y1={padT + chartH} x2={xS(yr)} y2={padT + chartH + 4} stroke="#ccc" strokeWidth="1" />
-          <text x={xS(yr)} y={padT + chartH + 13} textAnchor="middle" fontSize="8.5" fill="#888">{yr}</text>
+          <line x1={xS({ year: yr } as PlotPoint, i)} y1={padT + chartH} x2={xS({ year: yr } as PlotPoint, i)} y2={padT + chartH + 4} stroke="#ccc" strokeWidth="1" />
+          <text x={xS({ year: yr } as PlotPoint, i)} y={padT + chartH + 13} textAnchor="middle" fontSize="8.5" fill="#888">{yr}</text>
         </g>
       ))}
       {/* Scatter dots */}
       {plotPts.map((p, i) => (
-        <circle key={i} cx={xS(p.year)} cy={yS(p.value)} r={5}
-          fill={p.isRecent ? "#1e3a1e" : "#78909c"} opacity={p.isRecent ? 0.9 : 0.55} stroke="white" strokeWidth="1.5" />
+        <circle key={i} cx={xS(p, i)} cy={yS(p.pct)} r={5}
+          fill={dotColor(p.pct, p.isRecent)} stroke="white" strokeWidth="1.5" opacity="0.9" />
       ))}
       {/* Y-axis label */}
-      <text x={12} y={padT + chartH / 2} textAnchor="middle" fontSize="7.5" fill="#aaa" transform={`rotate(-90,12,${padT + chartH / 2})`}>{yLabel}</text>
+      <text x={10} y={padT + chartH / 2} textAnchor="middle" fontSize="7.5" fill="#bbb"
+        transform={`rotate(-90,10,${padT + chartH / 2})`}>field beaten</text>
       {/* Legend */}
-      <circle cx={W - padR - 80} cy={padT + 8} r={4} fill="#1e3a1e" />
-      <text x={W - padR - 73} y={padT + 11} fontSize="7.5" fill="#555">Recent</text>
-      <circle cx={W - padR - 35} cy={padT + 8} r={4} fill="#78909c" opacity="0.6" />
-      <text x={W - padR - 28} y={padT + 11} fontSize="7.5" fill="#555">Older</text>
+      <circle cx={W - padR - 120} cy={padT + 8} r={4} fill="#e65100" />
+      <text x={W - padR - 113} y={padT + 11} fontSize="7.5" fill="#666">Top 10%</text>
+      <circle cx={W - padR - 70} cy={padT + 8} r={4} fill="#1e3a1e" />
+      <text x={W - padR - 63} y={padT + 11} fontSize="7.5" fill="#666">Top 25%</text>
+      <circle cx={W - padR - 18} cy={padT + 8} r={4} fill="#90a4ae" />
+      <text x={W - padR - 11} y={padT + 11} fontSize="7.5" fill="#666">Rest</text>
     </svg>
   );
 }
@@ -1567,21 +1570,18 @@ export default function RaceReadinessPage() {
                 </div>
 
                 {/* Performance trend */}
-                {races.filter(r => r.result_status === "FINISHED" && r.finish_seconds).length >= 2 && (
+                {races.filter(r => r.result_status === "FINISHED" && r.position && r.total_finishers).length >= 2 && (
                   <div style={{ marginBottom: "22px" }}>
-                    <p style={sectionLabel}>Performance Trend</p>
+                    <p style={sectionLabel}>Field Position Over Time</p>
                     <PerformanceTrendChart races={races} recentThreshold={recentThreshold} />
                     <div style={{ fontSize: "8.5px", color: "#aaa", marginTop: "4px" }}>
-                      Pace expressed as grade-adjusted equivalent min/km where course data is available; raw finish hours otherwise.
-                      Trend line direction: {(() => {
-                        const fin = races.filter(r => r.result_status === "FINISHED" && r.finish_seconds && r.flat_equivalent_km);
+                      Each dot is one race finish. Y-axis shows percentage of field beaten (higher = better). Trend line direction: {(() => {
+                        const fin = races.filter(r => r.result_status === "FINISHED" && r.position && r.total_finishers && r.total_finishers > 1);
                         if (fin.length < 2) return "insufficient data.";
-                        const n = fin.length;
-                        const mx = fin.reduce((s, r) => s + r.result_year, 0) / n;
-                        const my = fin.reduce((s, r) => s + (r.finish_seconds! / 60) / r.flat_equivalent_km!, 0) / n;
-                        const slope = fin.reduce((s, r) => s + (r.result_year - mx) * ((r.finish_seconds! / 60) / r.flat_equivalent_km! - my), 0)
-                          / Math.max(fin.reduce((s, r) => s + (r.result_year - mx) ** 2, 0), 0.001);
-                        return slope < -0.05 ? "improving over time." : slope > 0.05 ? "slowing over time." : "broadly stable.";
+                        const pts = fin.map(r => ({ year: r.result_year, pct: ((r.total_finishers! - r.position!) / (r.total_finishers! - 1)) * 100 }));
+                        const n = pts.length, mx = pts.reduce((s, p) => s + p.year, 0) / n, my = pts.reduce((s, p) => s + p.pct, 0) / n;
+                        const slope = pts.reduce((s, p) => s + (p.year - mx) * (p.pct - my), 0) / Math.max(pts.reduce((s, p) => s + (p.year - mx) ** 2, 0), 0.001);
+                        return slope > 1 ? "moving up the field over time." : slope < -1 ? "moving down the field over time." : "broadly stable.";
                       })()}
                     </div>
                   </div>
