@@ -56,6 +56,27 @@ function stripTrailingYear(title: string): { name: string; year: number | null }
   return { name: title.trim(), year: null };
 }
 
+/**
+ * Derive a clean race name and year from a filename.
+ * e.g. "2026_Shakespeare_Marathon_-_26th_April_2026.csv" → { name: "Shakespeare Marathon", year: 2026 }
+ */
+function nameFromFilename(filename: string): { name: string; year: number | null } {
+  // Strip extension
+  const base = filename.replace(/\.[^.]+$/, "");
+  // Replace underscores with spaces, collapse runs of spaces/dashes used as separators
+  const spaced = base.replace(/_/g, " ").replace(/\s{2,}/g, " ").trim();
+  // Strip leading 4-digit year (e.g. "2026 - " or "2026 ")
+  const noLeadingYear = spaced.replace(/^\d{4}\s*[-–]?\s*/, "");
+  // Strip trailing year via existing helper
+  const { name: withPossibleDateFrag, year } = stripTrailingYear(noLeadingYear);
+  // Strip trailing date fragment left over after year removal, e.g. "- 26th April" or "26 April"
+  const name = withPossibleDateFrag
+    .replace(/\s*[-–]\s*\d{1,2}(?:st|nd|rd|th)?\s+\w+\s*$/, "")
+    .replace(/\s*[-–]\s*$/, "")
+    .trim();
+  return { name: name || base, year };
+}
+
 /** Extract leading 4-digit year from filename, e.g. "2015_Race_Name.csv" → 2015. */
 function yearFromFilename(filename: string): number | null {
   const m = filename.match(/^(\d{4})[_\-]/);
@@ -165,8 +186,14 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
   // Auto-detect: if row 0 looks like a header row (no title row present), use filename as title.
   const hasTitleRow = !looksLikeHeaderRow(lines[0]);
 
-  const rawTitle = hasTitleRow ? (lines[0][0] ?? filename) : filename;
-  const { name: raceName, year: titleYear } = stripTrailingYear(rawTitle);
+  let raceName: string;
+  let titleYear: number | null;
+  if (hasTitleRow) {
+    const rawTitle = lines[0][0] ?? filename;
+    ({ name: raceName, year: titleYear } = stripTrailingYear(rawTitle));
+  } else {
+    ({ name: raceName, year: titleYear } = nameFromFilename(filename));
+  }
   const filenameYear = yearFromFilename(filename);
   const raceYear = titleYear ?? filenameYear ?? new Date().getFullYear();
   const dedupSlug = `${slugify(raceName)}-${raceYear}`;
