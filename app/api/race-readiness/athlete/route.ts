@@ -98,14 +98,13 @@ export async function GET(req: NextRequest) {
       .eq("athlete_key", athleteKey)
       .maybeSingle(),
 
-    // ── 2. Race history ──────────────────────────────────────────────────────
+    // ── 2. Race history (no join to race_profiles — no FK defined) ───────────
     supabase
       .from("race_results")
       .select(`
         race_id, result_year, result_status, finish_seconds, position,
         age_group, gender, additional_data,
-        races ( name ),
-        race_profiles ( total_distance_km, total_ascent_m, flat_equivalent_km )
+        races ( name )
       `)
       .eq("full_name", athleteKey)
       .order("result_year", { ascending: false })
@@ -115,6 +114,23 @@ export async function GET(req: NextRequest) {
 
   if (resultsErr) {
     return NextResponse.json({ error: resultsErr.message }, { status: 500 });
+  }
+
+  // ── 2b. Fetch race_profiles separately (race_id is the PK, no FK on race_results) ──
+  const uniqueRaceIds = [...new Set((resultRows ?? []).map(r => r.race_id as string))];
+  const profileMap: Record<string, { total_distance_km: number; total_ascent_m: number; flat_equivalent_km: number }> = {};
+  if (uniqueRaceIds.length > 0) {
+    const { data: profileRows } = await supabase
+      .from("race_profiles")
+      .select("race_id, total_distance_km, total_ascent_m, flat_equivalent_km")
+      .in("race_id", uniqueRaceIds);
+    for (const rp of profileRows ?? []) {
+      profileMap[rp.race_id as string] = {
+        total_distance_km:  rp.total_distance_km  as number,
+        total_ascent_m:     rp.total_ascent_m     as number,
+        flat_equivalent_km: rp.flat_equivalent_km as number,
+      };
+    }
   }
 
   // ── 3. Cluster label ──────────────────────────────────────────────────────
@@ -156,10 +172,7 @@ export async function GET(req: NextRequest) {
       ? (r.races[0] as { name: string } | undefined)?.name
       : (r.races as { name: string } | null)?.name;
 
-    const rp = Array.isArray(r.race_profiles)
-      ? (r.race_profiles[0] as { total_distance_km: number; total_ascent_m: number; flat_equivalent_km: number } | undefined)
-      : (r.race_profiles as { total_distance_km: number; total_ascent_m: number; flat_equivalent_km: number } | null);
-
+    const rp = profileMap[r.race_id as string] ?? null;
     const ad = r.additional_data as Record<string, string> | null;
 
     return {
