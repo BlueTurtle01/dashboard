@@ -73,13 +73,18 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(rows);
 }
 
+const CLUB_PLACEHOLDERS = new Set([
+  "(no club)", "no club", "none", "n/a", "na", "-", "--",
+  "unattached", "unaffiliated", "independent",
+]);
+
 // Mirrors al_extract_club() in SQL — checks all known field name variants
 function extractClub(ad: Record<string, string> | null): string | null {
   if (!ad) return null;
   const keys = ["Club", "club", "Team", "team", "club_team", "club_company"];
   for (const key of keys) {
     const val = ad[key]?.trim();
-    if (val) return val;
+    if (val && !CLUB_PLACEHOLDERS.has(val.toLowerCase())) return val;
   }
   return null;
 }

@@ -87,6 +87,21 @@ function yearFromFilename(filename: string): number | null {
   return null;
 }
 
+// Timing systems use various placeholder strings when no club is entered.
+const CLUB_PLACEHOLDERS = new Set([
+  "(no club)", "no club", "none", "n/a", "na", "-", "--",
+  "unattached", "unaffiliated", "independent",
+]);
+
+function normaliseClub(raw: string): string | null {
+  const v = raw.trim();
+  return v && !CLUB_PLACEHOLDERS.has(v.toLowerCase()) ? v : null;
+}
+
+// Valid UK-style age group values. Anything else (race category labels, distances, etc.)
+// is stored in additional_data["Race Category"] instead and not treated as an age group.
+const AGE_GROUP_RE = /^(Senior|Junior|Open|U\d{1,2}|[MF]?V?\d{2}(\+|[-]\d{2})?|[MF][SJ]|[MW]?[SJ])$/i;
+
 function normalizeGender(raw: string): "Male" | "Female" | null {
   const v = raw.trim().toLowerCase();
   if (["male", "men", "m"].includes(v)) return "Male";
@@ -261,7 +276,7 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
       if (v) additional_data["Nation"] = v;
     }
     if (colMap.team !== null) {
-      const v = get(colMap.team);
+      const v = normaliseClub(get(colMap.team));
       if (v) additional_data["Team"] = v;
     }
     if (colMap.lastLocation !== null) {
@@ -276,12 +291,22 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
       if (v) additional_data[h] = v;
     });
 
+    // Validate age group — timing systems often put race-category labels (e.g. "Marathon",
+    // "110 Male", "42km") in the Class/Category column. Store those in Race Category instead.
+    const rawAgeGroupTrimmed = rawAgeGroup.trim();
+    const isValidAgeGroup = rawAgeGroupTrimmed !== "" &&
+      rawAgeGroupTrimmed.toLowerCase() !== "timed out" &&
+      AGE_GROUP_RE.test(rawAgeGroupTrimmed);
+    if (rawAgeGroupTrimmed && !isValidAgeGroup && rawAgeGroupTrimmed.toLowerCase() !== "timed out") {
+      additional_data["Race Category"] = rawAgeGroupTrimmed;
+    }
+
     rows.push({
       position: hasPosition ? parseInt(rawOverall, 10) : null,
       full_name: rawName,
       bib_number: get(colMap.bib) || null,
       gender: normalizeGender(get(colMap.genderValue)),
-      age_group: rawAgeGroup && rawAgeGroup.toLowerCase() !== "timed out" ? rawAgeGroup : null,
+      age_group: isValidAgeGroup ? rawAgeGroupTrimmed : null,
       result_status,
       finish_seconds,
       result_year: raceYear,
