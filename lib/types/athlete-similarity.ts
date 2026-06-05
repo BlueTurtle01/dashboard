@@ -60,7 +60,7 @@ export interface AlAthleteProjection {
   // Joined from al_athlete_clusters for chart colouring
   cluster_id?: number;
   race_count?: number;
-  cluster_label?: string;
+  cluster_label?: string | null;
 }
 
 export interface PipelineRun {
