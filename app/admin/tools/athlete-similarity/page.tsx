@@ -947,14 +947,353 @@ function ClusterVizTab() {
   );
 }
 
+// ── Readiness Check Tab ───────────────────────────────────────────────────────
+
+type FitRating = "covered" | "stretch" | "significant_gap";
+type ReadinessRating = "well_prepared" | "ready_with_caveats" | "a_step_up" | "major_challenge";
+type RaceListItem = { id: string; name: string; race_year: number | null };
+
+interface GapDimension { rating: FitRating; [k: string]: number | null | FitRating }
+interface ReadinessResult {
+  athlete_key: string;
+  race_name: string;
+  gap_analysis: {
+    distance:   { athlete_max_km: number | null; race_requires_km: number | null; rating: FitRating };
+    elevation:  { athlete_max_m: number | null;  race_requires_m: number | null;  rating: FitRating };
+    difficulty: { athlete_avg: number | null;    race_ratio: number | null;        rating: FitRating };
+  };
+  peer_outcome: {
+    similar_entrants: number; finish_rate: number | null;
+    avg_finish_seconds: number | null; best_finish_seconds: number | null; limited_data: boolean;
+  };
+  cluster_outcome: {
+    cluster_id: number | null; cluster_label: string | null;
+    cluster_entrants: number; cluster_finish_rate: number | null;
+  };
+  own_history: { year: number | null; result_status: string; finish_seconds: number | null; position: number | null }[];
+  overall_rating: ReadinessRating;
+  rating_reason: string;
+}
+
+const RATING_CONFIG: Record<ReadinessRating, { label: string; color: string; bg: string }> = {
+  well_prepared:      { label: "Well Prepared",       color: "#16a34a", bg: "#f0fdf4" },
+  ready_with_caveats: { label: "Ready with Caveats",  color: "#d97706", bg: "#fffbeb" },
+  a_step_up:          { label: "A Step Up",           color: "#ea580c", bg: "#fff7ed" },
+  major_challenge:    { label: "Major Challenge",     color: "#dc2626", bg: "#fef2f2" },
+};
+
+const FIT_CONFIG: Record<FitRating, { label: string; color: string }> = {
+  covered:          { label: "Covered",         color: "#16a34a" },
+  stretch:          { label: "Stretch",         color: "#d97706" },
+  significant_gap:  { label: "Significant Gap", color: "#dc2626" },
+};
+
+function ReadinessStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>{value}</div>
+    </div>
+  );
+}
+
+function GapCard({ label, leftLabel, leftVal, rightLabel, rightVal, unit, rating }: {
+  label: string; leftLabel: string; leftVal: string;
+  rightLabel: string; rightVal: string; unit: string; rating: FitRating;
+}) {
+  const rc = FIT_CONFIG[rating];
+  return (
+    <div style={{ ...card, display: "flex", alignItems: "center", gap: 16 }}>
+      <div style={{ minWidth: 90, fontSize: 13, fontWeight: 600, color: "#374151" }}>{label}</div>
+      <div style={{ flex: 1, fontSize: 13, color: "#6b7280" }}>
+        {leftLabel}: <strong style={{ color: "#111827" }}>{leftVal}</strong>
+        <span style={{ margin: "0 6px", color: "#d1d5db" }}>·</span>
+        {rightLabel}: <strong style={{ color: "#111827" }}>{rightVal}</strong>
+        <span style={{ marginLeft: 6, fontSize: 12, color: "#9ca3af" }}>{unit}</span>
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 600, color: rc.color,
+        background: rc.color + "18", border: `1px solid ${rc.color}30`,
+        borderRadius: 4, padding: "2px 8px", flexShrink: 0 }}>
+        {rc.label}
+      </span>
+    </div>
+  );
+}
+
+function ReadinessTab() {
+  const [athleteSearch, setAthleteSearch]     = useState("");
+  const [athleteResults, setAthleteResults]   = useState<AthleteSearchResult[]>([]);
+  const [selectedAthlete, setSelectedAthlete] = useState<AthleteSearchResult | null>(null);
+  const [raceSearch, setRaceSearch]           = useState("");
+  const [raceResults, setRaceResults]         = useState<RaceListItem[]>([]);
+  const [allRaces, setAllRaces]               = useState<RaceListItem[]>([]);
+  const [selectedRace, setSelectedRace]       = useState<RaceListItem | null>(null);
+  const [assessment, setAssessment]           = useState<ReadinessResult | null>(null);
+  const [loading, setLoading]                 = useState(false);
+  const [error, setError]                     = useState<string | null>(null);
+
+  // Pre-fetch all races once
+  useEffect(() => {
+    fetch("/api/admin/races")
+      .then((r) => r.json())
+      .then((d) => setAllRaces(d.races ?? []));
+  }, []);
+
+  // Debounced athlete search
+  useEffect(() => {
+    if (athleteSearch.length < 2) { setAthleteResults([]); return; }
+    const t = setTimeout(() => {
+      fetch(`/api/admin/athlete-similarity/athletes?search=${encodeURIComponent(athleteSearch)}&limit=10`)
+        .then((r) => r.json())
+        .then((d) => setAthleteResults(d.athletes ?? []));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [athleteSearch]);
+
+  // Client-side race filter
+  useEffect(() => {
+    if (raceSearch.length < 2) { setRaceResults([]); return; }
+    const q = raceSearch.toLowerCase();
+    setRaceResults(allRaces.filter((r) => r.name.toLowerCase().includes(q)).slice(0, 15));
+  }, [raceSearch, allRaces]);
+
+  async function checkReadiness() {
+    if (!selectedAthlete || !selectedRace) return;
+    setLoading(true);
+    setError(null);
+    setAssessment(null);
+    try {
+      const url = `/api/admin/athlete-similarity/readiness?athlete_key=${encodeURIComponent(selectedAthlete.athlete_key)}&race_id=${encodeURIComponent(selectedRace.id)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Request failed");
+      setAssessment(data);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const canCheck = selectedAthlete !== null && selectedRace !== null && !loading;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Input panels */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        {/* Athlete search */}
+        <div style={card}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 12px" }}>Select Athlete</h3>
+          <input
+            placeholder="Search athlete name…"
+            value={athleteSearch}
+            onChange={(e) => { setAthleteSearch(e.target.value); setSelectedAthlete(null); setAssessment(null); }}
+            style={input}
+          />
+          {athleteResults.length > 0 && (
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, marginTop: 4, overflow: "hidden" }}>
+              {athleteResults.map((a) => (
+                <div key={a.athlete_key}
+                  onClick={() => { setSelectedAthlete(a); setAthleteSearch(a.athlete_key); setAthleteResults([]); }}
+                  style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer",
+                    background: "#fff", borderBottom: "1px solid #f3f4f6" }}>
+                  {a.athlete_key}
+                  <span style={{ color: "#9ca3af", marginLeft: 8, fontSize: 12 }}>
+                    {a.race_count} races{a.cluster_label ? ` · ${a.cluster_label}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {selectedAthlete && (
+            <div style={{ fontSize: 13, color: "#16a34a", marginTop: 8 }}>
+              Selected: <strong>{selectedAthlete.athlete_key}</strong>
+            </div>
+          )}
+        </div>
+
+        {/* Race search */}
+        <div style={card}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 12px" }}>Select Race</h3>
+          <input
+            placeholder="Search race name…"
+            value={raceSearch}
+            onChange={(e) => { setRaceSearch(e.target.value); setSelectedRace(null); setAssessment(null); }}
+            style={input}
+          />
+          {raceResults.length > 0 && (
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, marginTop: 4, overflow: "hidden" }}>
+              {raceResults.map((r) => (
+                <div key={r.id}
+                  onClick={() => {
+                    setSelectedRace(r);
+                    setRaceSearch(r.name + (r.race_year ? ` (${r.race_year})` : ""));
+                    setRaceResults([]);
+                  }}
+                  style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer",
+                    background: "#fff", borderBottom: "1px solid #f3f4f6" }}>
+                  {r.name}
+                  {r.race_year && <span style={{ color: "#9ca3af", marginLeft: 8, fontSize: 12 }}>{r.race_year}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {selectedRace && (
+            <div style={{ fontSize: 13, color: "#16a34a", marginTop: 8 }}>
+              Selected: <strong>{selectedRace.name}</strong>
+              {selectedRace.race_year && <span style={{ color: "#6b7280" }}> ({selectedRace.race_year})</span>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Check button */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={checkReadiness} disabled={!canCheck}
+          style={{ ...btn("#2563eb"), opacity: canCheck ? 1 : 0.5 }}>
+          {loading ? "Checking…" : "Check Readiness"}
+        </button>
+        {error && <span style={{ fontSize: 13, color: "#dc2626" }}>{error}</span>}
+      </div>
+
+      {/* Results */}
+      {assessment && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Header */}
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0 }}>
+            {assessment.athlete_key}
+            <span style={{ color: "#9ca3af", fontWeight: 400 }}> → </span>
+            {assessment.race_name}
+          </h2>
+
+          {/* Overall badge */}
+          {(() => {
+            const c = RATING_CONFIG[assessment.overall_rating];
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 12,
+                background: c.bg, border: `1px solid ${c.color}30`,
+                borderRadius: 8, padding: "12px 16px" }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: c.color }}>{c.label}</span>
+                <span style={{ fontSize: 13, color: "#374151" }}>{assessment.rating_reason}</span>
+              </div>
+            );
+          })()}
+
+          {/* Gap analysis */}
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#6b7280",
+            textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: -6 }}>
+            Course Fit
+          </div>
+          <GapCard label="Distance"
+            leftLabel="Your max" leftVal={assessment.gap_analysis.distance.athlete_max_km !== null ? `${fmt(assessment.gap_analysis.distance.athlete_max_km)} km` : "—"}
+            rightLabel="Race requires" rightVal={assessment.gap_analysis.distance.race_requires_km !== null ? `${fmt(assessment.gap_analysis.distance.race_requires_km)} km` : "No profile"}
+            unit="flat equiv" rating={assessment.gap_analysis.distance.rating} />
+          <GapCard label="Elevation"
+            leftLabel="Your max" leftVal={assessment.gap_analysis.elevation.athlete_max_m !== null ? `${fmt(assessment.gap_analysis.elevation.athlete_max_m, 0)} m` : "—"}
+            rightLabel="Race requires" rightVal={assessment.gap_analysis.elevation.race_requires_m !== null ? `${fmt(assessment.gap_analysis.elevation.race_requires_m, 0)} m` : "No profile"}
+            unit="ascent" rating={assessment.gap_analysis.elevation.rating} />
+          <GapCard label="Difficulty"
+            leftLabel="Your avg" leftVal={assessment.gap_analysis.difficulty.athlete_avg !== null ? fmt(assessment.gap_analysis.difficulty.athlete_avg, 2) : "—"}
+            rightLabel="Race ratio" rightVal={assessment.gap_analysis.difficulty.race_ratio !== null ? fmt(assessment.gap_analysis.difficulty.race_ratio, 2) : "No profile"}
+            unit="difficulty ratio" rating={assessment.gap_analysis.difficulty.rating} />
+
+          {/* Peer outcome */}
+          <div style={card}>
+            <h4 style={{ fontSize: 13, fontWeight: 600, margin: "0 0 10px" }}>
+              Peer Outcome
+              <span style={{ fontWeight: 400, color: "#6b7280", marginLeft: 6 }}>
+                (athletes most similar to you)
+              </span>
+            </h4>
+            {assessment.peer_outcome.similar_entrants === 0 ? (
+              <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>
+                None of your 50 most similar athletes have entered this race.
+              </p>
+            ) : (
+              <div style={{ display: "flex", gap: 28, flexWrap: "wrap", alignItems: "flex-end" }}>
+                <ReadinessStat label="Similar entrants" value={String(assessment.peer_outcome.similar_entrants)} />
+                <ReadinessStat label="Finish rate"
+                  value={assessment.peer_outcome.finish_rate !== null
+                    ? `${(assessment.peer_outcome.finish_rate * 100).toFixed(0)}%` : "—"} />
+                <ReadinessStat label="Avg finish time"
+                  value={assessment.peer_outcome.avg_finish_seconds !== null
+                    ? fmtSeconds(assessment.peer_outcome.avg_finish_seconds) : "—"} />
+                <ReadinessStat label="Best finish time"
+                  value={assessment.peer_outcome.best_finish_seconds !== null
+                    ? fmtSeconds(assessment.peer_outcome.best_finish_seconds) : "—"} />
+                {assessment.peer_outcome.limited_data && (
+                  <span style={{ fontSize: 12, color: "#9ca3af" }}>limited data (&lt;3 entrants)</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Cluster outcome */}
+          <div style={card}>
+            <h4 style={{ fontSize: 13, fontWeight: 600, margin: "0 0 10px" }}>
+              Cluster Outcome
+              {assessment.cluster_outcome.cluster_label && (
+                <span style={{ fontWeight: 400, color: "#6b7280", marginLeft: 6 }}>
+                  ({assessment.cluster_outcome.cluster_label})
+                </span>
+              )}
+            </h4>
+            {assessment.cluster_outcome.cluster_entrants === 0 ? (
+              <p style={{ fontSize: 13, color: "#9ca3af", margin: 0 }}>
+                No athletes from your cluster have entered this race.
+              </p>
+            ) : (
+              <div style={{ display: "flex", gap: 28 }}>
+                <ReadinessStat label="Cluster entrants" value={String(assessment.cluster_outcome.cluster_entrants)} />
+                <ReadinessStat label="Cluster finish rate"
+                  value={assessment.cluster_outcome.cluster_finish_rate !== null
+                    ? `${(assessment.cluster_outcome.cluster_finish_rate * 100).toFixed(0)}%` : "—"} />
+              </div>
+            )}
+          </div>
+
+          {/* Own history */}
+          {assessment.own_history.length > 0 && (
+            <div style={card}>
+              <h4 style={{ fontSize: 13, fontWeight: 600, margin: "0 0 10px" }}>Your Prior Attempts</h4>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>{["Year", "Status", "Finish Time", "Position"].map((h) => (
+                    <th key={h} style={th}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {assessment.own_history.map((r, i) => (
+                    <tr key={i}>
+                      <td style={td}>{r.year ?? "—"}</td>
+                      <td style={{ ...td,
+                        color: r.result_status === "DNF" ? "#dc2626" : r.result_status === "FINISHED" ? "#16a34a" : "#374151",
+                        fontWeight: r.result_status === "FINISHED" ? 600 : 400 }}>
+                        {r.result_status}
+                      </td>
+                      <td style={td}>{r.finish_seconds !== null ? fmtSeconds(r.finish_seconds) : "—"}</td>
+                      <td style={td}>{r.position ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
-type Tab = "overview" | "search" | "test" | "clusters";
+type Tab = "overview" | "search" | "test" | "clusters" | "readiness";
 
 const TAB_LABELS: Record<Tab, string> = {
-  overview: "Overview",
-  search:   "Athlete Search",
-  test:     "Test Athlete",
-  clusters: "Cluster Visualisation",
+  overview:  "Overview",
+  search:    "Athlete Search",
+  test:      "Test Athlete",
+  clusters:  "Cluster Visualisation",
+  readiness: "Readiness Check",
 };
 
 export default function AthleteSimilarityPage() {
@@ -1030,6 +1369,7 @@ export default function AthleteSimilarityPage() {
       {tab === "search"    && <AthleteSearchTab />}
       {tab === "test"      && <TestAthleteTab />}
       {tab === "clusters"  && <ClusterVizTab />}
+      {tab === "readiness" && <ReadinessTab />}
     </main>
   );
 }

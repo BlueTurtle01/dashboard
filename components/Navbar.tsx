@@ -427,6 +427,7 @@ export default async function Navbar() {
                 <SidebarDropdown
                   label="Tools"
                   items={[
+                    { href: "/admin/tools", label: "Tools Hub" },
                     { href: "/admin/race-strategy", label: "Race Strategy" },
                     { href: "/admin/race-files", label: "Race Files" },
                     { href: "/admin/race-comparison", label: "Race Comparison" },
