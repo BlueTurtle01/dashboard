@@ -88,24 +88,39 @@ export async function POST(req: NextRequest) {
     logLines.push(...chunk.toString().split("\n").filter(Boolean).map((l) => `[err] ${l}`));
   });
 
-  child.on("close", (code: number | null) => {
-    // Use service role client to bypass RLS for this write-back
-    const svc = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } },
-    );
-    svc
+  async function finaliseRun(code: number | null, forcedError?: string) {
+    const svcUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!svcUrl || !svcKey) {
+      console.error("[als-run] Missing Supabase env vars — cannot update run record", runId);
+      return;
+    }
+    const svc = createServiceClient(svcUrl, svcKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const errorMsg = forcedError ?? (code !== 0 ? `Exit code ${code}${logLines.some(l => l.startsWith("[err]")) ? " — " + logLines.filter(l => l.startsWith("[err]")).slice(-3).join("; ") : ""}` : null);
+    const { error } = await svc
       .from("als_pipeline_runs")
       .update({
-        status: code === 0 ? "done" : "error",
-        log_lines: logLines.slice(-200),  // keep last 200 lines
-        error_msg: code !== 0 ? `Exit code ${code}` : null,
+        status: code === 0 && !forcedError ? "done" : "error",
+        log_lines: logLines.slice(-200),
+        error_msg: errorMsg,
         finished_at: new Date().toISOString(),
       })
-      .eq("id", runId)
-      .then(() => {});
-  });
+      .eq("id", runId);
+    if (error) {
+      console.error("[als-run] Failed to update run record", runId, error.message);
+    }
+  }
+
+  child.on("close", (code: number | null) => { finaliseRun(code); });
+
+  // Safety net: if the process never closes (shouldn't happen, but belt-and-braces),
+  // mark as error after 90 minutes so the UI doesn't show "running" forever.
+  const stalledTimer = setTimeout(() => {
+    finaliseRun(null, "Timed out after 90 minutes — process may have stalled");
+  }, 90 * 60 * 1000);
+  child.once("close", () => clearTimeout(stalledTimer));
 
   child.unref();
 

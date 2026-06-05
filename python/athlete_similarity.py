@@ -114,7 +114,11 @@ def run_profiles(min_races: int) -> None:
     total_raw = len(df)
     print(f"  {total_raw} athletes with >= {min_races} races")
 
-    # Derived columns
+    # Coerce all aggregate columns to numeric (psycopg2 may return them as strings)
+    for col in ["race_count", "finish_count", "dnf_count", "avg_perf_index",
+                "avg_flat_equiv_km", "max_flat_equiv_km", "avg_ascent_m", "max_ascent_m",
+                "avg_difficulty_ratio", "first_result_year", "last_result_year"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     df["career_span_years"] = (df["last_result_year"] - df["first_result_year"]).clip(lower=0) + 1
     df["finish_count_log"]  = np.log1p(df["finish_count"].fillna(0).astype(float))
     df["dnf_rate"] = np.where(
@@ -137,25 +141,33 @@ def run_profiles(min_races: int) -> None:
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(feat_df.values)
 
+    df = df.reset_index(drop=True)  # ensure positional index matches X_scaled rows
+
+    def _int(v, default=0):
+        return int(v) if pd.notna(v) else default
+
+    def _float(v):
+        return float(v) if pd.notna(v) else None
+
     print(f"  Writing {len(df)} athlete profiles...")
     records = []
     for i, row in df.iterrows():
         records.append((
             row["athlete_key"],
-            int(row["race_count"]),
-            int(row["finish_count"]) if pd.notna(row["finish_count"]) else 0,
-            int(row["dnf_count"]) if pd.notna(row["dnf_count"]) else 0,
-            float(row["dnf_rate"]) if pd.notna(row["dnf_rate"]) else None,
-            float(row["avg_perf_index"]) if pd.notna(row["avg_perf_index"]) else None,
-            float(row["recency_perf_index"]) if pd.notna(row["recency_perf_index"]) else None,
-            float(row["avg_flat_equiv_km"]) if pd.notna(row["avg_flat_equiv_km"]) else None,
-            float(row["max_flat_equiv_km"]) if pd.notna(row["max_flat_equiv_km"]) else None,
-            float(row["avg_ascent_m"]) if pd.notna(row["avg_ascent_m"]) else None,
-            float(row["max_ascent_m"]) if pd.notna(row["max_ascent_m"]) else None,
-            float(row["avg_difficulty_ratio"]) if pd.notna(row["avg_difficulty_ratio"]) else None,
-            int(row["first_result_year"]) if pd.notna(row["first_result_year"]) else None,
-            int(row["last_result_year"]) if pd.notna(row["last_result_year"]) else None,
-            int(row["career_span_years"]) if pd.notna(row["career_span_years"]) else None,
+            _int(row["race_count"]),
+            _int(row["finish_count"]),
+            _int(row["dnf_count"]),
+            _float(row["dnf_rate"]),
+            _float(row["avg_perf_index"]),
+            _float(row["recency_perf_index"]),
+            _float(row["avg_flat_equiv_km"]),
+            _float(row["max_flat_equiv_km"]),
+            _float(row["avg_ascent_m"]),
+            _float(row["max_ascent_m"]),
+            _float(row["avg_difficulty_ratio"]),
+            _int(row["first_result_year"], None),
+            _int(row["last_result_year"], None),
+            _int(row["career_span_years"], None),
             json.dumps([round(float(v), 6) for v in X_scaled[i]]),
         ))
 
