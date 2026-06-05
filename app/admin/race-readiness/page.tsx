@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
 
@@ -49,6 +49,58 @@ interface ResultsResponse {
 }
 interface RaceOption {
   race_id: string; race_name: string; total_distance_km: number; total_ascent_m: number;
+}
+
+/* ── Athlete types ── */
+interface AthleteSearchHit {
+  athlete_key: string;
+  race_count: number;
+  finish_count: number;
+  first_result_year: number | null;
+  last_result_year: number | null;
+  career_span_years: number | null;
+  avg_ascent_m: number | null;
+  cluster_label: string | null;
+}
+interface AthleteProfile {
+  athlete_key: string;
+  gender: string | null;
+  age_group: string | null;
+  club: string | null;
+  race_count: number;
+  finish_count: number;
+  dnf_count: number;
+  dnf_rate: number | null;
+  avg_perf_index: number | null;
+  recency_perf_index: number | null;
+  avg_flat_equiv_km: number | null;
+  max_flat_equiv_km: number | null;
+  avg_ascent_m: number | null;
+  max_ascent_m: number | null;
+  avg_difficulty_ratio: number | null;
+  first_result_year: number | null;
+  last_result_year: number | null;
+  career_span_years: number | null;
+  cluster_label: string | null;
+}
+interface AthleteRace {
+  race_id: string;
+  race_name: string;
+  result_year: number;
+  result_status: string;
+  finish_seconds: number | null;
+  position: number | null;
+  age_group: string | null;
+  gender: string | null;
+  club: string | null;
+  total_distance_km: number | null;
+  total_ascent_m: number | null;
+  flat_equivalent_km: number | null;
+  total_finishers: number | null;
+}
+interface AthleteResponse {
+  profile: AthleteProfile;
+  races: AthleteRace[];
 }
 
 /* ── Elevation types ── */
@@ -290,6 +342,266 @@ function DistributionMini({ dist, totalFinishers }: { dist: DistributionBucket[]
       })}
       <text x={W / 2} y={padT + 8} textAnchor="middle" fontSize="7" fill="#aaa">{totalFinishers.toLocaleString()} finishers</text>
     </svg>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PAGE 3 COMPONENTS
+══════════════════════════════════════════════════════════════════ */
+
+/* Athlete search combobox — shown in the no-print config panel */
+function AthleteSearchCombobox({ onSelect, selectedKey }: {
+  onSelect: (key: string) => void;
+  selectedKey: string;
+}) {
+  const [query, setQuery]       = useState(selectedKey);
+  const [hits, setHits]         = useState<AthleteSearchHit[]>([]);
+  const [open, setOpen]         = useState(false);
+  const [searching, setSearching] = useState(false);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapRef  = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectedKey && !query) setQuery(selectedKey);
+  }, [selectedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  function handleInput(value: string) {
+    setQuery(value);
+    if (debounce.current) clearTimeout(debounce.current);
+    if (value.trim().length < 2) { setHits([]); setOpen(false); return; }
+    debounce.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/admin/athlete-similarity/athletes?search=${encodeURIComponent(value.trim())}&limit=8`);
+        if (res.ok) {
+          const json = await res.json() as { athletes: AthleteSearchHit[] };
+          setHits(json.athletes ?? []);
+          setOpen(true);
+        }
+      } catch { /* ignore */ }
+      setSearching(false);
+    }, 300);
+  }
+
+  function select(hit: AthleteSearchHit) {
+    setQuery(hit.athlete_key);
+    setOpen(false);
+    setHits([]);
+    onSelect(hit.athlete_key);
+  }
+
+  const inputS: React.CSSProperties = { padding: "8px 12px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "14px", color: "#111", background: "#fff", outline: "none", width: "260px" };
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative" }}>
+      <input
+        type="text"
+        value={query}
+        placeholder="Search athlete name…"
+        onChange={e => handleInput(e.target.value)}
+        onFocus={() => hits.length > 0 && setOpen(true)}
+        style={inputS}
+      />
+      {searching && <span style={{ position: "absolute", right: "12px", top: "10px", fontSize: "11px", color: "#aaa" }}>…</span>}
+      {open && hits.length > 0 && (
+        <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 100, background: "#fff", border: "1px solid #ddd", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: "320px", maxHeight: "320px", overflowY: "auto", marginTop: "4px" }}>
+          {hits.map(h => (
+            <button
+              key={h.athlete_key}
+              type="button"
+              onClick={() => select(h)}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 14px", border: "none", background: "none", cursor: "pointer", borderBottom: "1px solid #f0f0f0" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "#f9f9f9")}
+              onMouseLeave={e => (e.currentTarget.style.background = "none")}
+            >
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "#111" }}>{h.athlete_key}</div>
+              <div style={{ fontSize: "11px", color: "#888", marginTop: "2px", display: "flex", gap: "10px" }}>
+                <span>{h.race_count} race{h.race_count !== 1 ? "s" : ""}</span>
+                {h.first_result_year && <span>{h.first_result_year}{h.last_result_year && h.last_result_year !== h.first_result_year ? `–${h.last_result_year}` : ""}</span>}
+                {h.avg_ascent_m && <span>{Math.round(h.avg_ascent_m)}m avg ↑</span>}
+                {h.cluster_label && <span style={{ color: "#1e3a1e", fontStyle: "italic" }}>{h.cluster_label}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Performance trend chart — scatter of finish time vs year */
+function PerformanceTrendChart({ races, recentThreshold }: { races: AthleteRace[]; recentThreshold: number }) {
+  const W = 698, H = 130, padL = 52, padR = 12, padT = 16, padB = 28;
+  const chartW = W - padL - padR, chartH = H - padT - padB;
+
+  const finished = races.filter(r =>
+    r.result_status === "FINISHED" && r.finish_seconds !== null && r.finish_seconds > 0
+  );
+  if (finished.length < 2) return null;
+
+  // Use flat-equivalent normalized pace (min/eq-km) where available; fall back to raw hours
+  type PlotPoint = { year: number; value: number; normalized: boolean; raceName: string; isRecent: boolean };
+  const points: PlotPoint[] = finished.map(r => {
+    const isRecent = r.result_year >= recentThreshold;
+    if (r.flat_equivalent_km && r.flat_equivalent_km > 0) {
+      return { year: r.result_year, value: (r.finish_seconds! / 60) / r.flat_equivalent_km, normalized: true, raceName: r.race_name, isRecent };
+    }
+    return { year: r.result_year, value: r.finish_seconds! / 3600, normalized: false, raceName: r.race_name, isRecent };
+  });
+
+  // Separate normalized vs raw — prefer normalized if majority have it
+  const normCount = points.filter(p => p.normalized).length;
+  const useNorm   = normCount > points.length / 2;
+  const plotPts   = useNorm ? points.filter(p => p.normalized) : points.filter(p => !p.normalized);
+  if (plotPts.length < 2) return null;
+
+  const years   = plotPts.map(p => p.year);
+  const values  = plotPts.map(p => p.value);
+  const minYear = Math.min(...years), maxYear = Math.max(...years);
+  const minVal  = Math.min(...values), maxVal  = Math.max(...values);
+  const valRange = Math.max(maxVal - minVal, 0.1);
+  const yPad    = valRange * 0.15;
+
+  const xS = (yr: number) => padL + (maxYear === minYear ? chartW / 2 : ((yr - minYear) / (maxYear - minYear)) * chartW);
+  const yS = (v: number)  => padT + chartH - ((v - (minVal - yPad)) / (valRange + 2 * yPad)) * chartH;
+
+  // Y-axis ticks (3-4 sensible values)
+  const yTickCount = 4;
+  const rawStep = (maxVal - minVal) / yTickCount;
+  const niceStep = rawStep < 0.5 ? 0.5 : rawStep < 1 ? 1 : rawStep < 5 ? Math.ceil(rawStep) : Math.ceil(rawStep / 5) * 5;
+  const yStart  = Math.floor((minVal - yPad) / niceStep) * niceStep;
+  const yTicks: number[] = [];
+  for (let t = yStart; t <= maxVal + yPad + niceStep; t += niceStep) yTicks.push(parseFloat(t.toFixed(2)));
+
+  // X-axis: one tick per year
+  const xYears = Array.from(new Set(years)).sort((a, b) => a - b);
+  // Thin out if too many
+  const xStep = xYears.length > 8 ? Math.ceil(xYears.length / 6) : 1;
+
+  // Trend line (simple linear regression)
+  const n = plotPts.length;
+  const mx = years.reduce((s, v) => s + v, 0) / n;
+  const my = values.reduce((s, v) => s + v, 0) / n;
+  const slope = plotPts.reduce((s, p) => s + (p.year - mx) * (p.value - my), 0) /
+    Math.max(plotPts.reduce((s, p) => s + (p.year - mx) ** 2, 0), 0.001);
+  const intercept = my - slope * mx;
+  const trendY1 = intercept + slope * minYear;
+  const trendY2 = intercept + slope * maxYear;
+
+  const yLabel = useNorm ? "min/eq-km" : "hours";
+
+  return (
+    <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
+      {/* Gridlines */}
+      {yTicks.map((t, i) => (
+        <g key={i}>
+          <line x1={padL} y1={yS(t)} x2={W - padR} y2={yS(t)} stroke="#eee" strokeWidth="1" />
+          <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill="#888">
+            {useNorm ? t.toFixed(1) : t.toFixed(1)}
+          </text>
+        </g>
+      ))}
+      {/* Trend line */}
+      <line x1={xS(minYear)} y1={yS(trendY1)} x2={xS(maxYear)} y2={yS(trendY2)}
+        stroke={slope < 0 ? "#2e7d32" : "#c0392b"} strokeWidth="1" strokeDasharray="4,3" opacity="0.5" />
+      {/* Axes */}
+      <line x1={padL} y1={padT} x2={padL} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
+      <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
+      {/* X ticks */}
+      {xYears.filter((_, i) => i % xStep === 0).map((yr, i) => (
+        <g key={i}>
+          <line x1={xS(yr)} y1={padT + chartH} x2={xS(yr)} y2={padT + chartH + 4} stroke="#ccc" strokeWidth="1" />
+          <text x={xS(yr)} y={padT + chartH + 13} textAnchor="middle" fontSize="8.5" fill="#888">{yr}</text>
+        </g>
+      ))}
+      {/* Scatter dots */}
+      {plotPts.map((p, i) => (
+        <circle key={i} cx={xS(p.year)} cy={yS(p.value)} r={5}
+          fill={p.isRecent ? "#1e3a1e" : "#78909c"} opacity={p.isRecent ? 0.9 : 0.55} stroke="white" strokeWidth="1.5" />
+      ))}
+      {/* Y-axis label */}
+      <text x={12} y={padT + chartH / 2} textAnchor="middle" fontSize="7.5" fill="#aaa" transform={`rotate(-90,12,${padT + chartH / 2})`}>{yLabel}</text>
+      {/* Legend */}
+      <circle cx={W - padR - 80} cy={padT + 8} r={4} fill="#1e3a1e" />
+      <text x={W - padR - 73} y={padT + 11} fontSize="7.5" fill="#555">Recent</text>
+      <circle cx={W - padR - 35} cy={padT + 8} r={4} fill="#78909c" opacity="0.6" />
+      <text x={W - padR - 28} y={padT + 11} fontSize="7.5" fill="#555">Older</text>
+    </svg>
+  );
+}
+
+/* Race history rows — shared between recent and highlights sections */
+function RaceHistoryRows({ races, highlightIds }: { races: AthleteRace[]; highlightIds?: Set<string> }) {
+  function fmt(s: number | null) {
+    if (!s || s <= 0) return "—";
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }
+  function statusBadge(status: string): { label: string; color: string } {
+    if (status === "FINISHED" || status === "UNKNOWN") return { label: "Fin", color: "#2e7d32" };
+    if (status === "DNF") return { label: "DNF", color: "#c0392b" };
+    if (status === "DNS") return { label: "DNS", color: "#888" };
+    return { label: status.slice(0, 3), color: "#888" };
+  }
+  const thS: React.CSSProperties = { textAlign: "left", padding: "3px 7px", borderBottom: "2px solid #1e3a1e", color: "#1e3a1e", fontWeight: 600, background: "#f9f9f9", fontSize: "9.5px" };
+  const tdS: React.CSSProperties = { padding: "3px 7px", borderBottom: "1px solid #eee", fontSize: "10.5px" };
+
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <thead>
+        <tr>
+          <th style={{ ...thS, width: "28%" }}>Race</th>
+          <th style={{ ...thS, width: "6%" }}>Year</th>
+          <th style={thS}>Status</th>
+          <th style={thS}>Time</th>
+          <th style={thS}>Position</th>
+          <th style={thS}>Dist</th>
+          <th style={thS}>Ascent</th>
+          <th style={{ ...thS, width: "6%" }}>Cat</th>
+        </tr>
+      </thead>
+      <tbody>
+        {races.map((r, i) => {
+          const { label: statusLabel, color: statusColor } = statusBadge(r.result_status);
+          const isHighlight = highlightIds?.has(`${r.race_id}|${r.result_year}`);
+          const posPct = r.position && r.total_finishers
+            ? Math.round((r.position / r.total_finishers) * 100) : null;
+          const rowBg = isHighlight ? "#fffbf0" : i % 2 === 0 ? "#fff" : "#fafafa";
+          return (
+            <tr key={i} style={{ background: rowBg }}>
+              <td style={{ ...tdS, fontWeight: isHighlight ? 600 : 400, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {isHighlight && <span style={{ color: "#e65100", marginRight: "4px", fontSize: "9px" }}>★</span>}
+                {r.race_name}
+              </td>
+              <td style={{ ...tdS, color: "#888" }}>{r.result_year}</td>
+              <td style={{ ...tdS, fontWeight: 600, color: statusColor }}>{statusLabel}</td>
+              <td style={{ ...tdS, fontFamily: "monospace", fontSize: "10px" }}>{fmt(r.finish_seconds)}</td>
+              <td style={{ ...tdS, fontSize: "10px" }}>
+                {r.position ? (
+                  <span>
+                    {r.position}
+                    {r.total_finishers ? <span style={{ color: "#aaa", fontSize: "9px" }}>/{r.total_finishers}</span> : ""}
+                    {posPct !== null ? <span style={{ color: posPct <= 10 ? "#2e7d32" : posPct <= 25 ? "#1565c0" : "#888", fontSize: "9px", marginLeft: "3px" }}>({posPct}%)</span> : ""}
+                  </span>
+                ) : "—"}
+              </td>
+              <td style={{ ...tdS, color: "#666" }}>{r.total_distance_km ? `${r.total_distance_km.toFixed(0)}km` : "—"}</td>
+              <td style={{ ...tdS, color: "#666" }}>{r.total_ascent_m ? `${Math.round(r.total_ascent_m)}m` : "—"}</td>
+              <td style={{ ...tdS, color: "#888", fontSize: "9.5px" }}>{r.age_group ?? "—"}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
@@ -562,6 +874,24 @@ export default function RaceReadinessPage() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [results, setResults]             = useState<ResultsResponse | null>(null);
   const [splitAnalysis, setSplitAnalysis] = useState<ResultsResponse | null>(null);
+  const [selectedAthleteKey, setSelectedAthleteKey] = useState("");
+  const [athlete, setAthlete]             = useState<AthleteResponse | null>(null);
+  const [athleteLoading, setAthleteLoading] = useState(false);
+  const [athleteError, setAthleteError]   = useState("");
+
+  const fetchAthlete = useCallback(async (key: string) => {
+    if (!key.trim()) return;
+    setAthleteLoading(true);
+    setAthleteError("");
+    setAthlete(null);
+    try {
+      const res = await fetch(`/api/race-readiness/athlete?key=${encodeURIComponent(key.trim())}`);
+      const json = await res.json() as AthleteResponse & { error?: string };
+      if (!res.ok || json.error) { setAthleteError(json.error ?? "Failed to load athlete."); }
+      else setAthlete(json);
+    } catch { setAthleteError("Network error loading athlete."); }
+    setAthleteLoading(false);
+  }, []);
 
   // Derived — elevation + segments
   const elevProfile    = result ? parseElevProfile(result.elevation_profile) : null;
@@ -762,6 +1092,15 @@ export default function RaceReadinessPage() {
             {generating ? "Loading…" : "Generate Overview"}
           </button>
           {genError && <span style={{ fontSize: "12px", color: "#b00020" }}>{genError}</span>}
+        </div>
+        <div>
+          <div style={labelStyle}>Athlete</div>
+          <AthleteSearchCombobox
+            selectedKey={selectedAthleteKey}
+            onSelect={key => { setSelectedAthleteKey(key); void fetchAthlete(key); }}
+          />
+          {athleteLoading && <div style={{ fontSize: "11px", color: "#888", marginTop: "4px" }}>Loading athlete…</div>}
+          {athleteError && <div style={{ fontSize: "11px", color: "#b00020", marginTop: "4px" }}>{athleteError}</div>}
         </div>
         {result && <button type="button" onClick={() => window.print()} style={printBtn}>Export to PDF</button>}
       </div>
@@ -1136,6 +1475,147 @@ export default function RaceReadinessPage() {
               <PageNumber n={2} />
             </div>
           )}
+
+          {/* ═══════════════════════════════════════
+              PAGE 3 — Athlete Overview
+          ═══════════════════════════════════════ */}
+          {athlete && (() => {
+            const p = athlete.profile;
+            const races = athlete.races;
+
+            // Recent: last 2 years from last result year
+            const lastYear = p.last_result_year ?? new Date().getFullYear();
+            const recentThreshold = lastYear - 1;
+            const recentRaces  = races.filter(r => r.result_year >= recentThreshold).slice(0, 10);
+
+            // Career highlights: best position, longest, highest ascent, earliest, + DNF if notable
+            const finished = races.filter(r => r.result_status === "FINISHED" && r.finish_seconds);
+            const byPos    = [...finished].filter(r => r.position).sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+            const byDist   = [...finished].filter(r => r.total_distance_km).sort((a, b) => (b.total_distance_km ?? 0) - (a.total_distance_km ?? 0));
+            const byAscent = [...finished].filter(r => r.total_ascent_m).sort((a, b) => (b.total_ascent_m ?? 0) - (a.total_ascent_m ?? 0));
+            const earliest = [...races].sort((a, b) => a.result_year - b.result_year)[0];
+
+            const uniqueById = (arr: AthleteRace[]) => {
+              const seen = new Set<string>();
+              return arr.filter(r => {
+                const k = `${r.race_id}|${r.result_year}`;
+                if (seen.has(k)) return false;
+                seen.add(k); return true;
+              });
+            };
+
+            const highlightRaces = uniqueById([
+              ...(byPos[0] ? [byPos[0]] : []),
+              ...(byDist[0] && byDist[0].total_distance_km !== byPos[0]?.total_distance_km ? [byDist[0]] : []),
+              ...(byAscent[0] ? [byAscent[0]] : []),
+              ...(earliest ? [earliest] : []),
+            ].filter(r => !recentRaces.some(rr => rr.race_id === r.race_id && rr.result_year === r.result_year)));
+
+            const highlightIds = new Set(highlightRaces.map(r => `${r.race_id}|${r.result_year}`));
+
+            // Career stat chips
+            type Chip = { label: string; value: string; sub?: string; accent?: string };
+            const chips: Chip[] = [
+              { label: "Races", value: String(p.race_count) },
+              { label: "Finishes", value: String(p.finish_count) },
+              ...(p.dnf_count > 0 ? [{ label: "DNFs", value: String(p.dnf_count), accent: "#c0392b" }] : []),
+              ...(p.career_span_years ? [{ label: "Career Span", value: `${p.career_span_years} yr${p.career_span_years !== 1 ? "s" : ""}`, sub: `${p.first_result_year ?? ""}–${p.last_result_year ?? ""}` }] : []),
+              ...(p.avg_ascent_m ? [{ label: "Avg Ascent", value: `${Math.round(p.avg_ascent_m)}m` }] : []),
+              ...(p.max_ascent_m ? [{ label: "Max Ascent", value: `${Math.round(p.max_ascent_m)}m` }] : []),
+              ...(p.avg_flat_equiv_km ? [{ label: "Avg Eq. Km", value: `${p.avg_flat_equiv_km.toFixed(1)} km` }] : []),
+              ...(p.cluster_label ? [{ label: "Athlete Type", value: p.cluster_label, accent: "#1e3a1e" }] : []),
+            ];
+
+            return (
+              <div style={a4Page}>
+                {/* Header */}
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{p.athlete_key}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Athlete Overview</div>
+                  </div>
+                </div>
+
+                {/* Identity row */}
+                <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
+                  {[
+                    p.gender && { k: "Gender", v: p.gender },
+                    p.age_group && { k: "Category", v: p.age_group },
+                    p.club && { k: "Club", v: p.club },
+                    { k: "Active", v: `${p.first_result_year ?? "?"} – ${p.last_result_year ?? "?"}` },
+                  ].filter(Boolean).map((item, i) => {
+                    const { k, v } = item as { k: string; v: string };
+                    return (
+                      <div key={i} style={{ background: "#f5f5f5", borderRadius: "6px", padding: "8px 14px" }}>
+                        <div style={{ fontSize: "9px", fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>{k}</div>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "#1e3a1e", marginTop: "2px" }}>{v}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Career stat chips */}
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
+                  {chips.map((c, i) => (
+                    <div key={i} style={{ border: `1.5px solid ${c.accent ?? "#e0e0e0"}`, borderRadius: "20px", padding: "5px 14px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      <div style={{ fontSize: "9px", color: "#999", textTransform: "uppercase", letterSpacing: "0.05em" }}>{c.label}</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: c.accent ?? "#222" }}>{c.value}</div>
+                      {c.sub && <div style={{ fontSize: "8.5px", color: "#bbb" }}>{c.sub}</div>}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Performance trend */}
+                {races.filter(r => r.result_status === "FINISHED" && r.finish_seconds).length >= 2 && (
+                  <div style={{ marginBottom: "22px" }}>
+                    <p style={sectionLabel}>Performance Trend</p>
+                    <PerformanceTrendChart races={races} recentThreshold={recentThreshold} />
+                    <div style={{ fontSize: "8.5px", color: "#aaa", marginTop: "4px" }}>
+                      Pace expressed as grade-adjusted equivalent min/km where course data is available; raw finish hours otherwise.
+                      Trend line direction: {(() => {
+                        const fin = races.filter(r => r.result_status === "FINISHED" && r.finish_seconds && r.flat_equivalent_km);
+                        if (fin.length < 2) return "insufficient data.";
+                        const n = fin.length;
+                        const mx = fin.reduce((s, r) => s + r.result_year, 0) / n;
+                        const my = fin.reduce((s, r) => s + (r.finish_seconds! / 60) / r.flat_equivalent_km!, 0) / n;
+                        const slope = fin.reduce((s, r) => s + (r.result_year - mx) * ((r.finish_seconds! / 60) / r.flat_equivalent_km! - my), 0)
+                          / Math.max(fin.reduce((s, r) => s + (r.result_year - mx) ** 2, 0), 0.001);
+                        return slope < -0.05 ? "improving over time." : slope > 0.05 ? "slowing over time." : "broadly stable.";
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent races */}
+                {recentRaces.length > 0 && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <p style={sectionLabel}>Recent Races (last 2 years)</p>
+                    <RaceHistoryRows races={recentRaces} />
+                  </div>
+                )}
+
+                {/* Career highlights */}
+                {highlightRaces.length > 0 && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <p style={sectionLabel}>Career Highlights ★</p>
+                    <RaceHistoryRows races={highlightRaces} highlightIds={highlightIds} />
+                  </div>
+                )}
+
+                {/* Footer note */}
+                <div style={{ marginTop: "auto", paddingTop: "16px", borderTop: "1px solid #eee" }}>
+                  <p style={{ fontSize: "8.5px", color: "#bbb", margin: 0 }}>
+                    Athlete data sourced from race results database. Starred rows indicate personal bests or career-significant performances.
+                    {p.cluster_label && ` Athlete type classification from similarity clustering.`}
+                  </p>
+                </div>
+
+                <PageNumber n={3} />
+              </div>
+            );
+          })()}
+
         </div>
       )}
 
