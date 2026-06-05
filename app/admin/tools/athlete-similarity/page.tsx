@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -122,8 +122,11 @@ function OverviewTab() {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
-  const [pollTimer, setPollTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [runLogs, setRunLogs] = useState<Record<string, string>>({});
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const runStartRef = useRef<number>(0);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [params, setParams] = useState({
     minRaces: 2,
@@ -132,6 +135,11 @@ function OverviewTab() {
     clusterMethod: "auto",
     kmeansK: 8,
   });
+
+  const stopPolling = useCallback(() => {
+    if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+    if (elapsedIntervalRef.current) { clearInterval(elapsedIntervalRef.current); elapsedIntervalRef.current = null; }
+  }, []);
 
   const loadStatus = useCallback(async () => {
     const res = await fetch("/api/admin/athlete-similarity");
@@ -144,8 +152,8 @@ function OverviewTab() {
 
   useEffect(() => {
     loadStatus();
-    return () => { if (pollTimer) clearTimeout(pollTimer); };
-  }, [loadStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+    return stopPolling;
+  }, [loadStatus, stopPolling]);
 
   function getLastRun(step: string): PipelineRun | undefined {
     return status?.recentRuns.find((r) => r.step === step || (step === "all" && r.step === "all"));
@@ -153,7 +161,9 @@ function OverviewTab() {
 
   async function triggerStep(step: string) {
     setRunning(step);
-    setRunLogs((prev) => ({ ...prev, [step]: "Starting…" }));
+    setElapsedSeconds(0);
+    runStartRef.current = Date.now();
+    setRunLogs((prev) => ({ ...prev, [step]: "" }));
 
     const res = await fetch("/api/admin/athlete-similarity/run", {
       method: "POST",
@@ -169,33 +179,39 @@ function OverviewTab() {
     }
 
     const { run_id } = await res.json();
-    pollRun(run_id, step);
-  }
 
-  function pollRun(runId: string, step: string) {
-    const t = setTimeout(async () => {
-      await loadStatus();
-      // Check if the run is complete
-      const res = await fetch("/api/admin/athlete-similarity");
-      if (res.ok) {
-        const data: PipelineStatus = await res.json();
-        setStatus(data);
-        const run = data.recentRuns.find((r) => r.id === runId);
-        if (!run || run.status === "running") {
-          pollRun(runId, step);
-        } else {
-          setRunning(null);
-          setRunLogs((prev) => ({
-            ...prev,
-            [step]: run.status === "done"
-              ? `Completed at ${new Date(run.finished_at ?? "").toLocaleTimeString()}`
-              : `Error: ${run.error_msg ?? "Unknown error"}`,
-          }));
-        }
+    // Elapsed time counter — updates every second
+    elapsedIntervalRef.current = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - runStartRef.current) / 1000));
+    }, 1000);
+
+    // Status poll — every 3 seconds
+    pollIntervalRef.current = setInterval(async () => {
+      const pollRes = await fetch("/api/admin/athlete-similarity");
+      if (!pollRes.ok) return;
+      const data: PipelineStatus = await pollRes.json();
+      setStatus(data);
+      const run = data.recentRuns.find((r) => r.id === run_id);
+      if (run && run.status !== "running") {
+        stopPolling();
+        setRunning(null);
+        setRunLogs((prev) => ({
+          ...prev,
+          [step]: run.status === "done"
+            ? `Done at ${new Date(run.finished_at ?? "").toLocaleTimeString()}`
+            : `Error: ${run.error_msg ?? "Unknown error"}`,
+        }));
       }
     }, 3000);
-    setPollTimer(t);
   }
+
+  function fmtElapsed(s: number): string {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  }
+
+  const isStalled = running !== null && elapsedSeconds > 600;
 
   const counts = status?.counts;
   const statCards = [
@@ -214,6 +230,43 @@ function OverviewTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Run status banner */}
+      {running !== null && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          background: isStalled ? "#fef3c7" : "#eff6ff",
+          border: `1px solid ${isStalled ? "#fcd34d" : "#93c5fd"}`,
+          borderRadius: 8, padding: "12px 16px",
+        }}>
+          {/* Pulsing dot */}
+          <span style={{
+            display: "inline-block", width: 10, height: 10, borderRadius: "50%",
+            background: isStalled ? "#f59e0b" : "#2563eb",
+            boxShadow: isStalled ? "0 0 0 3px #fde68a" : "0 0 0 3px #bfdbfe",
+            animation: "pulse 1.5s infinite",
+            flexShrink: 0,
+          }} />
+          <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+          <span style={{ fontSize: 14, fontWeight: 600, color: isStalled ? "#92400e" : "#1d4ed8" }}>
+            {STEPS.find((s) => s.key === running)?.label ?? running} running…
+          </span>
+          <span style={{ fontSize: 13, color: isStalled ? "#92400e" : "#3b82f6", fontVariantNumeric: "tabular-nums" }}>
+            {fmtElapsed(elapsedSeconds)} elapsed
+          </span>
+          {isStalled && (
+            <span style={{ fontSize: 12, color: "#b45309", marginLeft: 4 }}>
+              — may have stalled, check server logs
+            </span>
+          )}
+          <button
+            onClick={() => { stopPolling(); setRunning(null); setRunLogs((p) => ({ ...p, [running]: "Cancelled (still running server-side)" })); }}
+            style={{ ...btn("#6b7280", true), marginLeft: "auto" }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Stat cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
         {statCards.map((s) => (
@@ -254,7 +307,7 @@ function OverviewTab() {
                       opacity: running !== null ? 0.6 : 1,
                     }}
                   >
-                    {isRunning ? "Running…" : label}
+                    {isRunning ? `Running… ${fmtElapsed(elapsedSeconds)}` : label}
                   </button>
                   <span style={{ fontSize: 12, color: "#9ca3af" }}>
                     {runLogs[key]
