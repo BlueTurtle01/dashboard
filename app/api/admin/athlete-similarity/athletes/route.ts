@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getUserRoles } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
 import type { AthleteSearchResult } from "@/lib/types/athlete-similarity";
@@ -19,14 +19,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("als_athlete_profiles")
-    .select(`
-      id, athlete_key, race_count, finish_count, dnf_count, dnf_rate,
-      avg_perf_index, recency_perf_index,
-      avg_flat_equiv_km, max_flat_equiv_km,
-      avg_ascent_m, max_ascent_m, avg_difficulty_ratio,
-      first_result_year, last_result_year, career_span_years, computed_at,
-      als_athlete_clusters ( cluster_id, cluster_method )
-    `)
+    .select("id, athlete_key, race_count, finish_count, dnf_count, dnf_rate, avg_perf_index, recency_perf_index, avg_flat_equiv_km, max_flat_equiv_km, avg_ascent_m, max_ascent_m, avg_difficulty_ratio, first_result_year, last_result_year, career_span_years, computed_at")
     .order("race_count", { ascending: false })
     .limit(limit);
 
@@ -39,34 +32,37 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Flatten cluster join and look up cluster label
   const athleteKeys = (data ?? []).map((r) => r.athlete_key);
-  const clusterIds = (data ?? [])
-    .map((r) => {
-      const c = Array.isArray(r.als_athlete_clusters) ? r.als_athlete_clusters[0] : r.als_athlete_clusters;
-      return c?.cluster_id;
-    })
-    .filter((id): id is number => id !== undefined && id !== null);
 
-  let summaryMap: Record<number, string | null> = {};
-  if (clusterIds.length > 0) {
+  // Fetch cluster assignments separately (no FK relationship defined)
+  const clusterMap: Record<string, number | null> = {};
+  if (athleteKeys.length > 0) {
+    const { data: clusterData } = await supabase
+      .from("als_athlete_clusters")
+      .select("athlete_key, cluster_id")
+      .in("athlete_key", athleteKeys);
+    for (const c of clusterData ?? []) clusterMap[c.athlete_key] = c.cluster_id;
+  }
+
+  const uniqueClusterIds = [
+    ...new Set(Object.values(clusterMap).filter((id): id is number => id !== null)),
+  ];
+  const summaryMap: Record<number, string | null> = {};
+  if (uniqueClusterIds.length > 0) {
     const { data: summaries } = await supabase
       .from("als_cluster_summaries")
       .select("cluster_id, auto_label, custom_label")
-      .in("cluster_id", [...new Set(clusterIds)]);
+      .in("cluster_id", uniqueClusterIds);
     for (const s of summaries ?? []) {
       summaryMap[s.cluster_id] = s.custom_label ?? s.auto_label ?? null;
     }
   }
 
   const results: AthleteSearchResult[] = (data ?? []).map((r) => {
-    const clusterRow = Array.isArray(r.als_athlete_clusters)
-      ? r.als_athlete_clusters[0]
-      : r.als_athlete_clusters;
-    const cluster_id = clusterRow?.cluster_id ?? null;
+    const cluster_id = clusterMap[r.athlete_key] ?? null;
     return {
       ...r,
-      feature_vector: [],  // omit large vector from search results
+      feature_vector: [],
       cluster_id,
       cluster_label: cluster_id !== null ? (summaryMap[cluster_id] ?? null) : null,
     } as AthleteSearchResult;

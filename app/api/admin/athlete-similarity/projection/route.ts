@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getUserRoles } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
 import type { AlAthleteProjection } from "@/lib/types/athlete-similarity";
@@ -12,59 +12,66 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = req.nextUrl;
-  const limit      = Math.min(parseInt(searchParams.get("limit") ?? "5000", 10), 20000);
-  const clusterId  = searchParams.get("cluster_id");
+  const limit     = Math.min(parseInt(searchParams.get("limit") ?? "5000", 10), 20000);
+  const clusterId = searchParams.get("cluster_id");
 
   const supabase = await createClient();
 
-  // Fetch projection + cluster assignment in one joined query via athlete_key
-  let query = supabase
+  // Fetch projection points
+  const { data: projData, error: projErr } = await supabase
     .from("als_athlete_projection")
-    .select(`
-      athlete_key, proj_x, proj_y, proj_method, computed_at,
-      als_athlete_clusters ( cluster_id ),
-      als_athlete_profiles ( race_count )
-    `)
+    .select("athlete_key, proj_x, proj_y, proj_method, computed_at")
     .limit(limit);
 
-  // Apply cluster filter if requested
-  if (clusterId !== null) {
-    const clusterIdNum = parseInt(clusterId, 10);
-    if (!isNaN(clusterIdNum)) {
-      // We can't filter projection by cluster_id directly since it's a join,
-      // so fetch all and filter in memory (acceptable for <= 20k athletes)
-    }
+  if (projErr) {
+    return NextResponse.json({ error: projErr.message }, { status: 500 });
   }
 
-  const { data, error } = await query;
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!projData || projData.length === 0) {
+    return NextResponse.json({ points: [], method: null });
   }
 
-  const clusterId_num = clusterId !== null ? parseInt(clusterId, 10) : null;
+  const athleteKeys = projData.map((r) => r.athlete_key);
 
-  const points: AlAthleteProjection[] = (data ?? [])
-    .map((r) => {
-      const clusterRow = Array.isArray(r.als_athlete_clusters)
-        ? r.als_athlete_clusters[0]
-        : r.als_athlete_clusters;
-      const profileRow = Array.isArray(r.als_athlete_profiles)
-        ? r.als_athlete_profiles[0]
-        : r.als_athlete_profiles;
-      return {
-        athlete_key: r.athlete_key,
-        proj_x: r.proj_x,
-        proj_y: r.proj_y,
-        proj_method: r.proj_method,
-        computed_at: r.computed_at,
-        cluster_id: clusterRow?.cluster_id ?? undefined,
-        race_count: profileRow?.race_count ?? undefined,
-      };
-    })
-    .filter((p) => clusterId_num === null || p.cluster_id === clusterId_num);
+  // Fetch cluster assignments and race counts in parallel
+  const [{ data: clusterData }, { data: profileData }] = await Promise.all([
+    supabase
+      .from("als_athlete_clusters")
+      .select("athlete_key, cluster_id")
+      .in("athlete_key", athleteKeys),
+    supabase
+      .from("als_athlete_profiles")
+      .select("athlete_key, race_count")
+      .in("athlete_key", athleteKeys),
+  ]);
+
+  const clusterMap: Record<string, number> = {};
+  for (const c of clusterData ?? []) clusterMap[c.athlete_key] = c.cluster_id;
+
+  const raceCountMap: Record<string, number> = {};
+  for (const p of profileData ?? []) raceCountMap[p.athlete_key] = p.race_count;
+
+  // Apply cluster filter
+  const clusterIdNum = clusterId !== null ? parseInt(clusterId, 10) : null;
+
+  let points: AlAthleteProjection[] = projData.map((r) => ({
+    athlete_key: r.athlete_key,
+    proj_x:      r.proj_x,
+    proj_y:      r.proj_y,
+    proj_method: r.proj_method,
+    computed_at: r.computed_at,
+    cluster_id:  clusterMap[r.athlete_key] ?? undefined,
+    race_count:  raceCountMap[r.athlete_key] ?? undefined,
+  }));
+
+  if (clusterIdNum !== null) {
+    points = points.filter((p) => p.cluster_id === clusterIdNum);
+  }
 
   // Enrich with cluster labels
-  const uniqueClusterIds = [...new Set(points.map((p) => p.cluster_id).filter((id): id is number => id !== undefined))];
+  const uniqueClusterIds = [
+    ...new Set(points.map((p) => p.cluster_id).filter((id): id is number => id !== undefined)),
+  ];
   const labelMap: Record<number, string> = {};
   if (uniqueClusterIds.length > 0) {
     const { data: summaries } = await supabase
@@ -81,5 +88,5 @@ export async function GET(req: NextRequest) {
     cluster_label: p.cluster_id !== undefined ? (labelMap[p.cluster_id] ?? null) : null,
   }));
 
-  return NextResponse.json({ points: enrichedPoints, method: data?.[0]?.proj_method ?? null });
+  return NextResponse.json({ points: enrichedPoints, method: projData[0]?.proj_method ?? null });
 }
