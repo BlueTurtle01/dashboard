@@ -30,7 +30,7 @@ export interface ParsedRow {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function stripBom(text: string): string {
-  return text.startsWith("﻿") ? text.slice(1) : text;
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
 function parseLines(text: string): string[][] {
@@ -130,12 +130,14 @@ interface ColMap {
   genderValue: number | null;        // Gender (2nd occurrence = 'Male'/'Female')
   ageGroup: number | null;           // Class (2nd occurrence = class name)
   lastLocation: number | null;       // Last Location
-  time: number | null;               // Time
+  time: number | null;               // Time (HH:MM:SS)
+  timeSeconds: number | null;        // Pre-computed time in seconds (e.g. race_time_seconds)
+  status: number | null;             // Explicit status column (FINISHER/DNF/DNS)
   // "Timed Out" can appear in the Class (2nd) column
 }
 
 // Known header keywords used to detect if row 0 is a headers row (no title row present).
-const HEADER_KEYWORDS = new Set(["name", "overall", "pos", "position", "bib", "gender", "class", "category", "time", "chip", "gun"]);
+const HEADER_KEYWORDS = new Set(["name", "overall", "pos", "position", "bib", "gender", "sex", "class", "category", "time", "chip", "gun", "race_time", "status"]);
 
 function looksLikeHeaderRow(row: string[]): boolean {
   return row.some((cell) => HEADER_KEYWORDS.has(cell.toLowerCase().trim()));
@@ -153,6 +155,8 @@ function buildColMap(headers: string[]): ColMap {
     ageGroup: null,
     lastLocation: null,
     time: null,
+    timeSeconds: null,
+    status: null,
   };
 
   headers.forEach((h, i) => {
@@ -167,21 +171,24 @@ function buildColMap(headers: string[]): ColMap {
     else if (key === "nation") map.nation = i;
     // Club/team aliases
     else if (key === "team" || key === "club") map.team = i;
-    // 2nd Gender = actual gender value
+    // Gender aliases: gender (repeat logic), sex
     else if (key === "gender" && occurrence === 2) map.genderValue = i;
-    // Only 1 Gender column → it IS the value
     else if (key === "gender" && occurrence === 1) {
-      // May be overwritten if a 2nd Gender col appears later — handled by the 2nd case
       if (map.genderValue === null) map.genderValue = i;
     }
+    else if (key === "sex" && map.genderValue === null) map.genderValue = i;
     // 2nd Class = age group / category name
     else if ((key === "class" || key === "category" || key === "cat") && occurrence === 2) map.ageGroup = i;
     else if ((key === "class" || key === "category" || key === "cat") && occurrence === 1) {
       if (map.ageGroup === null) map.ageGroup = i;
     }
-    else if (key === "last location") map.lastLocation = i;
-    // Time aliases: time, chip, chip time, net, net time — prefer first match
-    else if ((key === "time" || key === "chip" || key === "chip time" || key === "net" || key === "net time") && map.time === null) map.time = i;
+    else if (key === "last location" || key === "last_point") map.lastLocation = i;
+    // Time aliases: HH:MM:SS formats — prefer first match
+    else if ((key === "time" || key === "chip" || key === "chip time" || key === "net" || key === "net time" || key === "race_time" || key === "gun_time" || key === "finish_time" || key === "finish time" || key === "gun time") && map.time === null) map.time = i;
+    // Pre-computed seconds (e.g. race_time_seconds) — use as fallback if no HH:MM:SS time
+    else if ((key === "race_time_seconds" || key === "finish_time_seconds" || key === "gun_time_seconds") && map.timeSeconds === null) map.timeSeconds = i;
+    // Explicit status column (e.g. FINISHER / DNF / DNS)
+    else if ((key === "status" || key === "result_status") && map.status === null) map.status = i;
   });
 
   return map;
@@ -247,7 +254,14 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
     const hasPosition = rawOverall !== "" && !isNaN(parseInt(rawOverall, 10));
     const timedOut = rawAgeGroup.toLowerCase() === "timed out";
 
-    if (hasPosition) {
+    const rawStatusVal = get(colMap.status).toUpperCase().trim();
+    if (rawStatusVal === "FINISHER" || rawStatusVal === "FINISHED") {
+      result_status = "FINISHED";
+    } else if (rawStatusVal === "DNF") {
+      result_status = "DNF";
+    } else if (rawStatusVal === "DNS") {
+      result_status = "DNS";
+    } else if (hasPosition) {
       result_status = "FINISHED";
     } else if (timedOut) {
       result_status = "DNF";
@@ -257,8 +271,16 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
       result_status = "DNF";
     }
 
-    // Finish time — only meaningful for finishers
-    const finish_seconds = result_status === "FINISHED" ? parseTime(rawTime) : null;
+    // Finish time — prefer pre-computed seconds column, fall back to HH:MM:SS parse
+    let finish_seconds: number | null = null;
+    if (result_status === "FINISHED") {
+      const rawSecs = get(colMap.timeSeconds);
+      if (rawSecs !== "") {
+        const parsed = parseInt(rawSecs, 10);
+        finish_seconds = isNaN(parsed) || parsed <= 0 ? null : parsed;
+      }
+      if (finish_seconds === null) finish_seconds = parseTime(rawTime);
+    }
 
     // Additional data: collect all "extra" columns not in the core set
     const coreIndices = new Set([
@@ -268,6 +290,8 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
       colMap.genderValue,
       colMap.ageGroup,
       colMap.time,
+      colMap.timeSeconds,
+      colMap.status,
     ].filter((x): x is number => x !== null));
 
     const additional_data: Record<string, string> = {};
@@ -286,7 +310,7 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
     // Collect any remaining header columns not already captured
     headers.forEach((h, idx) => {
       if (coreIndices.has(idx)) return;
-      if (["nation", "team", "last location"].includes(h.toLowerCase().trim())) return;
+      if (["nation", "team", "club", "last location", "last_point", "sex"].includes(h.toLowerCase().trim())) return;
       const v = cells[idx]?.trim();
       if (v) additional_data[h] = v;
     });
