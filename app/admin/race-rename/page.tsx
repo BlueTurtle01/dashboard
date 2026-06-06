@@ -32,6 +32,11 @@ export default function RaceRenamePage() {
     targetName: string;
   } | null>(null);
 
+  // Delete confirmation
+  const [pendingDelete, setPendingDelete] = useState<Race | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   useEffect(() => { load(); }, []);
 
   async function load() {
@@ -102,6 +107,22 @@ export default function RaceRenamePage() {
     }
   }
 
+  async function doDelete(race: Race) {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/admin/races/${race.id}`, { method: "DELETE" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Delete failed");
+      setPendingDelete(null);
+      await load();
+    } catch (e) {
+      setDeleteError(String(e));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   function handleSaveClick(sourceId: string) {
     const newName = editValue.trim();
     if (!newName) return;
@@ -141,7 +162,7 @@ export default function RaceRenamePage() {
                 <th className="px-4 py-3 text-left font-medium w-16">Year</th>
                 <th className="px-4 py-3 text-left font-medium w-20">Results</th>
                 <th className="px-4 py-3 text-left font-medium w-24">Status</th>
-                <th className="px-4 py-3 w-24" />
+                <th className="px-4 py-3 w-32" />
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
@@ -211,12 +232,20 @@ export default function RaceRenamePage() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => startEdit(race)}
-                          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                        >
-                          Rename
-                        </button>
+                        <div className="flex gap-3 justify-end">
+                          <button
+                            onClick={() => startEdit(race)}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            onClick={() => { setPendingDelete(race); setDeleteError(null); }}
+                            className="text-xs text-red-500 hover:text-red-700 font-medium"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -224,6 +253,36 @@ export default function RaceRenamePage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {pendingDelete && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-lg font-semibold mb-2">Delete race?</h2>
+            <p className="text-sm text-zinc-600 mb-1">
+              <span className="font-medium text-zinc-900">&ldquo;{pendingDelete.name}&rdquo;</span> will be permanently deleted along with all{" "}
+              <span className="font-medium text-zinc-900">{pendingDelete.result_count}</span> results. This cannot be undone.
+            </p>
+            {deleteError && <p className="text-xs text-red-600 mt-2">{deleteError}</p>}
+            <div className="flex gap-3 justify-end mt-4">
+              <button
+                onClick={() => setPendingDelete(null)}
+                disabled={deleting}
+                className="text-sm text-zinc-500 hover:text-zinc-800 px-4 py-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => doDelete(pendingDelete)}
+                disabled={deleting}
+                className="text-sm bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-40"
+              >
+                {deleting ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

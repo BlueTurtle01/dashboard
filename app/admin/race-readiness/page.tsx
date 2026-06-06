@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
 
@@ -48,7 +48,7 @@ interface ResultsResponse {
   late_analysis?: LateAnalysis | null;
 }
 interface RaceOption {
-  race_id: string; race_name: string; total_distance_km: number; total_ascent_m: number;
+  race_id: string; race_name: string; total_distance_km: number | null; total_ascent_m: number | null;
 }
 
 /* ── Athlete types ── */
@@ -348,6 +348,79 @@ function DistributionMini({ dist, totalFinishers }: { dist: DistributionBucket[]
 /* ══════════════════════════════════════════════════════════════════
    PAGE 3 COMPONENTS
 ══════════════════════════════════════════════════════════════════ */
+
+/* Race search combobox — client-side filter over all loaded races */
+function RaceSearchCombobox({ races, selectedId, onSelect }: {
+  races: RaceOption[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const selectedRace = races.find(r => r.race_id === selectedId);
+  const [query, setQuery] = useState(selectedRace?.race_name ?? "");
+  const [open, setOpen]   = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectedRace && !query) setQuery(selectedRace.race_name);
+  }, [selectedRace]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = q ? races.filter(r => r.race_name.toLowerCase().includes(q)) : races;
+    return list.slice(0, 30);
+  }, [query, races]);
+
+  function select(race: RaceOption) {
+    setQuery(race.race_name);
+    setOpen(false);
+    onSelect(race.race_id);
+  }
+
+  const inS: React.CSSProperties = { ...inputStyle, width: "280px" };
+  const dropS: React.CSSProperties = { position: "absolute", top: "100%", left: 0, zIndex: 100, background: "#fff", border: "1px solid #ddd", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: "320px", maxHeight: "320px", overflowY: "auto", marginTop: "4px" };
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative" }}>
+      <input
+        type="text"
+        value={query}
+        placeholder="Search races…"
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        style={inS}
+      />
+      {open && filtered.length > 0 && (
+        <div style={dropS}>
+          {filtered.map(r => (
+            <button
+              key={r.race_id}
+              type="button"
+              onClick={() => select(r)}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 14px", border: "none", background: "none", cursor: "pointer", borderBottom: "1px solid #f0f0f0" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "#f9f9f9")}
+              onMouseLeave={e => (e.currentTarget.style.background = "none")}
+            >
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "#111" }}>{r.race_name}</div>
+              {r.total_distance_km != null && (
+                <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+                  {r.total_distance_km.toFixed(1)} km · {Math.round(r.total_ascent_m ?? 0)}m ↑
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* Athlete search combobox — shown in the no-print config panel */
 function AthleteSearchCombobox({ onSelect, selectedKey }: {
@@ -941,22 +1014,22 @@ export default function RaceReadinessPage() {
     return { total, fastestMin, medianMin, year: results.latest_year };
   })();
 
-  // Load races list
+  // Load races list — all races, with profile data (distance/ascent) where available
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
+      const { data: raceRows } = await supabase.from("races").select("id, name").order("name");
+      if (!raceRows) return;
+      const raceIds = raceRows.map(r => r.id as string);
+      const { data: profileRows } = await supabase
         .from("race_profiles")
-        .select("race_id, total_distance_km, total_ascent_m, metadata")
-        .order("race_id");
-      if (!data) return;
-      const raceIds = data.map(r => r.race_id);
-      const { data: raceRows } = await supabase.from("races").select("id, name").in("id", raceIds).order("name");
-      const nameMap = new Map((raceRows ?? []).map((r: { id: string; name: string }) => [r.id, r.name]));
-      setRaces(data.map(r => ({
-        race_id:           r.race_id,
-        race_name:         nameMap.get(r.race_id) ?? (r.metadata as { race_name?: string })?.race_name ?? r.race_id,
-        total_distance_km: r.total_distance_km,
-        total_ascent_m:    r.total_ascent_m,
+        .select("race_id, total_distance_km, total_ascent_m")
+        .in("race_id", raceIds);
+      const profileMap = new Map((profileRows ?? []).map(r => [r.race_id as string, r]));
+      setRaces(raceRows.map(r => ({
+        race_id:           r.id as string,
+        race_name:         r.name as string,
+        total_distance_km: profileMap.get(r.id as string)?.total_distance_km ?? null,
+        total_ascent_m:    profileMap.get(r.id as string)?.total_ascent_m ?? null,
       })));
     }
     void load();
@@ -1081,14 +1154,11 @@ export default function RaceReadinessPage() {
       <div className="no-print" style={{ background: "#fff", borderBottom: "1px solid #e5e5e5", padding: "24px 32px", display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-end" }}>
         <div>
           <div style={labelStyle}>Race</div>
-          <select value={selectedRaceId} onChange={e => setSelectedRaceId(e.target.value)} style={inputStyle}>
-            <option value="">— Select race —</option>
-            {races.map(r => (
-              <option key={r.race_id} value={r.race_id}>
-                {r.race_name} · {r.total_distance_km.toFixed(1)} km · {Math.round(r.total_ascent_m)}m ↑
-              </option>
-            ))}
-          </select>
+          <RaceSearchCombobox
+            races={races}
+            selectedId={selectedRaceId}
+            onSelect={id => setSelectedRaceId(id)}
+          />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <button type="button" onClick={() => void handleGenerate()} disabled={generating} style={generateBtn}>
