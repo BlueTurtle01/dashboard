@@ -13,7 +13,7 @@ interface RaceMeta {
 }
 interface TerrainSection {
   start_km: number; end_km: number; distance_km: number;
-  section_type: string; avg_gradient_percent: number;
+  section_type: string; terrain: string; avg_gradient_percent: number;
   ascent_m: number; descent_m: number; flat_equivalent_km: number;
 }
 interface WindSection {
@@ -1719,7 +1719,146 @@ export default function RaceReadinessPage() {
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 4 — Demands Built Up
+              PAGE 4 — Experience Gaps
+          ═══════════════════════════════════════ */}
+          {athlete && result.terrain_sections.length > 0 && (() => {
+            const p = athlete.profile;
+
+            // Aggregate target race pairings from its terrain sections
+            const targetPairingMap: Record<string, { section_type: string; terrain: string; km: number }> = {};
+            for (const sec of result.terrain_sections) {
+              const key = `${sec.section_type}|${sec.terrain}`;
+              if (!targetPairingMap[key]) targetPairingMap[key] = { section_type: sec.section_type, terrain: sec.terrain, km: 0 };
+              targetPairingMap[key].km += sec.distance_km;
+            }
+
+            // Round and sort by km descending (importance order)
+            const targetList = Object.values(targetPairingMap)
+              .map(tp => ({ ...tp, km: Math.round(tp.km * 10) / 10 }))
+              .filter(tp => tp.km >= 0.1)
+              .sort((a, b) => b.km - a.km);
+
+            // Athlete's existing km per pairing
+            const athleteMap: Record<string, number> = {};
+            for (const p of athlete.terrain_pairings ?? []) {
+              athleteMap[`${p.section_type}|${p.terrain}`] = p.total_km;
+            }
+
+            // Build gap rows
+            const gapRows = targetList.map(tp => {
+              const athleteKm = athleteMap[`${tp.section_type}|${tp.terrain}`] ?? 0;
+              const pct = tp.km > 0 ? Math.min(100, Math.round((athleteKm / tp.km) * 100)) : 100;
+              const status: "none" | "partial" | "met" =
+                athleteKm === 0 ? "none" : pct >= 100 ? "met" : "partial";
+              return { ...tp, athleteKm, pct, status };
+            });
+
+            const noneCount    = gapRows.filter(r => r.status === "none").length;
+            const partialCount = gapRows.filter(r => r.status === "partial").length;
+            const metCount     = gapRows.filter(r => r.status === "met").length;
+
+            const sectionTypeLabel = (s: string) =>
+              s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const terrainLabel = (t: string) =>
+              t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const pairingColor = (s: string) =>
+              s.includes("climb") ? "#c0392b" : s.includes("descent") ? "#1565c0" : "#2e7d32";
+
+            const statusBadge = (row: (typeof gapRows)[0]) => {
+              if (row.status === "met")     return { label: "Met",            bg: "#e8f5e9", color: "#2e7d32" };
+              if (row.status === "partial") return { label: `${row.pct}% met`, bg: "#fff3e0", color: "#f57c00" };
+              return                               { label: "No experience",   bg: "#fce4ec", color: "#c0392b" };
+            };
+
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{p.athlete_key}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Experience Gaps</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Experience Gaps</h2>
+                <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
+                  Every terrain demand of {result.race.name} — ordered by distance on course (most impactful first)
+                </p>
+
+                {/* Summary chips */}
+                <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+                  {noneCount > 0 && (
+                    <div style={{ background: "#fce4ec", borderRadius: "20px", padding: "5px 14px", fontSize: "11px", fontWeight: 700, color: "#c0392b" }}>
+                      {noneCount} demand{noneCount !== 1 ? "s" : ""} with no prior experience
+                    </div>
+                  )}
+                  {partialCount > 0 && (
+                    <div style={{ background: "#fff3e0", borderRadius: "20px", padding: "5px 14px", fontSize: "11px", fontWeight: 700, color: "#f57c00" }}>
+                      {partialCount} partially met
+                    </div>
+                  )}
+                  {metCount > 0 && (
+                    <div style={{ background: "#e8f5e9", borderRadius: "20px", padding: "5px 14px", fontSize: "11px", fontWeight: 700, color: "#2e7d32" }}>
+                      {metCount} fully met
+                    </div>
+                  )}
+                </div>
+
+                {/* Gap table */}
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...thStyle, width: "160px" }}>Gradient Type</th>
+                      <th style={{ ...thStyle, width: "110px" }}>Surface</th>
+                      <th style={{ ...thStyle, width: "65px" }}>Race km</th>
+                      <th style={{ ...thStyle, width: "75px" }}>Athlete km</th>
+                      <th style={{ ...thStyle, width: "110px" }}>Status</th>
+                      <th style={thStyle}>Coverage</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gapRows.map((row, i) => {
+                      const col    = pairingColor(row.section_type);
+                      const badge  = statusBadge(row);
+                      const metPct = Math.min(100, row.pct);
+                      return (
+                        <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                          <td style={{ ...tdStyle, fontWeight: 600, color: col }}>
+                            {sectionTypeLabel(row.section_type)}
+                          </td>
+                          <td style={{ ...tdStyle, color: "#555" }}>{terrainLabel(row.terrain)}</td>
+                          <td style={{ ...tdStyle, fontWeight: 700 }}>{row.km.toFixed(1)}</td>
+                          <td style={{ ...tdStyle, color: row.athleteKm > 0 ? "#333" : "#ccc" }}>
+                            {row.athleteKm > 0 ? row.athleteKm.toFixed(1) : "—"}
+                          </td>
+                          <td style={tdStyle}>
+                            <span style={{ background: badge.bg, color: badge.color, borderRadius: "10px", padding: "2px 8px", fontSize: "9.5px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                              {badge.label}
+                            </span>
+                          </td>
+                          <td style={tdStyle}>
+                            <div style={{ position: "relative", height: "10px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
+                              <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${metPct}%`, background: row.status === "met" ? "#2e7d32" : row.status === "partial" ? "#f57c00" : "#eee", borderRadius: "3px" }} />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                <div style={{ marginTop: "12px", fontSize: "8.5px", color: "#bbb" }}>
+                  Demands ordered by distance on the target course — longer sections carry more physical consequence.
+                  Athlete km drawn from all finished races in their career history.
+                </div>
+
+                <PageNumber n={4} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 5 — Demands Built Up
           ═══════════════════════════════════════ */}
           {athlete && (() => {
             const p = athlete.profile;
@@ -1906,7 +2045,7 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={4} />
+                <PageNumber n={5} />
               </div>
             );
           })()}
