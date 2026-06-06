@@ -1117,6 +1117,9 @@ export default function RaceReadinessPage() {
       });
       if (rRes.ok) setResults(await rRes.json() as ResultsResponse);
     } catch { /* optional */ }
+
+    // Re-fetch athlete so any newly uploaded race profiles are picked up
+    if (selectedAthleteKey.trim()) void fetchAthlete(selectedAthleteKey.trim());
   }
 
   /* ── Page 2 demand computations ── */
@@ -1725,16 +1728,21 @@ export default function RaceReadinessPage() {
             const p = athlete.profile;
 
             // Aggregate target race pairings from its terrain sections
-            const targetPairingMap: Record<string, { section_type: string; terrain: string; km: number }> = {};
+            const targetPairingMap: Record<string, { section_type: string; terrain: string; km: number; weightedGrad: number }> = {};
             for (const sec of result.terrain_sections) {
               const key = `${sec.section_type}|${sec.terrain}`;
-              if (!targetPairingMap[key]) targetPairingMap[key] = { section_type: sec.section_type, terrain: sec.terrain, km: 0 };
-              targetPairingMap[key].km += sec.distance_km;
+              if (!targetPairingMap[key]) targetPairingMap[key] = { section_type: sec.section_type, terrain: sec.terrain, km: 0, weightedGrad: 0 };
+              targetPairingMap[key].km          += sec.distance_km;
+              targetPairingMap[key].weightedGrad += sec.avg_gradient_percent * sec.distance_km;
             }
 
             // Round and sort by km descending (importance order)
             const targetList = Object.values(targetPairingMap)
-              .map(tp => ({ ...tp, km: Math.round(tp.km * 10) / 10 }))
+              .map(tp => ({
+                ...tp,
+                km:           Math.round(tp.km * 10) / 10,
+                avg_gradient: tp.km > 0 ? Math.round((tp.weightedGrad / tp.km) * 10) / 10 : 0,
+              }))
               .filter(tp => tp.km >= 0.1)
               .sort((a, b) => b.km - a.km);
 
@@ -1750,7 +1758,7 @@ export default function RaceReadinessPage() {
               const pct = tp.km > 0 ? Math.min(100, Math.round((athleteKm / tp.km) * 100)) : 100;
               const status: "none" | "partial" | "met" =
                 athleteKm === 0 ? "none" : pct >= 100 ? "met" : "partial";
-              return { ...tp, athleteKm, pct, status };
+              return { ...tp, athleteKm, pct, status, avg_gradient: tp.avg_gradient };
             });
 
             const noneCount    = gapRows.filter(r => r.status === "none").length;
@@ -1825,6 +1833,9 @@ export default function RaceReadinessPage() {
                         <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                           <td style={{ ...tdStyle, fontWeight: 600, color: col }}>
                             {sectionTypeLabel(row.section_type)}
+                            <div style={{ fontSize: "8.5px", color: "#999", fontWeight: 400, marginTop: "1px" }}>
+                              avg {row.avg_gradient > 0 ? "+" : ""}{row.avg_gradient.toFixed(1)}%
+                            </div>
                           </td>
                           <td style={{ ...tdStyle, color: "#555" }}>{terrainLabel(row.terrain)}</td>
                           <td style={{ ...tdStyle, fontWeight: 700 }}>{row.km.toFixed(1)}</td>
