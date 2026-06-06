@@ -2072,6 +2072,8 @@ export default function RaceReadinessPage() {
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         @media print {
           .no-print { display: none !important; }
+          .app-sidebar { display: none !important; }
+          .app-topbar  { display: none !important; }
           .race-strategy-canvas { background: #fff !important; padding: 0 !important; gap: 0 !important; }
           @page { size: A4 portrait; margin: 0; }
         }
