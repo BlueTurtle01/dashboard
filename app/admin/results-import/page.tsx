@@ -27,8 +27,15 @@ interface ImportRecord {
 
 interface GpxFileState {
   file: File;
+  raceId: string;
+  raceName: string;
   status: "pending" | "uploading" | "done" | "error";
   message: string | null;
+}
+
+interface RaceItem {
+  id: string;
+  name: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -58,11 +65,20 @@ export default function ResultsImportPage() {
   // GPX tab state
   const [gpxFiles, setGpxFiles] = useState<GpxFileState[]>([]);
   const [gpxDragOver, setGpxDragOver] = useState(false);
+  const [races, setRaces] = useState<RaceItem[]>([]);
+  const [raceSearch, setRaceSearch] = useState<Record<string, string>>({});  // file.name → search text
+  const [raceOpen, setRaceOpen]     = useState<Record<string, boolean>>({});  // file.name → dropdown open
   const gpxInputRef = useRef<HTMLInputElement>(null);
 
-  // Load import history
+  // Load import history + races list
   useEffect(() => {
     loadHistory();
+    fetch("/api/admin/races")
+      .then(r => r.json())
+      .then((b: { races?: { id: string; name: string }[] }) =>
+        setRaces((b.races ?? []).map(r => ({ id: r.id, name: r.name })))
+      )
+      .catch(() => {/* non-fatal */});
   }, []);
 
   async function loadHistory() {
@@ -221,43 +237,50 @@ export default function ResultsImportPage() {
     for (const file of Array.from(fileList)) {
       if (!file.name.toLowerCase().endsWith(".gpx")) continue;
       if (gpxFiles.some((f) => f.file.name === file.name)) continue;
-      toAdd.push({ file, status: "pending", message: null });
+      toAdd.push({ file, raceId: "", raceName: "", status: "pending", message: null });
     }
     setGpxFiles((prev) => [...prev, ...toAdd]);
   }
 
+  function setFileRace(fileName: string, raceId: string, raceName: string) {
+    setGpxFiles(prev => prev.map(f => f.file.name === fileName ? { ...f, raceId, raceName } : f));
+    setRaceOpen(prev => ({ ...prev, [fileName]: false }));
+    setRaceSearch(prev => ({ ...prev, [fileName]: raceName }));
+  }
+
   async function uploadGpx(gpxFile: GpxFileState) {
-    setGpxFiles((prev) =>
-      prev.map((f) => (f.file === gpxFile.file ? { ...f, status: "uploading" } : f))
-    );
+    if (!gpxFile.raceId) return;
+    setGpxFiles(prev => prev.map(f => f.file === gpxFile.file ? { ...f, status: "uploading", message: "Uploading & computing profile…" } : f));
+
     const formData = new FormData();
+    formData.append("race_id", gpxFile.raceId);
     formData.append("file", gpxFile.file);
 
-    const res = await fetch("/api/admin/raw-gpx-upload", { method: "POST", body: formData });
-    const body = await res.json();
+    const res  = await fetch("/api/admin/gpx-upload", { method: "POST", body: formData });
+    const body = await res.json() as { success?: boolean; total_distance_km?: number; total_ascent_m?: number; sections_count?: number; error?: string };
 
-    setGpxFiles((prev) =>
-      prev.map((f) =>
-        f.file === gpxFile.file
-          ? {
-              ...f,
-              status: res.ok ? "done" : "error",
-              message: res.ok ? "Uploaded" : (body.error ?? "Upload failed"),
-            }
-          : f
-      )
-    );
+    setGpxFiles(prev => prev.map(f =>
+      f.file === gpxFile.file
+        ? {
+            ...f,
+            status:  res.ok ? "done" : "error",
+            message: res.ok
+              ? `Done — ${body.total_distance_km?.toFixed(1)} km · ${Math.round(body.total_ascent_m ?? 0)}m ↑ · ${body.sections_count} sections`
+              : (body.error ?? "Upload failed"),
+          }
+        : f
+    ));
   }
 
   async function uploadAllGpx() {
-    const pending = gpxFiles.filter((f) => f.status === "pending");
+    const pending = gpxFiles.filter(f => f.status === "pending" && f.raceId);
     await Promise.all(pending.map(uploadGpx));
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   const readyCount = csvFiles.filter((f) => f.status === "pending" && f.parsed).length;
-  const gpxPendingCount = gpxFiles.filter((f) => f.status === "pending").length;
+  const gpxPendingCount = gpxFiles.filter(f => f.status === "pending" && f.raceId).length;
 
   return (
     <div style={{ padding: "24px", maxWidth: 960, fontFamily: "sans-serif" }}>
@@ -437,7 +460,7 @@ export default function ResultsImportPage() {
               Drop GPX files here or <span style={{ color: "#2563eb" }}>click to browse</span>
             </div>
             <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
-              Files are stored and can be linked to a race later
+              Select a race for each file, then upload — profile is computed automatically
             </div>
             <input
               ref={gpxInputRef}
@@ -465,15 +488,57 @@ export default function ResultsImportPage() {
                       background: "#fff",
                     }}
                   >
-                    <span style={{ flex: 1, fontSize: 13 }}>{f.file.name}</span>
-                    <span style={{ fontSize: 12, color: "#9ca3af" }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "0 1 200px" }}>{f.file.name}</span>
+                    <span style={{ fontSize: 12, color: "#9ca3af", whiteSpace: "nowrap" }}>
                       {(f.file.size / 1024).toFixed(0)} KB
                     </span>
+                    {/* Race picker */}
+                    {f.status === "pending" && (
+                      <div style={{ position: "relative", flex: 1, minWidth: 160 }}>
+                        <input
+                          type="text"
+                          placeholder="Search race…"
+                          value={raceSearch[f.file.name] ?? ""}
+                          onChange={e => {
+                            setRaceSearch(prev => ({ ...prev, [f.file.name]: e.target.value }));
+                            setRaceOpen(prev => ({ ...prev, [f.file.name]: true }));
+                            if (!e.target.value) setGpxFiles(prev => prev.map(g => g.file.name === f.file.name ? { ...g, raceId: "", raceName: "" } : g));
+                          }}
+                          onFocus={() => setRaceOpen(prev => ({ ...prev, [f.file.name]: true }))}
+                          onBlur={() => setTimeout(() => setRaceOpen(prev => ({ ...prev, [f.file.name]: false })), 150)}
+                          style={{ width: "100%", fontSize: 12, padding: "4px 8px", border: "1px solid #d1d5db", borderRadius: 4, outline: "none", boxSizing: "border-box" }}
+                        />
+                        {raceOpen[f.file.name] && (
+                          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, background: "#fff", border: "1px solid #d1d5db", borderRadius: 4, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 220, overflowY: "auto", marginTop: 2 }}>
+                            {races
+                              .filter(r => !raceSearch[f.file.name] || r.name.toLowerCase().includes((raceSearch[f.file.name] ?? "").toLowerCase()))
+                              .slice(0, 25)
+                              .map(r => (
+                                <button
+                                  key={r.id}
+                                  type="button"
+                                  onMouseDown={() => setFileRace(f.file.name, r.id, r.name)}
+                                  style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", border: "none", background: "none", cursor: "pointer", fontSize: 12, borderBottom: "1px solid #f3f4f6" }}
+                                >
+                                  {r.name}
+                                </button>
+                              ))}
+                            {races.filter(r => !raceSearch[f.file.name] || r.name.toLowerCase().includes((raceSearch[f.file.name] ?? "").toLowerCase())).length === 0 && (
+                              <div style={{ padding: "8px 10px", fontSize: 12, color: "#9ca3af" }}>No races found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {f.status !== "pending" && f.raceName && (
+                      <span style={{ fontSize: 12, color: "#6b7280", flex: 1 }}>{f.raceName}</span>
+                    )}
                     <StatusBadge status={f.status} message={f.message} />
                     {f.status === "pending" && (
                       <button
                         onClick={() => uploadGpx(f)}
-                        style={{ fontSize: 12, padding: "4px 10px", cursor: "pointer", border: "1px solid #d1d5db", borderRadius: 4 }}
+                        disabled={!f.raceId}
+                        style={{ fontSize: 12, padding: "4px 10px", cursor: f.raceId ? "pointer" : "not-allowed", border: "1px solid #d1d5db", borderRadius: 4, opacity: f.raceId ? 1 : 0.4, whiteSpace: "nowrap" }}
                       >
                         Upload
                       </button>
