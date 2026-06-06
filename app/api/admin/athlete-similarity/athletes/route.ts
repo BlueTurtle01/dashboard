@@ -68,5 +68,58 @@ export async function GET(req: NextRequest) {
     } as AthleteSearchResult;
   });
 
+  // Fall back to race_results for athletes not in als_athlete_profiles (e.g. single-race athletes)
+  if (search.length > 0 && results.length < limit) {
+    const existingKeys = new Set(results.map((r) => r.athlete_key));
+    const { data: rawRows } = await supabase
+      .from("race_results")
+      .select("full_name, result_year, result_status, finish_seconds")
+      .ilike("full_name", `%${search}%`)
+      .not("full_name", "is", null)
+      .neq("full_name", "")
+      .neq("full_name", "Anonymous")
+      .limit(500);
+
+    const nameGroups: Record<string, { count: number; years: number[]; finishes: number }> = {};
+    for (const r of rawRows ?? []) {
+      const name = r.full_name as string;
+      if (!name || existingKeys.has(name)) continue;
+      if (!nameGroups[name]) nameGroups[name] = { count: 0, years: [], finishes: 0 };
+      nameGroups[name].count++;
+      if (r.result_year) nameGroups[name].years.push(r.result_year as number);
+      if (["FINISHED", "UNKNOWN"].includes(r.result_status as string) && r.finish_seconds) {
+        nameGroups[name].finishes++;
+      }
+    }
+
+    const remaining = limit - results.length;
+    for (const [name, stats] of Object.entries(nameGroups).slice(0, remaining)) {
+      const firstYear = stats.years.length > 0 ? Math.min(...stats.years) : null;
+      const lastYear  = stats.years.length > 0 ? Math.max(...stats.years) : null;
+      results.push({
+        id: "",
+        athlete_key:          name,
+        race_count:           stats.count,
+        finish_count:         stats.finishes,
+        dnf_count:            stats.count - stats.finishes,
+        dnf_rate:             null,
+        avg_perf_index:       null,
+        recency_perf_index:   null,
+        avg_flat_equiv_km:    null,
+        max_flat_equiv_km:    null,
+        avg_ascent_m:         null,
+        max_ascent_m:         null,
+        avg_difficulty_ratio: null,
+        first_result_year:    firstYear,
+        last_result_year:     lastYear,
+        career_span_years:    firstYear !== null && lastYear !== null ? lastYear - firstYear + 1 : null,
+        computed_at:          "",
+        feature_vector:       [],
+        cluster_id:           null,
+        cluster_label:        null,
+      } as AthleteSearchResult);
+    }
+  }
+
   return NextResponse.json({ athletes: results, total: results.length });
 }

@@ -11,6 +11,7 @@ export interface ParsedImport {
   raceName: string;       // title with trailing year stripped
   raceYear: number;
   dedupSlug: string;      // slugified raceName — used for race dedup on import
+  hasTitleRow: boolean;   // true if row 0 of the file is a race title (not headers)
   rows: ParsedRow[];
   parseErrors: string[];
 }
@@ -202,7 +203,7 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
   const lines = parseLines(text).filter((l) => l.some((c) => c !== ""));
 
   if (lines.length < 1) {
-    return { raceName: filename, raceYear: new Date().getFullYear(), dedupSlug: slugify(filename), rows: [], parseErrors: ["File is empty or has fewer than 2 rows"] };
+    return { raceName: filename, raceYear: new Date().getFullYear(), dedupSlug: slugify(filename), hasTitleRow: false, rows: [], parseErrors: ["File is empty or has fewer than 2 rows"] };
   }
 
   // Auto-detect: if row 0 looks like a header row (no title row present), use filename as title.
@@ -223,14 +224,14 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
   // Row 1 (or 0 if no title): headers
   const headerRowIndex = hasTitleRow ? 1 : 0;
   if (lines.length < headerRowIndex + 2) {
-    return { raceName, raceYear, dedupSlug, rows: [], parseErrors: ["File is empty or has fewer than 2 rows"] };
+    return { raceName, raceYear, dedupSlug, hasTitleRow, rows: [], parseErrors: ["File is empty or has fewer than 2 rows"] };
   }
   const headers = lines[headerRowIndex];
   const colMap = buildColMap(headers);
 
   if (colMap.name === null) {
     parseErrors.push("Could not find a 'Name' column in headers");
-    return { raceName, raceYear, dedupSlug, rows: [], parseErrors };
+    return { raceName, raceYear, dedupSlug, hasTitleRow, rows: [], parseErrors };
   }
 
   const rows: ParsedRow[] = [];
@@ -338,5 +339,5 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
     });
   }
 
-  return { raceName, raceYear, dedupSlug, rows, parseErrors };
+  return { raceName, raceYear, dedupSlug, hasTitleRow, rows, parseErrors };
 }

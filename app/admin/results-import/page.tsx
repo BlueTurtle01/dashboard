@@ -169,11 +169,20 @@ export default function ResultsImportPage() {
         f.parsed &&
         (f.editName !== f.parsed.raceName || f.editYear !== String(f.parsed.raceYear))
       ) {
-        // Re-create file with patched title row so the server parses the correct values
+        // Re-create file with a title row so the server parses the correct name/year.
+        // If the file already had a title row, replace it. If it started with headers,
+        // prepend a new row so the headers are preserved.
         const text = await f.file.text();
-        const lines = text.split(/\r?\n/);
-        lines[0] = `${f.editName} ${f.editYear}`;
-        const patched = new Blob([lines.join("\n")], { type: "text/csv" });
+        const titleLine = `${f.editName} ${f.editYear}`;
+        let patchedText: string;
+        if (f.parsed.hasTitleRow) {
+          const lines = text.split(/\r?\n/);
+          lines[0] = titleLine;
+          patchedText = lines.join("\n");
+        } else {
+          patchedText = `${titleLine}\n${text}`;
+        }
+        const patched = new Blob([patchedText], { type: "text/csv" });
         formData.append("files", patched, f.file.name);
       } else {
         formData.append("files", f.file, f.file.name);
