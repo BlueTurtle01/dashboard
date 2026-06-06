@@ -945,6 +945,7 @@ export default function RaceReadinessPage() {
   const [selectedRaceId, setSelectedRaceId] = useState("");
   const [generating, setGenerating]       = useState(false);
   const [genError, setGenError]           = useState("");
+  const [noRaceProfile, setNoRaceProfile] = useState(false);
   const [result, setResult]               = useState<OverviewResponse | null>(null);
   const [weather, setWeather]             = useState<WeatherDayRecord[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -1054,6 +1055,7 @@ export default function RaceReadinessPage() {
     if (!selectedRaceId) { setGenError("Please select a race."); return; }
     setGenerating(true);
     setGenError("");
+    setNoRaceProfile(false);
     setResult(null);
     setWeather([]);
     setResults(null);
@@ -1064,19 +1066,36 @@ export default function RaceReadinessPage() {
       body: JSON.stringify({ race_id: selectedRaceId }),
     });
     const json = await res.json() as OverviewResponse & { error?: string };
-    if (!res.ok || json.error) { setGenError(json.error ?? "Failed to load race overview."); setGenerating(false); return; }
-    setResult(json);
+
+    let effectiveResult: OverviewResponse;
+    if (res.status === 404 || (!res.ok && json.error?.includes("No race profile"))) {
+      // No route profile uploaded yet — still allow athlete pages to render
+      const raceName = races.find(r => r.race_id === selectedRaceId)?.race_name ?? "Unknown race";
+      setNoRaceProfile(true);
+      effectiveResult = {
+        race: { id: selectedRaceId, name: raceName, total_distance_km: 0, total_ascent_m: 0, total_descent_m: 0, race_date: null, weather_lat: null, weather_lon: null },
+        route: [], wind_sections: null, elevation_profile: null, sustained_segments: null, terrain_sections: [],
+      };
+    } else if (!res.ok || json.error) {
+      setGenError(json.error ?? "Failed to load race overview.");
+      setGenerating(false);
+      return;
+    } else {
+      effectiveResult = json;
+    }
+
+    setResult(effectiveResult);
     setGenerating(false);
 
     // Weather history
-    const effectiveDate = json.race.race_date;
-    if (effectiveDate && json.race.weather_lat !== null && json.race.weather_lon !== null) {
+    const effectiveDate = effectiveResult.race.race_date;
+    if (effectiveDate && effectiveResult.race.weather_lat !== null && effectiveResult.race.weather_lon !== null) {
       const [, monthStr, dayStr] = effectiveDate.split("-");
       setWeatherLoading(true);
       try {
         const wRes = await fetch("/api/race-analysis/weather-history", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat: json.race.weather_lat, lon: json.race.weather_lon, month: parseInt(monthStr, 10), day: parseInt(dayStr, 10) }),
+          body: JSON.stringify({ lat: effectiveResult.race.weather_lat, lon: effectiveResult.race.weather_lon, month: parseInt(monthStr, 10), day: parseInt(dayStr, 10) }),
         });
         if (wRes.ok) setWeather(((await wRes.json()) as { data: WeatherDayRecord[] }).data ?? []);
       } catch { /* optional */ }
@@ -1198,7 +1217,13 @@ export default function RaceReadinessPage() {
               Course profile, terrain character, and historical conditions{raceDateLabel ? ` · ${raceDateLabel}` : ""}
             </p>
 
-            <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+            {noRaceProfile && (
+              <div style={{ padding: "24px", background: "#fafafa", border: "1px solid #e0e0e0", borderRadius: "8px", textAlign: "center", color: "#888", fontSize: "13px" }}>
+                No route profile has been uploaded for this race. Course analysis, elevation chart, and terrain data are unavailable.
+              </div>
+            )}
+
+            {!noRaceProfile && <><div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
               {[
                 { label: "Distance",      value: `${result.race.total_distance_km.toFixed(1)} km` },
                 { label: "Total ascent",  value: `${Math.round(result.race.total_ascent_m)} m ↑` },
@@ -1345,7 +1370,7 @@ export default function RaceReadinessPage() {
                 Course data derived from GPX file. Elevation data from ERA5 reanalysis. Race results from official published results.
                 {weather.length > 0 && " Weather: Hersbach et al. (2023) ERA5 via Open-Meteo Historical Weather API."}
               </p>
-            </div>
+            </div></>}
             <PageNumber n={1} />
           </div>
 

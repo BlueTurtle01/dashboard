@@ -68,8 +68,9 @@ export async function GET(req: NextRequest) {
     } as AthleteSearchResult;
   });
 
-  // Fall back to race_results for athletes not in als_athlete_profiles (e.g. single-race athletes)
-  if (search.length > 0 && results.length < limit) {
+  // Always supplement with athletes from race_results not in als_athlete_profiles
+  // (e.g. single-race athletes excluded from the similarity pipeline)
+  if (search.length > 0) {
     const existingKeys = new Set(results.map((r) => r.athlete_key));
     const { data: rawRows } = await supabase
       .from("race_results")
@@ -77,13 +78,14 @@ export async function GET(req: NextRequest) {
       .ilike("full_name", `%${search}%`)
       .not("full_name", "is", null)
       .neq("full_name", "")
-      .neq("full_name", "Anonymous")
       .limit(500);
 
     const nameGroups: Record<string, { count: number; years: number[]; finishes: number }> = {};
     for (const r of rawRows ?? []) {
       const name = r.full_name as string;
       if (!name || existingKeys.has(name)) continue;
+      const nameLower = name.toLowerCase();
+      if (nameLower === "anonymous" || nameLower === "") continue;
       if (!nameGroups[name]) nameGroups[name] = { count: 0, years: [], finishes: 0 };
       nameGroups[name].count++;
       if (r.result_year) nameGroups[name].years.push(r.result_year as number);
@@ -92,8 +94,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const remaining = limit - results.length;
-    for (const [name, stats] of Object.entries(nameGroups).slice(0, remaining)) {
+    for (const [name, stats] of Object.entries(nameGroups).slice(0, 5)) {
       const firstYear = stats.years.length > 0 ? Math.min(...stats.years) : null;
       const lastYear  = stats.years.length > 0 ? Math.max(...stats.years) : null;
       results.push({
