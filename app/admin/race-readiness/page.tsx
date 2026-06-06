@@ -103,6 +103,7 @@ interface TerrainPairing {
   terrain: string;
   total_km: number;
   race_count: number;
+  avg_gradient: number;
 }
 interface AthleteResponse {
   profile: AthleteProfile;
@@ -1983,6 +1984,9 @@ export default function RaceReadinessPage() {
                             <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                               <td style={{ ...tdStyle, fontWeight: 600, color: col }}>
                                 {sectionTypeLabel(pair.section_type)}
+                                <div style={{ fontSize: "8.5px", color: "#999", fontWeight: 400, marginTop: "1px" }}>
+                                  avg {pair.avg_gradient > 0 ? "+" : ""}{pair.avg_gradient.toFixed(1)}%
+                                </div>
                               </td>
                               <td style={{ ...tdStyle, color: "#555" }}>{terrainLabel(pair.terrain)}</td>
                               <td style={{ ...tdStyle, fontWeight: 700 }}>{pair.total_km.toFixed(1)}</td>

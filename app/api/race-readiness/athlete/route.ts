@@ -41,6 +41,7 @@ export interface TerrainPairing {
   terrain: string;
   total_km: number;
   race_count: number;
+  avg_gradient: number;
 }
 
 export interface AthleteRaceDetail {
@@ -125,7 +126,7 @@ export async function GET(req: NextRequest) {
 
   // ── 2b. Fetch race_profiles separately (race_id is the PK, no FK on race_results) ──
   const uniqueRaceIds = [...new Set((resultRows ?? []).map(r => r.race_id as string))];
-  type SectionEntry = { section_type: string; terrain: string; distance_km: number };
+  type SectionEntry = { section_type: string; terrain: string; distance_km: number; avg_gradient_percent: number };
   type ProfileEntry = { total_distance_km: number; total_ascent_m: number; flat_equivalent_km: number; sections: SectionEntry[] };
   const profileMap: Record<string, ProfileEntry> = {};
   if (uniqueRaceIds.length > 0) {
@@ -139,7 +140,7 @@ export async function GET(req: NextRequest) {
         if (!s || typeof s !== "object") return [];
         const sec = s as Record<string, unknown>;
         if (typeof sec.section_type !== "string" || typeof sec.terrain !== "string" || typeof sec.distance_km !== "number") return [];
-        return [{ section_type: sec.section_type, terrain: sec.terrain, distance_km: sec.distance_km }];
+        return [{ section_type: sec.section_type, terrain: sec.terrain, distance_km: sec.distance_km, avg_gradient_percent: typeof sec.avg_gradient_percent === "number" ? sec.avg_gradient_percent : 0 }];
       });
       profileMap[rp.race_id as string] = {
         total_distance_km:  rp.total_distance_km  as number,
@@ -237,22 +238,29 @@ export async function GET(req: NextRequest) {
   };
 
   // ── 7. Terrain pairings from finished race sections ─────────────────────────
-  const pairingMap: Record<string, { section_type: string; terrain: string; total_km: number; race_count: number }> = {};
+  const pairingMap: Record<string, { section_type: string; terrain: string; total_km: number; race_count: number; weighted_grad: number }> = {};
   for (const row of resultRows ?? []) {
     if (row.result_status !== "FINISHED") continue;
     const secs = profileMap[row.race_id as string]?.sections ?? [];
     const countedThisRow = new Set<string>();
     for (const sec of secs) {
       const key = `${sec.section_type}|${sec.terrain}`;
-      if (!pairingMap[key]) pairingMap[key] = { section_type: sec.section_type, terrain: sec.terrain, total_km: 0, race_count: 0 };
-      pairingMap[key].total_km += sec.distance_km;
+      if (!pairingMap[key]) pairingMap[key] = { section_type: sec.section_type, terrain: sec.terrain, total_km: 0, race_count: 0, weighted_grad: 0 };
+      pairingMap[key].total_km    += sec.distance_km;
+      pairingMap[key].weighted_grad += sec.avg_gradient_percent * sec.distance_km;
       if (!countedThisRow.has(key)) { pairingMap[key].race_count++; countedThisRow.add(key); }
     }
   }
   const terrainPairings: TerrainPairing[] = Object.values(pairingMap)
     .sort((a, b) => b.total_km - a.total_km)
     .slice(0, 10)
-    .map(p => ({ ...p, total_km: Math.round(p.total_km * 10) / 10 }));
+    .map(p => ({
+      section_type: p.section_type,
+      terrain:      p.terrain,
+      total_km:     Math.round(p.total_km * 10) / 10,
+      race_count:   p.race_count,
+      avg_gradient: p.total_km > 0 ? Math.round((p.weighted_grad / p.total_km) * 10) / 10 : 0,
+    }));
 
   return NextResponse.json({ profile: athleteProfile, races, terrain_pairings: terrainPairings });
 }
