@@ -98,9 +98,16 @@ interface AthleteRace {
   flat_equivalent_km: number | null;
   total_finishers: number | null;
 }
+interface TerrainPairing {
+  section_type: string;
+  terrain: string;
+  total_km: number;
+  race_count: number;
+}
 interface AthleteResponse {
   profile: AthleteProfile;
   races: AthleteRace[];
+  terrain_pairings?: TerrainPairing[];
 }
 
 /* ── Elevation types ── */
@@ -1707,6 +1714,199 @@ export default function RaceReadinessPage() {
                 </div>
 
                 <PageNumber n={3} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 4 — Demands Built Up
+          ═══════════════════════════════════════ */}
+          {athlete && (() => {
+            const p = athlete.profile;
+            const allRaces = athlete.races;
+
+            const finishedRaces = allRaces.filter(r => r.result_status === "FINISHED" && r.finish_seconds);
+
+            const targetDist   = (result.race.total_distance_km ?? 0) > 0 ? result.race.total_distance_km : null;
+            const targetAscent = (result.race.total_ascent_m    ?? 0) > 0 ? result.race.total_ascent_m    : null;
+
+            const maxDist   = finishedRaces.reduce((m, r) => Math.max(m, r.total_distance_km ?? 0), 0) || null;
+            const maxAscent = finishedRaces.reduce((m, r) => Math.max(m, r.total_ascent_m    ?? 0), 0) || null;
+            const maxFlatEq = finishedRaces.reduce((m, r) => Math.max(m, r.flat_equivalent_km ?? 0), 0) || null;
+            const maxTime   = finishedRaces.reduce((m, r) => Math.max(m, r.finish_seconds     ?? 0), 0) || null;
+
+            const normDist   = Math.max(maxDist ?? 0, targetDist ?? 0)   || 1;
+            const normAscent = Math.max(maxAscent ?? 0, targetAscent ?? 0) || 1;
+
+            const tableRaces = [...finishedRaces].sort((a, b) => b.result_year - a.result_year).slice(0, 10);
+
+            const pairings = athlete.terrain_pairings ?? [];
+            const maxPairingKm = pairings.reduce((m, p) => Math.max(m, p.total_km), 0) || 1;
+
+            const sectionTypeLabel = (s: string) =>
+              s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const terrainLabel = (t: string) =>
+              t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const pairingColor = (s: string) =>
+              s.includes("climb") ? "#c0392b" : s.includes("descent") ? "#1565c0" : "#2e7d32";
+
+            const fmtTime = (secs: number) => {
+              const h = Math.floor(secs / 3600);
+              const m = Math.floor((secs % 3600) / 60);
+              return h > 0 ? `${h}h ${m}m` : `${m}m`;
+            };
+
+            type DCard = { label: string; achieved: number | null; target: number | null; fmtFn: (n: number) => string; color: string };
+            const cards: DCard[] = [
+              { label: "Distance",     achieved: maxDist,   target: targetDist,   fmtFn: n => `${n.toFixed(0)} km`,      color: "#1565c0" },
+              { label: "Ascent",       achieved: maxAscent, target: targetAscent, fmtFn: n => `${Math.round(n)}m`,       color: "#c0392b" },
+              ...(maxFlatEq ? [{ label: "Flat Equiv.", achieved: maxFlatEq, target: null, fmtFn: (n: number) => `${n.toFixed(1)} km`, color: "#e65100" }] : []),
+              { label: "Time on Feet", achieved: maxTime,   target: null,         fmtFn: fmtTime,                        color: "#6a1b9a" },
+            ];
+
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{p.athlete_key}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Demands Built Up</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Demands Built Up</h2>
+                <p style={{ margin: "0 0 20px", fontSize: "12px", color: "#888" }}>
+                  What this athlete has already experienced — compared to the demands of {result.race.name}
+                </p>
+
+                {/* Demand comparison cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "24px" }}>
+                  {cards.map((card, i) => {
+                    const pct = card.target && card.achieved ? Math.round((card.achieved / card.target) * 100) : null;
+                    const barColor = pct === null ? card.color : pct >= 100 ? "#2e7d32" : pct >= 70 ? "#f57c00" : "#c0392b";
+                    return (
+                      <div key={i} style={{ border: `2px solid ${barColor}30`, borderRadius: "8px", padding: "14px 16px", background: `${barColor}06` }}>
+                        <div style={{ fontSize: "9px", fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>{card.label}</div>
+                        <div style={{ fontSize: "22px", fontWeight: 700, color: "#1e3a1e" }}>
+                          {card.achieved ? card.fmtFn(card.achieved) : "—"}
+                        </div>
+                        {card.target && (
+                          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>Target: {card.fmtFn(card.target)}</div>
+                        )}
+                        {pct !== null && (
+                          <>
+                            <div style={{ height: "6px", background: "#eee", borderRadius: "3px", marginTop: "8px", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: barColor, borderRadius: "3px" }} />
+                            </div>
+                            <div style={{ fontSize: "10px", color: barColor, fontWeight: 600, marginTop: "4px" }}>
+                              {pct >= 100 ? "✓ Demand met" : `${pct}% of target demand`}
+                            </div>
+                          </>
+                        )}
+                        {pct === null && card.achieved && !card.target && (
+                          <div style={{ fontSize: "10px", color: "#aaa", marginTop: "8px" }}>longest effort on record</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Terrain / elevation pairings */}
+                {pairings.length > 0 && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <p style={sectionLabel}>Top 10 Elevation · Terrain Pairings — kilometres built across all finishes</p>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, width: "180px" }}>Gradient Type</th>
+                          <th style={{ ...thStyle, width: "130px" }}>Surface</th>
+                          <th style={{ ...thStyle, width: "55px" }}>km</th>
+                          <th style={{ ...thStyle, width: "50px" }}>Races</th>
+                          <th style={thStyle}>Experience</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pairings.map((pair, i) => {
+                          const barPct = (pair.total_km / maxPairingKm) * 100;
+                          const col = pairingColor(pair.section_type);
+                          return (
+                            <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                              <td style={{ ...tdStyle, fontWeight: 600, color: col }}>
+                                {sectionTypeLabel(pair.section_type)}
+                              </td>
+                              <td style={{ ...tdStyle, color: "#555" }}>{terrainLabel(pair.terrain)}</td>
+                              <td style={{ ...tdStyle, fontWeight: 700 }}>{pair.total_km.toFixed(1)}</td>
+                              <td style={{ ...tdStyle, color: "#888" }}>{pair.race_count}</td>
+                              <td style={tdStyle}>
+                                <div style={{ height: "10px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${barPct}%`, background: col, borderRadius: "3px", opacity: 0.75 }} />
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Race history table with demand bars */}
+                {tableRaces.length > 0 ? (
+                  <div>
+                    <p style={sectionLabel}>Finished Race History — Demands vs Target</p>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>Race</th>
+                          <th style={thStyle}>Yr</th>
+                          <th style={thStyle}>Time</th>
+                          <th style={{ ...thStyle, width: "170px" }}>Distance</th>
+                          <th style={{ ...thStyle, width: "170px" }}>Ascent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableRaces.map((r, i) => {
+                          const dPct    = r.total_distance_km ? Math.min(100, (r.total_distance_km / normDist)   * 100) : 0;
+                          const aPct    = r.total_ascent_m    ? Math.min(100, (r.total_ascent_m    / normAscent) * 100) : 0;
+                          const tgtDPct = targetDist   ? Math.min(100, (targetDist   / normDist)   * 100) : null;
+                          const tgtAPct = targetAscent ? Math.min(100, (targetAscent / normAscent) * 100) : null;
+                          return (
+                            <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                              <td style={tdStyle}>{r.race_name}</td>
+                              <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{r.result_year}</td>
+                              <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{r.finish_seconds ? fmtTime(r.finish_seconds) : "—"}</td>
+                              <td style={tdStyle}>
+                                <div style={{ position: "relative", height: "12px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
+                                  <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${dPct}%`, background: "#1565c0", borderRadius: "3px", opacity: 0.75 }} />
+                                  {tgtDPct !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: `calc(${tgtDPct}% - 1px)`, width: "2px", background: "#c0392b" }} />}
+                                </div>
+                                <div style={{ fontSize: "8px", color: "#888", marginTop: "1px" }}>{r.total_distance_km ? `${r.total_distance_km.toFixed(0)} km` : "—"}</div>
+                              </td>
+                              <td style={tdStyle}>
+                                <div style={{ position: "relative", height: "12px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
+                                  <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${aPct}%`, background: "#c0392b", borderRadius: "3px", opacity: 0.75 }} />
+                                  {tgtAPct !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: `calc(${tgtAPct}% - 1px)`, width: "2px", background: "#1e3a1e" }} />}
+                                </div>
+                                <div style={{ fontSize: "8px", color: "#888", marginTop: "1px" }}>{r.total_ascent_m ? `${Math.round(r.total_ascent_m)}m` : "—"}</div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {(targetDist || targetAscent) && (
+                      <div style={{ marginTop: "8px", fontSize: "8.5px", color: "#999" }}>
+                        Red line on each bar = target race demand
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: "#aaa", fontSize: "14px" }}>
+                    No finished race data found for this athlete.
+                  </div>
+                )}
+
+                <PageNumber n={4} />
               </div>
             );
           })()}

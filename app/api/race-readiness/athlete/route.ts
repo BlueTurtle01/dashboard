@@ -36,6 +36,13 @@ export interface AthleteProfileSummary {
   cluster_label: string | null;
 }
 
+export interface TerrainPairing {
+  section_type: string;
+  terrain: string;
+  total_km: number;
+  race_count: number;
+}
+
 export interface AthleteRaceDetail {
   race_id: string;
   race_name: string;
@@ -118,17 +125,27 @@ export async function GET(req: NextRequest) {
 
   // ── 2b. Fetch race_profiles separately (race_id is the PK, no FK on race_results) ──
   const uniqueRaceIds = [...new Set((resultRows ?? []).map(r => r.race_id as string))];
-  const profileMap: Record<string, { total_distance_km: number; total_ascent_m: number; flat_equivalent_km: number }> = {};
+  type SectionEntry = { section_type: string; terrain: string; distance_km: number };
+  type ProfileEntry = { total_distance_km: number; total_ascent_m: number; flat_equivalent_km: number; sections: SectionEntry[] };
+  const profileMap: Record<string, ProfileEntry> = {};
   if (uniqueRaceIds.length > 0) {
     const { data: profileRows } = await supabase
       .from("race_profiles")
-      .select("race_id, total_distance_km, total_ascent_m, flat_equivalent_km")
+      .select("race_id, total_distance_km, total_ascent_m, flat_equivalent_km, sections_json")
       .in("race_id", uniqueRaceIds);
     for (const rp of profileRows ?? []) {
+      const rawSecs = Array.isArray(rp.sections_json) ? rp.sections_json : [];
+      const sections: SectionEntry[] = rawSecs.flatMap((s: unknown) => {
+        if (!s || typeof s !== "object") return [];
+        const sec = s as Record<string, unknown>;
+        if (typeof sec.section_type !== "string" || typeof sec.terrain !== "string" || typeof sec.distance_km !== "number") return [];
+        return [{ section_type: sec.section_type, terrain: sec.terrain, distance_km: sec.distance_km }];
+      });
       profileMap[rp.race_id as string] = {
         total_distance_km:  rp.total_distance_km  as number,
         total_ascent_m:     rp.total_ascent_m     as number,
         flat_equivalent_km: rp.flat_equivalent_km as number,
+        sections,
       };
     }
   }
@@ -219,5 +236,23 @@ export async function GET(req: NextRequest) {
     cluster_label:       clusterLabel,
   };
 
-  return NextResponse.json({ profile: athleteProfile, races });
+  // ── 7. Terrain pairings from finished race sections ─────────────────────────
+  const pairingMap: Record<string, { section_type: string; terrain: string; total_km: number; race_count: number }> = {};
+  for (const row of resultRows ?? []) {
+    if (row.result_status !== "FINISHED") continue;
+    const secs = profileMap[row.race_id as string]?.sections ?? [];
+    const countedThisRow = new Set<string>();
+    for (const sec of secs) {
+      const key = `${sec.section_type}|${sec.terrain}`;
+      if (!pairingMap[key]) pairingMap[key] = { section_type: sec.section_type, terrain: sec.terrain, total_km: 0, race_count: 0 };
+      pairingMap[key].total_km += sec.distance_km;
+      if (!countedThisRow.has(key)) { pairingMap[key].race_count++; countedThisRow.add(key); }
+    }
+  }
+  const terrainPairings: TerrainPairing[] = Object.values(pairingMap)
+    .sort((a, b) => b.total_km - a.total_km)
+    .slice(0, 10)
+    .map(p => ({ ...p, total_km: Math.round(p.total_km * 10) / 10 }));
+
+  return NextResponse.json({ profile: athleteProfile, races, terrain_pairings: terrainPairings });
 }

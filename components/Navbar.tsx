@@ -441,6 +441,7 @@ export default async function Navbar() {
                     { href: "/admin/race-rename", label: "Race Rename" },
                     { href: "/admin/race-pacing", label: "Race Pacing" },
                     { href: "/admin/race-readiness", label: "Race Readiness" },
+                    { href: "/admin/athlete-demands", label: "Athlete Demands" },
                     { href: "/admin/preparation-races", label: "Preparation Races" },
                   ]}
                 />
