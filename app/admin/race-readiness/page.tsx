@@ -2074,6 +2074,8 @@ export default function RaceReadinessPage() {
           .no-print { display: none !important; }
           .app-sidebar { display: none !important; }
           .app-topbar  { display: none !important; }
+          body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+          .app-content { margin: 0 !important; padding: 0 !important; }
           .race-strategy-canvas { background: #fff !important; padding: 0 !important; gap: 0 !important; }
           @page { size: A4 portrait; margin: 0; }
         }
