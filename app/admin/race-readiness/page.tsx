@@ -1329,7 +1329,343 @@ export default function RaceReadinessPage() {
         <div style={canvas} className="race-strategy-canvas">
 
           {/* ═══════════════════════════════════════
-              PAGE 1 — Race Overview
+              PAGE 1 — Executive Readiness Summary
+          ═══════════════════════════════════════ */}
+          {result && athlete && expContext && (() => {
+            type ReadinessLevel = "strong" | "moderate" | "major_gap" | "unknown";
+
+            const firstName  = athlete.profile.athlete_key.split(" ")[0];
+            const sc         = expContext.scale;
+            const goalDist   = result.race.total_distance_km;
+            const goalAscent = result.race.total_ascent_m;
+            const goalDescent= result.race.total_descent_m;
+
+            // ── Athlete bests ──────────────────────────────────────────────
+            const athDist   = sc?.athlete_max_dist?.km ?? 0;
+            const athAscent = sc?.athlete_max_ascent?.m ?? athlete.profile.max_ascent_m ?? 0;
+            const athFlatEq = sc?.athlete_max_flat_equiv?.km ?? athlete.profile.max_flat_equiv_km ?? 0;
+            const goalFlatEq= sc?.goal_flat_equiv_km ?? 0;
+
+            // ── Status levels ──────────────────────────────────────────────
+            const levelColor = (l: ReadinessLevel) =>
+              l === "strong" ? "#2e7d32" : l === "moderate" ? "#f57c00" : l === "major_gap" ? "#c0392b" : "#9e9e9e";
+            const levelBg = (l: ReadinessLevel) =>
+              l === "strong" ? "#e8f5e9" : l === "moderate" ? "#fff3e0" : l === "major_gap" ? "#fce4ec" : "#f5f5f5";
+            const levelLabel = (l: ReadinessLevel) =>
+              l === "strong" ? "Strong" : l === "moderate" ? "Moderate" : l === "major_gap" ? "Major gap" : "Unknown";
+
+            const distStatus: ReadinessLevel =
+              athDist === 0 || goalDist === 0 ? "unknown" :
+              athDist >= goalDist         ? "strong" :
+              athDist >= goalDist * 0.7   ? "moderate" : "major_gap";
+
+            const ascentStatus: ReadinessLevel =
+              athAscent === 0 || goalAscent === 0 ? "unknown" :
+              athAscent >= goalAscent * 0.8 ? "strong" :
+              athAscent >= goalAscent * 0.5 ? "moderate" : "major_gap";
+
+            const flatStatus: ReadinessLevel =
+              athFlatEq === 0 || goalFlatEq === 0 ? "unknown" :
+              athFlatEq >= goalFlatEq * 0.8  ? "strong" :
+              athFlatEq >= goalFlatEq * 0.55 ? "moderate" : "major_gap";
+
+            // ── Gap rows (same logic as page 5 / Experience Gaps) ─────────
+            const _tpm: Record<string, { section_type: string; terrain: string; km: number }> = {};
+            for (const sec of result.terrain_sections) {
+              const key = `${sec.section_type}|${sec.terrain}`;
+              if (!_tpm[key]) _tpm[key] = { section_type: sec.section_type, terrain: sec.terrain, km: 0 };
+              _tpm[key].km += sec.distance_km;
+            }
+            const _aem: Record<string, number> = {};
+            for (const tp of athlete.terrain_pairings ?? []) {
+              _aem[`${tp.section_type}|${tp.terrain}`] = tp.total_km;
+            }
+            const summaryGapRows = Object.values(_tpm)
+              .filter(tp => tp.km >= 0.1)
+              .map(tp => {
+                const exactKm = _aem[`${tp.section_type}|${tp.terrain}`] ?? 0;
+                const pct = tp.km > 0 ? Math.min(100, Math.round((exactKm / tp.km) * 100)) : 100;
+                return {
+                  section_type: tp.section_type, terrain: tp.terrain,
+                  km: tp.km, exactKm, pct,
+                  status: exactKm === 0 ? "none" as const : pct >= 100 ? "met" as const : "partial" as const,
+                };
+              });
+
+            const descentRows      = summaryGapRows.filter(r => r.section_type.includes("descent"));
+            const descentDemandKm  = descentRows.reduce((s, r) => s + r.km, 0);
+            const descentCoveredKm = descentRows.reduce((s, r) => s + r.exactKm, 0);
+            const descentStatus: ReadinessLevel =
+              descentDemandKm === 0 ? "unknown" :
+              descentCoveredKm / descentDemandKm >= 0.8 ? "strong" :
+              descentCoveredKm / descentDemandKm >= 0.5 ? "moderate" : "major_gap";
+
+            const trailRows      = summaryGapRows.filter(r => ["trail","technical_trail","fell"].includes(r.terrain));
+            const trailDemandKm  = trailRows.reduce((s, r) => s + r.km, 0);
+            const trailCoveredKm = trailRows.reduce((s, r) => s + r.exactKm, 0);
+            const terrainStatus: ReadinessLevel =
+              trailDemandKm === 0 ? "unknown" :
+              trailCoveredKm / trailDemandKm >= 0.8 ? "strong" :
+              trailCoveredKm / trailDemandKm >= 0.5 ? "moderate" : "major_gap";
+
+            // ── Overall verdict ────────────────────────────────────────────
+            const statusList = [distStatus, ascentStatus, descentStatus, terrainStatus]
+              .filter((s): s is "strong" | "moderate" | "major_gap" => s !== "unknown");
+            const majorCount = statusList.filter(s => s === "major_gap").length;
+            const metCount   = summaryGapRows.filter(r => r.status === "met").length;
+
+            const overallLabel =
+              majorCount >= 2 ? "Not yet race-specific ready" :
+              majorCount === 1 ? "Aerobically capable, but race-specific gaps remain" :
+              statusList.includes("moderate") ? "Mostly ready, with specific risks" :
+              "Race-specific ready";
+
+            const verdictColor =
+              overallLabel === "Race-specific ready"      ? "#2e7d32" :
+              overallLabel.includes("Mostly ready")        ? "#f57c00" :
+              overallLabel.includes("Aerobically capable") ? "#e65100" : "#c0392b";
+
+            // ── Verdict text ───────────────────────────────────────────────
+            const verdictParts: string[] = [];
+            if (distStatus === "strong" && sc?.athlete_max_dist) {
+              verdictParts.push(
+                `${firstName} has demonstrated the endurance to complete distances longer than ${result.race.name} — ` +
+                `the longest recorded race is ${sc.athlete_max_dist.race_name} (${sc.athlete_max_dist.km.toFixed(0)} km).`
+              );
+            } else if (distStatus === "major_gap" && goalDist > 0) {
+              verdictParts.push(`At ${goalDist.toFixed(0)} km, ${result.race.name} is longer than anything clearly on record for ${firstName}.`);
+            }
+            if (ascentStatus === "major_gap" && athAscent > 0 && goalAscent > 0) {
+              const ar = (goalAscent / athAscent).toFixed(1);
+              verdictParts.push(
+                `The main concern is not distance — it is vertical load. The target race demands ${goalAscent.toLocaleString()} m of ascent, ` +
+                `${ar}× more than the best on record (${athAscent.toLocaleString()} m).`
+              );
+            } else if (ascentStatus === "moderate" && athAscent > 0 && goalAscent > 0) {
+              verdictParts.push(`The ascent load is a step up: ${goalAscent.toLocaleString()} m target vs ${athAscent.toLocaleString()} m best recorded.`);
+            }
+            if (verdictParts.length === 0) {
+              verdictParts.push(`${firstName}'s readiness for ${result.race.name} has been assessed across distance, ascent, descent, and terrain specificity.`);
+            }
+            const verdictText = verdictParts.join(" ");
+
+            // ── Biggest strength ───────────────────────────────────────────
+            let strengthText =
+              distStatus === "strong" && sc?.athlete_max_dist
+                ? `${firstName} has already proven the ability to complete ultra-distance events longer than ${result.race.name}. ` +
+                  `The longest recorded race — ${sc.athlete_max_dist.race_name} (${sc.athlete_max_dist.km.toFixed(0)} km, ${sc.athlete_max_dist.year}) — ` +
+                  `shows basic endurance and willingness to stay on course for a long time are not in question.`
+              : flatStatus === "strong" && sc?.athlete_max_flat_equiv
+                ? `${firstName}'s total effort capacity is strong. A best flat-equivalent load of ${sc.athlete_max_flat_equiv.km.toFixed(1)} km ` +
+                  `(${sc.athlete_max_flat_equiv.race_name}, ${sc.athlete_max_flat_equiv.year}) shows the engine is there for sustained effort.`
+              : metCount > 0
+                ? `${firstName} has covered ${metCount} of ${summaryGapRows.length} terrain-demand types at or above race-ready levels. ` +
+                  `That breadth of proven experience across conditions is a genuine asset.`
+                : `Completing multiple ultra-distance events demonstrates commitment and the ability to manage race-day adversity over extended periods.`;
+
+            // ── Biggest limiter ────────────────────────────────────────────
+            let limiterText =
+              ascentStatus === "major_gap"
+                ? (() => {
+                    const pct = goalAscent > 0 && athAscent > 0 ? Math.round((athAscent / goalAscent) * 100) : null;
+                    return (
+                      `Vertical load is the main limiter. ${result.race.name} includes ${goalAscent > 0 ? goalAscent.toLocaleString() : "—"} m of ascent, ` +
+                      `compared with ${firstName}'s best recorded ascent of ${athAscent > 0 ? athAscent.toLocaleString() : "unknown"} m` +
+                      `${sc?.athlete_max_ascent ? ` (${sc.athlete_max_ascent.race_name}, ${sc.athlete_max_ascent.year})` : ""}. ` +
+                      `${pct != null ? `That is only ${pct}% of the target race demand.` : ""}`
+                    );
+                  })()
+              : terrainStatus === "major_gap"
+                ? `Trail and fell-specific experience is the key gap. The target race is predominantly off-road mountain terrain, and the majority of matched race history does not reflect equivalent trail or fell conditions.`
+              : descentStatus === "major_gap"
+                ? `Descending volume is the main limiter. The race includes ${goalDescent > 0 ? goalDescent.toLocaleString() : "—"} m of descent, with limited proven experience of equivalent descent loads. Eccentric quad loading over repeated technical descents is a specific risk.`
+              : flatStatus === "major_gap"
+                ? `Total effort duration is the key gap. The race effort load exceeds anything clearly on record and will require sustained output at a level not yet fully replicated in training or racing.`
+                : `No single dominant limiter identified. Focus on maintaining race-specific training quality and arriving at the start line healthy and rested.`;
+
+            // ── Race-day risks ─────────────────────────────────────────────
+            const risks: string[] = [];
+            if (ascentStatus === "major_gap") risks.push("Repeated steep climbs causing unsustainable effort spikes — no equivalent training stimulus visible in race history.");
+            if (descentStatus === "major_gap" || descentStatus === "moderate") risks.push("Steep descending creating quad fatigue and elevated injury risk over the second half of the course.");
+            if (terrainStatus === "major_gap") risks.push("Limited trail and fell-specific experience — technical terrain adds time, effort, and navigational risk.");
+            if (wetPct !== null && wetPct > 50) risks.push(`Wet conditions (${wetPct}% historical chance of rain) increasing technical difficulty and energy expenditure.`);
+            if (distStatus === "strong" && (ascentStatus === "major_gap" || terrainStatus === "major_gap")) risks.push("Pacing trap — the distance alone may feel manageable, masking the much larger vertical and terrain demands.");
+            if (risks.length === 0) {
+              risks.push("Maintain race-specific training quality and a disciplined taper approach.");
+              risks.push("Race-day nutrition and pacing execution will be the key variables.");
+            }
+
+            // ── Next step & feeder race ────────────────────────────────────
+            const nextStepText =
+              ascentStatus === "major_gap"
+                ? "Do not treat this as a distance problem. Preparation should focus on mountain-specific vertical load: long sustained climbs, controlled technical descents, and at least one training block that replicates steep mountain terrain before race day."
+              : terrainStatus === "major_gap"
+                ? "Prioritise trail and fell-specific training. Seek out technical off-road routes with meaningful ascent and descent. The goal is to build confidence and efficiency on the same kind of terrain the race demands."
+              : distStatus !== "strong"
+                ? "Build overall endurance base with a focus on time on feet at race-equivalent effort. A progressive long-run block leading into a race-simulation event would be ideal."
+                : "Continue building on the existing base. Race-specific sharpness — pacing strategy, nutrition, and kit management — will be the key variables on the day.";
+
+            const raceDate = result.race.race_date ? new Date(result.race.race_date + "T12:00:00") : null;
+            const cutoff   = raceDate ? new Date(raceDate.getTime() - 28 * 86_400_000) : null;
+            const feederRace = prepRaces?.suggestions
+              .filter(s => s.next_date != null && cutoff != null && new Date(s.next_date + "T12:00:00") <= cutoff)
+              .sort((a, b) => b.gap_fill_score - a.gap_fill_score)[0] ?? null;
+
+            // ── Score cards ────────────────────────────────────────────────
+            const overallConfidenceLevel: ReadinessLevel =
+              majorCount >= 2 ? "major_gap" :
+              majorCount === 1 ? "moderate" :
+              statusList.includes("moderate") ? "moderate" : "strong";
+
+            const scoreCards: { title: string; level: ReadinessLevel; detail: string }[] = [
+              {
+                title: "Distance",
+                level: distStatus,
+                detail: athDist > 0 && goalDist > 0
+                  ? `${athDist.toFixed(0)} km max vs ${goalDist.toFixed(0)} km target`
+                  : "Insufficient data",
+              },
+              {
+                title: "Ascent",
+                level: ascentStatus,
+                detail: athAscent > 0 && goalAscent > 0
+                  ? `${athAscent.toLocaleString()} m max vs ${goalAscent.toLocaleString()} m target`
+                  : "Insufficient data",
+              },
+              {
+                title: "Descent",
+                level: descentStatus,
+                detail: descentDemandKm > 0
+                  ? `${(Math.round(descentCoveredKm * 10) / 10).toFixed(1)} km covered of ${(Math.round(descentDemandKm * 10) / 10).toFixed(1)} km`
+                  : "Insufficient data",
+              },
+              {
+                title: "Terrain specificity",
+                level: terrainStatus,
+                detail: trailDemandKm > 0
+                  ? `${(Math.round(trailCoveredKm * 10) / 10).toFixed(1)} km trail/fell vs ${(Math.round(trailDemandKm * 10) / 10).toFixed(1)} km demanded`
+                  : "No off-road demand detected",
+              },
+              {
+                title: "Time-on-feet load",
+                level: flatStatus,
+                detail: athFlatEq > 0 && goalFlatEq > 0
+                  ? `${athFlatEq.toFixed(1)} km effort-equiv vs ${goalFlatEq.toFixed(1)} km goal`
+                  : "Insufficient data",
+              },
+              {
+                title: "Overall confidence",
+                level: overallConfidenceLevel,
+                detail: summaryGapRows.length > 0
+                  ? `${metCount} of ${summaryGapRows.length} demand types fully met`
+                  : "No course profile data",
+              },
+            ];
+
+            // ── Card style helpers ─────────────────────────────────────────
+            const panelCard = (accent: string, bg: string): React.CSSProperties => ({
+              background: bg, border: `1px solid ${accent}40`,
+              borderLeft: `4px solid ${accent}`, borderRadius: "6px", padding: "12px 14px",
+            });
+            const panelHead2: React.CSSProperties = {
+              fontSize: "10px", fontWeight: 700, textTransform: "uppercase",
+              letterSpacing: "0.07em", marginBottom: "5px",
+            };
+
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Race Readiness</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Race Readiness Summary</h2>
+                <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
+                  A plain-English assessment of whether {firstName} is currently prepared for {result.race.name}
+                </p>
+
+                {/* ── Overall verdict ─────────────────────────────────────── */}
+                <div style={{
+                  background: `${verdictColor}0c`, border: `1px solid ${verdictColor}35`,
+                  borderLeft: `6px solid ${verdictColor}`, borderRadius: "6px",
+                  padding: "12px 16px", marginBottom: "12px",
+                }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <div style={{ fontSize: "10px", fontWeight: 700, color: verdictColor, textTransform: "uppercase", letterSpacing: "0.07em" }}>Overall Verdict</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: verdictColor }}>{overallLabel}</div>
+                  </div>
+                  <div style={{ fontSize: "11.5px", color: "#333", lineHeight: 1.5 }}>{verdictText}</div>
+                </div>
+
+                {/* ── 6 readiness score cards ─────────────────────────────── */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                  {scoreCards.map(card => (
+                    <div key={card.title} style={{
+                      background: levelBg(card.level), border: `1px solid ${levelColor(card.level)}40`,
+                      borderTop: `3px solid ${levelColor(card.level)}`, borderRadius: "6px", padding: "9px 11px",
+                    }}>
+                      <div style={{ fontSize: "9px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px" }}>{card.title}</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: levelColor(card.level), marginBottom: "3px" }}>{levelLabel(card.level)}</div>
+                      <div style={{ fontSize: "9px", color: "#555", lineHeight: 1.35 }}>{card.detail}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Strength + Limiter ──────────────────────────────────── */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                  <div style={panelCard("#2e7d32", "#f9fffe")}>
+                    <div style={{ ...panelHead2, color: "#2e7d32" }}>Biggest Strength</div>
+                    <div style={{ fontSize: "11px", color: "#333", lineHeight: 1.5 }}>{strengthText}</div>
+                  </div>
+                  <div style={panelCard(verdictColor, "#fffaf9")}>
+                    <div style={{ ...panelHead2, color: verdictColor }}>Biggest Limiter</div>
+                    <div style={{ fontSize: "11px", color: "#333", lineHeight: 1.5 }}>{limiterText}</div>
+                  </div>
+                </div>
+
+                {/* ── Race-day risks ──────────────────────────────────────── */}
+                <div style={{ ...panelCard("#e65100", "#fffaf5"), marginBottom: "10px" }}>
+                  <div style={{ ...panelHead2, color: "#e65100" }}>Main Race-Day Risks</div>
+                  <ul style={{ margin: 0, paddingLeft: "16px" }}>
+                    {risks.map((r, i) => (
+                      <li key={i} style={{ fontSize: "10.5px", color: "#444", lineHeight: 1.45, marginBottom: i < risks.length - 1 ? "4px" : 0 }}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* ── Recommended next step ───────────────────────────────── */}
+                <div style={{ ...panelCard("#1565c0", "#f0f4ff"), marginBottom: "8px" }}>
+                  <div style={{ ...panelHead2, color: "#1565c0" }}>Recommended Next Step</div>
+                  <div style={{ fontSize: "11px", color: "#333", lineHeight: 1.5 }}>{nextStepText}</div>
+                  {feederRace ? (
+                    <div style={{ marginTop: "6px", fontSize: "10.5px", color: "#1565c0", fontWeight: 600 }}>
+                      Suitable preparation race: {feederRace.race_name}
+                      {feederRace.next_date ? ` — ${new Date(feederRace.next_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}` : ""}
+                      {feederRace.gap_fill_score > 0 ? ` (${Math.round(feederRace.gap_fill_score)}% demand coverage)` : ""}
+                    </div>
+                  ) : raceDate ? (
+                    <div style={{ marginTop: "5px", fontSize: "10px", color: "#888" }}>No suitable preparation race identified before race day — use race-specific training blocks instead.</div>
+                  ) : null}
+                </div>
+
+                {/* ── Footer ─────────────────────────────────────────────── */}
+                <div style={{ paddingTop: "8px", borderTop: "1px solid #eee" }}>
+                  <p style={{ margin: 0, fontSize: "9px", color: "#bbb", lineHeight: 1.5 }}>
+                    Readiness assessment is based on available race-history data, course profile, terrain classification, historical weather, and modelled race demands.
+                    It is not a guarantee of performance or safety.
+                  </p>
+                </div>
+
+                <PageNumber n={1} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 2 — Race Overview
           ═══════════════════════════════════════ */}
           <div style={a4Page}>
             <div style={printHeader}>
@@ -1526,11 +1862,11 @@ export default function RaceReadinessPage() {
                 {weather.length > 0 && " Weather: Hersbach et al. (2023) ERA5 via Open-Meteo Historical Weather API."}
               </p>
             </div></>}
-            <PageNumber n={1} />
+            <PageNumber n={2} />
           </div>
 
           {/* ═══════════════════════════════════════
-              PAGE 2 — Race Demands Profile
+              PAGE 3 — Race Demands Profile
           ═══════════════════════════════════════ */}
           {secs.length > 0 && (
             <div style={a4Page}>
@@ -1725,12 +2061,12 @@ export default function RaceReadinessPage() {
                 </p>
               </div>
 
-              <PageNumber n={2} />
+              <PageNumber n={3} />
             </div>
           )}
 
           {/* ═══════════════════════════════════════
-              PAGE 3 — Athlete Overview
+              PAGE 4 — Athlete Overview
           ═══════════════════════════════════════ */}
           {athlete && (() => {
             const p = athlete.profile;
@@ -1918,13 +2254,13 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={3} />
+                <PageNumber n={4} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 4 — Experience Gaps
+              PAGE 5 — Experience Gaps
           ═══════════════════════════════════════ */}
           {athlete && result.terrain_sections.length > 0 && (() => {
             const p = athlete.profile;
@@ -2084,13 +2420,13 @@ export default function RaceReadinessPage() {
                   Athlete km drawn from all finished races in their career history.
                 </div>
 
-                <PageNumber n={4} />
+                <PageNumber n={5} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 5 — Demands Built Up
+              PAGE 6 — Demands Built Up
           ═══════════════════════════════════════ */}
           {athlete && (() => {
             const p = athlete.profile;
@@ -2280,13 +2616,13 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={5} />
+                <PageNumber n={6} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 6 — Suggested Preparation Races
+              PAGE 7 — Suggested Preparation Races
           ═══════════════════════════════════════ */}
           {(prepRacesLoading || (prepRaces && athlete)) && (() => {
             const stl = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -2400,13 +2736,13 @@ export default function RaceReadinessPage() {
                   Location inferred from centroid of athlete&apos;s career race history. Races already completed by this athlete are excluded.
                 </div>
 
-                <PageNumber n={6} />
+                <PageNumber n={7} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 7 — Experience Context
+              PAGE 8 — Experience Context
           ═══════════════════════════════════════ */}
           {(expContextLoading || expContext) && (() => {
             const fmtH = (h: number) => {
@@ -2580,7 +2916,7 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={7} />
+                <PageNumber n={8} />
               </div>
             );
           })()}

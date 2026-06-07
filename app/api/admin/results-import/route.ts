@@ -35,11 +35,6 @@ export async function POST(req: NextRequest) {
       const text = await file.text();
       const parsed = parseCsvFile(filename, text);
 
-      if (!parsed.rows.length) {
-        results.push({ filename, error: parsed.parseErrors[0] ?? "No rows parsed" });
-        continue;
-      }
-
       // Check for duplicate import (same filename already imported)
       const { data: existing } = await supabase
         .from("race_result_imports")
@@ -100,6 +95,20 @@ export async function POST(req: NextRequest) {
           }
           raceId = newRace.id;
         }
+      }
+
+      // If no rows were parsed, create/find the race but skip results.
+      // No import record is created so the file can be re-uploaded after fixing the CSV.
+      if (!parsed.rows.length) {
+        results.push({
+          filename,
+          warning: `Race created with no results — ${parsed.parseErrors[0] ?? "No rows parsed"}`,
+          raceName: parsed.raceName,
+          raceYear: parsed.raceYear,
+          rowCount: 0,
+          raceId,
+        });
+        continue;
       }
 
       // Create import record
