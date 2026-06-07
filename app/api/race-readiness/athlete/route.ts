@@ -58,6 +58,8 @@ export interface AthleteRaceDetail {
   total_ascent_m: number | null;
   flat_equivalent_km: number | null;
   total_finishers: number | null;
+  cat_position: number | null;
+  cat_finishers: number | null;
 }
 
 const CLUB_KEYS = ["Club", "club", "Team", "team", "club_team", "club_company"];
@@ -184,6 +186,41 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── 4b. Category positions per (race_id, result_year, age_group) ──────────
+  // For finished races where we know the athlete's age_group and finish time,
+  // fetch all category finishers and compute the athlete's rank within their group.
+  const catMap: Record<string, { cat_position: number; cat_finishers: number }> = {};
+  const finishedWithCat = (resultRows ?? []).filter(r =>
+    r.result_status === "FINISHED" && r.finish_seconds && r.age_group
+  );
+  if (finishedWithCat.length > 0) {
+    const catRaceIds   = [...new Set(finishedWithCat.map(r => r.race_id as string))];
+    const catAgeGroups = [...new Set(finishedWithCat.map(r => r.age_group as string))];
+    const { data: catRows } = await supabase
+      .from("race_results")
+      .select("race_id, result_year, age_group, finish_seconds")
+      .in("race_id", catRaceIds)
+      .in("age_group", catAgeGroups)
+      .in("result_status", ["FINISHED", "UNKNOWN"])
+      .not("finish_seconds", "is", null);
+    // Group all finish times by (race_id, result_year, age_group)
+    const catGroups: Record<string, number[]> = {};
+    for (const row of catRows ?? []) {
+      const k = `${row.race_id as string}|${row.result_year as number}|${row.age_group as string}`;
+      if (!catGroups[k]) catGroups[k] = [];
+      catGroups[k].push(row.finish_seconds as number);
+    }
+    for (const r of finishedWithCat) {
+      const k = `${r.race_id as string}|${r.result_year as number}|${r.age_group as string}`;
+      const times = catGroups[k];
+      if (times && times.length > 0) {
+        const athleteTime = r.finish_seconds as number;
+        const faster = times.filter(t => t < athleteTime).length;
+        catMap[k] = { cat_position: faster + 1, cat_finishers: times.length };
+      }
+    }
+  }
+
   // ── 5. Build race list ────────────────────────────────────────────────────
   const races: AthleteRaceDetail[] = (resultRows ?? []).map(r => {
     const raceName = Array.isArray(r.races)
@@ -192,6 +229,8 @@ export async function GET(req: NextRequest) {
 
     const rp = profileMap[r.race_id as string] ?? null;
     const ad = r.additional_data as Record<string, string> | null;
+    const catKey = `${r.race_id as string}|${r.result_year as number}|${r.age_group as string}`;
+    const cat = catMap[catKey] ?? null;
 
     return {
       race_id:            r.race_id as string,
@@ -207,6 +246,8 @@ export async function GET(req: NextRequest) {
       total_ascent_m:     rp?.total_ascent_m ?? null,
       flat_equivalent_km: rp?.flat_equivalent_km ?? null,
       total_finishers:    finisherCounts[`${r.race_id as string}|${r.result_year as number}`] ?? null,
+      cat_position:       cat?.cat_position ?? null,
+      cat_finishers:      cat?.cat_finishers ?? null,
     };
   });
 

@@ -97,6 +97,8 @@ interface AthleteRace {
   total_ascent_m: number | null;
   flat_equivalent_km: number | null;
   total_finishers: number | null;
+  cat_position: number | null;
+  cat_finishers: number | null;
 }
 interface TerrainPairing {
   section_type: string;
@@ -109,6 +111,29 @@ interface AthleteResponse {
   profile: AthleteProfile;
   races: AthleteRace[];
   terrain_pairings?: TerrainPairing[];
+}
+
+/* ── Prep races types ── */
+interface PrepRaceGapFill {
+  section_type: string;
+  terrain: string;
+  race_km: number;
+  needed_km: number;
+}
+interface PrepRaceSuggestion {
+  race_id: string;
+  race_name: string;
+  distance_miles: number;
+  next_date: string | null;
+  total_distance_km: number | null;
+  total_ascent_m: number | null;
+  gap_fill_score: number;
+  gaps_filled: PrepRaceGapFill[];
+}
+interface PrepRacesResult {
+  centroid: { lat: number; lon: number } | null;
+  radius_miles: number;
+  suggestions: PrepRaceSuggestion[];
 }
 
 /* ── Elevation types ── */
@@ -346,7 +371,10 @@ function DistributionMini({ dist, totalFinishers }: { dist: DistributionBucket[]
       {[dist[0], dist[Math.floor(dist.length / 2)], dist[dist.length - 1]].filter(Boolean).map((b, i) => {
         const positions = [0, Math.floor(dist.length / 2), dist.length - 1];
         const x = padL + positions[i] * (chartW / dist.length);
-        return <text key={i} x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize="7.5" fill="#888">{b.min_min}m</text>;
+        const labelMins = b.min_min;
+        const lh = Math.floor(labelMins / 60), lm = Math.round(labelMins % 60);
+        const label = `${lh}h${lm > 0 ? ` ${lm}m` : ""}`;
+        return <text key={i} x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize="7.5" fill="#888">{label}</text>;
       })}
       <text x={W / 2} y={padT + 8} textAnchor="middle" fontSize="7" fill="#aaa">{totalFinishers.toLocaleString()} finishers</text>
     </svg>
@@ -627,8 +655,8 @@ function PerformanceTrendChart({ races, recentThreshold }: { races: AthleteRace[
 function RaceHistoryRows({ races, highlightIds }: { races: AthleteRace[]; highlightIds?: Set<string> }) {
   function fmt(s: number | null) {
     if (!s || s <= 0) return "—";
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-    return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return `${h}:${String(m).padStart(2, "0")}`;
   }
   function statusBadge(status: string): { label: string; color: string } {
     if (status === "FINISHED" || status === "UNKNOWN") return { label: "Fin", color: "#2e7d32" };
@@ -963,6 +991,9 @@ export default function RaceReadinessPage() {
   const [athlete, setAthlete]             = useState<AthleteResponse | null>(null);
   const [athleteLoading, setAthleteLoading] = useState(false);
   const [athleteError, setAthleteError]   = useState("");
+  const [radiusMiles, setRadiusMiles]     = useState(100);
+  const [prepRaces, setPrepRaces]         = useState<PrepRacesResult | null>(null);
+  const [prepRacesLoading, setPrepRacesLoading] = useState(false);
 
   const fetchAthlete = useCallback(async (key: string) => {
     if (!key.trim()) return;
@@ -987,13 +1018,25 @@ export default function RaceReadinessPage() {
     .slice(0, 5);
   const windData       = result?.wind_sections ?? [];
 
-  // Terrain aggregates
+  // Elevation aggregates (climbing / descending / flat)
   const terrainSummary = (() => {
     const secs  = result?.terrain_sections ?? [];
     const total = secs.reduce((s, t) => s + t.distance_km, 0);
     const climbing   = secs.filter(s => s.section_type.includes("climb")).reduce((s, t) => s + t.distance_km, 0);
     const descending = secs.filter(s => s.section_type.includes("descent")).reduce((s, t) => s + t.distance_km, 0);
     return { total, climbing, descending, flat: Math.max(0, total - climbing - descending) };
+  })();
+
+  // Surface / terrain composition (road, trail, fell, etc.)
+  const surfaceSummary = (() => {
+    const secs = result?.terrain_sections ?? [];
+    const map: Record<string, number> = {};
+    for (const s of secs) {
+      if (s.terrain) map[s.terrain] = (map[s.terrain] ?? 0) + s.distance_km;
+    }
+    const total = Object.values(map).reduce((a, b) => a + b, 0);
+    const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return { entries, total };
   })();
 
   // Race date display
@@ -1121,6 +1164,19 @@ export default function RaceReadinessPage() {
 
     // Re-fetch athlete so any newly uploaded race profiles are picked up
     if (selectedAthleteKey.trim()) void fetchAthlete(selectedAthleteKey.trim());
+
+    // Fetch preparation race suggestions
+    setPrepRaces(null);
+    if (selectedAthleteKey.trim() && selectedRaceId) {
+      setPrepRacesLoading(true);
+      fetch(
+        `/api/race-readiness/prep-races?key=${encodeURIComponent(selectedAthleteKey.trim())}&race_id=${encodeURIComponent(selectedRaceId)}&radius_miles=${radiusMiles}`
+      )
+        .then(r => r.json())
+        .then(data => setPrepRaces(data as PrepRacesResult))
+        .catch(() => {})
+        .finally(() => setPrepRacesLoading(false));
+    }
   }
 
   /* ── Page 2 demand computations ── */
@@ -1205,6 +1261,21 @@ export default function RaceReadinessPage() {
           {athleteLoading && <div style={{ fontSize: "11px", color: "#888", marginTop: "4px" }}>Loading athlete…</div>}
           {athleteError && <div style={{ fontSize: "11px", color: "#b00020", marginTop: "4px" }}>{athleteError}</div>}
         </div>
+        <div>
+          <div style={labelStyle}>Prep race radius</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <input
+              type="number"
+              value={radiusMiles}
+              min={10}
+              max={500}
+              step={10}
+              onChange={e => setRadiusMiles(Math.max(10, Math.min(500, Number(e.target.value))))}
+              style={{ padding: "8px 10px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "14px", color: "#111", background: "#fff", width: "70px" }}
+            />
+            <span style={{ fontSize: "12px", color: "#888" }}>miles</span>
+          </div>
+        </div>
         {result && <button type="button" onClick={() => window.print()} style={printBtn}>Export to PDF</button>}
       </div>
 
@@ -1271,10 +1342,37 @@ export default function RaceReadinessPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "18px" }}>
               <div>
-                <p style={sectionLabel}>Terrain Composition</p>
+                <p style={sectionLabel}>Elevation Composition</p>
                 <TerrainBar label="Climbing"      km={terrainSummary.climbing}   pct={terrainSummary.total > 0 ? (terrainSummary.climbing   / terrainSummary.total) * 100 : 0} color="#c0392b" />
                 <TerrainBar label="Descending"    km={terrainSummary.descending} pct={terrainSummary.total > 0 ? (terrainSummary.descending / terrainSummary.total) * 100 : 0} color="#1565c0" />
                 <TerrainBar label="Flat / Rolling" km={terrainSummary.flat}      pct={terrainSummary.total > 0 ? (terrainSummary.flat       / terrainSummary.total) * 100 : 0} color="#546e7a" />
+
+                {surfaceSummary.total > 0 && (() => {
+                  const SURFACE_COLOR: Record<string, string> = {
+                    road: "#90a4ae", pavement: "#90a4ae", track: "#78909c",
+                    gravel: "#a1887f", trail: "#66bb6a", technical_trail: "#388e3c",
+                    fell: "#8d6e63", mud: "#6d4c41", sand: "#ffa726", snow: "#80d8ff",
+                  };
+                  const SURFACE_LABEL: Record<string, string> = {
+                    road: "Road", pavement: "Pavement", track: "Track",
+                    gravel: "Gravel", trail: "Trail", technical_trail: "Technical Trail",
+                    fell: "Fell", mud: "Mud", sand: "Sand", snow: "Snow",
+                  };
+                  return (
+                    <>
+                      <p style={{ ...sectionLabel, marginTop: "14px" }}>Terrain Composition</p>
+                      {surfaceSummary.entries.map(([surface, km]) => (
+                        <TerrainBar
+                          key={surface}
+                          label={SURFACE_LABEL[surface] ?? surface.charAt(0).toUpperCase() + surface.slice(1).replace(/_/g, " ")}
+                          km={km}
+                          pct={surfaceSummary.total > 0 ? (km / surfaceSummary.total) * 100 : 0}
+                          color={SURFACE_COLOR[surface] ?? "#90a4ae"}
+                        />
+                      ))}
+                    </>
+                  );
+                })()}
               </div>
               {notable.length > 0 && (
                 <div>
@@ -1701,6 +1799,63 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
+                {/* Category results table */}
+                {(() => {
+                  const catRaces = recentRaces.filter(r =>
+                    r.result_status === "FINISHED" && r.cat_position && r.age_group
+                  );
+                  if (catRaces.length === 0) return null;
+                  const thC: React.CSSProperties = { textAlign: "left", padding: "3px 7px", borderBottom: "2px solid #1e3a1e", color: "#1e3a1e", fontWeight: 600, background: "#f9f9f9", fontSize: "9.5px" };
+                  const tdC: React.CSSProperties = { padding: "3px 7px", borderBottom: "1px solid #eee", fontSize: "10.5px" };
+                  return (
+                    <div style={{ marginBottom: "20px" }}>
+                      <p style={sectionLabel}>Category Results (last 2 years)</p>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr>
+                            <th style={{ ...thC, width: "34%" }}>Race</th>
+                            <th style={{ ...thC, width: "6%" }}>Year</th>
+                            <th style={{ ...thC, width: "8%" }}>Cat</th>
+                            <th style={thC}>Time</th>
+                            <th style={thC}>Cat. Position</th>
+                            <th style={thC}>Cat. Finishers</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {catRaces.map((r, i) => {
+                            const fmtTime = (s: number | null) => {
+                              if (!s || s <= 0) return "—";
+                              const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+                              return `${h}:${String(m).padStart(2, "0")}`;
+                            };
+                            const catPct = r.cat_position && r.cat_finishers
+                              ? Math.round((r.cat_position / r.cat_finishers) * 100) : null;
+                            return (
+                              <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                                <td style={{ ...tdC, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.race_name}</td>
+                                <td style={{ ...tdC, color: "#888" }}>{r.result_year}</td>
+                                <td style={{ ...tdC, fontSize: "9.5px", color: "#555" }}>{r.age_group}</td>
+                                <td style={{ ...tdC, fontFamily: "monospace", fontSize: "10px" }}>{fmtTime(r.finish_seconds)}</td>
+                                <td style={tdC}>
+                                  {r.cat_position}
+                                  {r.cat_finishers ? <span style={{ color: "#aaa", fontSize: "9px" }}>/{r.cat_finishers}</span> : ""}
+                                </td>
+                                <td style={tdC}>
+                                  {catPct !== null && (
+                                    <span style={{ color: catPct <= 10 ? "#2e7d32" : catPct <= 25 ? "#1565c0" : "#888", fontSize: "10px", fontWeight: 600 }}>
+                                      top {catPct}%
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+
                 {/* Career highlights */}
                 {highlightRaces.length > 0 && (
                   <div style={{ marginBottom: "20px" }}>
@@ -1747,19 +1902,31 @@ export default function RaceReadinessPage() {
               .filter(tp => tp.km >= 0.1)
               .sort((a, b) => b.km - a.km);
 
-            // Athlete's existing km per pairing
-            const athleteMap: Record<string, number> = {};
+            // Exact terrain match (section_type + terrain must both match)
+            const athleteExactMap: Record<string, number> = {};
             for (const p of athlete.terrain_pairings ?? []) {
-              athleteMap[`${p.section_type}|${p.terrain}`] = p.total_km;
+              athleteExactMap[`${p.section_type}|${p.terrain}`] = p.total_km;
             }
 
-            // Build gap rows
+            // Cross-terrain index: same gradient on OTHER surfaces — shown as context
+            const athleteCrossIndex: Record<string, Array<{ terrain: string; km: number }>> = {};
+            for (const p of athlete.terrain_pairings ?? []) {
+              if (!athleteCrossIndex[p.section_type]) athleteCrossIndex[p.section_type] = [];
+              athleteCrossIndex[p.section_type].push({ terrain: p.terrain, km: p.total_km });
+            }
+
+            // Build gap rows — status driven by exact match only
             const gapRows = targetList.map(tp => {
-              const athleteKm = athleteMap[`${tp.section_type}|${tp.terrain}`] ?? 0;
-              const pct = tp.km > 0 ? Math.min(100, Math.round((athleteKm / tp.km) * 100)) : 100;
+              const exactKm = Math.round((athleteExactMap[`${tp.section_type}|${tp.terrain}`] ?? 0) * 10) / 10;
+              const crossEntries = (athleteCrossIndex[tp.section_type] ?? [])
+                .filter(e => e.terrain !== tp.terrain)
+                .sort((a, b) => b.km - a.km);
+              const crossKm = Math.round(crossEntries.reduce((s, e) => s + e.km, 0) * 10) / 10;
+              const crossSurface = crossEntries.length > 0 ? crossEntries[0].terrain : null;
+              const pct = tp.km > 0 ? Math.min(100, Math.round((exactKm / tp.km) * 100)) : 100;
               const status: "none" | "partial" | "met" =
-                athleteKm === 0 ? "none" : pct >= 100 ? "met" : "partial";
-              return { ...tp, athleteKm, pct, status, avg_gradient: tp.avg_gradient };
+                exactKm === 0 ? "none" : pct >= 100 ? "met" : "partial";
+              return { ...tp, exactKm, crossKm, crossSurface, pct, status };
             });
 
             const noneCount    = gapRows.filter(r => r.status === "none").length;
@@ -1840,8 +2007,15 @@ export default function RaceReadinessPage() {
                           </td>
                           <td style={{ ...tdStyle, color: "#555" }}>{terrainLabel(row.terrain)}</td>
                           <td style={{ ...tdStyle, fontWeight: 700 }}>{row.km.toFixed(1)}</td>
-                          <td style={{ ...tdStyle, color: row.athleteKm > 0 ? "#333" : "#ccc" }}>
-                            {row.athleteKm > 0 ? row.athleteKm.toFixed(1) : "—"}
+                          <td style={tdStyle}>
+                            <span style={{ color: row.exactKm > 0 ? "#333" : "#ccc" }}>
+                              {row.exactKm > 0 ? row.exactKm.toFixed(1) : "—"}
+                            </span>
+                            {row.crossKm > 0 && row.crossSurface && (
+                              <div style={{ fontSize: "8px", color: "#aaa", marginTop: "1px" }}>
+                                +{row.crossKm.toFixed(1)}km on {terrainLabel(row.crossSurface)}
+                              </div>
+                            )}
                           </td>
                           <td style={tdStyle}>
                             <span style={{ background: badge.bg, color: badge.color, borderRadius: "10px", padding: "2px 8px", fontSize: "9.5px", fontWeight: 700, whiteSpace: "nowrap" }}>
@@ -2061,6 +2235,126 @@ export default function RaceReadinessPage() {
                 )}
 
                 <PageNumber n={5} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 6 — Suggested Preparation Races
+          ═══════════════════════════════════════ */}
+          {(prepRacesLoading || (prepRaces && athlete)) && (() => {
+            const stl = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const tl  = (t: string) => t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const scoreColor = (n: number) => n >= 70 ? "#2e7d32" : n >= 40 ? "#e65100" : "#78909c";
+            const formatDate = (d: string) =>
+              new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+            const suggestions = prepRaces?.suggestions ?? [];
+
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Race Readiness</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Suggested Preparation Races</h2>
+                <p style={{ margin: "0 0 18px", fontSize: "12px", color: "#888" }}>
+                  Races within {prepRaces?.radius_miles ?? radiusMiles} miles of {athlete?.profile.athlete_key.split(" ")[0]}&apos;s race base
+                  that best address identified experience gaps for {result.race.name}
+                  {prepRaces?.centroid ? ` · base inferred from ${suggestions.length > 0 ? "race" : ""} history` : ""}
+                </p>
+
+                {prepRacesLoading && !prepRaces && (
+                  <div style={{ textAlign: "center", padding: "60px 0", color: "#aaa", fontSize: "13px" }}>
+                    Searching for preparation races…
+                  </div>
+                )}
+
+                {prepRaces && suggestions.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "60px 0", color: "#aaa", fontSize: "13px" }}>
+                    No scored races found within {prepRaces.radius_miles} miles.
+                    {!prepRaces.centroid && " Unable to infer athlete's location from race history."}
+                  </div>
+                )}
+
+                {suggestions.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {suggestions.map((s, i) => {
+                      const col = scoreColor(s.gap_fill_score);
+                      return (
+                        <div key={s.race_id} style={{ border: `1px solid #e5e5e5`, borderLeft: `4px solid ${col}`, borderRadius: "6px", padding: "12px 14px", background: "#fff" }}>
+                          {/* Header row */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
+                            <div style={{ fontWeight: 700, fontSize: "13px", color: "#111" }}>
+                              {i + 1}. {s.race_name}
+                            </div>
+                            <div style={{ background: col, color: "#fff", borderRadius: "10px", padding: "2px 10px", fontSize: "10px", fontWeight: 700, whiteSpace: "nowrap", marginLeft: "12px" }}>
+                              {s.gap_fill_score}% gap coverage
+                            </div>
+                          </div>
+
+                          {/* Stats row */}
+                          <div style={{ fontSize: "10.5px", color: "#666", marginBottom: "8px", display: "flex", gap: "14px", flexWrap: "wrap" }}>
+                            <span>📍 {s.distance_miles.toFixed(1)} mi away</span>
+                            {s.next_date && <span>📅 Next: {formatDate(s.next_date)}</span>}
+                            {s.total_distance_km != null && <span>↔ {s.total_distance_km.toFixed(1)} km</span>}
+                            {s.total_ascent_m != null && <span>↑ {Math.round(s.total_ascent_m).toLocaleString()} m</span>}
+                          </div>
+
+                          {/* Coverage bar */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                            <div style={{ fontSize: "9px", color: "#aaa", whiteSpace: "nowrap" }}>Coverage</div>
+                            <div style={{ flex: 1, height: "6px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${s.gap_fill_score}%`, background: col, borderRadius: "3px" }} />
+                            </div>
+                          </div>
+
+                          {/* Gap fills */}
+                          <div>
+                            <div style={{ fontSize: "9.5px", color: "#555", fontWeight: 600, marginBottom: "3px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                              Experience gaps addressed:
+                            </div>
+                            {s.gaps_filled.slice(0, 5).map((f, j) => {
+                              const fillPct = Math.min(100, Math.round((f.race_km / f.needed_km) * 100));
+                              const gapCol  = f.section_type.includes("climb") ? "#c0392b" : f.section_type.includes("descent") ? "#1565c0" : "#2e7d32";
+                              return (
+                                <div key={j} style={{ display: "flex", alignItems: "baseline", gap: "6px", fontSize: "10.5px", color: "#333", marginBottom: "2px" }}>
+                                  <span style={{ color: gapCol, fontWeight: 700, flexShrink: 0 }}>›</span>
+                                  <span>
+                                    <span style={{ fontWeight: 600 }}>{stl(f.section_type)}</span>
+                                    {" / "}
+                                    <span style={{ color: "#555" }}>{tl(f.terrain)}</span>
+                                    {" — "}
+                                    <span style={{ fontWeight: 600 }}>{f.race_km.toFixed(1)} km</span>
+                                    <span style={{ color: "#999", fontSize: "9.5px" }}>
+                                      {" "}({fillPct}% of your {f.needed_km.toFixed(1)} km gap)
+                                    </span>
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            {s.gaps_filled.length > 5 && (
+                              <div style={{ fontSize: "9.5px", color: "#aaa", marginTop: "2px" }}>
+                                +{s.gaps_filled.length - 5} more gap types addressed
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div style={{ marginTop: "16px", fontSize: "8.5px", color: "#bbb" }}>
+                  Races scored by how much of your identified experience gaps they address, weighted by km needed.
+                  Location inferred from centroid of athlete&apos;s career race history. Races already completed by this athlete are excluded.
+                </div>
+
+                <PageNumber n={6} />
               </div>
             );
           })()}
