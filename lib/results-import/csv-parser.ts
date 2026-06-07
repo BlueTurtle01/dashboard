@@ -63,7 +63,9 @@ function stripTrailingYear(title: string): { name: string; year: number | null }
  */
 function nameFromFilename(filename: string): { name: string; year: number | null } {
   // Strip extension
-  const base = filename.replace(/\.[^.]+$/, "");
+  let base = filename.replace(/\.[^.]+$/, "");
+  // Strip common trailing suffixes added by timing systems (e.g. "_results", "_entries")
+  base = base.replace(/[_\-\s]+(results|entries|export|data)$/i, "");
   // Replace underscores with spaces, collapse runs of spaces/dashes used as separators
   const spaced = base.replace(/_/g, " ").replace(/\s{2,}/g, " ").trim();
   // Strip leading 4-digit year (e.g. "2026 - " or "2026 ")
@@ -138,7 +140,7 @@ interface ColMap {
 }
 
 // Known header keywords used to detect if row 0 is a headers row (no title row present).
-const HEADER_KEYWORDS = new Set(["name", "overall", "pos", "position", "bib", "gender", "sex", "class", "category", "time", "chip", "gun", "race_time", "status"]);
+const HEADER_KEYWORDS = new Set(["name", "full_name", "overall", "pos", "position", "bib", "gender", "sex", "class", "category", "time", "chip", "gun", "race_time", "overall_time", "status"]);
 
 function looksLikeHeaderRow(row: string[]): boolean {
   return row.some((cell) => HEADER_KEYWORDS.has(cell.toLowerCase().trim()));
@@ -167,7 +169,7 @@ function buildColMap(headers: string[]): ColMap {
 
     // Position aliases: overall (1st), pos, position
     if ((key === "overall" || key === "pos" || key === "position") && occurrence === 1) map.position = i;
-    else if (key === "name") map.name = i;
+    else if (key === "name" || key === "full_name" || key === "full name") map.name = i;
     else if (key === "bib") map.bib = i;
     else if (key === "nation") map.nation = i;
     // Club/team aliases
@@ -185,7 +187,7 @@ function buildColMap(headers: string[]): ColMap {
     }
     else if (key === "last location" || key === "last_point") map.lastLocation = i;
     // Time aliases: HH:MM:SS formats — prefer first match
-    else if ((key === "time" || key === "chip" || key === "chip time" || key === "net" || key === "net time" || key === "race_time" || key === "gun_time" || key === "finish_time" || key === "finish time" || key === "gun time") && map.time === null) map.time = i;
+    else if ((key === "time" || key === "chip" || key === "chip time" || key === "net" || key === "net time" || key === "race_time" || key === "gun_time" || key === "finish_time" || key === "finish time" || key === "gun time" || key === "overall_time") && map.time === null) map.time = i;
     // Pre-computed seconds (e.g. race_time_seconds) — use as fallback if no HH:MM:SS time
     else if ((key === "race_time_seconds" || key === "finish_time_seconds" || key === "gun_time_seconds") && map.timeSeconds === null) map.timeSeconds = i;
     // Explicit status column (e.g. FINISHER / DNF / DNS)
