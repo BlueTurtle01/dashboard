@@ -62,6 +62,31 @@ export interface AthleteRaceDetail {
   cat_finishers: number | null;
 }
 
+function normaliseSectionType(t: string): string {
+  const map: Record<string, string> = {
+    very_steep_climb:   "steep_climb",
+    major_climb:        "sustained_climb",
+    steady_climb:       "mild_climb",
+    gentle_climb:       "mild_climb",
+    flat_rolling:       "flat",
+    gentle_descent:     "mild_descent",
+    runnable_descent:   "mild_descent",
+    steep_descent:      "sustained_descent",
+    very_steep_descent: "steep_descent",
+  };
+  return map[t] ?? t;
+}
+
+function normaliseTerrain(t: string): string {
+  const map: Record<string, string> = {
+    pavement:        "road",
+    track:           "road",
+    technical_trail: "rocky_trail",
+    fell:            "grass",
+  };
+  return map[t] ?? t;
+}
+
 const CLUB_KEYS = ["Club", "club", "Team", "team", "club_team", "club_company"];
 const CLUB_PLACEHOLDERS = new Set([
   "(no club)", "no club", "none", "n/a", "na", "-", "--",
@@ -285,9 +310,11 @@ export async function GET(req: NextRequest) {
     const secs = profileMap[row.race_id as string]?.sections ?? [];
     const countedThisRow = new Set<string>();
     for (const sec of secs) {
-      const key = `${sec.section_type}|${sec.terrain}`;
-      if (!pairingMap[key]) pairingMap[key] = { section_type: sec.section_type, terrain: sec.terrain, total_km: 0, race_count: 0, weighted_grad: 0 };
-      pairingMap[key].total_km    += sec.distance_km;
+      const st  = normaliseSectionType(sec.section_type);
+      const ter = normaliseTerrain(sec.terrain);
+      const key = `${st}|${ter}`;
+      if (!pairingMap[key]) pairingMap[key] = { section_type: st, terrain: ter, total_km: 0, race_count: 0, weighted_grad: 0 };
+      pairingMap[key].total_km      += sec.distance_km;
       pairingMap[key].weighted_grad += sec.avg_gradient_percent * sec.distance_km;
       if (!countedThisRow.has(key)) { pairingMap[key].race_count++; countedThisRow.add(key); }
     }
@@ -302,5 +329,10 @@ export async function GET(req: NextRequest) {
       avg_gradient: p.total_km > 0 ? Math.round((p.weighted_grad / p.total_km) * 10) / 10 : 0,
     }));
 
-  return NextResponse.json({ profile: athleteProfile, races, terrain_pairings: terrainPairings });
+  const racesWithProfile = (resultRows ?? []).filter(
+    r => ["FINISHED", "UNKNOWN"].includes(r.result_status as string)
+      && !!profileMap[r.race_id as string]
+  ).length;
+
+  return NextResponse.json({ profile: athleteProfile, races, terrain_pairings: terrainPairings, races_with_profile: racesWithProfile });
 }

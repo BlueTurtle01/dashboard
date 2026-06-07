@@ -65,6 +65,64 @@ export interface TerrainSection {
   flat_equivalent_km: number;
 }
 
+// ── Section-type normalisation (backend labels → frontend canonical labels) ──
+function normaliseSectionType(t: string): string {
+  const map: Record<string, string> = {
+    very_steep_climb:   "steep_climb",
+    major_climb:        "sustained_climb",
+    steady_climb:       "mild_climb",
+    gentle_climb:       "mild_climb",
+    flat_rolling:       "flat",
+    gentle_descent:     "mild_descent",
+    runnable_descent:   "mild_descent",
+    steep_descent:      "sustained_descent",
+    very_steep_descent: "steep_descent",
+  };
+  return map[t] ?? t;
+}
+
+// ── Flat-equivalent estimate using Minetti grade-adjusted cost model ────────
+function computeFlatEquiv(distKm: number, gradPct: number): number {
+  const g = gradPct / 100;
+  const cost = 1 + 4.5 * g + 19.0 * g ** 2 - 43.3 * g ** 3;
+  return distKm * Math.max(0.5, Math.min(cost, 4.0));
+}
+
+// ── Map race_pace_strategy JSON → TerrainSection[] ────────────────────────
+function strategyToTerrainSections(strategyJson: string): TerrainSection[] | null {
+  try {
+    const parsed = JSON.parse(strategyJson) as { sections?: unknown[] };
+    if (!Array.isArray(parsed?.sections)) return null;
+    const terrainMap: Record<string, string> = {
+      smooth_trail: "trail", rocky_trail: "technical_trail",
+      grass: "fell", pavement: "road", track: "road",
+    };
+    return parsed.sections.flatMap((s: unknown): TerrainSection[] => {
+      if (!s || typeof s !== "object") return [];
+      const sec = s as Record<string, unknown>;
+      const dist   = typeof sec.distance_km              === "number" ? sec.distance_km              : 0;
+      const grad   = typeof sec.average_gradient_percent === "number" ? sec.average_gradient_percent : 0;
+      const ascent = typeof sec.elevation_gain_m         === "number" ? sec.elevation_gain_m         : 0;
+      const descent= typeof sec.elevation_loss_m         === "number" ? sec.elevation_loss_m         : 0;
+      if (dist <= 0) return [];
+      const rawTerrain = typeof sec.terrain_type === "string" ? sec.terrain_type : "road";
+      const terrain    = terrainMap[rawTerrain] ?? rawTerrain;
+      const section_type = typeof sec.section_type === "string" ? sec.section_type : "flat";
+      return [{
+        start_km:             typeof sec.start_distance_km === "number" ? sec.start_distance_km : 0,
+        end_km:               typeof sec.end_distance_km   === "number" ? sec.end_distance_km   : dist,
+        distance_km:          dist,
+        section_type,
+        terrain,
+        avg_gradient_percent: grad,
+        ascent_m:             ascent,
+        descent_m:            descent,
+        flat_equivalent_km:   computeFlatEquiv(dist, grad),
+      }];
+    });
+  } catch { return null; }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const roles = await getUserRoles();
@@ -165,26 +223,32 @@ export async function POST(req: NextRequest) {
       .from("races_meta")
       .select("meta_key, meta_value")
       .eq("race_id", race_id)
-      .in("meta_key", ["elevation_profile", "sustained_segments"]);
+      .in("meta_key", ["elevation_profile", "sustained_segments", "race_pace_strategy"]);
 
     const meta: Record<string, string> = {};
     for (const row of (metaRows ?? []) as { meta_key: string; meta_value: string }[]) {
       meta[row.meta_key] = row.meta_value;
     }
 
-    // ── Terrain sections from sections_json ───────────────────────────────────
-    const rawSections = (profile.sections_json ?? []) as StoredSection[];
-    const terrainSections: TerrainSection[] = rawSections.map(s => ({
-      start_km:             s.start_distance_km,
-      end_km:               s.end_distance_km,
-      distance_km:          s.distance_km,
-      section_type:         s.section_type,
-      terrain:              s.terrain,
-      avg_gradient_percent: s.avg_gradient_percent,
-      ascent_m:             s.ascent_m,
-      descent_m:            s.descent_m,
-      flat_equivalent_km:   s.flat_equivalent_km,
-    }));
+    // ── Terrain sections — prefer race_pace_strategy (per-section terrain), fallback to sections_json ──
+    const strategyTerrainSections = meta.race_pace_strategy
+      ? strategyToTerrainSections(meta.race_pace_strategy)
+      : null;
+
+    const terrainSections: TerrainSection[] =
+      strategyTerrainSections && strategyTerrainSections.length > 0
+        ? strategyTerrainSections
+        : (profile.sections_json ?? [] as StoredSection[]).map((s: StoredSection) => ({
+            start_km:             s.start_distance_km,
+            end_km:               s.end_distance_km,
+            distance_km:          s.distance_km,
+            section_type:         normaliseSectionType(s.section_type),
+            terrain:              s.terrain,
+            avg_gradient_percent: s.avg_gradient_percent,
+            ascent_m:             s.ascent_m,
+            descent_m:            s.descent_m,
+            flat_equivalent_km:   s.flat_equivalent_km,
+          }));
 
     return NextResponse.json({
       race: {

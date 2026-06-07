@@ -111,6 +111,7 @@ interface AthleteResponse {
   profile: AthleteProfile;
   races: AthleteRace[];
   terrain_pairings?: TerrainPairing[];
+  races_with_profile?: number;
 }
 
 /* ── Experience context types ── */
@@ -2465,7 +2466,7 @@ export default function RaceReadinessPage() {
               athleteCrossIndex[p.section_type].push({ terrain: p.terrain, km: p.total_km });
             }
 
-            // Build gap rows — status driven by exact match only
+            // Build gap rows — 4-level status (met / partial / surface_gap / none)
             const gapRows = targetList.map(tp => {
               const exactKm = Math.round((athleteExactMap[`${tp.section_type}|${tp.terrain}`] ?? 0) * 10) / 10;
               const crossEntries = (athleteCrossIndex[tp.section_type] ?? [])
@@ -2474,14 +2475,17 @@ export default function RaceReadinessPage() {
               const crossKm = Math.round(crossEntries.reduce((s, e) => s + e.km, 0) * 10) / 10;
               const crossSurface = crossEntries.length > 0 ? crossEntries[0].terrain : null;
               const pct = tp.km > 0 ? Math.min(100, Math.round((exactKm / tp.km) * 100)) : 100;
-              const status: "none" | "partial" | "met" =
-                exactKm === 0 ? "none" : pct >= 100 ? "met" : "partial";
+              const status: "none" | "partial" | "met" | "surface_gap" =
+                exactKm === 0 && crossKm > 0 ? "surface_gap" :
+                exactKm === 0               ? "none" :
+                pct >= 100                  ? "met" : "partial";
               return { ...tp, exactKm, crossKm, crossSurface, pct, status };
             });
 
-            const noneCount    = gapRows.filter(r => r.status === "none").length;
-            const partialCount = gapRows.filter(r => r.status === "partial").length;
-            const metCount     = gapRows.filter(r => r.status === "met").length;
+            const noneCount       = gapRows.filter(r => r.status === "none").length;
+            const surfaceGapCount = gapRows.filter(r => r.status === "surface_gap").length;
+            const partialCount    = gapRows.filter(r => r.status === "partial").length;
+            const metCount        = gapRows.filter(r => r.status === "met").length;
 
             const sectionTypeLabel = (s: string) =>
               s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -2491,9 +2495,10 @@ export default function RaceReadinessPage() {
               s.includes("climb") ? "#c0392b" : s.includes("descent") ? "#1565c0" : "#2e7d32";
 
             const statusBadge = (row: (typeof gapRows)[0]) => {
-              if (row.status === "met")     return { label: "Met",            bg: "#e8f5e9", color: "#2e7d32" };
-              if (row.status === "partial") return { label: `${row.pct}% met`, bg: "#fff3e0", color: "#f57c00" };
-              return                               { label: "No experience",   bg: "#fce4ec", color: "#c0392b" };
+              if (row.status === "met")          return { label: "Covered",       bg: "#e8f5e9", color: "#2e7d32" };
+              if (row.status === "partial")      return { label: `${row.pct}% met`, bg: "#fff3e0", color: "#f57c00" };
+              if (row.status === "surface_gap")  return { label: "Surface gap",   bg: "#fff3e0", color: "#e65100" };
+              return                                    { label: "No experience", bg: "#fce4ec", color: "#c0392b" };
             };
 
             return (
@@ -2512,70 +2517,93 @@ export default function RaceReadinessPage() {
                 </p>
 
                 {/* Summary chips */}
-                <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
                   {noneCount > 0 && (
-                    <div style={{ background: "#fce4ec", borderRadius: "20px", padding: "5px 14px", fontSize: "11px", fontWeight: 700, color: "#c0392b" }}>
-                      {noneCount} demand{noneCount !== 1 ? "s" : ""} with no prior experience
+                    <div style={{ background: "#fce4ec", borderRadius: "20px", padding: "4px 12px", fontSize: "10.5px", fontWeight: 700, color: "#c0392b" }}>
+                      {noneCount} no experience
+                    </div>
+                  )}
+                  {surfaceGapCount > 0 && (
+                    <div style={{ background: "#fff3e0", borderRadius: "20px", padding: "4px 12px", fontSize: "10.5px", fontWeight: 700, color: "#e65100" }}>
+                      {surfaceGapCount} surface gap{surfaceGapCount !== 1 ? "s" : ""}
                     </div>
                   )}
                   {partialCount > 0 && (
-                    <div style={{ background: "#fff3e0", borderRadius: "20px", padding: "5px 14px", fontSize: "11px", fontWeight: 700, color: "#f57c00" }}>
+                    <div style={{ background: "#fff8e1", borderRadius: "20px", padding: "4px 12px", fontSize: "10.5px", fontWeight: 700, color: "#f57c00" }}>
                       {partialCount} partially met
                     </div>
                   )}
                   {metCount > 0 && (
-                    <div style={{ background: "#e8f5e9", borderRadius: "20px", padding: "5px 14px", fontSize: "11px", fontWeight: 700, color: "#2e7d32" }}>
-                      {metCount} fully met
+                    <div style={{ background: "#e8f5e9", borderRadius: "20px", padding: "4px 12px", fontSize: "10.5px", fontWeight: 700, color: "#2e7d32" }}>
+                      {metCount} covered
                     </div>
                   )}
                 </div>
 
                 {/* Honest gap explanation */}
-                <p style={{ margin: "0 0 14px", fontSize: "11px", color: "#444", lineHeight: 1.55 }}>
+                <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#444", lineHeight: 1.55 }}>
                   {noneCount > 0
-                    ? `${noneCount} demand${noneCount !== 1 ? "s" : ""} on ${result.race.name} have no equivalent in this athlete's race history. These are genuine experience gaps — terrain not tested in a race context. On race day, unfamiliar terrain costs more in time and mental energy than familiar terrain, regardless of fitness.`
+                    ? `${noneCount} demand${noneCount !== 1 ? "s" : ""} on ${result.race.name} have no equivalent in this athlete's race history. These are genuine experience gaps — terrain not tested in a race context.`
+                    : surfaceGapCount > 0
+                    ? `All gradient types on ${result.race.name} appear in this athlete's history, but on different surfaces. Fitness transfers; terrain-specific technique and muscle recruitment do not.`
                     : partialCount > 0
-                    ? `All major terrain types on ${result.race.name} have some prior exposure, but several are underrepresented. Partial coverage means the volume raced is less than the course demands — present, but not confirmed adequate.`
-                    : `Every terrain demand of ${result.race.name} is covered by prior experience. Volume and recency still matter — a demand met years ago at a smaller scale carries less confidence than recent, similar-scale racing.`
+                    ? `All terrain types have some prior exposure, but several are underrepresented relative to the course demands.`
+                    : `Every terrain demand of ${result.race.name} is covered by prior experience.`
                   }
-                  {` Each row below is ordered by course distance — the longer the "Race km" value, the greater the physical consequence of that terrain type.`}
+                  {` Each row is ordered by course distance — the longer the "Race km" value, the greater the physical consequence.`}
                 </p>
 
-                {/* Gap table */}
+                {/* Profile coverage warning */}
+                {(() => {
+                  const rwp = athlete.races_with_profile ?? 0;
+                  const total = athlete.profile.finish_count;
+                  if (rwp === 0 || rwp >= total) return null;
+                  return (
+                    <div style={{ background: "#fff8e1", border: "1px solid #ffe082", borderRadius: "6px",
+                      padding: "7px 12px", marginBottom: "10px", fontSize: "10.5px", color: "#795500" }}>
+                      <strong>Data coverage:</strong> Terrain experience is based on {rwp} of {total} finished
+                      races with GPS profile data. The remaining {total - rwp} races count toward career stats
+                      but have no terrain breakdown — gaps may be understated.
+                    </div>
+                  );
+                })()}
+
+                {/* Gap table — 5 columns */}
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      <th style={{ ...thStyle, width: "160px" }}>Gradient Type</th>
-                      <th style={{ ...thStyle, width: "110px" }}>Surface</th>
-                      <th style={{ ...thStyle, width: "65px" }}>Race km</th>
-                      <th style={{ ...thStyle, width: "75px" }}>Athlete km</th>
+                      <th style={{ ...thStyle, width: "180px" }}>Terrain Demand</th>
+                      <th style={{ ...thStyle, width: "70px" }}>Race km</th>
+                      <th style={{ ...thStyle, width: "80px" }}>Your experience</th>
+                      <th style={thStyle}>On other surfaces</th>
                       <th style={{ ...thStyle, width: "110px" }}>Status</th>
-                      <th style={thStyle}>Coverage</th>
                     </tr>
                   </thead>
                   <tbody>
                     {gapRows.map((row, i) => {
-                      const col    = pairingColor(row.section_type);
-                      const badge  = statusBadge(row);
-                      const metPct = Math.min(100, row.pct);
+                      const col   = pairingColor(row.section_type);
+                      const badge = statusBadge(row);
                       return (
                         <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                          <td style={{ ...tdStyle, fontWeight: 600, color: col }}>
-                            {sectionTypeLabel(row.section_type)}
-                            <div style={{ fontSize: "8.5px", color: "#999", fontWeight: 400, marginTop: "1px" }}>
-                              avg {row.avg_gradient > 0 ? "+" : ""}{row.avg_gradient.toFixed(1)}%
+                          <td style={{ ...tdStyle, fontWeight: 600 }}>
+                            <span style={{ color: col }}>{sectionTypeLabel(row.section_type)}</span>
+                            <div style={{ fontSize: "8.5px", color: "#aaa", fontWeight: 400, marginTop: "1px" }}>
+                              {terrainLabel(row.terrain)} · avg {row.avg_gradient > 0 ? "+" : ""}{row.avg_gradient.toFixed(1)}%
                             </div>
                           </td>
-                          <td style={{ ...tdStyle, color: "#555" }}>{terrainLabel(row.terrain)}</td>
                           <td style={{ ...tdStyle, fontWeight: 700 }}>{row.km.toFixed(1)}</td>
                           <td style={tdStyle}>
-                            <span style={{ color: row.exactKm > 0 ? "#333" : "#ccc" }}>
-                              {row.exactKm > 0 ? row.exactKm.toFixed(1) : "—"}
+                            <span style={{ color: row.exactKm > 0 ? "#333" : "#ccc", fontWeight: row.exactKm > 0 ? 600 : 400 }}>
+                              {row.exactKm > 0 ? `${row.exactKm.toFixed(1)} km` : "—"}
                             </span>
-                            {row.crossKm > 0 && row.crossSurface && (
-                              <div style={{ fontSize: "8px", color: "#aaa", marginTop: "1px" }}>
-                                +{row.crossKm.toFixed(1)}km on {terrainLabel(row.crossSurface)}
-                              </div>
+                          </td>
+                          <td style={tdStyle}>
+                            {row.crossKm > 0 && row.crossSurface ? (
+                              <span style={{ color: row.status === "surface_gap" ? "#e65100" : "#aaa", fontSize: "10px" }}>
+                                {row.crossKm.toFixed(1)} km on {terrainLabel(row.crossSurface)}
+                              </span>
+                            ) : (
+                              <span style={{ color: "#ddd" }}>—</span>
                             )}
                           </td>
                           <td style={tdStyle}>
@@ -2583,20 +2611,17 @@ export default function RaceReadinessPage() {
                               {badge.label}
                             </span>
                           </td>
-                          <td style={tdStyle}>
-                            <div style={{ position: "relative", height: "10px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
-                              <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${metPct}%`, background: row.status === "met" ? "#2e7d32" : row.status === "partial" ? "#f57c00" : "#eee", borderRadius: "3px" }} />
-                            </div>
-                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
 
-                <div style={{ marginTop: "12px", fontSize: "8.5px", color: "#bbb" }}>
-                  Demands ordered by distance on the target course — longer sections carry more physical consequence.
-                  Athlete km drawn from all finished races in their career history.
+                <div style={{ marginTop: "10px", fontSize: "8.5px", color: "#666", lineHeight: 1.6 }}>
+                  <strong>Covered</strong> — raced this terrain at or above the required volume.{" "}
+                  <strong>Surface gap</strong> — done this gradient on a different surface; aerobic fitness transfers but terrain-specific adaptation does not.{" "}
+                  <strong>No experience</strong> — this gradient and surface combination is untested in any race on record.
+                  Demands ordered by course distance — longer sections have greater physical consequence.
                 </div>
 
                 <PageNumber n={6} />
