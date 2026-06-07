@@ -92,11 +92,12 @@ export async function POST(req: NextRequest) {
     // ── Race name + coordinates ───────────────────────────────────────────────
     const { data: race } = await supabase
       .from("races")
-      .select("id, name, race_latitude, race_longitude")
+      .select("id, name, slug, race_latitude, race_longitude")
       .eq("id", race_id)
       .maybeSingle();
 
     const raceName = race?.name ?? (profile.metadata as { race_name?: string })?.race_name ?? "Race";
+    const raceSlug = (race as { slug?: string | null } | null)?.slug ?? null;
     const raceLat  = (race as { race_latitude?: number | null } | null)?.race_latitude  ?? null;
     const raceLon  = (race as { race_longitude?: number | null } | null)?.race_longitude ?? null;
 
@@ -189,6 +190,7 @@ export async function POST(req: NextRequest) {
       race: {
         id:                race_id,
         name:              raceName,
+        slug:              raceSlug,
         total_distance_km: profile.total_distance_km,
         total_ascent_m:    profile.total_ascent_m,
         total_descent_m:   profile.total_descent_m,

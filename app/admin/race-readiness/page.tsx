@@ -7,7 +7,7 @@ import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
 
 /* ── API types ── */
 interface RaceMeta {
-  id: string; name: string;
+  id: string; name: string; slug: string | null;
   total_distance_km: number; total_ascent_m: number; total_descent_m: number;
   race_date: string | null; weather_lat: number | null; weather_lon: number | null;
 }
@@ -1179,7 +1179,7 @@ export default function RaceReadinessPage() {
       const raceName = races.find(r => r.race_id === selectedRaceId)?.race_name ?? "Unknown race";
       setNoRaceProfile(true);
       effectiveResult = {
-        race: { id: selectedRaceId, name: raceName, total_distance_km: 0, total_ascent_m: 0, total_descent_m: 0, race_date: null, weather_lat: null, weather_lon: null },
+        race: { id: selectedRaceId, name: raceName, slug: null, total_distance_km: 0, total_ascent_m: 0, total_descent_m: 0, race_date: null, weather_lat: null, weather_lon: null },
         route: [], wind_sections: null, elevation_profile: null, sustained_segments: null, terrain_sections: [],
       };
     } else if (!res.ok || json.error) {
@@ -2837,6 +2837,28 @@ export default function RaceReadinessPage() {
                   Location inferred from centroid of athlete&apos;s career race history. Races already completed by this athlete are excluded.
                 </div>
 
+                {/* Training plans callout — only when the race has a published slug */}
+                {result.race.slug && (() => {
+                  const raceUrl = `https://www.tortoiseendurance.com/feeder-races/${result.race.slug}`;
+                  const qrSrc   = `https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(raceUrl)}`;
+                  return (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "20px", alignItems: "center", background: "#fff", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "14px 18px", marginTop: "16px" }}>
+                      <div>
+                        <div style={{ fontSize: "11px", fontWeight: 700, color: "#1e3a1e", marginBottom: "4px" }}>Training Plans Available for {result.race.name}</div>
+                        <div style={{ fontSize: "10px", color: "#555", lineHeight: 1.5, marginBottom: "6px" }}>
+                          We offer structured training plans tailored to this race — from 8-week programmes to full 6-month build cycles.
+                          Scan the QR code to view available plans and start dates.
+                        </div>
+                        <div style={{ fontSize: "9px", color: "#aaa" }}>tortoiseendurance.com/feeder-races/{result.race.slug}</div>
+                      </div>
+                      <div style={{ textAlign: "center", flexShrink: 0 }}>
+                        <img src={qrSrc} alt={`QR — ${raceUrl}`} width={80} height={80} style={{ display: "block", borderRadius: "4px" }} />
+                        <div style={{ fontSize: "8px", color: "#aaa", marginTop: "3px" }}>Scan to view plans</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <PageNumber n={7} />
               </div>
             );
@@ -3092,38 +3114,32 @@ export default function RaceReadinessPage() {
                 </div>
               </div>
 
-              {/* Training plans callout */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "20px", alignItems: "center", background: "#fff", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "16px 20px", marginBottom: "22px" }}>
-                <div>
-                  <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", marginBottom: "5px" }}>Training Plans Available for This Race</div>
-                  <div style={{ fontSize: "10.5px", color: "#555", lineHeight: 1.5, marginBottom: "8px" }}>
-                    We offer structured training plans tailored to most races in our database — from 8-week programmes to full 6-month build cycles.
-                    Scan the QR code to view available plans for {result.race.name} and other events.
+              {/* Training plans callout — only shown when the race has a published slug */}
+              {result.race.slug && (() => {
+                const raceUrl = `https://www.tortoiseendurance.com/feeder-races/${result.race.slug}`;
+                const qrSrc   = `https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(raceUrl)}`;
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "20px", alignItems: "center", background: "#fff", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "16px 20px", marginBottom: "22px" }}>
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", marginBottom: "5px" }}>Training Plans Available for {result.race.name}</div>
+                      <div style={{ fontSize: "10.5px", color: "#555", lineHeight: 1.5, marginBottom: "8px" }}>
+                        We offer structured training plans tailored to this race — from 8-week programmes to full 6-month build cycles.
+                        Scan the QR code to view all available plans and start dates for {result.race.name}.
+                      </div>
+                      <div style={{ fontSize: "10px", color: "#888" }}>tortoiseendurance.com/feeder-races/{result.race.slug}</div>
+                    </div>
+                    <div style={{ textAlign: "center", flexShrink: 0 }}>
+                      <img
+                        src={qrSrc}
+                        alt={`QR code — ${raceUrl}`}
+                        width={90} height={90}
+                        style={{ display: "block", borderRadius: "4px" }}
+                      />
+                      <div style={{ fontSize: "8px", color: "#aaa", marginTop: "4px" }}>Scan to view plans</div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: "10px", color: "#888" }}>tortoiseendurance.com/training-programs</div>
-                </div>
-                <div style={{ textAlign: "center", flexShrink: 0 }}>
-                  {/* QR code via free public API */}
-                  <img
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=https%3A%2F%2Fwww.tortoiseendurance.com%2Ftraining-programs"
-                    alt="QR code — tortoiseendurance.com/training-programs"
-                    width={90} height={90}
-                    style={{ display: "block", borderRadius: "4px" }}
-                  />
-                  <div style={{ fontSize: "8px", color: "#aaa", marginTop: "4px" }}>Scan to view plans</div>
-                </div>
-              </div>
-
-              {/* CTA */}
-              <div style={{ background: "#1e3a1e", borderRadius: "8px", padding: "18px 22px", textAlign: "center" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>
-                  Ready to race with a plan?
-                </div>
-                <div style={{ fontSize: "11px", color: "#c8dcc8", lineHeight: 1.5 }}>
-                  Contact your Tortoise Endurance coach to receive your personalised Race Day Pacing Strategy document.<br />
-                  Delivered as a printable PDF tailored to {result.race.name}.
-                </div>
-              </div>
+                );
+              })()}
 
               <PageNumber n={9} />
             </div>
