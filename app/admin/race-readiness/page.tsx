@@ -1638,21 +1638,30 @@ export default function RaceReadinessPage() {
                   <div style={{ fontSize: "11.5px", color: "#333", lineHeight: 1.5 }}>{verdictText}</div>
                 </div>
 
-                {/* ── 6 readiness score cards ─────────────────────────────── */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-                  {scoreCards.map(card => (
+                {/* ── Readiness at a Glance ──────────────────────────────── */}
+                <p style={{ ...sectionLabel, marginBottom: "8px" }}>Readiness at a Glance</p>
+                <div style={{ border: "1px solid #e8e8e8", borderRadius: "6px", overflow: "hidden", marginBottom: "16px" }}>
+                  {scoreCards.map((card, i) => (
                     <div key={card.title} style={{
-                      background: levelBg(card.level), border: `1px solid ${levelColor(card.level)}40`,
-                      borderTop: `3px solid ${levelColor(card.level)}`, borderRadius: "6px", padding: "9px 11px",
+                      display: "flex", alignItems: "center", gap: "14px",
+                      padding: "9px 14px",
+                      borderTop: i > 0 ? "1px solid #f0f0f0" : "none",
+                      background: "#fff",
                     }}>
-                      <div style={{ fontSize: "9px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px" }}>{card.title}</div>
-                      <div style={{ fontSize: "13px", fontWeight: 700, color: levelColor(card.level), marginBottom: "3px" }}>{levelLabel(card.level)}</div>
-                      <div style={{ fontSize: "9px", color: "#555", lineHeight: 1.35 }}>{card.detail}</div>
+                      <div style={{ width: "3px", alignSelf: "stretch", background: levelColor(card.level), borderRadius: "2px", flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "10.5px", fontWeight: 600, color: "#333" }}>{card.title}</div>
+                        <div style={{ fontSize: "9.5px", color: "#999", marginTop: "1px" }}>{card.detail}</div>
+                      </div>
+                      <div style={{ fontSize: "10px", fontWeight: 700, color: levelColor(card.level), flexShrink: 0 }}>
+                        {levelLabel(card.level)}
+                      </div>
                     </div>
                   ))}
                 </div>
 
                 {/* ── Strength + Limiter ──────────────────────────────────── */}
+                <p style={{ ...sectionLabel, marginBottom: "8px" }}>Strengths & Limiters</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                   <div style={panelCard("#2e7d32", "#f9fffe")}>
                     <div style={{ ...panelHead2, color: "#2e7d32" }}>Biggest Strength</div>
@@ -1665,6 +1674,7 @@ export default function RaceReadinessPage() {
                 </div>
 
                 {/* ── Race-day risks ──────────────────────────────────────── */}
+                <p style={{ ...sectionLabel, marginBottom: "8px" }}>Race-Day Risk Factors</p>
                 <div style={{ ...panelCard("#e65100", "#fffaf5"), marginBottom: "10px" }}>
                   <div style={{ ...panelHead2, color: "#e65100" }}>Main Race-Day Risks</div>
                   <ul style={{ margin: 0, paddingLeft: "16px" }}>
@@ -1675,6 +1685,7 @@ export default function RaceReadinessPage() {
                 </div>
 
                 {/* ── Recommended next step ───────────────────────────────── */}
+                <p style={{ ...sectionLabel, marginBottom: "8px" }}>Recommended Preparation</p>
                 <div style={{ ...panelCard("#1565c0", "#f0f4ff"), marginBottom: "8px" }}>
                   <div style={{ ...panelHead2, color: "#1565c0" }}>Recommended Next Step</div>
                   <div style={{ fontSize: "11px", color: "#333", lineHeight: 1.5 }}>{nextStepText}</div>
