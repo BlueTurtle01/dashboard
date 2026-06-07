@@ -1368,6 +1368,107 @@ export default function RaceReadinessPage() {
         <div style={canvas} className="race-strategy-canvas">
 
           {/* ═══════════════════════════════════════
+              TABLE OF CONTENTS
+          ═══════════════════════════════════════ */}
+          {(() => {
+            type TocEntry = { title: string; body: string; visible: boolean };
+            const entries: TocEntry[] = [
+              {
+                title: "Race Readiness Summary",
+                body: "The opening verdict page — a plain-English assessment of whether the athlete is currently prepared for this race. Readiness is colour-coded across key physical dimensions, with the most significant strength, limiter, and recommended next step called out explicitly.",
+                visible: !!(athlete && expContext),
+              },
+              {
+                title: "Race Overview",
+                body: "A high-level picture of the course: elevation profile, mapped route, terrain strip, and distribution of historical finishing times. Use this page to build a shared mental model of the race before reading the deeper analysis.",
+                visible: true,
+              },
+              {
+                title: "Race Demands Profile",
+                body: "What the course actually requires, shown through three technical charts. The elevation chart shows where the big climbs fall, the gradient histogram reveals how much of the course is steep, and the cumulative ascent chart shows whether effort is front-loaded or spread evenly.",
+                visible: true,
+              },
+              {
+                title: "Race Demands Profile (continued)",
+                body: "Demand summary cards quantify the key effort multipliers — distance, ascent, descent, and flat-equivalent load. Historical split data shows how the course tends to punish or reward different pacing approaches based on past finishers.",
+                visible: true,
+              },
+              {
+                title: "Athlete Overview",
+                body: "A profile of the athlete's competitive history, including career highlights, recent results, and category finishes over the last two years. This page establishes the baseline from which all readiness comparisons on subsequent pages are drawn.",
+                visible: !!athlete,
+              },
+              {
+                title: "Experience Gaps",
+                body: "Every terrain type on the goal course is listed — climb trail, descent road, flat fell, and so on — alongside how many kilometres of that terrain the athlete has covered in previous races. Red and amber rows identify where targeted build-up would have the most impact.",
+                visible: !!athlete,
+              },
+              {
+                title: "Demands Built Up",
+                body: "The athlete's peak single-race load versus what this race demands. Bar charts compare the highest distance, ascent, and flat-equivalent effort the athlete has recorded against the goal race targets — the fastest way to spot which dimensions are under-prepared.",
+                visible: !!athlete,
+              },
+              {
+                title: "Suggested Preparation Races",
+                body: "Nearby races ranked by how effectively they would close the athlete's identified experience gaps. Each suggestion lists the specific terrain types it covers and the kilometres it would contribute toward closing each gap.",
+                visible: !!athlete,
+              },
+              {
+                title: "Experience Context",
+                body: "Four contextual comparisons that put the goal race in perspective: scale ratios showing how much bigger this race is than anything the athlete has done, a projected finish-time range, the biggest climb on the course versus the athlete's personal best, and which past race most resembles the opening section.",
+                visible: !!(athlete && expContext),
+              },
+              {
+                title: "Race Day Pacing Strategy",
+                body: "A personalised, section-by-section race plan built around this exact course, the forecast conditions, and the athlete's target finish time. Follow the link on this page to generate the full pacing document.",
+                visible: true,
+              },
+            ];
+            const visible = entries.filter(e => e.visible);
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Race Readiness Report</div>
+                  </div>
+                </div>
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Report Contents</h2>
+                <p style={{ margin: "0 0 24px", fontSize: "12px", color: "#888" }}>
+                  What each section covers and what to look for
+                </p>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {visible.map((entry, i) => (
+                    <div key={i} style={{
+                      display: "flex", gap: "16px", padding: "14px 0",
+                      borderBottom: i < visible.length - 1 ? "1px solid #f0f0f0" : "none",
+                      alignItems: "flex-start",
+                    }}>
+                      <div style={{
+                        flexShrink: 0, width: "26px", height: "26px", borderRadius: "50%",
+                        background: "#1e3a1e", color: "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: "11px", fontWeight: 700, marginTop: "2px",
+                      }}>
+                        {i + 1}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e", marginBottom: "4px" }}>
+                          {entry.title}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#555", lineHeight: 1.65 }}>
+                          {entry.body}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
               PAGE 1 — Executive Readiness Summary
           ═══════════════════════════════════════ */}
           {result && athlete && expContext && (() => {
