@@ -111,6 +111,9 @@ export default function RaceFilesPage() {
   const [profileError, setProfileError] = useState<Record<string, string>>({});
   const [profileSuccess, setProfileSuccess] = useState<Record<string, string>>({});
 
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
+
   // Hidden file inputs per (race × fileType)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -467,6 +470,25 @@ export default function RaceFilesPage() {
     background: "#fff5f5",
   };
 
+  async function handleBackfillCoords() {
+    setBackfilling(true);
+    setBackfillMsg(null);
+    try {
+      const res  = await fetch("/api/admin/backfill-race-coords", { method: "POST" });
+      const json = await res.json() as { updated?: number; skipped?: number; errors?: number; error?: string };
+      if (!res.ok || json.error) {
+        setBackfillMsg(`Error: ${json.error ?? "Unknown error"}`);
+      } else {
+        setBackfillMsg(
+          `Done — ${json.updated} updated, ${json.skipped} already had coordinates${json.errors ? `, ${json.errors} failed` : ""}.`
+        );
+      }
+    } catch {
+      setBackfillMsg("Network error running backfill.");
+    }
+    setBackfilling(false);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -493,6 +515,21 @@ export default function RaceFilesPage() {
             Upload and manage GPX courses, wind analysis CSVs, and other files for each race.
             These files power the automated pacing analysis pipeline.
           </p>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "12px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => void handleBackfillCoords()}
+              disabled={backfilling}
+              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 500, borderRadius: "7px", border: "1px solid #d1d5db", background: backfilling ? "#f3f4f6" : "#fff", color: "#374151", cursor: backfilling ? "default" : "pointer" }}
+            >
+              {backfilling ? "⏳ Backfilling…" : "📍 Backfill Race Coordinates"}
+            </button>
+            {backfillMsg && (
+              <span style={{ fontSize: "12px", color: backfillMsg.startsWith("Error") ? "#b91c1c" : "#166534" }}>
+                {backfillMsg}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Search */}

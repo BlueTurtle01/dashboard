@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserRoles } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
+import { parseGpxPoints } from "@/lib/race-analysis/gpx";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -95,22 +96,61 @@ export async function GET(req: NextRequest) {
     .eq("full_name", athleteKey);
   const athleteRaceIds = new Set((athleteResults ?? []).map(r => r.race_id as string));
 
-  // ── 2. Centroid from athlete's race coordinates ────────────────────────────
+  // ── 2. Centroid from athlete's race coordinates ──────────────────────────
+  // Primary: race_latitude / race_longitude on the races table.
+  // Fallback: first GPS point of the race's GPX file (for races not yet
+  //           geocoded in the database).
   let centroid: { lat: number; lon: number } | null = null;
   if (athleteRaceIds.size > 0) {
-    const { data: raceCoords } = await supabase
+    const { data: raceRows } = await supabase
       .from("races")
-      .select("race_latitude, race_longitude")
-      .in("id", [...athleteRaceIds])
-      .not("race_latitude", "is", null)
-      .not("race_longitude", "is", null);
-    const coords = (raceCoords ?? []).filter(
-      r => typeof r.race_latitude === "number" && typeof r.race_longitude === "number"
-    );
-    if (coords.length > 0) {
+      .select("id, race_latitude, race_longitude")
+      .in("id", [...athleteRaceIds]);
+
+    const coordPoints: { lat: number; lon: number }[] = [];
+    const missingCoordIds: string[] = [];
+
+    for (const r of raceRows ?? []) {
+      if (typeof r.race_latitude === "number" && typeof r.race_longitude === "number") {
+        coordPoints.push({ lat: r.race_latitude, lon: r.race_longitude });
+      } else {
+        missingCoordIds.push(r.id as string);
+      }
+    }
+
+    // GPX fallback — fetch start point for races without stored coordinates
+    if (missingCoordIds.length > 0) {
+      const { data: gpxFiles } = await supabase
+        .from("race_files")
+        .select("race_id, public_url")
+        .in("race_id", missingCoordIds)
+        .eq("file_type", "gpx");
+
+      // Fetch GPX files in parallel (cap at 10, short timeout each)
+      const gpxFetches = (gpxFiles ?? []).slice(0, 10).map(async f => {
+        try {
+          const res = await fetch(f.public_url as string, {
+            signal: AbortSignal.timeout(8_000),
+          });
+          if (!res.ok) return null;
+          const pts = parseGpxPoints(await res.text());
+          if (pts.length === 0) return null;
+          return { lat: pts[0].lat, lon: pts[0].lon };
+        } catch {
+          return null;
+        }
+      });
+
+      const gpxResults = await Promise.all(gpxFetches);
+      for (const pt of gpxResults) {
+        if (pt) coordPoints.push(pt);
+      }
+    }
+
+    if (coordPoints.length > 0) {
       centroid = {
-        lat: coords.reduce((s, r) => s + (r.race_latitude as number), 0) / coords.length,
-        lon: coords.reduce((s, r) => s + (r.race_longitude as number), 0) / coords.length,
+        lat: coordPoints.reduce((s, p) => s + p.lat, 0) / coordPoints.length,
+        lon: coordPoints.reduce((s, p) => s + p.lon, 0) / coordPoints.length,
       };
     }
   }

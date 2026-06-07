@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     // ── Verify race exists ────────────────────────────────────────────────────
     const { data: race } = await supabase
       .from("races")
-      .select("id, name, terrain_type")
+      .select("id, name, terrain_type, race_latitude, race_longitude")
       .eq("id", race_id)
       .maybeSingle();
     if (!race) return NextResponse.json({ error: "Race not found" }, { status: 404 });
@@ -137,6 +137,14 @@ export async function POST(req: NextRequest) {
     let gpxPoints: GpxPoint[];
     try { gpxPoints = parseGpxPoints(await file.text()); }
     catch (e) { return NextResponse.json({ error: `GPX parse error: ${e instanceof Error ? e.message : e}` }, { status: 422 }); }
+
+    // ── Backfill race coordinates from GPX start point (if not already set) ──
+    if (gpxPoints.length > 0 && race.race_latitude == null) {
+      await adminClient
+        .from("races")
+        .update({ race_latitude: gpxPoints[0].lat, race_longitude: gpxPoints[0].lon })
+        .eq("id", race_id);
+    }
 
     // ── Compute race profile ──────────────────────────────────────────────────
     const profile = computeRaceProfile(gpxPoints, race.terrain_type, undefined);
