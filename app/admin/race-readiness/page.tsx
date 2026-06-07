@@ -2564,6 +2564,14 @@ export default function RaceReadinessPage() {
                       <strong>Data coverage:</strong> Terrain experience is based on {rwp} of {total} finished
                       races with GPS profile data. The remaining {total - rwp} races count toward career stats
                       but have no terrain breakdown — gaps may be understated.
+                      {" "}<a
+                        href={`/admin/data-coverage?race_id=${encodeURIComponent(result.race.id)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#795500", fontWeight: 600, textDecoration: "underline" }}
+                      >
+                        Check data coverage →
+                      </a>
                     </div>
                   );
                 })()}
