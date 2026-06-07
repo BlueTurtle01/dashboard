@@ -794,7 +794,7 @@ function gradientBandColor(grad: number): string {
 
 /* Gradient distribution histogram */
 function GradientHistogram({ sections }: { sections: TerrainSection[] }) {
-  const W = 698, H = 100, padL = 48, padR = 12, padT = 16, padB = 30;
+  const W = 698, H = 160, padL = 48, padR = 12, padT = 16, padB = 30;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
   const bands = GRAD_BANDS.map(b => ({
@@ -845,7 +845,7 @@ function GradientHistogram({ sections }: { sections: TerrainSection[] }) {
 
 /* Cumulative ascent line chart */
 function CumulativeAscentChart({ profile }: { profile: RaceElevProfile }) {
-  const W = 698, H = 100, padL = 52, padR = 12, padT = 16, padB = 24;
+  const W = 698, H = 170, padL = 52, padR = 12, padT = 16, padB = 24;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
   // Compute cumulative ascent per point
@@ -920,7 +920,7 @@ function CumulativeAscentChart({ profile }: { profile: RaceElevProfile }) {
 
 /* Terrain strip — color-coded sections across the course */
 function TerrainStrip({ sections, totalKm }: { sections: TerrainSection[]; totalKm: number }) {
-  const W = 698, H = 32;
+  const W = 698, H = 52;
   return (
     <svg width={W} height={H} style={{ display: "block" }}>
       {sections.map((s, i) => {
@@ -946,7 +946,7 @@ function TerrainStrip({ sections, totalKm }: { sections: TerrainSection[]; total
 
 /* Effort profile chart — flat_equivalent_km / distance_km per section */
 function EffortProfileChart({ sections, totalKm }: { sections: TerrainSection[]; totalKm: number }) {
-  const W = 698, H = 90, padL = 44, padR = 8, padT = 14, padB = 22;
+  const W = 698, H = 160, padL = 44, padR = 8, padT = 14, padB = 22;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
   const ratios = sections.map(s => s.distance_km > 0 ? s.flat_equivalent_km / s.distance_km : 1);
@@ -1917,13 +1917,14 @@ export default function RaceReadinessPage() {
               </div>
 
               <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Race Demands Profile</h2>
-              <p style={{ margin: "0 0 12px", fontSize: "12px", color: "#888" }}>
-                Physical and environmental demands an athlete will face on this course
+              <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#555", lineHeight: 1.5 }}>
+                Understanding what {result.race.name} demands physically is the foundation for assessing whether you are ready for it.
+                The three charts below show how the course is structured — where it climbs, how the climbing is distributed, and how much energy each section costs relative to flat running.
               </p>
 
               {/* ── Section 1: Gradient distribution ── */}
-              <div style={{ marginBottom: "14px" }}>
-                <p style={{ ...sectionLabel, marginBottom: "6px" }}>Gradient Distribution — kilometres at each slope band</p>
+              <div style={{ marginBottom: "20px" }}>
+                <p style={{ ...sectionLabel, marginBottom: "8px" }}>Gradient Distribution — kilometres at each slope band</p>
                 <GradientHistogram sections={secs} />
                 {/* Legend */}
                 <div style={{ display: "flex", gap: "10px", marginTop: "6px", flexWrap: "wrap" }}>
@@ -1947,8 +1948,8 @@ export default function RaceReadinessPage() {
 
               {/* ── Section 2: Cumulative ascent ── */}
               {elevProfile && (
-                <div style={{ marginBottom: "14px" }}>
-                  <p style={{ ...sectionLabel, marginBottom: "6px" }}>
+                <div style={{ marginBottom: "20px" }}>
+                  <p style={{ ...sectionLabel, marginBottom: "8px" }}>
                     Climbing Load Over Course
                     {halfwayAscentPct !== null ? ` — ${halfwayAscentPct}% of total ascent completed at halfway` : ""}
                   </p>
@@ -1960,8 +1961,8 @@ export default function RaceReadinessPage() {
               )}
 
               {/* ── Section 3: Terrain strip + effort profile ── */}
-              <div style={{ marginBottom: "14px" }}>
-                <p style={{ ...sectionLabel, marginBottom: "6px" }}>Section-by-Section Effort Multiplier — vs. flat running pace</p>
+              <div style={{ marginBottom: "20px" }}>
+                <p style={{ ...sectionLabel, marginBottom: "8px" }}>Section-by-Section Effort Multiplier — vs. flat running pace</p>
                 <EffortProfileChart sections={secs} totalKm={totalKm} />
                 <div style={{ marginTop: "4px" }}>
                   <div style={{ fontSize: "9px", color: "#888", lineHeight: 1.4 }}>
@@ -1980,8 +1981,8 @@ export default function RaceReadinessPage() {
               </div>
 
               {/* ── Section 4: Terrain colour strip ── */}
-              <div style={{ marginBottom: "14px" }}>
-                <p style={{ ...sectionLabel, marginBottom: "6px" }}>Terrain Character Strip — gradient colour across the course</p>
+              <div style={{ marginBottom: "20px" }}>
+                <p style={{ ...sectionLabel, marginBottom: "8px" }}>Terrain Character Strip — gradient colour across the course</p>
                 <TerrainStrip sections={secs} totalKm={totalKm} />
                 <div style={{ marginTop: "8px" }} />
               </div>
@@ -2026,8 +2027,13 @@ export default function RaceReadinessPage() {
               </div>
 
               <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Race Demands Profile</h2>
-              <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
-                Demand summary and historical race pattern
+              <p style={{ margin: "0 0 6px", fontSize: "12px", color: "#888" }}>
+                Demand summary and race pattern data
+              </p>
+              <p style={{ margin: "0 0 16px", fontSize: "11.5px", color: "#444", lineHeight: 1.6 }}>
+                These cards translate the course data into the four physical demands that matter most for {result.race.name}.
+                They are written honestly: where a demand is significant, it is significant — softening it does not help you prepare.
+                Read each card as a direct statement about what this race will test, and whether you are ready for it.
               </p>
 
               {/* ── Demand summary (4 cards) ── */}
@@ -2279,6 +2285,33 @@ export default function RaceReadinessPage() {
                   ))}
                 </div>
 
+                {/* Race-readiness framing note */}
+                {(() => {
+                  const goalAscent = result.race.total_ascent_m ?? 0;
+                  let verticalNote = "";
+                  if (p.max_ascent_m && goalAscent > 0) {
+                    if (p.max_ascent_m < goalAscent * 0.7) {
+                      verticalNote = ` The heaviest climbing race on record (${Math.round(p.max_ascent_m).toLocaleString()}m) is well below ${result.race.name}'s ${Math.round(goalAscent).toLocaleString()}m of ascent — vertical exposure is a genuine gap.`;
+                    } else if (p.max_ascent_m < goalAscent) {
+                      verticalNote = ` The heaviest climbing race on record (${Math.round(p.max_ascent_m).toLocaleString()}m) falls short of ${result.race.name}'s ${Math.round(goalAscent).toLocaleString()}m of ascent.`;
+                    } else {
+                      verticalNote = ` Prior races have reached or exceeded ${result.race.name}'s ${Math.round(goalAscent).toLocaleString()}m of climbing, which is a positive vertical indicator.`;
+                    }
+                  }
+                  const dnfRate = p.race_count > 0 ? Math.round((p.dnf_count / p.race_count) * 100) : 0;
+                  const dnfNote = dnfRate >= 20
+                    ? ` A DNF rate of ${dnfRate}% (${p.dnf_count} from ${p.race_count} races) is worth understanding — causes should be considered before targeting a race of this scale.`
+                    : "";
+                  return (
+                    <p style={{ margin: "0 0 18px", fontSize: "11px", color: "#444", lineHeight: 1.55 }}>
+                      {`${p.athlete_key} has ${p.race_count} races on record across ${p.career_span_years ?? "—"} years of competition.`}
+                      {verticalNote}
+                      {dnfNote}
+                      {` The pages that follow assess whether this background translates to readiness for ${result.race.name}.`}
+                    </p>
+                  );
+                })()}
+
                 {/* Performance trend */}
                 {races.filter(r => (r.result_status === "FINISHED" || r.result_status === "UNKNOWN") && r.position).length >= 2 && (
                   <div style={{ marginBottom: "22px" }}>
@@ -2486,6 +2519,17 @@ export default function RaceReadinessPage() {
                   )}
                 </div>
 
+                {/* Honest gap explanation */}
+                <p style={{ margin: "0 0 14px", fontSize: "11px", color: "#444", lineHeight: 1.55 }}>
+                  {noneCount > 0
+                    ? `${noneCount} demand${noneCount !== 1 ? "s" : ""} on ${result.race.name} have no equivalent in this athlete's race history. These are genuine experience gaps — terrain not tested in a race context. On race day, unfamiliar terrain costs more in time and mental energy than familiar terrain, regardless of fitness.`
+                    : partialCount > 0
+                    ? `All major terrain types on ${result.race.name} have some prior exposure, but several are underrepresented. Partial coverage means the volume raced is less than the course demands — present, but not confirmed adequate.`
+                    : `Every terrain demand of ${result.race.name} is covered by prior experience. Volume and recency still matter — a demand met years ago at a smaller scale carries less confidence than recent, similar-scale racing.`
+                  }
+                  {` Each row below is ordered by course distance — the longer the "Race km" value, the greater the physical consequence of that terrain type.`}
+                </p>
+
                 {/* Gap table */}
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
@@ -2609,6 +2653,29 @@ export default function RaceReadinessPage() {
                 <p style={{ margin: "0 0 20px", fontSize: "12px", color: "#888" }}>
                   What this athlete has already experienced — compared to the demands of {result.race.name}
                 </p>
+
+                {/* Honest distance/ascent framing */}
+                {(() => {
+                  const distGap   = targetDist   !== null && maxDist   !== null ? (maxDist   >= targetDist   ? "met" : "gap") : null;
+                  const ascentGap = targetAscent !== null && maxAscent !== null ? (maxAscent >= targetAscent ? "met" : "gap") : null;
+                  let framingText = "";
+                  if (distGap === "gap" && ascentGap === "gap") {
+                    framingText = `Neither the distance (${targetDist?.toFixed(0)} km) nor the ascent (${Math.round(targetAscent ?? 0).toLocaleString()}m) of ${result.race.name} has been matched in a single race finish. Both are unvalidated at this scale — a meaningful consideration for race day.`;
+                  } else if (distGap === "gap") {
+                    framingText = `The ascent of ${result.race.name} has been matched in prior racing, but the full distance (${targetDist?.toFixed(0)} km) has not been completed in a single race. Distance tolerance is the primary unconfirmed demand.`;
+                  } else if (ascentGap === "gap") {
+                    framingText = `The distance of ${result.race.name} has been covered in prior racing, but the full ascent (${Math.round(targetAscent ?? 0).toLocaleString()}m) has not been matched in a single race. Vertical load is the primary unconfirmed demand.`;
+                  } else if (distGap === "met" && ascentGap === "met") {
+                    framingText = `Both the distance and ascent of ${result.race.name} have been matched or exceeded in prior race finishes — a meaningful baseline. Recency and terrain specificity of those races determine how well this transfers.`;
+                  } else {
+                    framingText = `The chart shows the athlete's maximum achieved values compared to the demands of ${result.race.name}.`;
+                  }
+                  return (
+                    <p style={{ margin: "0 0 16px", fontSize: "11px", color: "#444", lineHeight: 1.55 }}>
+                      {framingText}
+                    </p>
+                  );
+                })()}
 
                 {/* Demand comparison cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "24px" }}>
