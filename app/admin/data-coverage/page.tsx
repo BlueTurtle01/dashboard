@@ -19,6 +19,8 @@ interface RaceRow {
   has_strategy: boolean;
 }
 
+type GenState = "idle" | "loading" | "done" | "error";
+
 const supabase = createClient();
 
 export default function DataCoveragePage() {
@@ -30,6 +32,8 @@ export default function DataCoveragePage() {
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState<string | null>(null);
   const [hideComplete, setHideComplete] = useState(false);
+  const [genStates, setGenStates]       = useState<Record<string, GenState>>({});
+  const [genErrors, setGenErrors]       = useState<Record<string, string>>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -74,9 +78,10 @@ export default function DataCoveragePage() {
     setLoading(true);
     setError(null);
     setRows([]);
+    setGenStates({});
+    setGenErrors({});
 
     try {
-      // 1. All races the athlete has appeared in
       const { data: resultData, error: rErr } = await supabase
         .from("race_results")
         .select("race_id, result_year, result_status, races(name)")
@@ -105,7 +110,6 @@ export default function DataCoveragePage() {
 
       const raceIds = deduped.map(r => r.race_id);
 
-      // 2. Parallel data-presence checks
       const [{ data: gpxRows }, { data: profileRows }, { data: metaRows }] = await Promise.all([
         supabase.from("race_files").select("race_id").in("race_id", raceIds).eq("file_type", "gpx"),
         supabase.from("race_profiles").select("race_id").in("race_id", raceIds),
@@ -134,6 +138,32 @@ export default function DataCoveragePage() {
     setQuery("");
     setRows([]);
     setError(null);
+    setGenStates({});
+    setGenErrors({});
+  }
+
+  // ── Generate strategy for a single race ──────────────────────────────────
+  async function generateStrategy(raceId: string) {
+    setGenStates(s => ({ ...s, [raceId]: "loading" }));
+    setGenErrors(e => { const next = { ...e }; delete next[raceId]; return next; });
+
+    try {
+      const res = await fetch("/api/race-strategy/auto-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race_id: raceId }),
+      });
+      const json = await res.json() as { success?: boolean; error?: string };
+      if (!res.ok || !json.success) {
+        throw new Error(json.error ?? "Generation failed.");
+      }
+      setGenStates(s => ({ ...s, [raceId]: "done" }));
+      // Optimistically mark strategy as present
+      setRows(r => r.map(row => row.race_id === raceId ? { ...row, has_strategy: true } : row));
+    } catch (e) {
+      setGenStates(s => ({ ...s, [raceId]: "error" }));
+      setGenErrors(err => ({ ...err, [raceId]: e instanceof Error ? e.message : "Failed." }));
+    }
   }
 
   const displayed = hideComplete
@@ -145,10 +175,19 @@ export default function DataCoveragePage() {
       ? <span style={{ color: "#2e7d32", fontWeight: 700 }}>✓</span>
       : <span style={{ color: "#c0392b", fontWeight: 700 }}>✗</span>;
 
-  const missingCount = rows.filter(r => !r.has_gpx || !r.has_profile || !r.has_strategy).length;
+  const missingCount  = rows.filter(r => !r.has_gpx || !r.has_profile || !r.has_strategy).length;
+  const canAutoGen    = rows.filter(r => r.has_profile && !r.has_strategy).length;
+
+  // ── Generate all missing strategies at once ───────────────────────────────
+  async function generateAll() {
+    const targets = rows.filter(r => r.has_profile && !r.has_strategy && genStates[r.race_id] !== "loading");
+    for (const row of targets) {
+      await generateStrategy(row.race_id);
+    }
+  }
 
   return (
-    <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "32px 24px", fontFamily: "system-ui, sans-serif" }}>
+    <div style={{ maxWidth: "1060px", margin: "0 auto", padding: "32px 24px", fontFamily: "system-ui, sans-serif" }}>
       {/* Header */}
       <div style={{ marginBottom: "6px" }}>
         <Link href="/admin/tools" style={{ color: "#2563eb", fontSize: "13px", textDecoration: "none" }}>
@@ -224,24 +263,32 @@ export default function DataCoveragePage() {
 
       {!loading && rows.length > 0 && (
         <>
-          {/* Summary row */}
+          {/* Summary + controls bar */}
           <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "16px", flexWrap: "wrap" }}>
             <div style={{ fontSize: "13px", color: "#555" }}>
-              <strong style={{ color: "#1e3a1e" }}>{rows.length}</strong> races found —{" "}
+              <strong style={{ color: "#1e3a1e" }}>{rows.length}</strong> races —{" "}
               <strong style={{ color: missingCount > 0 ? "#c0392b" : "#2e7d32" }}>{missingCount}</strong> with missing data
             </div>
+            {canAutoGen > 0 && (
+              <button
+                onClick={() => void generateAll()}
+                style={{
+                  padding: "6px 14px", borderRadius: "6px", border: "1px solid #1565c0",
+                  background: "#1565c0", color: "#fff", fontSize: "12px", fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Generate all {canAutoGen} missing {canAutoGen === 1 ? "strategy" : "strategies"}
+              </button>
+            )}
             <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#555", cursor: "pointer", marginLeft: "auto" }}>
-              <input
-                type="checkbox"
-                checked={hideComplete}
-                onChange={e => setHideComplete(e.target.checked)}
-              />
+              <input type="checkbox" checked={hideComplete} onChange={e => setHideComplete(e.target.checked)} />
               Show incomplete only
             </label>
           </div>
 
           {/* Legend */}
-          <div style={{ fontSize: "11px", color: "#888", marginBottom: "12px", display: "flex", gap: "16px" }}>
+          <div style={{ fontSize: "11px", color: "#888", marginBottom: "12px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
             <span><strong>GPX</strong> — route file uploaded</span>
             <span><strong>Profile</strong> — terrain sections computed from GPX</span>
             <span><strong>Strategy</strong> — pace strategy saved (Plan Insights)</span>
@@ -251,7 +298,7 @@ export default function DataCoveragePage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#f9f9f9" }}>
-                  {["Race", "Year", "Status", "GPX", "Profile", "Strategy", ""].map((h, i) => (
+                  {["Race", "Year", "Status", "GPX", "Profile", "Strategy", "Actions"].map((h, i) => (
                     <th key={i} style={{
                       textAlign: i === 0 ? "left" : "center",
                       padding: "10px 14px", fontSize: "11px", fontWeight: 600, color: "#888",
@@ -272,6 +319,8 @@ export default function DataCoveragePage() {
                 )}
                 {displayed.map((row, i) => {
                   const allOk = row.has_gpx && row.has_profile && row.has_strategy;
+                  const gs    = genStates[row.race_id] ?? "idle";
+                  const ge    = genErrors[row.race_id];
                   return (
                     <tr key={row.race_id} style={{ borderTop: i > 0 ? "1px solid #f0f0f0" : "none", background: allOk ? "#fafffe" : "#fff" }}>
                       <td style={{ padding: "10px 14px", fontSize: "13px", color: "#1e3a1e", fontWeight: 500 }}>
@@ -291,16 +340,42 @@ export default function DataCoveragePage() {
                       </td>
                       <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>{tick(row.has_gpx)}</td>
                       <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>{tick(row.has_profile)}</td>
-                      <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>{tick(row.has_strategy)}</td>
+                      <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>
+                        {gs === "done" ? <span style={{ color: "#2e7d32", fontWeight: 700 }}>✓</span> : tick(row.has_strategy)}
+                      </td>
                       <td style={{ padding: "10px 14px", textAlign: "center" }}>
-                        {!allOk && (
-                          <Link
-                            href={`/admin/race-files?race=${encodeURIComponent(row.race_name)}`}
-                            style={{ fontSize: "12px", color: "#1565c0", textDecoration: "none", fontWeight: 500 }}
-                          >
-                            Upload →
-                          </Link>
-                        )}
+                        <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+                          {/* Generate strategy button: show when has profile but no strategy */}
+                          {row.has_profile && !row.has_strategy && gs !== "done" && (
+                            <button
+                              onClick={() => void generateStrategy(row.race_id)}
+                              disabled={gs === "loading"}
+                              style={{
+                                padding: "4px 10px", borderRadius: "5px", fontSize: "11px", fontWeight: 600,
+                                cursor: gs === "loading" ? "wait" : "pointer",
+                                border: "1px solid #1565c0",
+                                background: gs === "loading" ? "#e3f2fd" : "#1565c0",
+                                color: gs === "loading" ? "#1565c0" : "#fff",
+                              }}
+                            >
+                              {gs === "loading" ? "Generating…" : "Generate strategy"}
+                            </button>
+                          )}
+                          {gs === "error" && ge && (
+                            <span style={{ fontSize: "10.5px", color: "#c0392b", maxWidth: "140px" }} title={ge}>
+                              {ge.length > 40 ? ge.slice(0, 40) + "…" : ge}
+                            </span>
+                          )}
+                          {/* Upload files link */}
+                          {!allOk && (
+                            <Link
+                              href={`/admin/race-files?race=${encodeURIComponent(row.race_name)}`}
+                              style={{ fontSize: "11px", color: "#1565c0", textDecoration: "none", fontWeight: 500, whiteSpace: "nowrap" }}
+                            >
+                              Upload →
+                            </Link>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -311,8 +386,8 @@ export default function DataCoveragePage() {
 
           <div style={{ marginTop: "10px", fontSize: "11.5px", color: "#aaa" }}>
             Showing {displayed.length} of {rows.length} races.
-            {" "}Profile = computed terrain sections from GPX.
-            {" "}Strategy = plan insights stored in races_meta.
+            {" "}Profile = terrain sections computed from GPX.
+            {" "}Strategy = auto-generated or manually edited pace strategy stored in races_meta.
           </div>
         </>
       )}
