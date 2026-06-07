@@ -29,6 +29,7 @@ export interface PrepRaceGapFill {
 export interface PrepRaceSuggestion {
   race_id: string;
   race_name: string;
+  race_slug: string | null;
   distance_miles: number;
   next_date: string | null;
   total_distance_km: number | null;
@@ -214,7 +215,7 @@ export async function GET(req: NextRequest) {
 
   const { data: boxRaces } = await supabase
     .from("races")
-    .select("id, name, race_latitude, race_longitude")
+    .select("id, name, slug, race_latitude, race_longitude")
     .gte("race_latitude", centroid.lat - latDelta)
     .lte("race_latitude", centroid.lat + latDelta)
     .gte("race_longitude", centroid.lon - lonDelta)
@@ -233,6 +234,7 @@ export async function GET(req: NextRequest) {
     .map(r => ({
       race_id:       r.id as string,
       race_name:     r.name as string,
+      race_slug:     (r.slug as string | null) ?? null,
       distance_miles: Math.round(
         (haversineKm(centroid!.lat, centroid!.lon, r.race_latitude as number, r.race_longitude as number) / 1.60934) * 10
       ) / 10,
@@ -297,6 +299,7 @@ export async function GET(req: NextRequest) {
     suggestions.push({
       race_id:           cand.race_id,
       race_name:         cand.race_name,
+      race_slug:         cand.race_slug,
       distance_miles:    cand.distance_miles,
       next_date:         nextDateIdx[cand.race_id] ?? null,
       total_distance_km: profile.total_distance_km as number ?? null,

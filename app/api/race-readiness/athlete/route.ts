@@ -281,7 +281,7 @@ export async function GET(req: NextRequest) {
   // ── 7. Terrain pairings from finished race sections ─────────────────────────
   const pairingMap: Record<string, { section_type: string; terrain: string; total_km: number; race_count: number; weighted_grad: number }> = {};
   for (const row of resultRows ?? []) {
-    if (row.result_status !== "FINISHED") continue;
+    if (!["FINISHED", "UNKNOWN"].includes(row.result_status as string)) continue;
     const secs = profileMap[row.race_id as string]?.sections ?? [];
     const countedThisRow = new Set<string>();
     for (const sec of secs) {
@@ -294,7 +294,6 @@ export async function GET(req: NextRequest) {
   }
   const terrainPairings: TerrainPairing[] = Object.values(pairingMap)
     .sort((a, b) => b.total_km - a.total_km)
-    .slice(0, 10)
     .map(p => ({
       section_type: p.section_type,
       terrain:      p.terrain,

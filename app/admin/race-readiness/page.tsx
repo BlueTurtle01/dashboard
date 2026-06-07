@@ -154,6 +154,7 @@ interface PrepRaceGapFill {
 interface PrepRaceSuggestion {
   race_id: string;
   race_name: string;
+  race_slug: string | null;
   distance_miles: number;
   next_date: string | null;
   total_distance_km: number | null;
@@ -2007,7 +2008,29 @@ export default function RaceReadinessPage() {
                 </div>
               )}
 
-              {/* ── Section 5: Demand summary (4 cards) ── */}
+              <PageNumber n={3} />
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════
+              PAGE 4 — Race Demands Profile (continued)
+          ═══════════════════════════════════════ */}
+          {secs.length > 0 && (
+            <div style={a4Page}>
+              <div style={printHeader}>
+                <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                  <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Race Demands Profile</div>
+                </div>
+              </div>
+
+              <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Race Demands Profile</h2>
+              <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
+                Demand summary and historical race pattern
+              </p>
+
+              {/* ── Demand summary (4 cards) ── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
                 <DemandCard title="Climbing Demand" accent="#c0392b">
                   {totalAscentM > 0 && terrainSummary.climbing > 0 ? (
@@ -2163,12 +2186,12 @@ export default function RaceReadinessPage() {
                 </p>
               </div>
 
-              <PageNumber n={3} />
+              <PageNumber n={4} />
             </div>
           )}
 
           {/* ═══════════════════════════════════════
-              PAGE 4 — Athlete Overview
+              PAGE 5 — Athlete Overview
           ═══════════════════════════════════════ */}
           {athlete && (() => {
             const p = athlete.profile;
@@ -2355,13 +2378,13 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={4} />
+                <PageNumber n={5} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 5 — Experience Gaps
+              PAGE 6 — Experience Gaps
           ═══════════════════════════════════════ */}
           {athlete && result.terrain_sections.length > 0 && (() => {
             const p = athlete.profile;
@@ -2521,13 +2544,13 @@ export default function RaceReadinessPage() {
                   Athlete km drawn from all finished races in their career history.
                 </div>
 
-                <PageNumber n={5} />
+                <PageNumber n={6} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 6 — Demands Built Up
+              PAGE 7 — Demands Built Up
           ═══════════════════════════════════════ */}
           {athlete && (() => {
             const p = athlete.profile;
@@ -2548,7 +2571,7 @@ export default function RaceReadinessPage() {
 
             const tableRaces = [...finishedRaces].sort((a, b) => b.result_year - a.result_year).slice(0, 10);
 
-            const pairings = athlete.terrain_pairings ?? [];
+            const pairings = (athlete.terrain_pairings ?? []).slice(0, 10);
             const maxPairingKm = pairings.reduce((m, p) => Math.max(m, p.total_km), 0) || 1;
 
             const sectionTypeLabel = (s: string) =>
@@ -2717,13 +2740,13 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={6} />
+                <PageNumber n={7} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 7 — Suggested Preparation Races
+              PAGE 8 — Suggested Preparation Races
           ═══════════════════════════════════════ */}
           {(prepRacesLoading || (prepRaces && athlete)) && (() => {
             const stl = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -2826,6 +2849,23 @@ export default function RaceReadinessPage() {
                               </div>
                             )}
                           </div>
+
+                          {/* Training plan QR — only if this race has a published slug */}
+                          {s.race_slug && (() => {
+                            const raceUrl = `https://www.tortoiseendurance.com/feeder-races/${s.race_slug}`;
+                            return (
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px", paddingTop: "8px", borderTop: "1px solid #f0f0f0" }}>
+                                <div>
+                                  <div style={{ fontSize: "9.5px", fontWeight: 700, color: "#1e3a1e", marginBottom: "2px" }}>Training plans available</div>
+                                  <div style={{ fontSize: "8.5px", color: "#888", lineHeight: 1.4 }}>We have structured plans for {s.race_name}.<br />Scan to view start dates and durations.</div>
+                                </div>
+                                <div style={{ textAlign: "center", marginLeft: "10px", flexShrink: 0 }}>
+                                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent(raceUrl)}`} alt={`QR — ${raceUrl}`} width={60} height={60} style={{ display: "block", borderRadius: "3px" }} />
+                                  <div style={{ fontSize: "7px", color: "#bbb", marginTop: "2px" }}>Scan for plans</div>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -2859,13 +2899,13 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={7} />
+                <PageNumber n={8} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 8 — Experience Context
+              PAGE 9 — Experience Context
           ═══════════════════════════════════════ */}
           {(expContextLoading || expContext) && (() => {
             const fmtH = (h: number) => {
@@ -3039,13 +3079,13 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={8} />
+                <PageNumber n={9} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 9 — Race Day Pacing Strategy CTA
+              PAGE 10 — Race Day Pacing Strategy CTA
           ═══════════════════════════════════════ */}
           {result && (
             <div style={a4Page}>
@@ -3141,7 +3181,7 @@ export default function RaceReadinessPage() {
                 );
               })()}
 
-              <PageNumber n={9} />
+              <PageNumber n={10} />
             </div>
           )}
 
