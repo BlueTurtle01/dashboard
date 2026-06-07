@@ -583,14 +583,15 @@ function PerformanceTrendChart({ races, recentThreshold }: { races: AthleteRace[
   const W = 698, H = 140, padL = 42, padR = 16, padT = 16, padB = 28;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
-  // Only races with both position and total_finishers, sorted chronologically
+  const isFinished = (r: AthleteRace) => r.result_status === "FINISHED" || r.result_status === "UNKNOWN";
+
+  // Full points: have position + total_finishers — can compute % field beaten
   type PlotPoint = { year: number; pct: number; raceName: string; pos: number; total: number; isRecent: boolean };
   const plotPts: PlotPoint[] = races
-    .filter(r => r.result_status === "FINISHED" && r.position && r.total_finishers && r.total_finishers > 1)
+    .filter(r => isFinished(r) && r.position && r.total_finishers && r.total_finishers > 1)
     .sort((a, b) => a.result_year !== b.result_year ? a.result_year - b.result_year : (a.position ?? 999) - (b.position ?? 999))
     .map(r => ({
       year:     r.result_year,
-      // % of field beaten: 100% = winner, 0% = last; higher = better
       pct:      ((r.total_finishers! - r.position!) / (r.total_finishers! - 1)) * 100,
       raceName: r.race_name,
       pos:      r.position!,
@@ -598,87 +599,108 @@ function PerformanceTrendChart({ races, recentThreshold }: { races: AthleteRace[
       isRecent: r.result_year >= recentThreshold,
     }));
 
-  if (plotPts.length < 2) return null;
+  // No-data points: finished with a position but no field-size info
+  type NoDataPoint = { year: number; raceName: string; isRecent: boolean };
+  const noDataPts: NoDataPoint[] = races
+    .filter(r => isFinished(r) && r.position && (!r.total_finishers || r.total_finishers <= 1))
+    .sort((a, b) => a.result_year - b.result_year)
+    .map(r => ({ year: r.result_year, raceName: r.race_name, isRecent: r.result_year >= recentThreshold }));
 
-  const years   = plotPts.map(p => p.year);
-  const minYear = Math.min(...years), maxYear = Math.max(...years);
+  const allYears = [...plotPts.map(p => p.year), ...noDataPts.map(p => p.year)];
+  if (plotPts.length + noDataPts.length < 2) return null;
 
-  // X spread: if all same year use index order, otherwise spread by year
+  const minYear = Math.min(...allYears), maxYear = Math.max(...allYears);
   const singleYear = minYear === maxYear;
-  const xS = (p: PlotPoint, i: number) =>
-    padL + (singleYear ? (i / (plotPts.length - 1)) * chartW : ((p.year - minYear) / (maxYear - minYear)) * chartW);
-  // Y: 0% at bottom, 100% at top; add 5% padding each end
+
+  // X position by year
+  const xByYear = (yr: number) =>
+    padL + (singleYear ? chartW / 2 : ((yr - minYear) / (maxYear - minYear)) * chartW);
   const yS = (pct: number) => padT + chartH - ((pct / 100) * chartH);
 
-  // Fixed Y ticks at 0, 25, 50, 75, 100
   const yTicks = [0, 25, 50, 75, 100];
-
-  // X ticks — one per year, thinned if needed
-  const xYears = Array.from(new Set(years)).sort((a, b) => a - b);
+  const xYears = Array.from(new Set(allYears)).sort((a, b) => a - b);
   const xStep  = xYears.length > 8 ? Math.ceil(xYears.length / 6) : 1;
 
-  // Linear regression for trend line (on year → pct)
+  // Linear regression on full plotPts only
   const n  = plotPts.length;
-  const mx = years.reduce((s, v) => s + v, 0) / n;
-  const my = plotPts.map(p => p.pct).reduce((s, v) => s + v, 0) / n;
-  const slope = plotPts.reduce((s, p) => s + (p.year - mx) * (p.pct - my), 0) /
-    Math.max(plotPts.reduce((s, p) => s + (p.year - mx) ** 2, 0), 0.001);
+  const mx = plotPts.reduce((s, p) => s + p.year, 0) / Math.max(n, 1);
+  const my = plotPts.reduce((s, p) => s + p.pct,  0) / Math.max(n, 1);
+  const slope = n >= 2
+    ? plotPts.reduce((s, p) => s + (p.year - mx) * (p.pct - my), 0) /
+      Math.max(plotPts.reduce((s, p) => s + (p.year - mx) ** 2, 0), 0.001)
+    : 0;
   const intercept = my - slope * mx;
-  const trendPct1 = Math.min(100, Math.max(0, intercept + slope * minYear));
-  const trendPct2 = Math.min(100, Math.max(0, intercept + slope * maxYear));
+  const trendX1 = xByYear(minYear), trendX2 = xByYear(maxYear);
+  const trendY1 = yS(Math.min(100, Math.max(0, intercept + slope * minYear)));
+  const trendY2 = yS(Math.min(100, Math.max(0, intercept + slope * maxYear)));
 
-  // Dot colour by percentile: top 10% = gold, top 25% = green, else slate
   function dotColor(pct: number, isRecent: boolean): string {
-    if (pct >= 90) return "#e65100";   // top 10% — standout
-    if (pct >= 75) return "#1e3a1e";   // top 25%
+    if (pct >= 90) return "#e65100";
+    if (pct >= 75) return "#1e3a1e";
     if (isRecent)  return "#546e7a";
     return "#90a4ae";
   }
 
   return (
-    <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
-      {/* Gridlines + Y labels */}
-      {yTicks.map((t, i) => (
-        <g key={i}>
-          <line x1={padL} y1={yS(t)} x2={W - padR} y2={yS(t)}
-            stroke={t === 50 ? "#ddd" : "#f0f0f0"} strokeWidth={t === 50 ? "1.5" : "1"} strokeDasharray={t === 50 ? "4,3" : undefined} />
-          <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill="#aaa">{t}%</text>
-        </g>
-      ))}
-      {/* Trend line */}
-      {!singleYear && (
-        <line
-          x1={xS(plotPts[0], 0)} y1={yS(trendPct1)}
-          x2={xS(plotPts[plotPts.length - 1], plotPts.length - 1)} y2={yS(trendPct2)}
-          stroke={slope > 0 ? "#2e7d32" : "#c0392b"} strokeWidth="1.5" strokeDasharray="5,3" opacity="0.55"
-        />
-      )}
-      {/* Axes */}
-      <line x1={padL} y1={padT} x2={padL} y2={padT + chartH} stroke="#ccc" strokeWidth="1" />
-      <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#ccc" strokeWidth="1" />
-      {/* X ticks */}
-      {xYears.filter((_, i) => i % xStep === 0).map((yr, i) => (
-        <g key={i}>
-          <line x1={xS({ year: yr } as PlotPoint, i)} y1={padT + chartH} x2={xS({ year: yr } as PlotPoint, i)} y2={padT + chartH + 4} stroke="#ccc" strokeWidth="1" />
-          <text x={xS({ year: yr } as PlotPoint, i)} y={padT + chartH + 13} textAnchor="middle" fontSize="8.5" fill="#888">{yr}</text>
-        </g>
-      ))}
-      {/* Scatter dots */}
-      {plotPts.map((p, i) => (
-        <circle key={i} cx={xS(p, i)} cy={yS(p.pct)} r={5}
-          fill={dotColor(p.pct, p.isRecent)} stroke="white" strokeWidth="1.5" opacity="0.9" />
-      ))}
-      {/* Y-axis label */}
-      <text x={10} y={padT + chartH / 2} textAnchor="middle" fontSize="7.5" fill="#bbb"
-        transform={`rotate(-90,10,${padT + chartH / 2})`}>field beaten</text>
-      {/* Legend */}
-      <circle cx={W - padR - 120} cy={padT + 8} r={4} fill="#e65100" />
-      <text x={W - padR - 113} y={padT + 11} fontSize="7.5" fill="#666">Top 10%</text>
-      <circle cx={W - padR - 70} cy={padT + 8} r={4} fill="#1e3a1e" />
-      <text x={W - padR - 63} y={padT + 11} fontSize="7.5" fill="#666">Top 25%</text>
-      <circle cx={W - padR - 18} cy={padT + 8} r={4} fill="#90a4ae" />
-      <text x={W - padR - 11} y={padT + 11} fontSize="7.5" fill="#666">Rest</text>
-    </svg>
+    <>
+      <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
+        {/* Gridlines + Y labels */}
+        {yTicks.map((t, i) => (
+          <g key={i}>
+            <line x1={padL} y1={yS(t)} x2={W - padR} y2={yS(t)}
+              stroke={t === 50 ? "#ddd" : "#f0f0f0"} strokeWidth={t === 50 ? "1.5" : "1"} strokeDasharray={t === 50 ? "4,3" : undefined} />
+            <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill="#aaa">{t}%</text>
+          </g>
+        ))}
+        {/* Trend line (only when we have ≥2 full points) */}
+        {!singleYear && n >= 2 && (
+          <line x1={trendX1} y1={trendY1} x2={trendX2} y2={trendY2}
+            stroke={slope > 0 ? "#2e7d32" : "#c0392b"} strokeWidth="1.5" strokeDasharray="5,3" opacity="0.55" />
+        )}
+        {/* Axes */}
+        <line x1={padL} y1={padT} x2={padL} y2={padT + chartH} stroke="#ccc" strokeWidth="1" />
+        <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#ccc" strokeWidth="1" />
+        {/* X ticks */}
+        {xYears.filter((_, i) => i % xStep === 0).map((yr, i) => (
+          <g key={i}>
+            <line x1={xByYear(yr)} y1={padT + chartH} x2={xByYear(yr)} y2={padT + chartH + 4} stroke="#ccc" strokeWidth="1" />
+            <text x={xByYear(yr)} y={padT + chartH + 13} textAnchor="middle" fontSize="8.5" fill="#888">{yr}</text>
+          </g>
+        ))}
+        {/* Full dots — field position known */}
+        {plotPts.map((p, i) => (
+          <circle key={i} cx={xByYear(p.year)} cy={yS(p.pct)} r={5}
+            fill={dotColor(p.pct, p.isRecent)} stroke="white" strokeWidth="1.5" opacity="0.9" />
+        ))}
+        {/* No-data dots — finished but no field size; plotted at 50% as hollow rings */}
+        {noDataPts.map((p, i) => (
+          <circle key={`nd-${i}`} cx={xByYear(p.year)} cy={yS(50)} r={4.5}
+            fill="white" stroke="#aaa" strokeWidth="1.5" strokeDasharray="2,1.5" opacity="0.85" />
+        ))}
+        {/* Y-axis label */}
+        <text x={10} y={padT + chartH / 2} textAnchor="middle" fontSize="7.5" fill="#bbb"
+          transform={`rotate(-90,10,${padT + chartH / 2})`}>field beaten</text>
+      </svg>
+      {/* Legend — below chart to avoid obscuring data */}
+      <div style={{ display: "flex", gap: "14px", marginTop: "5px", flexWrap: "wrap", paddingLeft: `${padL}px` }}>
+        {[
+          { color: "#e65100", label: "Top 10%" },
+          { color: "#1e3a1e", label: "Top 25%" },
+          { color: "#90a4ae", label: "Rest" },
+        ].map(({ color, label }) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0 }} />
+            <span style={{ fontSize: "8px", color: "#666" }}>{label}</span>
+          </div>
+        ))}
+        {noDataPts.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", border: "1.5px dashed #aaa", flexShrink: 0 }} />
+            <span style={{ fontSize: "8px", color: "#666" }}>No field data (shown at 50%)</span>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -2167,7 +2189,6 @@ export default function RaceReadinessPage() {
               ...(p.avg_ascent_m ? [{ label: "Avg Ascent", value: `${Math.round(p.avg_ascent_m)}m` }] : []),
               ...(p.max_ascent_m ? [{ label: "Max Ascent", value: `${Math.round(p.max_ascent_m)}m` }] : []),
               ...(p.avg_flat_equiv_km ? [{ label: "Avg Eq. Km", value: `${p.avg_flat_equiv_km.toFixed(1)} km` }] : []),
-              ...(p.cluster_label ? [{ label: "Athlete Type", value: p.cluster_label, accent: "#1e3a1e" }] : []),
             ];
 
             return (
@@ -2211,13 +2232,13 @@ export default function RaceReadinessPage() {
                 </div>
 
                 {/* Performance trend */}
-                {races.filter(r => r.result_status === "FINISHED" && r.position && r.total_finishers).length >= 2 && (
+                {races.filter(r => (r.result_status === "FINISHED" || r.result_status === "UNKNOWN") && r.position).length >= 2 && (
                   <div style={{ marginBottom: "22px" }}>
                     <p style={sectionLabel}>Field Position Over Time</p>
                     <PerformanceTrendChart races={races} recentThreshold={recentThreshold} />
-                    <div style={{ fontSize: "8.5px", color: "#aaa", marginTop: "4px" }}>
-                      Each dot is one race finish. Y-axis shows percentage of field beaten (higher = better). Trend line direction: {(() => {
-                        const fin = races.filter(r => r.result_status === "FINISHED" && r.position && r.total_finishers && r.total_finishers > 1);
+                    <div style={{ fontSize: "8.5px", color: "#aaa", marginTop: "6px" }}>
+                      Each dot is one race finish. Y-axis shows percentage of field beaten (higher = better). Hollow dots indicate races where field size is not recorded. Trend line direction: {(() => {
+                        const fin = races.filter(r => (r.result_status === "FINISHED" || r.result_status === "UNKNOWN") && r.position && r.total_finishers && r.total_finishers > 1);
                         if (fin.length < 2) return "insufficient data.";
                         const pts = fin.map(r => ({ year: r.result_year, pct: ((r.total_finishers! - r.position!) / (r.total_finishers! - 1)) * 100 }));
                         const n = pts.length, mx = pts.reduce((s, p) => s + p.year, 0) / n, my = pts.reduce((s, p) => s + p.pct, 0) / n;
