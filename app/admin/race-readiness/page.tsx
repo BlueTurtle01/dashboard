@@ -771,7 +771,7 @@ function gradientBandColor(grad: number): string {
 
 /* Gradient distribution histogram */
 function GradientHistogram({ sections }: { sections: TerrainSection[] }) {
-  const W = 698, H = 130, padL = 48, padR = 12, padT = 16, padB = 30;
+  const W = 698, H = 100, padL = 48, padR = 12, padT = 16, padB = 30;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
   const bands = GRAD_BANDS.map(b => ({
@@ -822,7 +822,7 @@ function GradientHistogram({ sections }: { sections: TerrainSection[] }) {
 
 /* Cumulative ascent line chart */
 function CumulativeAscentChart({ profile }: { profile: RaceElevProfile }) {
-  const W = 698, H = 130, padL = 52, padR = 12, padT = 16, padB = 24;
+  const W = 698, H = 100, padL = 52, padR = 12, padT = 16, padB = 24;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
   // Compute cumulative ascent per point
@@ -923,7 +923,7 @@ function TerrainStrip({ sections, totalKm }: { sections: TerrainSection[]; total
 
 /* Effort profile chart — flat_equivalent_km / distance_km per section */
 function EffortProfileChart({ sections, totalKm }: { sections: TerrainSection[]; totalKm: number }) {
-  const W = 698, H = 120, padL = 44, padR = 8, padT = 14, padB = 22;
+  const W = 698, H = 90, padL = 44, padR = 8, padT = 14, padB = 22;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
   const ratios = sections.map(s => s.distance_km > 0 ? s.flat_equivalent_km / s.distance_km : 1);
@@ -1438,11 +1438,11 @@ export default function RaceReadinessPage() {
             if (ascentStatus === "major_gap" && athAscent > 0 && goalAscent > 0) {
               const ar = (goalAscent / athAscent).toFixed(1);
               verdictParts.push(
-                `The main concern is not distance — it is vertical load. The target race demands ${goalAscent.toLocaleString()} m of ascent, ` +
-                `${ar}× more than the best on record (${athAscent.toLocaleString()} m).`
+                `The main concern is not distance — it is vertical load. The target race demands ${Math.round(goalAscent).toLocaleString()} m of ascent, ` +
+                `${ar}× more than the best on record (${Math.round(athAscent).toLocaleString()} m).`
               );
             } else if (ascentStatus === "moderate" && athAscent > 0 && goalAscent > 0) {
-              verdictParts.push(`The ascent load is a step up: ${goalAscent.toLocaleString()} m target vs ${athAscent.toLocaleString()} m best recorded.`);
+              verdictParts.push(`The ascent load is a step up: ${Math.round(goalAscent).toLocaleString()} m target vs ${Math.round(athAscent).toLocaleString()} m best recorded.`);
             }
             if (verdictParts.length === 0) {
               verdictParts.push(`${firstName}'s readiness for ${result.race.name} has been assessed across distance, ascent, descent, and terrain specificity.`);
@@ -1469,8 +1469,8 @@ export default function RaceReadinessPage() {
                 ? (() => {
                     const pct = goalAscent > 0 && athAscent > 0 ? Math.round((athAscent / goalAscent) * 100) : null;
                     return (
-                      `Vertical load is the main limiter. ${result.race.name} includes ${goalAscent > 0 ? goalAscent.toLocaleString() : "—"} m of ascent, ` +
-                      `compared with ${firstName}'s best recorded ascent of ${athAscent > 0 ? athAscent.toLocaleString() : "unknown"} m` +
+                      `Vertical load is the main limiter. ${result.race.name} includes ${goalAscent > 0 ? Math.round(goalAscent).toLocaleString() : "—"} m of ascent, ` +
+                      `compared with ${firstName}'s best recorded ascent of ${athAscent > 0 ? Math.round(athAscent).toLocaleString() : "unknown"} m` +
                       `${sc?.athlete_max_ascent ? ` (${sc.athlete_max_ascent.race_name}, ${sc.athlete_max_ascent.year})` : ""}. ` +
                       `${pct != null ? `That is only ${pct}% of the target race demand.` : ""}`
                     );
@@ -1478,7 +1478,7 @@ export default function RaceReadinessPage() {
               : terrainStatus === "major_gap"
                 ? `Trail and fell-specific experience is the key gap. The target race is predominantly off-road mountain terrain, and the majority of matched race history does not reflect equivalent trail or fell conditions.`
               : descentStatus === "major_gap"
-                ? `Descending volume is the main limiter. The race includes ${goalDescent > 0 ? goalDescent.toLocaleString() : "—"} m of descent, with limited proven experience of equivalent descent loads. Eccentric quad loading over repeated technical descents is a specific risk.`
+                ? `Descending volume is the main limiter. The race includes ${goalDescent > 0 ? Math.round(goalDescent).toLocaleString() : "—"} m of descent, with limited proven experience of equivalent descent loads. Eccentric quad loading over repeated technical descents is a specific risk.`
               : flatStatus === "major_gap"
                 ? `Total effort duration is the key gap. The race effort load exceeds anything clearly on record and will require sustained output at a level not yet fully replicated in training or racing.`
                 : `No single dominant limiter identified. Focus on maintaining race-specific training quality and arriving at the start line healthy and rested.`;
@@ -1529,7 +1529,7 @@ export default function RaceReadinessPage() {
                 title: "Ascent",
                 level: ascentStatus,
                 detail: athAscent > 0 && goalAscent > 0
-                  ? `${athAscent.toLocaleString()} m max vs ${goalAscent.toLocaleString()} m target`
+                  ? `${Math.round(athAscent).toLocaleString()} m max vs ${Math.round(goalAscent).toLocaleString()} m target`
                   : "Insufficient data",
               },
               {
@@ -1884,7 +1884,7 @@ export default function RaceReadinessPage() {
               </p>
 
               {/* ── Section 1: Gradient distribution ── */}
-              <div style={{ marginBottom: "14px" }}>
+              <div style={{ marginBottom: "10px" }}>
                 <p style={sectionLabel}>Gradient Distribution — kilometres at each slope band</p>
                 <GradientHistogram sections={secs} />
                 {/* Legend */}
@@ -1896,68 +1896,117 @@ export default function RaceReadinessPage() {
                     </div>
                   ))}
                 </div>
+                <p style={{ margin: "2px 0 0", fontSize: "9px", color: "#aaa", lineHeight: 1.4 }}>
+                  Shows how much of the route falls into each slope band — a quick guide to whether the race is runnable, climb-heavy, descent-heavy, or constantly variable.
+                </p>
               </div>
 
               {/* ── Section 2: Cumulative ascent ── */}
               {elevProfile && (
-                <div style={{ marginBottom: "14px" }}>
+                <div style={{ marginBottom: "10px" }}>
                   <p style={sectionLabel}>
                     Climbing Load Over Course
                     {halfwayAscentPct !== null ? ` — ${halfwayAscentPct}% of total ascent completed at halfway` : ""}
                   </p>
                   <CumulativeAscentChart profile={elevProfile} />
-                  <p style={{ margin: "4px 0 0", fontSize: "9px", color: "#aaa" }}>
-                    Dashed percentages show how much of the total {Math.round(totalAscentM)}m ascent has accumulated at each quarter of the course.
+                  <p style={{ margin: "4px 0 0", fontSize: "9px", color: "#aaa", lineHeight: 1.4 }}>
+                    Dashed markers show what proportion of total climbing has accumulated at each quarter. Late-loading courses are especially demanding because hard climbs arrive when the athlete is already fatigued.
                   </p>
                 </div>
               )}
 
               {/* ── Section 3: Terrain strip + effort profile ── */}
-              <div style={{ marginBottom: "14px" }}>
+              <div style={{ marginBottom: "10px" }}>
                 <p style={sectionLabel}>Section-by-Section Effort Multiplier — vs. flat running pace</p>
                 <EffortProfileChart sections={secs} totalKm={totalKm} />
-                <div style={{ marginTop: "4px", display: "flex", gap: "14px", alignItems: "center" }}>
-                  <span style={{ fontSize: "9px", color: "#888" }}>
-                    1.0× = flat running effort. Higher bars = more energy per km. Lower bars = descent assistance.
-                  </span>
-                  <span style={{ fontSize: "9px", color: "#888" }}>Overall: <strong style={{ color: "#333" }}>{effortRatio.toFixed(2)}× average effort multiplier</strong></span>
+                <div style={{ marginTop: "4px" }}>
+                  <div style={{ fontSize: "9px", color: "#888", lineHeight: 1.4 }}>
+                    <strong style={{ color: "#333" }}>Average effort multiplier: {effortRatio.toFixed(2)}×</strong>
+                    {" — "}on average, each kilometre costs approximately {effortRatio.toFixed(2)}× the energy of flat running.
+                    This is a comparative metric: it helps compare this course against flatter races in an athlete&apos;s history, not a literal prediction of individual difficulty.
+                  </div>
+                  <div style={{ fontSize: "9px", color: "#aaa", marginTop: "3px", lineHeight: 1.3 }}>
+                    1.0× = flat running effort. Values above 1.0× indicate more energy per km. Descents may show lower values but still create muscle damage.
+                  </div>
                 </div>
               </div>
 
               {/* ── Section 4: Terrain colour strip ── */}
-              <div style={{ marginBottom: "14px" }}>
+              <div style={{ marginBottom: "10px" }}>
                 <p style={sectionLabel}>Terrain Character Strip — gradient colour across the course</p>
                 <TerrainStrip sections={secs} totalKm={totalKm} />
-                <div style={{ marginTop: "14px" }} />
+                <div style={{ marginTop: "10px" }} />
               </div>
 
+              {/* ── What this means for you ── */}
+              {totalKm > 0 && totalAscentM > 0 && effortRatio > 0 && (
+                <div style={{
+                  background: "#f8f8f8", border: "1px solid #e0e0e0",
+                  borderLeft: "4px solid #1e3a1e", borderRadius: "6px",
+                  padding: "10px 14px", marginBottom: "10px",
+                }}>
+                  <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "5px" }}>
+                    What this means for you
+                  </div>
+                  <div style={{ fontSize: "10.5px", color: "#333", lineHeight: 1.45 }}>
+                    {result.race.name} is not just a {totalKm.toFixed(0)} km endurance challenge.
+                    {" "}The {Math.round(totalAscentM).toLocaleString()} m of ascent and {Math.round(totalDescentM).toLocaleString()} m of descent make each kilometre
+                    significantly more costly than flat running — averaging {effortRatio.toFixed(2)}× the effort.
+                    {" "}Pacing by fixed pace targets is less reliable on terrain like this;
+                    effort, heart rate, or breathing rate are better guides.
+                    {" "}The primary preparation need is vertical durability: climbing strength, downhill resilience,
+                    and the ability to stay controlled after repeated effort spikes.
+                  </div>
+                </div>
+              )}
+
               {/* ── Section 5: Demand summary (4 cards) ── */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px" }}>
                 <DemandCard title="Climbing Demand" accent="#c0392b">
-                  <strong>{Math.round(totalAscentM)}m</strong> total ascent over{" "}
-                  <strong>{terrainSummary.climbing.toFixed(1)} km</strong> of climbing terrain ({((terrainSummary.climbing / totalKm) * 100).toFixed(0)}% of course).
-                  {steepestClimb && (
-                    <> Steepest sustained section: <strong>{steepestClimb.avg_gradient_percent.toFixed(1)}%</strong> average gradient
-                    {" "}(km {steepestClimb.start_km.toFixed(1)}–{steepestClimb.end_km.toFixed(1)}, {steepestClimb.distance_km.toFixed(1)} km).
+                  {totalAscentM > 0 && terrainSummary.climbing > 0 ? (
+                    <>
+                      The race includes{" "}
+                      <strong>{Math.round(totalAscentM).toLocaleString()} m</strong> of ascent across{" "}
+                      <strong>{terrainSummary.climbing.toFixed(1)} km</strong> of climbing terrain
+                      {" "}({((terrainSummary.climbing / totalKm) * 100).toFixed(0)}% of course).
+                      {halfwayAscentPct !== null ? (
+                        halfwayAscentPct > 55
+                          ? ` The climbing is front-loaded — ${halfwayAscentPct}% of all ascent is done before halfway. Starting conservatively on climbs protects performance in the second half.`
+                          : halfwayAscentPct < 45
+                          ? ` The climbing is back-loaded — only ${halfwayAscentPct}% of ascent arrives before halfway, meaning hard climbs continue when the athlete is already fatigued.`
+                          : " Climbing is spread broadly across both halves, requiring repeatable climbing output rather than a single strong effort."
+                      ) : null}
+                      {steepestClimb ? (
+                        <> Steepest sustained section: <strong>{steepestClimb.avg_gradient_percent.toFixed(1)}%</strong> average gradient
+                        {" "}(km {steepestClimb.start_km.toFixed(1)}–{steepestClimb.end_km.toFixed(1)}).</>
+                      ) : null}
                     </>
-                  )}
-                  {halfwayAscentPct !== null && (
-                    <> <strong>{halfwayAscentPct}%</strong> of all climbing is done before halfway — {halfwayAscentPct > 55 ? "the course is front-loaded" : halfwayAscentPct < 45 ? "the course is back-loaded — the hardest work comes late" : "climbing is broadly even across both halves"}.</>
+                  ) : (
+                    <span style={{ color: "#aaa" }}>Insufficient course data.</span>
                   )}
                 </DemandCard>
 
                 <DemandCard title="Descending Demand" accent="#1565c0">
-                  <strong>{Math.round(totalDescentM)}m</strong> total descent over{" "}
-                  <strong>{terrainSummary.descending.toFixed(1)} km</strong> of descending terrain ({((terrainSummary.descending / totalKm) * 100).toFixed(0)}% of course).
-                  {steepestDescent && (
-                    <> Steepest descent: <strong>{Math.abs(steepestDescent.avg_gradient_percent).toFixed(1)}%</strong> average gradient
-                    {" "}(km {steepestDescent.start_km.toFixed(1)}–{steepestDescent.end_km.toFixed(1)}, {steepestDescent.distance_km.toFixed(1)} km).
+                  {totalDescentM > 0 && terrainSummary.descending > 0 ? (
+                    <>
+                      The race includes{" "}
+                      <strong>{Math.round(totalDescentM).toLocaleString()} m</strong> of descent across{" "}
+                      <strong>{terrainSummary.descending.toFixed(1)} km</strong> of descending terrain
+                      {" "}({((terrainSummary.descending / totalKm) * 100).toFixed(0)}% of course).
+                      {steepestDescent ? (
+                        <> Steepest descent: <strong>{Math.abs(steepestDescent.avg_gradient_percent).toFixed(1)}%</strong> average gradient
+                        {" "}(km {steepestDescent.start_km.toFixed(1)}–{steepestDescent.end_km.toFixed(1)}).</>
+                      ) : null}
+                      {" "}
+                      {totalDescentM > 2000
+                        ? "This volume creates substantial eccentric load on the quads and calves. Even aerobically fit athletes can be stopped by leg damage if downhill durability has not been specifically trained."
+                        : totalDescentM > 1000
+                        ? "This creates moderate eccentric loading. Downhill technique and quad strength are important contributors to a controlled finish."
+                        : "Descending load is limited relative to the climbing volume."}
                     </>
+                  ) : (
+                    <span style={{ color: "#aaa" }}>Insufficient course data.</span>
                   )}
-                  {" "}Significant descending volume creates{" "}
-                  {totalDescentM > 2000 ? "substantial eccentric loading — quad fatigue is a key risk for this race" :
-                   totalDescentM > 1000 ? "moderate eccentric loading — quad strength and downhill technique are important" :
-                   "limited eccentric loading compared to the climbing volume"}.
                 </DemandCard>
 
                 <DemandCard title="Final Third Demands" accent="#e65100">
@@ -1977,17 +2026,23 @@ export default function RaceReadinessPage() {
                 </DemandCard>
 
                 <DemandCard title="Pacing Complexity" accent={complexityColor}>
-                  <strong style={{ color: complexityColor }}>{complexityLabel} complexity</strong>.{" "}
+                  <strong style={{ color: complexityColor }}>{complexityLabel} pacing complexity.</strong>
+                  {" "}
                   {cvRatio > 0.45
-                    ? "Effort varies dramatically between sections. Athletes must manage pace aggressively — running by feel or heart rate rather than fixed pace is essential."
+                    ? "The effort cost changes sharply from section to section. Fixed pace targets are unreliable — the athlete should manage intensity by effort, heart rate, or breathing rate. Avoid effort spikes on steep climbs and uncontrolled descending that damages the legs early."
                     : cvRatio > 0.25
-                    ? "Moderate variation in effort across sections. Pace targets should be adapted per section; a single pace plan will misrepresent the demands."
+                    ? "Effort varies noticeably between sections. Pace targets should be adapted section-by-section; a single target pace will misrepresent the true demands on steeper ground."
                     : "Effort is relatively consistent across sections. A steady, measured approach is appropriate for most of this course."
                   }
-                  {" "}Overall flat-equivalent distance: <strong>{totalFlatEq.toFixed(1)} km</strong> ({effortRatio.toFixed(2)}× the actual {totalKm.toFixed(1)} km).
-                  {halfway && (
+                  {totalFlatEq > 0 && totalKm > 0 ? (
+                    <>
+                      {" "}Estimated flat-effort equivalent: <strong>{totalFlatEq.toFixed(1)} km</strong> ({effortRatio.toFixed(2)}× the actual {totalKm.toFixed(1)} km) —
+                      a comparative load metric, not a literal distance prediction.
+                    </>
+                  ) : null}
+                  {halfway ? (
                     <> Historical data: <strong>{halfway.pct_positive_split.toFixed(0)}%</strong> of athletes run a positive split (too fast in the first half).</>
-                  )}
+                  ) : null}
                 </DemandCard>
               </div>
 
@@ -2801,8 +2856,8 @@ export default function RaceReadinessPage() {
                             : `This race is a similar distance to your longest events — but ${sc.ascent_ratio}× more climbing.`}
                         </div>
                         <div style={detailLine}>
-                          Your longest: {sc.athlete_max_dist ? `${sc.athlete_max_dist.race_name} (${sc.athlete_max_dist.km} km, ${sc.athlete_max_ascent?.m != null ? `${sc.athlete_max_ascent.m.toLocaleString()}m ↑` : ""})` : "No data"}
-                          {" · "}Goal race: {sc.goal_distance_km} km, {sc.goal_ascent_m.toLocaleString()}m ↑
+                          Your longest: {sc.athlete_max_dist ? `${sc.athlete_max_dist.race_name} (${sc.athlete_max_dist.km} km, ${sc.athlete_max_ascent?.m != null ? `${Math.round(sc.athlete_max_ascent.m).toLocaleString()}m ↑` : ""})` : "No data"}
+                          {" · "}Goal race: {sc.goal_distance_km} km, {Math.round(sc.goal_ascent_m).toLocaleString()}m ↑
                         </div>
                         <div style={{ display: "flex", gap: "16px", marginTop: "8px" }}>
                           {[
@@ -2864,12 +2919,12 @@ export default function RaceReadinessPage() {
                         <div style={{ ...panelHead, color: "#e65100" }}>Biggest Challenge</div>
                         <div style={insightLine}>
                           {bc.athlete_best
-                            ? `The main climb (km ${bc.goal.start_km}–${bc.goal.end_km}, ${bc.goal.ascent_m.toLocaleString()}m ↑ over ${bc.goal.km} km at ${bc.goal.avg_grad}%) is ${bc.ratio}× bigger than any climb in your history.`
-                            : `The main climb (${bc.goal.ascent_m.toLocaleString()}m ↑ over ${bc.goal.km} km) — no comparable climb in your race history.`}
+                            ? `The main climb (km ${bc.goal.start_km}–${bc.goal.end_km}, ${Math.round(bc.goal.ascent_m).toLocaleString()}m ↑ over ${bc.goal.km} km at ${bc.goal.avg_grad}%) is ${bc.ratio}× bigger than any climb in your history.`
+                            : `The main climb (${Math.round(bc.goal.ascent_m).toLocaleString()}m ↑ over ${bc.goal.km} km) — no comparable climb in your race history.`}
                         </div>
                         <div style={detailLine}>
                           {bc.athlete_best
-                            ? `Your biggest recorded climb: ${bc.athlete_best.km} km, ${bc.athlete_best.ascent_m.toLocaleString()}m ↑ (${bc.athlete_best.race_name}, ${bc.athlete_best.year})`
+                            ? `Your biggest recorded climb: ${bc.athlete_best.km} km, ${Math.round(bc.athlete_best.ascent_m).toLocaleString()}m ↑ (${bc.athlete_best.race_name}, ${bc.athlete_best.year})`
                             : "No climb data found in your race profiles."}
                         </div>
                         {bc.athlete_best && bc.ratio != null && (
