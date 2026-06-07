@@ -1283,6 +1283,21 @@ export default function RaceReadinessPage() {
   const complexityLabel = cvRatio > 0.45 ? "High" : cvRatio > 0.25 ? "Moderate" : "Low";
   const complexityColor = cvRatio > 0.45 ? "#c0392b" : cvRatio > 0.25 ? "#e65100" : "#2e7d32";
 
+  // Gradient distribution stats for PAGE 3 narrative
+  const runnableKm    = secs.filter(s => s.avg_gradient_percent >= -3 && s.avg_gradient_percent < 3).reduce((a, s) => a + s.distance_km, 0);
+  const steepClimbKm  = secs.filter(s => s.avg_gradient_percent >= 8).reduce((a, s) => a + s.distance_km, 0);
+  const steepDescentKm = secs.filter(s => s.avg_gradient_percent < -8).reduce((a, s) => a + s.distance_km, 0);
+  const runnablePct   = totalKm > 0 ? Math.round(runnableKm    / totalKm * 100) : 0;
+  const steepClimbPct = totalKm > 0 ? Math.round(steepClimbKm  / totalKm * 100) : 0;
+  const steepDescentPct = totalKm > 0 ? Math.round(steepDescentKm / totalKm * 100) : 0;
+  const courseCharacter = runnablePct > 60
+    ? "mostly flat and runnable — athletes can hold a consistent rhythm for large stretches"
+    : steepClimbPct + steepDescentPct > 30
+    ? "technically demanding — a large proportion of the course is steep in either direction"
+    : runnablePct > 35
+    ? "mixed terrain — runnable sections break up the climbing and descending"
+    : "constantly variable — gradient changes frequently, making a fixed pace target unreliable";
+
   // Cumulative ascent at halfway
   const halfwayAscentPct = (() => {
     if (!elevProfile || totalAscentM <= 0) return null;
@@ -1906,8 +1921,8 @@ export default function RaceReadinessPage() {
               </p>
 
               {/* ── Section 1: Gradient distribution ── */}
-              <div style={{ marginBottom: "10px" }}>
-                <p style={sectionLabel}>Gradient Distribution — kilometres at each slope band</p>
+              <div style={{ marginBottom: "14px" }}>
+                <p style={{ ...sectionLabel, marginBottom: "6px" }}>Gradient Distribution — kilometres at each slope band</p>
                 <GradientHistogram sections={secs} />
                 {/* Legend */}
                 <div style={{ display: "flex", gap: "10px", marginTop: "6px", flexWrap: "wrap" }}>
@@ -1919,14 +1934,20 @@ export default function RaceReadinessPage() {
                   ))}
                 </div>
                 <p style={{ margin: "2px 0 0", fontSize: "9px", color: "#aaa", lineHeight: 1.4 }}>
-                  Shows how much of the route falls into each slope band — a quick guide to whether the race is runnable, climb-heavy, descent-heavy, or constantly variable.
+                  {totalKm > 0 ? (
+                    <>
+                      {runnablePct}% of the course is near-flat (within ±3%), {steepClimbPct}% is steep uphill (≥8%), and {steepDescentPct}% is steep downhill (≥8%).
+                      {" "}This course is {courseCharacter}.
+                      {runnablePct < 25 ? " With so little runnable terrain, athletes cannot rely on pace at all — effort and breathing rate must guide every section." : ""}
+                    </>
+                  ) : "Shows how much of the route falls into each slope band — a quick guide to whether the race is runnable, climb-heavy, descent-heavy, or constantly variable."}
                 </p>
               </div>
 
               {/* ── Section 2: Cumulative ascent ── */}
               {elevProfile && (
-                <div style={{ marginBottom: "10px" }}>
-                  <p style={sectionLabel}>
+                <div style={{ marginBottom: "14px" }}>
+                  <p style={{ ...sectionLabel, marginBottom: "6px" }}>
                     Climbing Load Over Course
                     {halfwayAscentPct !== null ? ` — ${halfwayAscentPct}% of total ascent completed at halfway` : ""}
                   </p>
@@ -1938,8 +1959,8 @@ export default function RaceReadinessPage() {
               )}
 
               {/* ── Section 3: Terrain strip + effort profile ── */}
-              <div style={{ marginBottom: "10px" }}>
-                <p style={sectionLabel}>Section-by-Section Effort Multiplier — vs. flat running pace</p>
+              <div style={{ marginBottom: "14px" }}>
+                <p style={{ ...sectionLabel, marginBottom: "6px" }}>Section-by-Section Effort Multiplier — vs. flat running pace</p>
                 <EffortProfileChart sections={secs} totalKm={totalKm} />
                 <div style={{ marginTop: "4px" }}>
                   <div style={{ fontSize: "9px", color: "#888", lineHeight: 1.4 }}>
@@ -1947,17 +1968,21 @@ export default function RaceReadinessPage() {
                     {" — "}on average, each kilometre costs approximately {effortRatio.toFixed(2)}× the energy of flat running.
                     This is a comparative metric: it helps compare this course against flatter races in an athlete&apos;s history, not a literal prediction of individual difficulty.
                   </div>
-                  <div style={{ fontSize: "9px", color: "#aaa", marginTop: "3px", lineHeight: 1.3 }}>
-                    1.0× = flat running effort. Values above 1.0× indicate more energy per km. Descents may show lower values but still create muscle damage.
+                  <div style={{ fontSize: "9px", color: "#aaa", marginTop: "3px", lineHeight: 1.35 }}>
+                    Each bar shows that section&apos;s effort cost vs. flat running. 1.0× = same energy. Uphill bars are taller; downhill bars shorter —
+                    but <strong style={{ color: "#666" }}>downhills are not free</strong>.
+                    {" "}Very gentle descents recover a small amount of energy, but steeper or prolonged downhills demand hard eccentric braking from the quadriceps.
+                    {" "}On long mountain courses, athletes often slow the most in the second half not because they run out of aerobic capacity,
+                    but because their legs fail from accumulated downhill load.
                   </div>
                 </div>
               </div>
 
               {/* ── Section 4: Terrain colour strip ── */}
-              <div style={{ marginBottom: "10px" }}>
-                <p style={sectionLabel}>Terrain Character Strip — gradient colour across the course</p>
+              <div style={{ marginBottom: "14px" }}>
+                <p style={{ ...sectionLabel, marginBottom: "6px" }}>Terrain Character Strip — gradient colour across the course</p>
                 <TerrainStrip sections={secs} totalKm={totalKm} />
-                <div style={{ marginTop: "10px" }} />
+                <div style={{ marginTop: "8px" }} />
               </div>
 
               {/* ── What this means for you ── */}
@@ -1965,7 +1990,7 @@ export default function RaceReadinessPage() {
                 <div style={{
                   background: "#f8f8f8", border: "1px solid #e0e0e0",
                   borderLeft: "4px solid #1e3a1e", borderRadius: "6px",
-                  padding: "10px 14px", marginBottom: "10px",
+                  padding: "12px 14px", marginBottom: "14px",
                 }}>
                   <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "5px" }}>
                     What this means for you
@@ -1983,7 +2008,7 @@ export default function RaceReadinessPage() {
               )}
 
               {/* ── Section 5: Demand summary (4 cards) ── */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
                 <DemandCard title="Climbing Demand" accent="#c0392b">
                   {totalAscentM > 0 && terrainSummary.climbing > 0 ? (
                     <>
@@ -2996,6 +3021,113 @@ export default function RaceReadinessPage() {
               </div>
             );
           })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 9 — Race Day Pacing Strategy CTA
+          ═══════════════════════════════════════ */}
+          {result && (
+            <div style={a4Page}>
+              <div style={printHeader}>
+                <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                  <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Race Day Pacing Strategy</div>
+                </div>
+              </div>
+
+              <h2 style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: 700, color: "#1e3a1e" }}>Your Race Day Pacing Strategy</h2>
+              <p style={{ margin: "0 0 22px", fontSize: "12px", color: "#888", lineHeight: 1.5 }}>
+                A personalised pacing document built around this exact course, forecast conditions, and your target finish time.
+              </p>
+
+              {/* Three feature panels */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "22px" }}>
+                {[
+                  {
+                    accent: "#c0392b",
+                    icon: "📍",
+                    title: "Route-Specific Zones",
+                    body: "Not one pace for the whole race. Each section of the course gets its own target effort band — based on the gradient, terrain, and cumulative fatigue expected at that point.",
+                  },
+                  {
+                    accent: "#1565c0",
+                    icon: "🌤",
+                    title: "Conditions Planning",
+                    body: "Wind direction and strength are factored into headwind and tailwind sections. Expected sun or rain and race-day temperature adjust your hydration and effort ceilings.",
+                  },
+                  {
+                    accent: "#e65100",
+                    icon: "⏱",
+                    title: "Target Time Splits",
+                    body: "Checkpoint-by-checkpoint split times based on your goal finish. Includes recommended halfway and final-third targets, and how much buffer to build early.",
+                  },
+                ].map(({ accent, icon, title, body }) => (
+                  <div key={title} style={{ background: "#fafafa", border: "1px solid #e0e0e0", borderTop: `4px solid ${accent}`, borderRadius: "6px", padding: "14px 14px" }}>
+                    <div style={{ fontSize: "20px", marginBottom: "8px" }}>{icon}</div>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>{title}</div>
+                    <div style={{ fontSize: "10.5px", color: "#555", lineHeight: 1.5 }}>{body}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* What's included */}
+              <div style={{ background: "#f4f8f4", border: "1px solid #c8dcc8", borderLeft: "4px solid #1e3a1e", borderRadius: "6px", padding: "14px 18px", marginBottom: "22px" }}>
+                <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>What&apos;s included</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }}>
+                  {[
+                    "Section-by-section effort targets (not just pace)",
+                    "Wind-adjusted effort bands for exposed sections",
+                    "Checkpoint split times with recommended tolerances",
+                    "Hydration and nutrition timing cues",
+                    "Early-warning signs of going too hard",
+                    "Conditions adjustment notes (sun, rain, heat)",
+                    "Final-third strategy based on your build-up",
+                    "Warm-up routine and pre-race activation checklist",
+                  ].map(item => (
+                    <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: "6px", fontSize: "10.5px", color: "#333" }}>
+                      <span style={{ color: "#1e3a1e", fontWeight: 700, flexShrink: 0 }}>✓</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Training plans callout */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "20px", alignItems: "center", background: "#fff", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "16px 20px", marginBottom: "22px" }}>
+                <div>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", marginBottom: "5px" }}>Training Plans Available for This Race</div>
+                  <div style={{ fontSize: "10.5px", color: "#555", lineHeight: 1.5, marginBottom: "8px" }}>
+                    We offer structured training plans tailored to most races in our database — from 8-week programmes to full 6-month build cycles.
+                    Scan the QR code to view available plans for {result.race.name} and other events.
+                  </div>
+                  <div style={{ fontSize: "10px", color: "#888" }}>tortoiseendurance.com/training-programs</div>
+                </div>
+                <div style={{ textAlign: "center", flexShrink: 0 }}>
+                  {/* QR code via free public API */}
+                  <img
+                    src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=https%3A%2F%2Fwww.tortoiseendurance.com%2Ftraining-programs"
+                    alt="QR code — tortoiseendurance.com/training-programs"
+                    width={90} height={90}
+                    style={{ display: "block", borderRadius: "4px" }}
+                  />
+                  <div style={{ fontSize: "8px", color: "#aaa", marginTop: "4px" }}>Scan to view plans</div>
+                </div>
+              </div>
+
+              {/* CTA */}
+              <div style={{ background: "#1e3a1e", borderRadius: "8px", padding: "18px 22px", textAlign: "center" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>
+                  Ready to race with a plan?
+                </div>
+                <div style={{ fontSize: "11px", color: "#c8dcc8", lineHeight: 1.5 }}>
+                  Contact your Tortoise Endurance coach to receive your personalised Race Day Pacing Strategy document.<br />
+                  Delivered as a printable PDF tailored to {result.race.name}.
+                </div>
+              </div>
+
+              <PageNumber n={9} />
+            </div>
+          )}
 
         </div>
       )}
