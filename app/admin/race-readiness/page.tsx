@@ -113,6 +113,37 @@ interface AthleteResponse {
   terrain_pairings?: TerrainPairing[];
 }
 
+/* ── Experience context types ── */
+interface ExpContextScale {
+  goal_distance_km: number; goal_ascent_m: number; goal_flat_equiv_km: number;
+  athlete_max_dist:       { km: number; race_name: string; year: number } | null;
+  athlete_max_ascent:     { m: number;  race_name: string; year: number } | null;
+  athlete_max_flat_equiv: { km: number; race_name: string; year: number } | null;
+  distance_ratio: number; ascent_ratio: number; flat_equiv_ratio: number;
+}
+interface ExpContextTimeEstimate {
+  estimated_min_hours: number; estimated_max_hours: number;
+  basis_race_name: string; basis_finish_hours: number;
+  athlete_longest_hours: number; athlete_longest_race_name: string;
+}
+interface ExpContextBiggestClimb {
+  goal: { km: number; ascent_m: number; avg_grad: number; start_km: number; end_km: number };
+  athlete_best: { km: number; ascent_m: number; race_name: string; year: number } | null;
+  ratio: number | null;
+}
+interface ExpContextOpeningMatch {
+  goal_opening_km: number; goal_dominant_type: string; goal_dominant_terrain: string;
+  goal_climb_pct: number;
+  matched_race_name: string | null; matched_race_year: number | null;
+  similarity: number;
+}
+interface ExperienceContextResult {
+  scale: ExpContextScale | null;
+  time_estimate: ExpContextTimeEstimate | null;
+  biggest_climb: ExpContextBiggestClimb | null;
+  opening_match: ExpContextOpeningMatch | null;
+}
+
 /* ── Prep races types ── */
 interface PrepRaceGapFill {
   section_type: string;
@@ -994,6 +1025,8 @@ export default function RaceReadinessPage() {
   const [radiusMiles, setRadiusMiles]     = useState(100);
   const [prepRaces, setPrepRaces]         = useState<PrepRacesResult | null>(null);
   const [prepRacesLoading, setPrepRacesLoading] = useState(false);
+  const [expContext, setExpContext]        = useState<ExperienceContextResult | null>(null);
+  const [expContextLoading, setExpContextLoading] = useState(false);
 
   const fetchAthlete = useCallback(async (key: string) => {
     if (!key.trim()) return;
@@ -1176,6 +1209,19 @@ export default function RaceReadinessPage() {
         .then(data => setPrepRaces(data as PrepRacesResult))
         .catch(() => {})
         .finally(() => setPrepRacesLoading(false));
+    }
+
+    // Fetch experience context insights
+    setExpContext(null);
+    if (selectedAthleteKey.trim() && selectedRaceId) {
+      setExpContextLoading(true);
+      fetch(
+        `/api/race-readiness/experience-context?key=${encodeURIComponent(selectedAthleteKey.trim())}&race_id=${encodeURIComponent(selectedRaceId)}`
+      )
+        .then(r => r.json())
+        .then(data => setExpContext(data as ExperienceContextResult))
+        .catch(() => {})
+        .finally(() => setExpContextLoading(false));
     }
   }
 
@@ -2355,6 +2401,186 @@ export default function RaceReadinessPage() {
                 </div>
 
                 <PageNumber n={6} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 7 — Experience Context
+          ═══════════════════════════════════════ */}
+          {(expContextLoading || expContext) && (() => {
+            const fmtH = (h: number) => {
+              const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+              return mm > 0 ? `${hh}h ${mm}m` : `${hh}h`;
+            };
+            const stl = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const tl  = (t: string) => t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+
+            const panelStyle: React.CSSProperties = {
+              borderLeft: "4px solid #1e3a1e", borderRadius: "6px", padding: "14px 18px",
+              background: "#fafafa", border: "1px solid #e8e8e8", borderLeftColor: "#1e3a1e",
+              marginBottom: "10px",
+            };
+            const panelHead: React.CSSProperties = { fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px" };
+            const insightLine: React.CSSProperties = { fontSize: "13.5px", fontWeight: 700, color: "#111", lineHeight: 1.35, marginBottom: "6px" };
+            const detailLine: React.CSSProperties = { fontSize: "10.5px", color: "#666", lineHeight: 1.5 };
+            const barTrack: React.CSSProperties = { height: "6px", background: "#e8e8e8", borderRadius: "3px", overflow: "hidden", marginTop: "6px", position: "relative" };
+
+            const ec = expContext;
+            const sc = ec?.scale;
+            const te = ec?.time_estimate;
+            const bc = ec?.biggest_climb;
+            const om = ec?.opening_match;
+
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Race Readiness</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Experience Context</h2>
+                <p style={{ margin: "0 0 18px", fontSize: "12px", color: "#888" }}>
+                  How {athlete?.profile.athlete_key.split(" ")[0]}&apos;s past races compare to the demands of {result.race.name}
+                </p>
+
+                {expContextLoading && !ec && (
+                  <div style={{ textAlign: "center", padding: "60px 0", color: "#aaa", fontSize: "13px" }}>Analysing race history…</div>
+                )}
+
+                {ec && (
+                  <div>
+                    {/* ── Scale ───────────────────────────────────── */}
+                    {sc && (
+                      <div style={{ ...panelStyle, borderLeftColor: "#c0392b" }}>
+                        <div style={{ ...panelHead, color: "#c0392b" }}>Course Scale</div>
+                        <div style={insightLine}>
+                          {sc.distance_ratio >= 1.1
+                            ? `This race is ${sc.distance_ratio}× longer and ${sc.ascent_ratio}× more climbing than ${sc.athlete_max_dist ? sc.athlete_max_dist.race_name : "your longest event"}.`
+                            : sc.distance_ratio < 1
+                            ? `At ${sc.goal_distance_km}km, this race is shorter than your longest (${sc.athlete_max_dist?.km}km). The ${sc.ascent_ratio}× ascent increase is the bigger step up.`
+                            : `This race is a similar distance to your longest events — but ${sc.ascent_ratio}× more climbing.`}
+                        </div>
+                        <div style={detailLine}>
+                          Your longest: {sc.athlete_max_dist ? `${sc.athlete_max_dist.race_name} (${sc.athlete_max_dist.km} km, ${sc.athlete_max_ascent?.m != null ? `${sc.athlete_max_ascent.m.toLocaleString()}m ↑` : ""})` : "No data"}
+                          {" · "}Goal race: {sc.goal_distance_km} km, {sc.goal_ascent_m.toLocaleString()}m ↑
+                        </div>
+                        <div style={{ display: "flex", gap: "16px", marginTop: "8px" }}>
+                          {[
+                            { label: "Distance", goal: sc.goal_distance_km, best: sc.athlete_max_dist?.km ?? 0, unit: "km", ratio: sc.distance_ratio },
+                            { label: "Ascent",   goal: sc.goal_ascent_m,    best: sc.athlete_max_ascent?.m ?? 0, unit: "m",  ratio: sc.ascent_ratio },
+                            { label: "Effort",   goal: sc.goal_flat_equiv_km, best: sc.athlete_max_flat_equiv?.km ?? 0, unit: "flat-km", ratio: sc.flat_equiv_ratio },
+                          ].map(({ label, goal, best, unit, ratio }) => (
+                            <div key={label} style={{ flex: 1 }}>
+                              <div style={{ fontSize: "9px", color: "#aaa", marginBottom: "2px" }}>{label}</div>
+                              <div style={barTrack}>
+                                <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${Math.min(100, (best / Math.max(goal, best)) * 100)}%`, background: "#78909c", borderRadius: "3px" }} />
+                                <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${Math.min(100, (goal / Math.max(goal, best)) * 100)}%`, background: "#c0392b", borderRadius: "3px", opacity: 0.7 }} />
+                              </div>
+                              <div style={{ fontSize: "8.5px", color: "#888", marginTop: "2px" }}>
+                                {ratio}× · {goal} {unit} vs {best || "—"} {unit} best
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Time on course ──────────────────────────── */}
+                    {te && (
+                      <div style={{ ...panelStyle, borderLeftColor: "#1565c0" }}>
+                        <div style={{ ...panelHead, color: "#1565c0" }}>Time on Course</div>
+                        <div style={insightLine}>
+                          Estimated {fmtH(te.estimated_min_hours)}–{fmtH(te.estimated_max_hours)} on course.
+                          {" "}Your longest event was {fmtH(te.athlete_longest_hours)} ({te.athlete_longest_race_name}).
+                        </div>
+                        <div style={detailLine}>
+                          Projected from your average pace across finished races, applied to the goal race effort load ({result.race.total_distance_km > 0 ? `${result.race.total_distance_km.toFixed(0)} km distance equivalent` : "flat-equivalent km"}).
+                          Upper estimate adds 25% for novelty and fatigue in unfamiliar terrain.
+                        </div>
+                        <div style={barTrack}>
+                          {(() => {
+                            const maxH = te.estimated_max_hours * 1.1;
+                            const longestPct = Math.min(100, (te.athlete_longest_hours / maxH) * 100);
+                            const minPct     = Math.min(100, (te.estimated_min_hours   / maxH) * 100);
+                            const maxPct     = Math.min(100, (te.estimated_max_hours   / maxH) * 100);
+                            return (
+                              <>
+                                <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${longestPct}%`, background: "#78909c", borderRadius: "3px" }} />
+                                <div style={{ position: "absolute", top: 0, left: `${minPct}%`, height: "100%", width: `${maxPct - minPct}%`, background: "#1565c0", borderRadius: "3px", opacity: 0.7 }} />
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <div style={{ fontSize: "8.5px", color: "#888", marginTop: "2px", display: "flex", gap: "12px" }}>
+                          <span style={{ color: "#78909c" }}>▬ Your longest: {fmtH(te.athlete_longest_hours)}</span>
+                          <span style={{ color: "#1565c0" }}>▬ Estimated range: {fmtH(te.estimated_min_hours)}–{fmtH(te.estimated_max_hours)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Biggest climb ────────────────────────────── */}
+                    {bc && (
+                      <div style={{ ...panelStyle, borderLeftColor: "#e65100" }}>
+                        <div style={{ ...panelHead, color: "#e65100" }}>Biggest Challenge</div>
+                        <div style={insightLine}>
+                          {bc.athlete_best
+                            ? `The main climb (km ${bc.goal.start_km}–${bc.goal.end_km}, ${bc.goal.ascent_m.toLocaleString()}m ↑ over ${bc.goal.km} km at ${bc.goal.avg_grad}%) is ${bc.ratio}× bigger than any climb in your history.`
+                            : `The main climb (${bc.goal.ascent_m.toLocaleString()}m ↑ over ${bc.goal.km} km) — no comparable climb in your race history.`}
+                        </div>
+                        <div style={detailLine}>
+                          {bc.athlete_best
+                            ? `Your biggest recorded climb: ${bc.athlete_best.km} km, ${bc.athlete_best.ascent_m.toLocaleString()}m ↑ (${bc.athlete_best.race_name}, ${bc.athlete_best.year})`
+                            : "No climb data found in your race profiles."}
+                        </div>
+                        {bc.athlete_best && bc.ratio != null && (
+                          <div style={barTrack}>
+                            <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${Math.min(100, (bc.athlete_best.ascent_m / bc.goal.ascent_m) * 100)}%`, background: "#78909c", borderRadius: "3px" }} />
+                            <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: "100%", background: "#e65100", borderRadius: "3px", opacity: 0.25 }} />
+                            <div style={{ fontSize: "8px", color: "#e65100", position: "absolute", right: "4px", top: "50%", transform: "translateY(-50%)", fontWeight: 700 }}>{bc.ratio}×</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Opening profile match ────────────────────── */}
+                    {om && (
+                      <div style={{ ...panelStyle, borderLeftColor: "#2e7d32" }}>
+                        <div style={{ ...panelHead, color: "#2e7d32" }}>Opening Profile</div>
+                        <div style={insightLine}>
+                          {om.matched_race_name
+                            ? `The opening ${om.goal_opening_km} km (${om.goal_climb_pct}% climbing, ${tl(om.goal_dominant_terrain)} terrain) is similar to how ${om.matched_race_name} (${om.matched_race_year}) started.`
+                            : `The opening ${om.goal_opening_km} km — ${stl(om.goal_dominant_type)} on ${tl(om.goal_dominant_terrain)} terrain — has no close match in your race history.`}
+                        </div>
+                        <div style={detailLine}>
+                          {om.matched_race_name
+                            ? `Similarity score ${Math.round(om.similarity * 100)}% — dominant character: ${stl(om.goal_dominant_type)} on ${tl(om.goal_dominant_terrain)}.`
+                            : `Dominant character: ${stl(om.goal_dominant_type)} on ${tl(om.goal_dominant_terrain)}. Prepare for an unfamiliar opening pace.`}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Typical conditions (from already-loaded weather) ─── */}
+                    {weather.length > 0 && avgMaxTemp != null && (
+                      <div style={{ ...panelStyle, borderLeftColor: "#6b6b6b" }}>
+                        <div style={{ ...panelHead, color: "#6b6b6b" }}>Typical Race Day Conditions</div>
+                        <div style={insightLine}>
+                          Historically {avgMaxTemp?.toFixed(0)}°C high / {avgMinTemp?.toFixed(0)}°C low, with a {wetPct}% chance of significant rain on race day.
+                        </div>
+                        <div style={detailLine}>
+                          Based on {weather.length} years of historical weather data at the race location
+                          {result.race.race_date ? ` around ${new Date(result.race.race_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long" })}` : ""}.
+                          {wetPct != null && wetPct > 50 ? " High likelihood of wet conditions — factor in grip and nutrition strategy." : ""}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <PageNumber n={7} />
               </div>
             );
           })()}
