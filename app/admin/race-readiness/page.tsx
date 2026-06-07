@@ -822,7 +822,7 @@ function GradientHistogram({ sections }: { sections: TerrainSection[] }) {
 
 /* Cumulative ascent line chart */
 function CumulativeAscentChart({ profile }: { profile: RaceElevProfile }) {
-  const W = 698, H = 160, padL = 52, padR = 12, padT = 16, padB = 24;
+  const W = 698, H = 130, padL = 52, padR = 12, padT = 16, padB = 24;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
   // Compute cumulative ascent per point
@@ -975,9 +975,9 @@ function EffortProfileChart({ sections, totalKm }: { sections: TerrainSection[];
 /* Demand card */
 function DemandCard({ title, accent, children }: { title: string; accent: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#fafafa", border: `1px solid #e0e0e0`, borderLeft: `3px solid ${accent}`, borderRadius: "6px", padding: "12px 14px" }}>
-      <p style={{ margin: "0 0 7px", fontSize: "11px", fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>{title}</p>
-      <div style={{ fontSize: "11px", color: "#444", lineHeight: "1.6" }}>{children}</div>
+    <div style={{ background: "#fafafa", border: `1px solid #e0e0e0`, borderLeft: `3px solid ${accent}`, borderRadius: "6px", padding: "10px 12px" }}>
+      <p style={{ margin: "0 0 5px", fontSize: "11px", fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>{title}</p>
+      <div style={{ fontSize: "11px", color: "#444", lineHeight: "1.5" }}>{children}</div>
     </div>
   );
 }
@@ -992,9 +992,9 @@ function PageNumber({ n }: { n: number }) {
 ══════════════════════════════════════════════════════════════════ */
 const a4Page: React.CSSProperties = { width: "794px", minHeight: "1123px", background: "#fff", padding: "40px 48px", boxSizing: "border-box", position: "relative", breakAfter: "page", pageBreakAfter: "always" };
 const canvas: React.CSSProperties = { background: "#6b6b6b", padding: "32px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" };
-const printHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #1e3a1e", paddingBottom: "12px", marginBottom: "24px" };
+const printHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #1e3a1e", paddingBottom: "12px", marginBottom: "18px" };
 const logoImg: React.CSSProperties = { height: "36px", width: "auto", objectFit: "contain" };
-const sectionLabel: React.CSSProperties = { margin: "0 0 6px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" };
+const sectionLabel: React.CSSProperties = { margin: "0 0 4px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" };
 const labelStyle: React.CSSProperties = { fontSize: "12px", fontWeight: 600, color: "#555", marginBottom: "6px" };
 const inputStyle: React.CSSProperties = { padding: "8px 12px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "14px", color: "#111", background: "#fff", outline: "none" };
 const generateBtn: React.CSSProperties = { padding: "10px 24px", border: "none", borderRadius: "8px", background: "#1e3a1e", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: "14px" };
@@ -1542,13 +1542,13 @@ export default function RaceReadinessPage() {
                 </div>
               </div>
 
-              <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Race Demands Profile</h2>
-              <p style={{ margin: "0 0 20px", fontSize: "12px", color: "#888" }}>
+              <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Race Demands Profile</h2>
+              <p style={{ margin: "0 0 12px", fontSize: "12px", color: "#888" }}>
                 Physical and environmental demands an athlete will face on this course
               </p>
 
               {/* ── Section 1: Gradient distribution ── */}
-              <div style={{ marginBottom: "20px" }}>
+              <div style={{ marginBottom: "14px" }}>
                 <p style={sectionLabel}>Gradient Distribution — kilometres at each slope band</p>
                 <GradientHistogram sections={secs} />
                 {/* Legend */}
@@ -1564,7 +1564,7 @@ export default function RaceReadinessPage() {
 
               {/* ── Section 2: Cumulative ascent ── */}
               {elevProfile && (
-                <div style={{ marginBottom: "20px" }}>
+                <div style={{ marginBottom: "14px" }}>
                   <p style={sectionLabel}>
                     Climbing Load Over Course
                     {halfwayAscentPct !== null ? ` — ${halfwayAscentPct}% of total ascent completed at halfway` : ""}
@@ -1577,7 +1577,7 @@ export default function RaceReadinessPage() {
               )}
 
               {/* ── Section 3: Terrain strip + effort profile ── */}
-              <div style={{ marginBottom: "20px" }}>
+              <div style={{ marginBottom: "14px" }}>
                 <p style={sectionLabel}>Section-by-Section Effort Multiplier — vs. flat running pace</p>
                 <EffortProfileChart sections={secs} totalKm={totalKm} />
                 <div style={{ marginTop: "4px", display: "flex", gap: "14px", alignItems: "center" }}>
@@ -1589,14 +1589,14 @@ export default function RaceReadinessPage() {
               </div>
 
               {/* ── Section 4: Terrain colour strip ── */}
-              <div style={{ marginBottom: "20px" }}>
+              <div style={{ marginBottom: "14px" }}>
                 <p style={sectionLabel}>Terrain Character Strip — gradient colour across the course</p>
                 <TerrainStrip sections={secs} totalKm={totalKm} />
                 <div style={{ marginTop: "14px" }} />
               </div>
 
               {/* ── Section 5: Demand summary (4 cards) ── */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                 <DemandCard title="Climbing Demand" accent="#c0392b">
                   <strong>{Math.round(totalAscentM)}m</strong> total ascent over{" "}
                   <strong>{terrainSummary.climbing.toFixed(1)} km</strong> of climbing terrain ({((terrainSummary.climbing / totalKm) * 100).toFixed(0)}% of course).
