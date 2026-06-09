@@ -104,6 +104,12 @@ const GROUPS: ToolGroup[] = [
         badge: "Active",
       },
       {
+        href: "/admin/athlete-history",
+        title: "Athlete History",
+        description: "View an athlete's full race history, career profile, club, and age category.",
+        badge: "Active",
+      },
+      {
         href: "/admin/athlete-demands",
         title: "Athlete Demands",
         description: "Analyse training load and race demands for individual athletes.",
