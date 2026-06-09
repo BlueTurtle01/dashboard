@@ -303,7 +303,7 @@ function RouteMap({ route, windSections, width = 694, height = 200 }: {
     for (; z >= 8; z--) { if ((osmTileX(maxLon, z) - osmTileX(minLon, z) + 1) * (osmTileY(minLat, z) - osmTileY(maxLat, z) + 1) <= 16) break; }
     const zPow = Math.pow(2, z);
     const mx0 = osmMercX(minLon), mx1 = osmMercX(maxLon), my0 = osmMercY(maxLat), my1 = osmMercY(minLat);
-    const sc = Math.min(width / (mx1 - mx0), height / (my1 - my0));
+    const sc = Math.max(width / (mx1 - mx0), height / (my1 - my0));
     const ox = (width - (mx1 - mx0) * sc) / 2, oy = (height - (my1 - my0) * sc) / 2;
     const tsz = 1 / zPow;
     const tx0 = osmTileX(minLon, z), tx1 = osmTileX(maxLon, z), ty0 = osmTileY(maxLat, z), ty1 = osmTileY(minLat, z);
@@ -320,7 +320,7 @@ function RouteMap({ route, windSections, width = 694, height = 200 }: {
   const minLat = r0lat - dlat * 0.15 - 0.005, maxLat = r1lat + dlat * 0.15 + 0.005;
   const minLon = r0lon - dlon * 0.15 - 0.008, maxLon = r1lon + dlon * 0.15 + 0.008;
   const mx0 = osmMercX(minLon), mx1 = osmMercX(maxLon), my0 = osmMercY(maxLat), my1 = osmMercY(minLat);
-  const sc = Math.min(width / (mx1 - mx0), height / (my1 - my0));
+  const sc = Math.max(width / (mx1 - mx0), height / (my1 - my0));
   const ox = (width - (mx1 - mx0) * sc) / 2, oy = (height - (my1 - my0) * sc) / 2;
   const toX = (lon: number) => ox + (osmMercX(lon) - mx0) * sc;
   const toY = (lat: number) => oy + (osmMercY(lat) - my0) * sc;
@@ -1921,90 +1921,39 @@ export default function RaceReadinessPage() {
               ))}
             </div>
 
-            {elevProfile && (
-              <div style={{ marginBottom: "18px" }}>
-                <p style={sectionLabel}>Course Elevation Profile</p>
-                <ElevationChart profile={elevProfile} notable={notable} />
-                {notable.length > 0 && (
-                  <div style={{ marginTop: "4px", display: "flex", gap: "16px" }}>
-                    <span style={{ fontSize: "9px", color: "#bf360c" }}>▲ amber = significant climb</span>
-                    <span style={{ fontSize: "9px", color: "#0d47a1" }}>▼ blue = significant descent</span>
-                  </div>
-                )}
-              </div>
-            )}
-
             {result.route.length > 1 && (
               <div style={{ marginBottom: "18px" }}>
                 <p style={sectionLabel}>Course Map{windData.length > 0 && " — arrows show wind direction · colour shows headwind risk"}</p>
-                <RouteMap route={result.route} windSections={windData.length ? windData : undefined} height={195} />
+                <RouteMap route={result.route} windSections={windData.length ? windData : undefined} height={560} />
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "18px" }}>
-              <div>
-                <p style={sectionLabel}>Elevation Composition</p>
-                <TerrainBar label="Climbing"      km={terrainSummary.climbing}   pct={terrainSummary.total > 0 ? (terrainSummary.climbing   / terrainSummary.total) * 100 : 0} color="#c0392b" />
-                <TerrainBar label="Descending"    km={terrainSummary.descending} pct={terrainSummary.total > 0 ? (terrainSummary.descending / terrainSummary.total) * 100 : 0} color="#1565c0" />
-                <TerrainBar label="Flat / Rolling" km={terrainSummary.flat}      pct={terrainSummary.total > 0 ? (terrainSummary.flat       / terrainSummary.total) * 100 : 0} color="#546e7a" />
-
-                {surfaceSummary.total > 0 && (() => {
-                  const SURFACE_COLOR: Record<string, string> = {
-                    road: "#90a4ae", pavement: "#90a4ae", track: "#78909c",
-                    gravel: "#a1887f", trail: "#66bb6a", technical_trail: "#388e3c",
-                    fell: "#8d6e63", mud: "#6d4c41", sand: "#ffa726", snow: "#80d8ff",
-                  };
-                  const SURFACE_LABEL: Record<string, string> = {
-                    road: "Road", pavement: "Pavement", track: "Track",
-                    gravel: "Gravel", trail: "Trail", technical_trail: "Technical Trail",
-                    fell: "Fell", mud: "Mud", sand: "Sand", snow: "Snow",
-                  };
-                  return (
-                    <>
-                      <p style={{ ...sectionLabel, marginTop: "14px" }}>Terrain Composition</p>
-                      {surfaceSummary.entries.map(([surface, km]) => (
-                        <TerrainBar
-                          key={surface}
-                          label={SURFACE_LABEL[surface] ?? surface.charAt(0).toUpperCase() + surface.slice(1).replace(/_/g, " ")}
-                          km={km}
-                          pct={surfaceSummary.total > 0 ? (km / surfaceSummary.total) * 100 : 0}
-                          color={SURFACE_COLOR[surface] ?? "#90a4ae"}
-                        />
-                      ))}
-                    </>
-                  );
-                })()}
-              </div>
-              {notable.length > 0 && (
-                <div>
-                  <p style={sectionLabel}>Key Segments</p>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr>
-                        <th style={thStyle}>Segment</th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>Elev.</th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>Dist.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {notable.map((seg, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                          <td style={{ ...tdStyle, color: seg.type === "climb" ? "#c0392b" : "#1565c0", fontWeight: 600 }}>
-                            {seg.type === "climb" ? "▲" : "▼"} km {seg.startKm.toFixed(1)}–{seg.endKm.toFixed(1)}
-                          </td>
-                          <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600 }}>
-                            {seg.type === "climb" ? "+" : ""}{Math.round(seg.totalElevationM)}m
-                          </td>
-                          <td style={{ ...tdStyle, textAlign: "right", color: "#888" }}>
-                            {(seg.endKm - seg.startKm).toFixed(1)} km
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {surfaceSummary.total > 0 && (() => {
+              const SURFACE_COLOR: Record<string, string> = {
+                road: "#90a4ae", pavement: "#90a4ae", track: "#78909c",
+                gravel: "#a1887f", trail: "#66bb6a", technical_trail: "#388e3c",
+                fell: "#8d6e63", mud: "#6d4c41", sand: "#ffa726", snow: "#80d8ff",
+              };
+              const SURFACE_LABEL: Record<string, string> = {
+                road: "Road", pavement: "Pavement", track: "Track",
+                gravel: "Gravel", trail: "Trail", technical_trail: "Technical Trail",
+                fell: "Fell", mud: "Mud", sand: "Sand", snow: "Snow",
+              };
+              return (
+                <div style={{ marginBottom: "18px" }}>
+                  <p style={sectionLabel}>Terrain Composition</p>
+                  {surfaceSummary.entries.map(([surface, km]) => (
+                    <TerrainBar
+                      key={surface}
+                      label={SURFACE_LABEL[surface] ?? surface.charAt(0).toUpperCase() + surface.slice(1).replace(/_/g, " ")}
+                      km={km}
+                      pct={surfaceSummary.total > 0 ? (km / surfaceSummary.total) * 100 : 0}
+                      color={SURFACE_COLOR[surface] ?? "#90a4ae"}
+                    />
+                  ))}
                 </div>
-              )}
-            </div>
+              );
+            })()}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
               <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "8px", padding: "12px 14px" }}>
@@ -2085,7 +2034,105 @@ export default function RaceReadinessPage() {
           </div>
 
           {/* ═══════════════════════════════════════
-              PAGE 3 — Race Demands Profile
+              PAGE 3 — Elevation
+          ═══════════════════════════════════════ */}
+          {(elevProfile || terrainSummary.total > 0) && (
+            <div style={a4Page}>
+              <div style={printHeader}>
+                <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                  <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Elevation</div>
+                </div>
+              </div>
+
+              <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Elevation</h2>
+              <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#555", lineHeight: 1.5 }}>
+                The elevation profile, composition, and climbing load show how ascent is distributed across {result.race.name} — when the hard work arrives and how the course is weighted.
+              </p>
+
+              {/* ── Elevation profile chart ── */}
+              {elevProfile && (
+                <div style={{ marginBottom: "18px" }}>
+                  <p style={sectionLabel}>Course Elevation Profile</p>
+                  <ElevationChart profile={elevProfile} notable={notable} />
+                  {notable.length > 0 && (
+                    <div style={{ marginTop: "4px", display: "flex", gap: "16px" }}>
+                      <span style={{ fontSize: "9px", color: "#bf360c" }}>▲ amber = significant climb</span>
+                      <span style={{ fontSize: "9px", color: "#0d47a1" }}>▼ blue = significant descent</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Elevation composition + key segments ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "18px" }}>
+                <div>
+                  <p style={sectionLabel}>Elevation Composition</p>
+                  <TerrainBar label="Climbing"       km={terrainSummary.climbing}   pct={terrainSummary.total > 0 ? (terrainSummary.climbing   / terrainSummary.total) * 100 : 0} color="#c0392b" />
+                  <TerrainBar label="Descending"     km={terrainSummary.descending} pct={terrainSummary.total > 0 ? (terrainSummary.descending / terrainSummary.total) * 100 : 0} color="#1565c0" />
+                  <TerrainBar label="Flat / Rolling" km={terrainSummary.flat}       pct={terrainSummary.total > 0 ? (terrainSummary.flat       / terrainSummary.total) * 100 : 0} color="#546e7a" />
+                  {halfwayAscentPct !== null && (
+                    <p style={{ margin: "8px 0 0", fontSize: "10px", color: "#444", lineHeight: 1.55 }}>
+                      {halfwayAscentPct > 55
+                        ? `Front-loaded — ${halfwayAscentPct}% of total ascent arrives in the first half. Managing effort on the early climbs is key to protecting the second half.`
+                        : halfwayAscentPct < 45
+                        ? `Back-loaded — only ${halfwayAscentPct}% of ascent arrives in the first half, leaving ${100 - halfwayAscentPct}% for when fatigue is highest. Conserving reserves early is critical.`
+                        : `Evenly loaded — ${halfwayAscentPct}% of ascent in the first half and ${100 - halfwayAscentPct}% in the second. Climbing demand is consistent throughout; no single section dominates.`}
+                    </p>
+                  )}
+                </div>
+                {notable.length > 0 && (
+                  <div>
+                    <p style={sectionLabel}>Key Segments</p>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>Segment</th>
+                          <th style={{ ...thStyle, textAlign: "right" }}>Elev.</th>
+                          <th style={{ ...thStyle, textAlign: "right" }}>Dist.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {notable.map((seg, i) => (
+                          <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                            <td style={{ ...tdStyle, color: seg.type === "climb" ? "#c0392b" : "#1565c0", fontWeight: 600 }}>
+                              {seg.type === "climb" ? "▲" : "▼"} km {seg.startKm.toFixed(1)}–{seg.endKm.toFixed(1)}
+                            </td>
+                            <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600 }}>
+                              {seg.type === "climb" ? "+" : ""}{Math.round(seg.totalElevationM)}m
+                            </td>
+                            <td style={{ ...tdStyle, textAlign: "right", color: "#888" }}>
+                              {(seg.endKm - seg.startKm).toFixed(1)} km
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Climbing load over course ── */}
+              {elevProfile && (
+                <div style={{ marginBottom: "20px" }}>
+                  <p style={{ ...sectionLabel, marginBottom: "8px" }}>
+                    Climbing Load Over Course
+                    {halfwayAscentPct !== null ? ` — ${halfwayAscentPct}% of total ascent completed at halfway` : ""}
+                  </p>
+                  <CumulativeAscentChart profile={elevProfile} />
+                  <p style={{ margin: "4px 0 0", fontSize: "9px", color: "#aaa", lineHeight: 1.4 }}>
+                    Dashed markers show what proportion of total climbing has accumulated at each quarter. Late-loading courses are especially demanding because hard climbs arrive when the athlete is already fatigued.
+                  </p>
+                </div>
+              )}
+
+              <PageNumber n={3} />
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════
+              PAGE 4 — Race Demands Profile
           ═══════════════════════════════════════ */}
           {secs.length > 0 && (
             <div style={a4Page}>
@@ -2100,7 +2147,7 @@ export default function RaceReadinessPage() {
               <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Race Demands Profile</h2>
               <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#555", lineHeight: 1.5 }}>
                 Understanding what {result.race.name} demands physically is the foundation for assessing whether you are ready for it.
-                The three charts below show how the course is structured — where it climbs, how the climbing is distributed, and how much energy each section costs relative to flat running.
+                The two charts below show the gradient distribution across slope bands and the relative energy cost of each section.
               </p>
 
               {/* ── Section 1: Gradient distribution ── */}
@@ -2127,21 +2174,7 @@ export default function RaceReadinessPage() {
                 </p>
               </div>
 
-              {/* ── Section 2: Cumulative ascent ── */}
-              {elevProfile && (
-                <div style={{ marginBottom: "20px" }}>
-                  <p style={{ ...sectionLabel, marginBottom: "8px" }}>
-                    Climbing Load Over Course
-                    {halfwayAscentPct !== null ? ` — ${halfwayAscentPct}% of total ascent completed at halfway` : ""}
-                  </p>
-                  <CumulativeAscentChart profile={elevProfile} />
-                  <p style={{ margin: "4px 0 0", fontSize: "9px", color: "#aaa", lineHeight: 1.4 }}>
-                    Dashed markers show what proportion of total climbing has accumulated at each quarter. Late-loading courses are especially demanding because hard climbs arrive when the athlete is already fatigued.
-                  </p>
-                </div>
-              )}
-
-              {/* ── Section 3: Terrain strip + effort profile ── */}
+              {/* ── Section 2: Terrain strip + effort profile ── */}
               <div style={{ marginBottom: "20px" }}>
                 <p style={{ ...sectionLabel, marginBottom: "8px" }}>Section-by-Section Effort Multiplier — vs. flat running pace</p>
                 <EffortProfileChart sections={secs} totalKm={totalKm} />
@@ -2190,12 +2223,12 @@ export default function RaceReadinessPage() {
                 </div>
               )}
 
-              <PageNumber n={3} />
+              <PageNumber n={4} />
             </div>
           )}
 
           {/* ═══════════════════════════════════════
-              PAGE 4 — Race Demands Profile (continued)
+              PAGE 5 — Race Demands Profile (continued)
           ═══════════════════════════════════════ */}
           {secs.length > 0 && (
             <div style={a4Page}>
@@ -2373,12 +2406,12 @@ export default function RaceReadinessPage() {
                 </p>
               </div>
 
-              <PageNumber n={4} />
+              <PageNumber n={5} />
             </div>
           )}
 
           {/* ═══════════════════════════════════════
-              PAGE 5 — Athlete Overview
+              PAGE 6 — Athlete Overview
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -2593,7 +2626,7 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={5} />
+                <PageNumber n={6} />
               </div>
 
               {/* ── Complete Race History — separate print page ── */}
@@ -2619,14 +2652,14 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={6} />
+                <PageNumber n={7} />
               </div>
               </>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 7 — Experience Gaps
+              PAGE 8 — Experience Gaps
           ═══════════════════════════════════════ */}
           {reportAthlete && result.terrain_sections.length > 0 && (() => {
             const p = reportAthlete.profile;
@@ -2829,13 +2862,13 @@ export default function RaceReadinessPage() {
                   Demands ordered by course distance — longer sections have greater physical consequence.
                 </div>
 
-                <PageNumber n={7} />
+                <PageNumber n={8} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 8 — Demands Built Up
+              PAGE 9 — Demands Built Up
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -3048,13 +3081,13 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={8} />
+                <PageNumber n={9} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 8 — Suggested Preparation Races
+              PAGE 10 — Suggested Preparation Races
           ═══════════════════════════════════════ */}
           {(prepRaces && reportAthlete) && (() => {
             const stl = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -3207,13 +3240,13 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={9} />
+                <PageNumber n={10} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 9 — Experience Context
+              PAGE 11 — Experience Context
           ═══════════════════════════════════════ */}
           {(expContextLoading || expContext) && (() => {
             const fmtH = (h: number) => {
@@ -3387,13 +3420,13 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={10} />
+                <PageNumber n={11} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 10 — Race Day Pacing Strategy CTA
+              PAGE 12 — Race Day Pacing Strategy CTA
           ═══════════════════════════════════════ */}
           {result && (
             <div style={a4Page}>
@@ -3489,7 +3522,7 @@ export default function RaceReadinessPage() {
                 );
               })()}
 
-              <PageNumber n={11} />
+              <PageNumber n={12} />
             </div>
           )}
 

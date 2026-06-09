@@ -46,6 +46,7 @@ export default function RegisterPage() {
         data: {
           role,
         },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
@@ -100,7 +101,7 @@ export default function RegisterPage() {
     }
 
     setSuccessMessage(
-      "Account created successfully. You can now log in."
+      "Account created! Please check your email to verify your address before logging in."
     );
 
     setEmail("");
@@ -108,11 +109,6 @@ export default function RegisterPage() {
     setConfirmPassword("");
     setRole("athlete");
     setLoading(false);
-
-    setTimeout(() => {
-      router.push("/login");
-      router.refresh();
-    }, 1200);
   }
 
   return (
