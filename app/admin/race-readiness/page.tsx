@@ -184,6 +184,8 @@ interface ElevProfileMatchResult {
   goal_loading_label: LoadingLabel | null;
   goal_halfway_pct: number | null;
   best_match: ElevProfileMatch | null;
+  /** 20 values in [0,1]: fraction of total ascent at each 5% step of distance */
+  match_curve: number[] | null;
   races_compared: number;
 }
 
@@ -862,77 +864,117 @@ function GradientHistogram({ sections }: { sections: TerrainSection[] }) {
   );
 }
 
-/* Cumulative ascent line chart */
-function CumulativeAscentChart({ profile }: { profile: RaceElevProfile }) {
-  const W = 698, H = 170, padL = 52, padR = 12, padT = 16, padB = 24;
+/* Cumulative ascent line chart — axes in % of distance / % of total ascent */
+function CumulativeAscentChart({ profile, comparison }: {
+  profile: RaceElevProfile;
+  comparison?: { curve: number[]; label: string } | null;
+}) {
+  const W = 698, H = 170, padL = 44, padR = 12, padT = 16, padB = 36;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
-  // Compute cumulative ascent per point
+  // Build goal race normalized curve from raw profile
   const pts = downsample(profile.points, 400);
-  const cumPts: { km: number; cumAscent: number }[] = [{ km: pts[0].distanceKm, cumAscent: 0 }];
+  const cumPts: { pct: number; ascentPct: number }[] = [{ pct: 0, ascentPct: 0 }];
   let running = 0;
+  const totalKm = profile.totalDistanceKm;
   for (let i = 1; i < pts.length; i++) {
     const diff = pts[i].elevationM - pts[i - 1].elevationM;
     if (diff > 0) running += diff;
-    cumPts.push({ km: pts[i].distanceKm, cumAscent: running });
+    cumPts.push({ pct: (pts[i].distanceKm / totalKm) * 100, ascentPct: running });
   }
-
-  const totalKm = profile.totalDistanceKm;
   const totalAscent = running;
-  const xS = (km: number) => padL + (km / totalKm) * chartW;
-  const yS = (m: number)  => padT + chartH - (m / Math.max(totalAscent, 1)) * chartH;
+  // Normalize y to 0–100
+  const normPts = cumPts.map(p => ({ pct: p.pct, ascentPct: totalAscent > 0 ? (p.ascentPct / totalAscent) * 100 : 0 }));
 
-  const linePts = cumPts.map(p => `${xS(p.km).toFixed(1)},${yS(p.cumAscent).toFixed(1)}`).join(" ");
+  // Scale helpers (both axes 0–100%)
+  const xS = (pct: number) => padL + (pct / 100) * chartW;
+  const yS = (pct: number) => padT + chartH - (pct / 100) * chartH;
 
-  // Y-axis ticks
-  const yStep = totalAscent < 1000 ? 200 : totalAscent < 3000 ? 500 : 1000;
-  const yTicks: number[] = [];
-  for (let t = 0; t <= totalAscent; t += yStep) yTicks.push(t);
-  if (yTicks[yTicks.length - 1] < totalAscent) yTicks.push(Math.ceil(totalAscent / yStep) * yStep);
+  const goalLinePts = normPts.map(p => `${xS(p.pct).toFixed(1)},${yS(p.ascentPct).toFixed(1)}`).join(" ");
+  const goalAreaD =
+    `M${xS(0).toFixed(1)},${(padT + chartH).toFixed(1)} ` +
+    normPts.map(p => `L${xS(p.pct).toFixed(1)},${yS(p.ascentPct).toFixed(1)}`).join(" ") +
+    ` L${xS(100).toFixed(1)},${(padT + chartH).toFixed(1)} Z`;
 
-  // Quarter markers
-  const quarters = [0.25, 0.5, 0.75].map(f => {
-    const targetKm = f * totalKm;
-    const pt = cumPts.reduce((best, p) => Math.abs(p.km - targetKm) < Math.abs(best.km - targetKm) ? p : best);
-    return { km: targetKm, pct: Math.round((pt.cumAscent / totalAscent) * 100) };
+  // Comparison line: N values in [0,1] at x = (i+1)/N * 100
+  const compPts = comparison?.curve
+    ? [{ x: 0, y: 0 }, ...comparison.curve.map((v, i) => ({
+        x: ((i + 1) / comparison.curve.length) * 100,
+        y: v * 100,
+      }))]
+    : null;
+  const compLinePts = compPts
+    ? compPts.map(p => `${xS(p.x).toFixed(1)},${yS(p.y).toFixed(1)}`).join(" ")
+    : null;
+
+  // Axes: 0%, 25%, 50%, 75%, 100%
+  const pctTicks = [0, 25, 50, 75, 100];
+  // Quarter distance markers (vertical dashed lines)
+  const quarters = [25, 50, 75];
+
+  // Cumulative ascent % reached at each quarter of distance (for goal race annotation)
+  const quartAnnotations = quarters.map(q => {
+    const pt = normPts.reduce((best, p) => Math.abs(p.pct - q) < Math.abs(best.pct - q) ? p : best);
+    return { q, ascentPct: Math.round(pt.ascentPct) };
   });
-
-  const xInt = Math.ceil(totalKm / 8 / 5) * 5;
-  const xTicks: number[] = [];
-  for (let k = 0; k <= totalKm; k += xInt) xTicks.push(k);
 
   return (
     <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
-      {yTicks.map((t, i) => (
+      {/* Grid lines */}
+      {pctTicks.map((t, i) => (
         <g key={i}>
           <line x1={padL} y1={yS(t)} x2={W - padR} y2={yS(t)} stroke="#eee" strokeWidth="1" />
-          <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill="#888">{t}m</text>
+          <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill="#888">{t}%</text>
         </g>
       ))}
-      {quarters.map(({ km, pct }, i) => (
+      {/* Quarter distance markers */}
+      {quartAnnotations.map(({ q, ascentPct }, i) => (
         <g key={i}>
-          <line x1={xS(km)} y1={padT} x2={xS(km)} y2={padT + chartH} stroke="#e0e0e0" strokeWidth="1" strokeDasharray="3,3" />
-          <text x={xS(km)} y={padT - 3} textAnchor="middle" fontSize="7.5" fill="#aaa">{pct}%</text>
+          <line x1={xS(q)} y1={padT} x2={xS(q)} y2={padT + chartH} stroke="#e0e0e0" strokeWidth="1" strokeDasharray="3,3" />
+          <text x={xS(q)} y={padT - 3} textAnchor="middle" fontSize="7.5" fill="#aaa">{ascentPct}%</text>
         </g>
       ))}
-      <path
-        d={`M${xS(cumPts[0].km).toFixed(1)},${(padT + chartH).toFixed(1)} ` +
-           cumPts.map(p => `L${xS(p.km).toFixed(1)},${yS(p.cumAscent).toFixed(1)}`).join(" ") +
-           ` L${xS(cumPts[cumPts.length - 1].km).toFixed(1)},${(padT + chartH).toFixed(1)} Z`}
-        fill="#c0392b18"
-      />
-      <polyline points={linePts} fill="none" stroke="#c0392b" strokeWidth="2" strokeLinejoin="round" />
+      {/* Goal race area + line */}
+      <path d={goalAreaD} fill="#c0392b18" />
+      <polyline points={goalLinePts} fill="none" stroke="#c0392b" strokeWidth="2" strokeLinejoin="round" />
+      {/* Comparison line */}
+      {compLinePts && (
+        <polyline points={compLinePts} fill="none" stroke="#1565c0" strokeWidth="1.8"
+          strokeLinejoin="round" strokeDasharray="5,3" />
+      )}
+      {/* 50% ascent reference */}
+      <line x1={padL} y1={yS(50)} x2={W - padR} y2={yS(50)} stroke="#888" strokeWidth="1" strokeDasharray="4,4" opacity="0.35" />
+      {/* Axes */}
       <line x1={padL} y1={padT} x2={padL} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
       <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
-      {xTicks.map((km, i) => (
+      {/* X-axis ticks */}
+      {pctTicks.map((t, i) => (
         <g key={i}>
-          <line x1={xS(km)} y1={padT + chartH} x2={xS(km)} y2={padT + chartH + 4} stroke="#ccc" strokeWidth="1" />
-          <text x={xS(km)} y={padT + chartH + 13} textAnchor="middle" fontSize="8.5" fill="#888">{Math.round(km)}km</text>
+          <line x1={xS(t)} y1={padT + chartH} x2={xS(t)} y2={padT + chartH + 4} stroke="#ccc" strokeWidth="1" />
+          <text x={xS(t)} y={padT + chartH + 12} textAnchor="middle" fontSize="8" fill="#888">{t}%</text>
         </g>
       ))}
-      {/* Dashed line at 50% ascent */}
-      <line x1={padL} y1={yS(totalAscent * 0.5)} x2={W - padR} y2={yS(totalAscent * 0.5)} stroke="#c0392b" strokeWidth="1" strokeDasharray="4,4" opacity="0.4" />
-      <text x={W - padR - 2} y={yS(totalAscent * 0.5) - 3} textAnchor="end" fontSize="7" fill="#c0392b" opacity="0.7">50% ascent</text>
+      {/* Axis labels */}
+      <text x={padL + chartW / 2} y={H - 2} textAnchor="middle" fontSize="7.5" fill="#aaa">% of course distance</text>
+      <text
+        x={10} y={padT + chartH / 2}
+        textAnchor="middle" fontSize="7.5" fill="#aaa"
+        transform={`rotate(-90, 10, ${padT + chartH / 2})`}
+      >% of total ascent</text>
+      {/* Legend */}
+      {comparison && (
+        <g transform={`translate(${padL + 8}, ${padT + 8})`}>
+          <rect x={0} y={0} width={280} height={22} fill="white" opacity={0.88} rx={3} />
+          <line x1={6} y1={11} x2={22} y2={11} stroke="#c0392b" strokeWidth="2" />
+          <text x={27} y={14.5} fontSize="8" fill="#333">Goal race</text>
+          {compLinePts && (
+            <>
+              <line x1={84} y1={11} x2={100} y2={11} stroke="#1565c0" strokeWidth="1.8" strokeDasharray="5,3" />
+              <text x={105} y={14.5} fontSize="8" fill="#333">{comparison.label}</text>
+            </>
+          )}
+        </g>
+      )}
     </svg>
   );
 }
@@ -2145,9 +2187,17 @@ export default function RaceReadinessPage() {
                     Climbing Load Over Course
                     {halfwayAscentPct !== null ? ` — ${halfwayAscentPct}% of total ascent completed at halfway` : ""}
                   </p>
-                  <CumulativeAscentChart profile={elevProfile} />
+                  <CumulativeAscentChart
+                    profile={elevProfile}
+                    comparison={
+                      elevProfileMatch?.best_match && elevProfileMatch.match_curve
+                        ? { curve: elevProfileMatch.match_curve, label: `${elevProfileMatch.best_match.race_name} (${elevProfileMatch.best_match.year})` }
+                        : null
+                    }
+                  />
                   <p style={{ margin: "4px 0 0", fontSize: "9px", color: "#aaa", lineHeight: 1.4 }}>
-                    Dashed markers show what proportion of total climbing has accumulated at each quarter. Late-loading courses are especially demanding because hard climbs arrive when the athlete is already fatigued.
+                    Dashed markers show what proportion of total climbing has accumulated at each quarter of distance.
+                    {elevProfileMatch?.best_match ? " Red = goal race · Blue dashed = closest matched past race." : " Late-loading courses are especially demanding because hard climbs arrive when the athlete is already fatigued."}
                   </p>
                 </div>
               )}

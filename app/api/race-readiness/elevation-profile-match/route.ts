@@ -51,6 +51,12 @@ export interface ElevProfileMatchResult {
   goal_loading_label: LoadingLabel | null;
   goal_halfway_pct: number | null;
   best_match: ElevProfileMatch | null;
+  /**
+   * 20-point normalized cumulative-ascent curve for the best match race.
+   * Values are 0–1 representing fraction of total ascent at 5%, 10%, …, 100%
+   * of course distance. Null when there is no match or no elevation data.
+   */
+  match_curve: number[] | null;
   races_compared: number;
 }
 
@@ -76,12 +82,12 @@ function parseElevPoints(value: unknown): { points: ElevPoint[]; totalKm: number
 }
 
 /**
- * Compute a 10-point normalized cumulative-ascent curve.
- * Returns an array of 10 values in [0,1] representing the fraction of total
- * ascent accumulated at each decile of the course distance.
+ * Compute an N-point normalized cumulative-ascent curve (default N=20).
+ * Returns an array of N values in [0,1] representing the fraction of total
+ * ascent accumulated at each (100/N)% step of the course distance.
  * Returns null when there is insufficient ascent data.
  */
-function normalizedCurve(points: ElevPoint[], totalKm: number, N = 10): number[] | null {
+function normalizedCurve(points: ElevPoint[], totalKm: number, N = 20): number[] | null {
   if (totalKm <= 0 || points.length < 2) return null;
   const sorted = [...points].sort((a, b) => a.distanceKm - b.distanceKm);
 
@@ -108,8 +114,9 @@ function normalizedCurve(points: ElevPoint[], totalKm: number, N = 10): number[]
 }
 
 function halfwayPct(curve: number[]): number {
-  // curve[4] = fraction of ascent at 50% distance (index 4 = step 5 of 10)
-  return Math.round((curve[4] ?? 0) * 100);
+  // With N=20, index 9 = step 10 = 50% of distance
+  const midIdx = Math.floor(curve.length / 2) - 1;
+  return Math.round((curve[midIdx] ?? 0) * 100);
 }
 
 function loadingLabel(hwPct: number): LoadingLabel {
@@ -166,7 +173,7 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const empty: ElevProfileMatchResult = {
     goal_loading_label: null, goal_halfway_pct: null,
-    best_match: null, races_compared: 0,
+    best_match: null, match_curve: null, races_compared: 0,
   };
 
   // ── 1. Goal race elevation profile ────────────────────────────────────────
@@ -195,7 +202,7 @@ export async function GET(req: NextRequest) {
     .neq("race_id", targetRaceId); // exclude the goal race itself
 
   const finishedRows = (athleteResults ?? []) as { race_id: string; result_year: number }[];
-  if (finishedRows.length === 0) return NextResponse.json({ ...empty, goal_loading_label: goalLabel, goal_halfway_pct: goalHwPct });
+  if (finishedRows.length === 0) return NextResponse.json({ ...empty, goal_loading_label: goalLabel, goal_halfway_pct: goalHwPct, match_curve: null });
 
   // De-duplicate: keep most recent year per race
   const bestYearByRace: Record<string, number> = {};
@@ -223,6 +230,7 @@ export async function GET(req: NextRequest) {
 
   // ── 5. Compute similarity for each past race ───────────────────────────────
   let bestMatch: ElevProfileMatch | null = null;
+  let bestMatchCurve: number[] | null = null;
   let bestMAE = 1;
   let racesCompared = 0;
 
@@ -245,6 +253,7 @@ export async function GET(req: NextRequest) {
 
     if (mae < bestMAE) {
       bestMAE = mae;
+      bestMatchCurve = curve;
       bestMatch = {
         race_name:       raceName,
         year,
@@ -264,6 +273,7 @@ export async function GET(req: NextRequest) {
     goal_loading_label: goalLabel,
     goal_halfway_pct:   goalHwPct,
     best_match:         surfacedMatch,
+    match_curve:        surfacedMatch ? bestMatchCurve : null,
     races_compared:     racesCompared,
   } satisfies ElevProfileMatchResult);
 }
