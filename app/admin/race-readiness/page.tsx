@@ -169,6 +169,24 @@ interface PrepRacesResult {
   suggestions: PrepRaceSuggestion[];
 }
 
+/* ── Elevation profile match types ── */
+type LoadingLabel = "front" | "even" | "back";
+interface ElevProfileMatch {
+  race_name: string;
+  year: number;
+  race_km: number;
+  loading_label: LoadingLabel;
+  halfway_pct: number;
+  similarity_pct: number;
+  partial_desc: string | null;
+}
+interface ElevProfileMatchResult {
+  goal_loading_label: LoadingLabel | null;
+  goal_halfway_pct: number | null;
+  best_match: ElevProfileMatch | null;
+  races_compared: number;
+}
+
 /* ── Elevation types ── */
 interface ElevationPoint { distanceKm: number; elevationM: number; }
 interface RaceElevProfile {
@@ -1052,6 +1070,7 @@ export default function RaceReadinessPage() {
   const [prepRacesLoading, setPrepRacesLoading] = useState(false);
   const [expContext, setExpContext]        = useState<ExperienceContextResult | null>(null);
   const [expContextLoading, setExpContextLoading] = useState(false);
+  const [elevProfileMatch, setElevProfileMatch] = useState<ElevProfileMatchResult | null>(null);
   const [includedRaceKeys, setIncludedRaceKeys] = useState<Set<string>>(new Set());
 
   const fetchAthlete = useCallback(async (key: string) => {
@@ -1224,6 +1243,11 @@ export default function RaceReadinessPage() {
           .then(r => r.ok ? r.json() as Promise<ExperienceContextResult> : null).catch(() => null)
       : Promise.resolve(null);
 
+    const elevProfileMatchPromise: Promise<ElevProfileMatchResult | null> = (selectedAthleteKey.trim() && selectedRaceId)
+      ? fetch(`/api/race-readiness/elevation-profile-match?key=${encodeURIComponent(selectedAthleteKey.trim())}&race_id=${encodeURIComponent(selectedRaceId)}`)
+          .then(r => r.ok ? r.json() as Promise<ElevProfileMatchResult> : null).catch(() => null)
+      : Promise.resolve(null);
+
     // Fetch athlete with the include filter applied so terrain pairings and profile
     // stats are computed only from the selected races.
     const includeParam = [...includedRaceKeys].join(",");
@@ -1232,8 +1256,8 @@ export default function RaceReadinessPage() {
           .then(r => r.ok ? r.json() as Promise<AthleteResponse> : null).catch(() => null)
       : Promise.resolve(null);
 
-    const [weatherData, resultsData, prepRacesData, expContextData, reportAthleteData] = await Promise.all([
-      weatherPromise, resultsPromise, prepRacesPromise, expContextPromise, reportAthletePromise,
+    const [weatherData, resultsData, prepRacesData, expContextData, elevProfileMatchData, reportAthleteData] = await Promise.all([
+      weatherPromise, resultsPromise, prepRacesPromise, expContextPromise, elevProfileMatchPromise, reportAthletePromise,
     ]);
 
     // ── Step 3: Split analysis — needs the median derived from resultsData ──
@@ -1263,6 +1287,7 @@ export default function RaceReadinessPage() {
     setSplitAnalysis(splitData);
     setPrepRaces(prepRacesData);
     setExpContext(expContextData);
+    setElevProfileMatch(elevProfileMatchData);
     if (reportAthleteData) setReportAthlete(reportAthleteData);
     setGenerating(false);
   }
@@ -2126,6 +2151,90 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
               )}
+
+              {/* ── Elevation profile reference (athlete comparison) ── */}
+              {elevProfileMatch && (() => {
+                const em = elevProfileMatch;
+                const loadDesc: Record<LoadingLabel, string> = {
+                  front: "front-loaded — most climbing in the first half",
+                  back:  "back-loaded — most climbing in the second half",
+                  even:  "evenly loaded — climbing spread across both halves",
+                };
+                const goalDesc = em.goal_loading_label ? loadDesc[em.goal_loading_label] : null;
+                const m = em.best_match;
+
+                let headline = "";
+                let body = "";
+                let accentColor = "#1e3a1e";
+                let borderColor = "#1e3a1e";
+
+                if (m) {
+                  const raceRef = `${m.race_name} (${m.year})`;
+                  const partialPrefix = m.partial_desc
+                    ? `The climbing in ${m.partial_desc} of this race resembles`
+                    : "The elevation profile of this course resembles";
+                  const sameLoading = em.goal_loading_label === m.loading_label;
+
+                  if (m.similarity_pct >= 75) {
+                    accentColor = "#2e7d32"; borderColor = "#2e7d32";
+                    headline = `Profile match — ${raceRef}`;
+                    body = sameLoading
+                      ? `${partialPrefix} ${raceRef}, which you completed${m.partial_desc ? "" : ` (${m.race_km.toFixed(0)} km)`}. Both are ${loadDesc[m.loading_label]}. Your experience on that race translates directly here — the climbing arrives in the same pattern.`
+                      : `${partialPrefix} ${raceRef}. The overall distribution of climbing is similar, giving you a useful reference for how this course will feel.`;
+                  } else {
+                    accentColor = "#e65100"; borderColor = "#e65100";
+                    headline = `Closest profile — ${raceRef}`;
+                    body = `${partialPrefix} ${raceRef}${m.partial_desc ? "" : ` (${m.race_km.toFixed(0)} km)`}, though the match is partial. Both are broadly ${loadDesc[m.loading_label]}. Use it as a rough guide rather than a direct comparison.`;
+                  }
+                } else {
+                  accentColor = "#b71c1c"; borderColor = "#b71c1c";
+                  headline = "No close profile match in race history";
+                  const noMatchBody = em.races_compared === 0
+                    ? "No elevation profile data is available for past races to make a comparison."
+                    : goalDesc
+                    ? `None of the ${em.races_compared} past race${em.races_compared !== 1 ? "s" : ""} with elevation data share a similar loading pattern. This ${goalDesc} is relatively uncharted territory — a potential gap to address specifically in preparation.`
+                    : "No closely matching elevation profile was found in this athlete's race history.";
+                  body = noMatchBody;
+                }
+
+                return (
+                  <div style={{
+                    background: "#fafafa", border: "1px solid #e0e0e0",
+                    borderLeft: `4px solid ${borderColor}`,
+                    borderRadius: "6px", padding: "12px 14px", marginBottom: "14px",
+                  }}>
+                    <div style={{ fontSize: "10px", fontWeight: 700, color: accentColor, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "5px" }}>
+                      Elevation Profile Reference
+                    </div>
+                    <div style={{ fontSize: "10.5px", fontWeight: 600, color: "#1e1e1e", marginBottom: "4px" }}>
+                      {headline}
+                    </div>
+                    <div style={{ fontSize: "10px", color: "#444", lineHeight: 1.55 }}>
+                      {body}
+                    </div>
+                    {m && (
+                      <div style={{ display: "flex", gap: "16px", marginTop: "8px", flexWrap: "wrap" }}>
+                        {[
+                          { label: "Similarity",   value: `${m.similarity_pct}%` },
+                          { label: "Past race",     value: `${m.race_km.toFixed(0)} km` },
+                          { label: "Loading",       value: m.loading_label === "front" ? "Front-loaded" : m.loading_label === "back" ? "Back-loaded" : "Even" },
+                          { label: "Halfway ascent", value: `${m.halfway_pct}% by halfway` },
+                        ].map(({ label, value }) => (
+                          <div key={label} style={{ fontSize: "9.5px" }}>
+                            <div style={{ color: "#aaa", marginBottom: "1px" }}>{label}</div>
+                            <div style={{ fontWeight: 600, color: "#333" }}>{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!m && em.races_compared > 0 && goalDesc && (
+                      <div style={{ marginTop: "6px", fontSize: "9px", color: "#888" }}>
+                        {em.races_compared} past race{em.races_compared !== 1 ? "s" : ""} compared
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <PageNumber n={3} />
             </div>
