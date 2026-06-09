@@ -208,7 +208,7 @@ export function DemandsTab({ raceId }: { raceId: string }) {
                 width={52}
               />
               <Tooltip
-                formatter={(val: number) => [`${val} km`, "Distance"]}
+                formatter={(val: number | string | undefined) => [`${val ?? ""} km`, "Distance"]}
                 contentStyle={{
                   borderRadius: "0.75rem",
                   border: "1px solid #e4e4e7",
@@ -254,7 +254,7 @@ export function DemandsTab({ raceId }: { raceId: string }) {
                 width={40}
               />
               <Tooltip
-                formatter={(val: number) => [`${val}×`, "Effort"]}
+                formatter={(val: number | string | undefined) => [`${val ?? ""}×`, "Effort"]}
                 contentStyle={{
                   borderRadius: "0.75rem",
                   border: "1px solid #e4e4e7",
