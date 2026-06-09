@@ -1051,6 +1051,7 @@ export default function RaceReadinessPage() {
   const [prepRacesLoading, setPrepRacesLoading] = useState(false);
   const [expContext, setExpContext]        = useState<ExperienceContextResult | null>(null);
   const [expContextLoading, setExpContextLoading] = useState(false);
+  const [includedRaceKeys, setIncludedRaceKeys] = useState<Set<string>>(new Set());
 
   const fetchAthlete = useCallback(async (key: string) => {
     if (!key.trim()) return;
@@ -1061,10 +1062,18 @@ export default function RaceReadinessPage() {
       const res = await fetch(`/api/race-readiness/athlete?key=${encodeURIComponent(key.trim())}`);
       const json = await res.json() as AthleteResponse & { error?: string };
       if (!res.ok || json.error) { setAthleteError(json.error ?? "Failed to load athlete."); }
-      else setAthlete(json);
+      else {
+        setAthlete(json);
+        setIncludedRaceKeys(new Set(json.races.map(r => `${r.race_id}|${r.result_year}`)));
+      }
     } catch { setAthleteError("Network error loading athlete."); }
     setAthleteLoading(false);
   }, []);
+
+  const filteredAthleteRaces = useMemo(
+    () => (athlete ? athlete.races.filter(r => includedRaceKeys.has(`${r.race_id}|${r.result_year}`)) : []),
+    [athlete, includedRaceKeys]
+  );
 
   // Derived — elevation + segments
   const elevProfile    = result ? parseElevProfile(result.elevation_profile) : null;
@@ -1362,6 +1371,56 @@ export default function RaceReadinessPage() {
           </div>
         </div>
         {result && <button type="button" onClick={() => window.print()} style={printBtn}>Export to PDF</button>}
+
+        {/* ── Race picker — shows after athlete loads ── */}
+        {athlete && !athleteLoading && (
+          <div style={{ flexBasis: "100%", borderTop: "1px solid #eee", paddingTop: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
+              <div style={labelStyle}>Races to include in analysis</div>
+              <span style={{ fontSize: "12px", color: "#888" }}>
+                {includedRaceKeys.size} of {athlete.races.length} selected
+              </span>
+              <button
+                type="button"
+                onClick={() => setIncludedRaceKeys(new Set(athlete.races.map(r => `${r.race_id}|${r.result_year}`)))}
+                style={{ fontSize: "12px", color: "#1e3a1e", background: "none", border: "1px solid #1e3a1e", borderRadius: "6px", padding: "4px 10px", cursor: "pointer" }}
+              >Select all</button>
+              <button
+                type="button"
+                onClick={() => setIncludedRaceKeys(new Set())}
+                style={{ fontSize: "12px", color: "#888", background: "none", border: "1px solid #ccc", borderRadius: "6px", padding: "4px 10px", cursor: "pointer" }}
+              >Clear all</button>
+            </div>
+            <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid #e5e5e5", borderRadius: "8px" }}>
+              {[...athlete.races].sort((a, b) => b.result_year - a.result_year).map(r => {
+                const key = `${r.race_id}|${r.result_year}`;
+                const checked = includedRaceKeys.has(key);
+                return (
+                  <label
+                    key={key}
+                    style={{ display: "flex", alignItems: "center", gap: "10px", padding: "7px 12px", cursor: "pointer", borderBottom: "1px solid #f5f5f5", background: checked ? "#fff" : "#fafafa" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={e => {
+                        const next = new Set(includedRaceKeys);
+                        if (e.target.checked) next.add(key); else next.delete(key);
+                        setIncludedRaceKeys(next);
+                      }}
+                      style={{ accentColor: "#1e3a1e", width: "14px", height: "14px", flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: "12px", color: "#999", width: "36px", flexShrink: 0 }}>{r.result_year}</span>
+                    <span style={{ fontSize: "13px", fontWeight: 500, color: checked ? "#1e3a1e" : "#aaa", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.race_name}</span>
+                    {r.total_distance_km != null && <span style={{ fontSize: "11px", color: "#bbb", flexShrink: 0 }}>{r.total_distance_km.toFixed(0)} km</span>}
+                    {r.total_ascent_m != null && <span style={{ fontSize: "11px", color: "#bbb", flexShrink: 0 }}>{Math.round(r.total_ascent_m).toLocaleString()}m ↑</span>}
+                    <span style={{ fontSize: "11px", fontWeight: 600, flexShrink: 0, color: r.result_status === "FINISHED" ? "#2e7d32" : r.result_status === "DNF" ? "#c0392b" : "#888" }}>{r.result_status}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {result && (
@@ -2314,7 +2373,7 @@ export default function RaceReadinessPage() {
           ═══════════════════════════════════════ */}
           {athlete && (() => {
             const p = athlete.profile;
-            const races = athlete.races;
+            const races = filteredAthleteRaces;
 
             // Recent: last 2 years from last result year
             const lastYear = p.last_result_year ?? new Date().getFullYear();
@@ -2743,7 +2802,7 @@ export default function RaceReadinessPage() {
           ═══════════════════════════════════════ */}
           {athlete && (() => {
             const p = athlete.profile;
-            const allRaces = athlete.races;
+            const allRaces = filteredAthleteRaces;
 
             const finishedRaces = allRaces.filter(r => r.result_status === "FINISHED" && r.finish_seconds);
 
