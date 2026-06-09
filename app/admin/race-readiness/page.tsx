@@ -1153,109 +1153,108 @@ export default function RaceReadinessPage() {
     void load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch split analysis when median is known
-  useEffect(() => {
-    if (!raceStats?.medianMin || !selectedRaceId) return;
-    void (async () => {
-      try {
-        const r = await fetch("/api/race-strategy/results", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ race_id: selectedRaceId, target_minutes: Math.round(raceStats.medianMin) }),
-        });
-        if (r.ok) setSplitAnalysis(await r.json() as ResultsResponse);
-      } catch { /* optional */ }
-    })();
-  }, [raceStats?.medianMin, selectedRaceId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   async function handleGenerate() {
     if (!selectedRaceId) { setGenError("Please select a race."); return; }
     setGenerating(true);
     setGenError("");
     setNoRaceProfile(false);
+    // Clear previous report so nothing renders until all data is ready
     setResult(null);
     setWeather([]);
     setResults(null);
     setSplitAnalysis(null);
+    setPrepRaces(null);
+    setExpContext(null);
 
-    const res  = await fetch("/api/race-readiness/overview", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ race_id: selectedRaceId }),
-    });
-    const json = await res.json() as OverviewResponse & { error?: string };
-
+    // ── Step 1: Race overview (sequential — its response feeds downstream calls) ──
     let effectiveResult: OverviewResponse;
-    if (res.status === 404 || (!res.ok && json.error?.includes("No race profile"))) {
-      // No route profile uploaded yet — still allow athlete pages to render
-      const raceName = races.find(r => r.race_id === selectedRaceId)?.race_name ?? "Unknown race";
-      setNoRaceProfile(true);
-      effectiveResult = {
-        race: { id: selectedRaceId, name: raceName, slug: null, total_distance_km: 0, total_ascent_m: 0, total_descent_m: 0, race_date: null, weather_lat: null, weather_lon: null },
-        route: [], wind_sections: null, elevation_profile: null, sustained_segments: null, terrain_sections: [],
-      };
-    } else if (!res.ok || json.error) {
-      setGenError(json.error ?? "Failed to load race overview.");
+    try {
+      const res  = await fetch("/api/race-readiness/overview", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race_id: selectedRaceId }),
+      });
+      const json = await res.json() as OverviewResponse & { error?: string };
+      if (res.status === 404 || (!res.ok && json.error?.includes("No race profile"))) {
+        const raceName = races.find(r => r.race_id === selectedRaceId)?.race_name ?? "Unknown race";
+        setNoRaceProfile(true);
+        effectiveResult = {
+          race: { id: selectedRaceId, name: raceName, slug: null, total_distance_km: 0, total_ascent_m: 0, total_descent_m: 0, race_date: null, weather_lat: null, weather_lon: null },
+          route: [], wind_sections: null, elevation_profile: null, sustained_segments: null, terrain_sections: [],
+        };
+      } else if (!res.ok || json.error) {
+        setGenError(json.error ?? "Failed to load race overview.");
+        setGenerating(false);
+        return;
+      } else {
+        effectiveResult = json;
+      }
+    } catch {
+      setGenError("Network error loading race overview.");
       setGenerating(false);
       return;
-    } else {
-      effectiveResult = json;
     }
 
-    setResult(effectiveResult);
-    setGenerating(false);
-
-    // Weather history
+    // ── Step 2: Fire remaining calls in parallel ──
     const effectiveDate = effectiveResult.race.race_date;
-    if (effectiveDate && effectiveResult.race.weather_lat !== null && effectiveResult.race.weather_lon !== null) {
-      const [, monthStr, dayStr] = effectiveDate.split("-");
-      setWeatherLoading(true);
+    const hasWeather = effectiveDate && effectiveResult.race.weather_lat !== null && effectiveResult.race.weather_lon !== null;
+
+    const weatherPromise: Promise<WeatherDayRecord[]> = hasWeather
+      ? (() => {
+          const [, monthStr, dayStr] = effectiveDate!.split("-");
+          return fetch("/api/race-analysis/weather-history", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat: effectiveResult.race.weather_lat, lon: effectiveResult.race.weather_lon, month: parseInt(monthStr, 10), day: parseInt(dayStr, 10) }),
+          }).then(r => r.ok ? (r.json() as Promise<{ data: WeatherDayRecord[] }>).then(d => d.data ?? []) : []).catch(() => []);
+        })()
+      : Promise.resolve([]);
+
+    const resultsPromise: Promise<ResultsResponse | null> = fetch("/api/race-strategy/results", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ race_id: selectedRaceId, target_minutes: 600 }),
+    }).then(r => r.ok ? r.json() as Promise<ResultsResponse> : null).catch(() => null);
+
+    const prepRacesPromise: Promise<PrepRacesResult | null> = (selectedAthleteKey.trim() && selectedRaceId)
+      ? fetch(`/api/race-readiness/prep-races?key=${encodeURIComponent(selectedAthleteKey.trim())}&race_id=${encodeURIComponent(selectedRaceId)}&radius_miles=${radiusMiles}`)
+          .then(r => r.ok ? r.json() as Promise<PrepRacesResult> : null).catch(() => null)
+      : Promise.resolve(null);
+
+    const expContextPromise: Promise<ExperienceContextResult | null> = (selectedAthleteKey.trim() && selectedRaceId)
+      ? fetch(`/api/race-readiness/experience-context?key=${encodeURIComponent(selectedAthleteKey.trim())}&race_id=${encodeURIComponent(selectedRaceId)}`)
+          .then(r => r.ok ? r.json() as Promise<ExperienceContextResult> : null).catch(() => null)
+      : Promise.resolve(null);
+
+    const [weatherData, resultsData, prepRacesData, expContextData] = await Promise.all([
+      weatherPromise, resultsPromise, prepRacesPromise, expContextPromise,
+    ]);
+
+    // ── Step 3: Split analysis — needs the median derived from resultsData ──
+    let splitData: ResultsResponse | null = null;
+    if (resultsData?.has_data && resultsData.distribution?.length) {
+      const dist = resultsData.distribution;
+      const total = resultsData.total_finishers ?? 0;
+      let cumulative = 0;
+      let medianMin  = dist[Math.floor(dist.length / 2)].min_min;
+      for (const b of dist) {
+        cumulative += b.count;
+        if (cumulative >= total / 2) { medianMin = (b.min_min + b.max_min) / 2; break; }
+      }
       try {
-        const wRes = await fetch("/api/race-analysis/weather-history", {
+        const r = await fetch("/api/race-strategy/results", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat: effectiveResult.race.weather_lat, lon: effectiveResult.race.weather_lon, month: parseInt(monthStr, 10), day: parseInt(dayStr, 10) }),
+          body: JSON.stringify({ race_id: selectedRaceId, target_minutes: Math.round(medianMin) }),
         });
-        if (wRes.ok) setWeather(((await wRes.json()) as { data: WeatherDayRecord[] }).data ?? []);
+        if (r.ok) splitData = await r.json() as ResultsResponse;
       } catch { /* optional */ }
-      setWeatherLoading(false);
     }
 
-    // Initial results (for distribution + to compute median for split analysis)
-    try {
-      const rRes = await fetch("/api/race-strategy/results", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ race_id: selectedRaceId, target_minutes: 600 }),
-      });
-      if (rRes.ok) setResults(await rRes.json() as ResultsResponse);
-    } catch { /* optional */ }
-
-    // Re-fetch athlete so any newly uploaded race profiles are picked up
-    if (selectedAthleteKey.trim()) void fetchAthlete(selectedAthleteKey.trim());
-
-    // Fetch preparation race suggestions
-    setPrepRaces(null);
-    if (selectedAthleteKey.trim() && selectedRaceId) {
-      setPrepRacesLoading(true);
-      fetch(
-        `/api/race-readiness/prep-races?key=${encodeURIComponent(selectedAthleteKey.trim())}&race_id=${encodeURIComponent(selectedRaceId)}&radius_miles=${radiusMiles}`
-      )
-        .then(r => r.json())
-        .then(data => setPrepRaces(data as PrepRacesResult))
-        .catch(() => {})
-        .finally(() => setPrepRacesLoading(false));
-    }
-
-    // Fetch experience context insights
-    setExpContext(null);
-    if (selectedAthleteKey.trim() && selectedRaceId) {
-      setExpContextLoading(true);
-      fetch(
-        `/api/race-readiness/experience-context?key=${encodeURIComponent(selectedAthleteKey.trim())}&race_id=${encodeURIComponent(selectedRaceId)}`
-      )
-        .then(r => r.json())
-        .then(data => setExpContext(data as ExperienceContextResult))
-        .catch(() => {})
-        .finally(() => setExpContextLoading(false));
-    }
+    // ── Step 4: Commit everything at once — report renders fully or not at all ──
+    setResult(effectiveResult);
+    setWeather(weatherData);
+    setResults(resultsData);
+    setSplitAnalysis(splitData);
+    setPrepRaces(prepRacesData);
+    setExpContext(expContextData);
+    setGenerating(false);
   }
 
   /* ── Page 2 demand computations ── */
