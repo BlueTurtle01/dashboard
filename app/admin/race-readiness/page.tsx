@@ -1044,6 +1044,7 @@ export default function RaceReadinessPage() {
   const [splitAnalysis, setSplitAnalysis] = useState<ResultsResponse | null>(null);
   const [selectedAthleteKey, setSelectedAthleteKey] = useState("");
   const [athlete, setAthlete]             = useState<AthleteResponse | null>(null);
+  const [reportAthlete, setReportAthlete] = useState<AthleteResponse | null>(null);
   const [athleteLoading, setAthleteLoading] = useState(false);
   const [athleteError, setAthleteError]   = useState("");
   const [radiusMiles, setRadiusMiles]     = useState(100);
@@ -1070,10 +1071,9 @@ export default function RaceReadinessPage() {
     setAthleteLoading(false);
   }, []);
 
-  const filteredAthleteRaces = useMemo(
-    () => (athlete ? athlete.races.filter(r => includedRaceKeys.has(`${r.race_id}|${r.result_year}`)) : []),
-    [athlete, includedRaceKeys]
-  );
+  // reportAthlete is fetched at generate-time with the include filter applied server-side,
+  // so its races, terrain pairings, and profile stats already reflect only selected races.
+  const filteredAthleteRaces = reportAthlete?.races ?? [];
 
   // Derived — elevation + segments
   const elevProfile    = result ? parseElevProfile(result.elevation_profile) : null;
@@ -1165,6 +1165,7 @@ export default function RaceReadinessPage() {
     setSplitAnalysis(null);
     setPrepRaces(null);
     setExpContext(null);
+    setReportAthlete(null);
 
     // ── Step 1: Race overview (sequential — its response feeds downstream calls) ──
     let effectiveResult: OverviewResponse;
@@ -1223,8 +1224,16 @@ export default function RaceReadinessPage() {
           .then(r => r.ok ? r.json() as Promise<ExperienceContextResult> : null).catch(() => null)
       : Promise.resolve(null);
 
-    const [weatherData, resultsData, prepRacesData, expContextData] = await Promise.all([
-      weatherPromise, resultsPromise, prepRacesPromise, expContextPromise,
+    // Fetch athlete with the include filter applied so terrain pairings and profile
+    // stats are computed only from the selected races.
+    const includeParam = [...includedRaceKeys].join(",");
+    const reportAthletePromise: Promise<AthleteResponse | null> = selectedAthleteKey.trim()
+      ? fetch(`/api/race-readiness/athlete?key=${encodeURIComponent(selectedAthleteKey.trim())}&include=${encodeURIComponent(includeParam)}`)
+          .then(r => r.ok ? r.json() as Promise<AthleteResponse> : null).catch(() => null)
+      : Promise.resolve(null);
+
+    const [weatherData, resultsData, prepRacesData, expContextData, reportAthleteData] = await Promise.all([
+      weatherPromise, resultsPromise, prepRacesPromise, expContextPromise, reportAthletePromise,
     ]);
 
     // ── Step 3: Split analysis — needs the median derived from resultsData ──
@@ -1254,6 +1263,7 @@ export default function RaceReadinessPage() {
     setSplitAnalysis(splitData);
     setPrepRaces(prepRacesData);
     setExpContext(expContextData);
+    if (reportAthleteData) setReportAthlete(reportAthleteData);
     setGenerating(false);
   }
 
@@ -1434,7 +1444,7 @@ export default function RaceReadinessPage() {
               {
                 title: "Race Readiness Summary",
                 body: "The opening verdict page — a plain-English assessment of whether the athlete is currently prepared for this race. Readiness is colour-coded across key physical dimensions, with the most significant strength, limiter, and recommended next step called out explicitly.",
-                visible: !!(athlete && expContext),
+                visible: !!(reportAthlete && expContext),
               },
               {
                 title: "Race Overview",
@@ -1454,27 +1464,27 @@ export default function RaceReadinessPage() {
               {
                 title: "Athlete Overview",
                 body: "A profile of the athlete's competitive history, including career highlights, recent results, and category finishes over the last two years. This page establishes the baseline from which all readiness comparisons on subsequent pages are drawn.",
-                visible: !!athlete,
+                visible: !!reportAthlete,
               },
               {
                 title: "Experience Gaps",
                 body: "Every terrain type on the goal course is listed — climb trail, descent road, flat fell, and so on — alongside how many kilometres of that terrain the athlete has covered in previous races. Red and amber rows identify where targeted build-up would have the most impact.",
-                visible: !!athlete,
+                visible: !!reportAthlete,
               },
               {
                 title: "Demands Built Up",
                 body: "The athlete's peak single-race load versus what this race demands. Bar charts compare the highest distance, ascent, and flat-equivalent effort the athlete has recorded against the goal race targets — the fastest way to spot which dimensions are under-prepared.",
-                visible: !!athlete,
+                visible: !!reportAthlete,
               },
               {
                 title: "Suggested Preparation Races",
                 body: "Nearby races ranked by how effectively they would close the athlete's identified experience gaps. Each suggestion lists the specific terrain types it covers and the kilometres it would contribute toward closing each gap.",
-                visible: !!athlete,
+                visible: !!reportAthlete,
               },
               {
                 title: "Experience Context",
                 body: "Four contextual comparisons that put the goal race in perspective: scale ratios showing how much bigger this race is than anything the athlete has done, a projected finish-time range, the biggest climb on the course versus the athlete's personal best, and which past race most resembles the opening section.",
-                visible: !!(athlete && expContext),
+                visible: !!(reportAthlete && expContext),
               },
               {
                 title: "Race Day Pacing Strategy",
@@ -1529,10 +1539,10 @@ export default function RaceReadinessPage() {
           {/* ═══════════════════════════════════════
               PAGE 1 — Executive Readiness Summary
           ═══════════════════════════════════════ */}
-          {result && athlete && expContext && (() => {
+          {result && reportAthlete && expContext && (() => {
             type ReadinessLevel = "strong" | "moderate" | "major_gap" | "unknown";
 
-            const firstName  = athlete.profile.athlete_key.split(" ")[0];
+            const firstName  = reportAthlete.profile.athlete_key.split(" ")[0];
             const sc         = expContext.scale;
             const goalDist   = result.race.total_distance_km;
             const goalAscent = result.race.total_ascent_m;
@@ -1540,8 +1550,8 @@ export default function RaceReadinessPage() {
 
             // ── Athlete bests ──────────────────────────────────────────────
             const athDist   = sc?.athlete_max_dist?.km ?? 0;
-            const athAscent = sc?.athlete_max_ascent?.m ?? athlete.profile.max_ascent_m ?? 0;
-            const athFlatEq = sc?.athlete_max_flat_equiv?.km ?? athlete.profile.max_flat_equiv_km ?? 0;
+            const athAscent = sc?.athlete_max_ascent?.m ?? reportAthlete.profile.max_ascent_m ?? 0;
+            const athFlatEq = sc?.athlete_max_flat_equiv?.km ?? reportAthlete.profile.max_flat_equiv_km ?? 0;
             const goalFlatEq= sc?.goal_flat_equiv_km ?? 0;
 
             // ── Status levels ──────────────────────────────────────────────
@@ -1575,7 +1585,7 @@ export default function RaceReadinessPage() {
               _tpm[key].km += sec.distance_km;
             }
             const _aem: Record<string, number> = {};
-            for (const tp of athlete.terrain_pairings ?? []) {
+            for (const tp of reportAthlete.terrain_pairings ?? []) {
               _aem[`${tp.section_type}|${tp.terrain}`] = tp.total_km;
             }
             const summaryGapRows = Object.values(_tpm)
@@ -2370,8 +2380,8 @@ export default function RaceReadinessPage() {
           {/* ═══════════════════════════════════════
               PAGE 5 — Athlete Overview
           ═══════════════════════════════════════ */}
-          {athlete && (() => {
-            const p = athlete.profile;
+          {reportAthlete && (() => {
+            const p = reportAthlete.profile;
             const races = filteredAthleteRaces;
 
             // Recent: last 2 years from last result year
@@ -2417,6 +2427,7 @@ export default function RaceReadinessPage() {
             ];
 
             return (
+              <>
               <div style={a4Page}>
                 {/* Header */}
                 <div style={printHeader}>
@@ -2584,14 +2595,41 @@ export default function RaceReadinessPage() {
 
                 <PageNumber n={5} />
               </div>
+
+              {/* ── Complete Race History — separate print page ── */}
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{p.athlete_key}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Complete Race History</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Complete Race History</h2>
+                <p style={{ margin: "0 0 18px", fontSize: "12px", color: "#888" }}>
+                  Every race on record — {races.length} result{races.length !== 1 ? "s" : ""} across {p.career_span_years ?? "—"} year{(p.career_span_years ?? 0) !== 1 ? "s" : ""}
+                </p>
+
+                <RaceHistoryRows races={[...races].sort((a, b) => b.result_year - a.result_year || a.race_name.localeCompare(b.race_name))} />
+
+                <div style={{ marginTop: "auto", paddingTop: "16px", borderTop: "1px solid #eee" }}>
+                  <p style={{ fontSize: "8.5px", color: "#bbb", margin: 0 }}>
+                    Full race history from database records. Results reflect only the races selected in the analysis.
+                  </p>
+                </div>
+
+                <PageNumber n={6} />
+              </div>
+              </>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 6 — Experience Gaps
+              PAGE 7 — Experience Gaps
           ═══════════════════════════════════════ */}
-          {athlete && result.terrain_sections.length > 0 && (() => {
-            const p = athlete.profile;
+          {reportAthlete && result.terrain_sections.length > 0 && (() => {
+            const p = reportAthlete.profile;
 
             // Aggregate target race pairings from its terrain sections
             const targetPairingMap: Record<string, { section_type: string; terrain: string; km: number; weightedGrad: number }> = {};
@@ -2614,13 +2652,13 @@ export default function RaceReadinessPage() {
 
             // Exact terrain match (section_type + terrain must both match)
             const athleteExactMap: Record<string, number> = {};
-            for (const p of athlete.terrain_pairings ?? []) {
+            for (const p of reportAthlete.terrain_pairings ?? []) {
               athleteExactMap[`${p.section_type}|${p.terrain}`] = p.total_km;
             }
 
             // Cross-terrain index: same gradient on OTHER surfaces — shown as context
             const athleteCrossIndex: Record<string, Array<{ terrain: string; km: number }>> = {};
-            for (const p of athlete.terrain_pairings ?? []) {
+            for (const p of reportAthlete.terrain_pairings ?? []) {
               if (!athleteCrossIndex[p.section_type]) athleteCrossIndex[p.section_type] = [];
               athleteCrossIndex[p.section_type].push({ terrain: p.terrain, km: p.total_km });
             }
@@ -2714,8 +2752,8 @@ export default function RaceReadinessPage() {
 
                 {/* Profile coverage warning */}
                 {(() => {
-                  const rwp = athlete.races_with_profile ?? 0;
-                  const total = athlete.profile.finish_count;
+                  const rwp = reportAthlete.races_with_profile ?? 0;
+                  const total = reportAthlete.profile.finish_count;
                   if (rwp === 0 || rwp >= total) return null;
                   return (
                     <div style={{ background: "#fff8e1", border: "1px solid #ffe082", borderRadius: "6px",
@@ -2791,16 +2829,16 @@ export default function RaceReadinessPage() {
                   Demands ordered by course distance — longer sections have greater physical consequence.
                 </div>
 
-                <PageNumber n={6} />
+                <PageNumber n={7} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 7 — Demands Built Up
+              PAGE 8 — Demands Built Up
           ═══════════════════════════════════════ */}
-          {athlete && (() => {
-            const p = athlete.profile;
+          {reportAthlete && (() => {
+            const p = reportAthlete.profile;
             const allRaces = filteredAthleteRaces;
 
             const finishedRaces = allRaces.filter(r => r.result_status === "FINISHED" && r.finish_seconds);
@@ -2818,7 +2856,7 @@ export default function RaceReadinessPage() {
 
             const tableRaces = [...finishedRaces].sort((a, b) => b.result_year - a.result_year).slice(0, 10);
 
-            const pairings = (athlete.terrain_pairings ?? []).slice(0, 10);
+            const pairings = (reportAthlete.terrain_pairings ?? []).slice(0, 10);
             const maxPairingKm = pairings.reduce((m, p) => Math.max(m, p.total_km), 0) || 1;
 
             const sectionTypeLabel = (s: string) =>
@@ -3010,7 +3048,7 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={7} />
+                <PageNumber n={8} />
               </div>
             );
           })()}
@@ -3018,7 +3056,7 @@ export default function RaceReadinessPage() {
           {/* ═══════════════════════════════════════
               PAGE 8 — Suggested Preparation Races
           ═══════════════════════════════════════ */}
-          {(prepRacesLoading || (prepRaces && athlete)) && (() => {
+          {(prepRaces && reportAthlete) && (() => {
             const stl = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
             const tl  = (t: string) => t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
             const scoreColor = (n: number) => n >= 70 ? "#2e7d32" : n >= 40 ? "#e65100" : "#78909c";
@@ -3039,7 +3077,7 @@ export default function RaceReadinessPage() {
 
                 <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Suggested Preparation Races</h2>
                 <p style={{ margin: "0 0 18px", fontSize: "12px", color: "#888" }}>
-                  Races within {prepRaces?.radius_miles ?? radiusMiles} miles of {athlete?.profile.athlete_key.split(" ")[0]}&apos;s race base
+                  Races within {prepRaces?.radius_miles ?? radiusMiles} miles of {reportAthlete?.profile.athlete_key.split(" ")[0]}&apos;s race base
                   that best address identified experience gaps for {result.race.name}
                   {prepRaces?.centroid ? ` · base inferred from ${suggestions.length > 0 ? "race" : ""} history` : ""}
                 </p>
@@ -3169,7 +3207,7 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={8} />
+                <PageNumber n={9} />
               </div>
             );
           })()}
@@ -3213,7 +3251,7 @@ export default function RaceReadinessPage() {
 
                 <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Experience Context</h2>
                 <p style={{ margin: "0 0 18px", fontSize: "12px", color: "#888" }}>
-                  How {athlete?.profile.athlete_key.split(" ")[0]}&apos;s past races compare to the demands of {result.race.name}
+                  How {reportAthlete?.profile.athlete_key.split(" ")[0]}&apos;s past races compare to the demands of {result.race.name}
                 </p>
 
                 {expContextLoading && !ec && (
@@ -3349,7 +3387,7 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={9} />
+                <PageNumber n={10} />
               </div>
             );
           })()}
@@ -3451,7 +3489,7 @@ export default function RaceReadinessPage() {
                 );
               })()}
 
-              <PageNumber n={10} />
+              <PageNumber n={11} />
             </div>
           )}
 

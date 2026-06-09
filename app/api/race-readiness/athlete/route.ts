@@ -113,6 +113,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "key parameter required" }, { status: 400 });
   }
 
+  // Optional: filter to a specific subset of races (comma-separated "race_id|result_year" pairs)
+  const includeParam = req.nextUrl.searchParams.get("include")?.trim() ?? "";
+  const includeSet: Set<string> | null = includeParam.length > 0
+    ? new Set(includeParam.split(",").filter(Boolean))
+    : null;
+
   const supabase = await createClient();
 
   // ── 1. Athlete profile from als_athlete_profiles ───────────────────────────
@@ -189,7 +195,15 @@ export async function GET(req: NextRequest) {
     clusterLabel = summary?.custom_label ?? summary?.auto_label ?? null;
   }
 
+  // ── 3b. Apply include filter (if provided) ────────────────────────────────
+  // effectiveResultRows is the subset used for all per-athlete computations.
+  // resultRows (full) is kept only for computing total field sizes.
+  const effectiveResultRows = includeSet
+    ? (resultRows ?? []).filter(r => includeSet.has(`${r.race_id as string}|${r.result_year as number}`))
+    : (resultRows ?? []);
+
   // ── 4. Total finishers per (race_id, result_year) ─────────────────────────
+  // Use the full resultRows so total field sizes are accurate regardless of filter.
   const raceYearPairs = [
     ...new Map(
       (resultRows ?? []).map(r => [`${r.race_id}|${r.result_year}`, { race_id: r.race_id as string, year: r.result_year as number }])
@@ -215,7 +229,7 @@ export async function GET(req: NextRequest) {
   // For finished races where we know the athlete's age_group and finish time,
   // fetch all category finishers and compute the athlete's rank within their group.
   const catMap: Record<string, { cat_position: number; cat_finishers: number }> = {};
-  const finishedWithCat = (resultRows ?? []).filter(r =>
+  const finishedWithCat = effectiveResultRows.filter(r =>
     r.result_status === "FINISHED" && r.finish_seconds && r.age_group
   );
   if (finishedWithCat.length > 0) {
@@ -247,7 +261,7 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 5. Build race list ────────────────────────────────────────────────────
-  const races: AthleteRaceDetail[] = (resultRows ?? []).map(r => {
+  const races: AthleteRaceDetail[] = effectiveResultRows.map(r => {
     const raceName = Array.isArray(r.races)
       ? (r.races[0] as { name: string } | undefined)?.name
       : (r.races as { name: string } | null)?.name;
@@ -276,36 +290,52 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  // ── 6. Derive profile fields from race_results if als_athlete_profiles missing ─
-  const derivedGender = races.find(r => r.gender)?.gender ?? null;
+  // ── 6. Derive profile fields ──────────────────────────────────────────────
+  const derivedGender   = races.find(r => r.gender)?.gender     ?? null;
   const derivedAgeGroup = races.find(r => r.age_group)?.age_group ?? null;
-  const derivedClub = races.find(r => r.club)?.club ?? null;
+  const derivedClub     = races.find(r => r.club)?.club          ?? null;
+
+  const finishedRaces = races.filter(r => r.result_status === "FINISHED");
+  const dnfRaces      = races.filter(r => r.result_status === "DNF");
+
+  // When a race filter is active, re-derive all aggregate stats from the filtered set
+  // so values reflect only the selected races rather than the pre-computed all-time totals.
+  const useFiltered = includeSet !== null;
+
+  const derivedMaxAscent    = finishedRaces.reduce((m, r) => Math.max(m, r.total_ascent_m     ?? 0), 0) || null;
+  const derivedAvgAscent    = finishedRaces.length > 0 ? finishedRaces.reduce((s, r) => s + (r.total_ascent_m     ?? 0), 0) / finishedRaces.length : null;
+  const derivedMaxFlatEq    = finishedRaces.reduce((m, r) => Math.max(m, r.flat_equivalent_km ?? 0), 0) || null;
+  const derivedAvgFlatEq    = finishedRaces.length > 0 ? finishedRaces.reduce((s, r) => s + (r.flat_equivalent_km ?? 0), 0) / finishedRaces.length : null;
+  const derivedFirstYear    = races.length > 0 ? Math.min(...races.map(r => r.result_year)) : null;
+  const derivedLastYear     = races.length > 0 ? Math.max(...races.map(r => r.result_year)) : null;
+  const derivedCareerSpan   = derivedFirstYear && derivedLastYear ? derivedLastYear - derivedFirstYear + 1 : null;
+  const derivedDnfRate      = races.length > 0 ? dnfRaces.length / races.length : null;
 
   const athleteProfile: AthleteProfileSummary = {
-    athlete_key:         athleteKey,
-    gender:              derivedGender,
-    age_group:           derivedAgeGroup,
-    club:                derivedClub,
-    race_count:          profile?.race_count          ?? races.length,
-    finish_count:        profile?.finish_count        ?? races.filter(r => r.result_status === "FINISHED").length,
-    dnf_count:           profile?.dnf_count           ?? races.filter(r => r.result_status === "DNF").length,
-    dnf_rate:            profile?.dnf_rate            ?? null,
-    avg_perf_index:      profile?.avg_perf_index      ?? null,
-    recency_perf_index:  profile?.recency_perf_index  ?? null,
-    avg_flat_equiv_km:   profile?.avg_flat_equiv_km   ?? null,
-    max_flat_equiv_km:   profile?.max_flat_equiv_km   ?? null,
-    avg_ascent_m:        profile?.avg_ascent_m        ?? null,
-    max_ascent_m:        profile?.max_ascent_m        ?? null,
+    athlete_key:          athleteKey,
+    gender:               derivedGender,
+    age_group:            derivedAgeGroup,
+    club:                 derivedClub,
+    race_count:           useFiltered ? races.length                          : (profile?.race_count          ?? races.length),
+    finish_count:         useFiltered ? finishedRaces.length                  : (profile?.finish_count        ?? finishedRaces.length),
+    dnf_count:            useFiltered ? dnfRaces.length                       : (profile?.dnf_count           ?? dnfRaces.length),
+    dnf_rate:             useFiltered ? derivedDnfRate                        : (profile?.dnf_rate            ?? null),
+    avg_perf_index:       profile?.avg_perf_index      ?? null,
+    recency_perf_index:   profile?.recency_perf_index  ?? null,
+    avg_flat_equiv_km:    useFiltered ? derivedAvgFlatEq                      : (profile?.avg_flat_equiv_km   ?? null),
+    max_flat_equiv_km:    useFiltered ? derivedMaxFlatEq                      : (profile?.max_flat_equiv_km   ?? null),
+    avg_ascent_m:         useFiltered ? derivedAvgAscent                      : (profile?.avg_ascent_m        ?? null),
+    max_ascent_m:         useFiltered ? derivedMaxAscent                      : (profile?.max_ascent_m        ?? null),
     avg_difficulty_ratio: profile?.avg_difficulty_ratio ?? null,
-    first_result_year:   profile?.first_result_year   ?? (races.length > 0 ? Math.min(...races.map(r => r.result_year)) : null),
-    last_result_year:    profile?.last_result_year    ?? (races.length > 0 ? Math.max(...races.map(r => r.result_year)) : null),
-    career_span_years:   profile?.career_span_years   ?? null,
-    cluster_label:       clusterLabel,
+    first_result_year:    useFiltered ? derivedFirstYear                      : (profile?.first_result_year   ?? derivedFirstYear),
+    last_result_year:     useFiltered ? derivedLastYear                       : (profile?.last_result_year    ?? derivedLastYear),
+    career_span_years:    useFiltered ? derivedCareerSpan                     : (profile?.career_span_years   ?? null),
+    cluster_label:        clusterLabel,
   };
 
   // ── 7. Terrain pairings from finished race sections ─────────────────────────
   const pairingMap: Record<string, { section_type: string; terrain: string; total_km: number; race_count: number; weighted_grad: number }> = {};
-  for (const row of resultRows ?? []) {
+  for (const row of effectiveResultRows) {
     if (!["FINISHED", "UNKNOWN"].includes(row.result_status as string)) continue;
     const secs = profileMap[row.race_id as string]?.sections ?? [];
     const countedThisRow = new Set<string>();
@@ -329,7 +359,7 @@ export async function GET(req: NextRequest) {
       avg_gradient: p.total_km > 0 ? Math.round((p.weighted_grad / p.total_km) * 10) / 10 : 0,
     }));
 
-  const racesWithProfile = (resultRows ?? []).filter(
+  const racesWithProfile = effectiveResultRows.filter(
     r => ["FINISHED", "UNKNOWN"].includes(r.result_status as string)
       && !!profileMap[r.race_id as string]
   ).length;
