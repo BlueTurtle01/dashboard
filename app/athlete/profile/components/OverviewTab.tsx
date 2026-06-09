@@ -161,7 +161,7 @@ export function OverviewTab({ raceId, race }: Props) {
                 width={52}
               />
               <Tooltip
-                formatter={(val: number | string | undefined) => [`${val ?? ""} m`, "Elevation"]}
+                formatter={(val) => [`${val} m`, "Elevation"]}
                 labelFormatter={(label) => `${label} km`}
                 contentStyle={{
                   borderRadius: "0.75rem",
