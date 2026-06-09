@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { TutorialProvider, useTutorial } from "@/lib/context/TutorialContext";
 import TutorialInfoBox from "@/components/tutorial/TutorialInfoBox";
@@ -12,6 +12,7 @@ import {
   type AthleteProfile as StoredAthleteProfile,
 } from "@/lib/data/athleteProfileStore";
 import { buildRaceHistorySummary, buildExperienceGaps } from "@/lib/planner/raceHistorySummary";
+import { RaceReadinessDashboard } from "./components/RaceReadinessDashboard";
 
 const supabase = createClient();
 
@@ -280,7 +281,8 @@ function AthleteProfileContent() {
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"event" | "training" | "preferences" | "constraints" | "schedule" | "races" | "history" | "health">("event");
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"event" | "training" | "preferences" | "constraints" | "schedule" | "races" | "history" | "health" | "readiness">("event");
   const [completedTabs, setCompletedTabs] = useState<Set<string>>(new Set());
   const [showSendConfirm, setShowSendConfirm] = useState<"low-progress" | "no-holidays" | false>(false);
   const [isSendingToCoach, setIsSendingToCoach] = useState(false);
@@ -309,6 +311,7 @@ function AthleteProfileContent() {
       try {
         const supabaseAuth = await supabase.auth.getUser();
         const currentUserId = supabaseAuth.data?.user?.id;
+        if (currentUserId) setCurrentUserId(currentUserId);
 
 
         const [
@@ -1182,6 +1185,16 @@ function AthleteProfileContent() {
             }`}
           >
             Health
+          </button>
+          <button
+            onClick={() => setActiveTab("readiness")}
+            className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+              activeTab === "readiness"
+                ? "border-zinc-900 text-zinc-900"
+                : "border-transparent text-zinc-500 hover:text-zinc-700"
+            }`}
+          >
+            Race Readiness
           </button>
         </div>
 
@@ -2166,6 +2179,11 @@ function AthleteProfileContent() {
         </>
         )}
 
+        {/* Race Readiness Tab */}
+        {activeTab === "readiness" && currentUserId && (
+          <RaceReadinessDashboard userId={currentUserId} />
+        )}
+
         {/* Health Tab */}
         {activeTab === "health" && (
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -2435,6 +2453,7 @@ function AthleteProfileContent() {
         </>
         )}
 
+        {activeTab !== "readiness" && (
         <div className="border-t border-zinc-100 pt-6">
           <div className="mb-6 flex items-center justify-end">
             <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-600">
@@ -2465,6 +2484,7 @@ function AthleteProfileContent() {
             </button>
           </div>
         </div>
+        )}
 
         {showSendConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -2530,9 +2550,39 @@ function AthleteProfileContent() {
 }
 
 export default function IntakePage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const tutorial = searchParams.get("tutorial");
   const isInTutorial = tutorial === "profile";
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  useEffect(() => {
+    async function checkAccess() {
+      const supabaseAuth = await supabase.auth.getUser();
+      const currentUserId = supabaseAuth.data?.user?.id;
+
+      if (currentUserId) {
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", currentUserId)
+          .eq("role", "solo_plan_holder")
+          .maybeSingle();
+
+        if (roleData) {
+          setIsRedirecting(true);
+          router.replace("/athlete");
+          return;
+        }
+      }
+    }
+
+    void checkAccess();
+  }, [router]);
+
+  if (isRedirecting) {
+    return null;
+  }
 
   return (
     <TutorialProvider isInTutorial={isInTutorial} tutorialType="profile">
