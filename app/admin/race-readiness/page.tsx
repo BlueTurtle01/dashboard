@@ -4496,6 +4496,63 @@ export default function RaceReadinessPage() {
                       </div>
                     )}
 
+                    {/* Aid station narrative summary */}
+                    {(() => {
+                      const athleteName = reportAthlete.profile.athlete_key ?? "The athlete";
+                      const raceName    = result.race.name;
+
+                      const expPara = (() => {
+                        if (athleteRaceGaps.length === 0) {
+                          return `There is no recorded aid station data from ${athleteName}'s previous races, so a direct comparison against the goal race logistics cannot be made from historical evidence. Preparation should be built around the goal race demands outlined above.`;
+                        }
+                        const bestRace = athleteRaceGaps.reduce((a, b) => b.maxGap > a.maxGap ? b : a);
+                        const raceWord = athleteRaceGaps.length === 1 ? "race" : "races";
+                        return `${athleteRaceGaps.length} of ${athleteName}'s previous ${raceWord} ${athleteRaceGaps.length === 1 ? "has" : "have"} aid station data on record. The largest unsupported gap navigated to date is ${athleteMaxGap!.toFixed(1)} km, recorded at ${bestRace.race_name}.`;
+                      })();
+
+                      const demandPara = (() => {
+                        const stationWord = sorted.length === 1 ? "station" : "stations";
+                        const facilityParts: string[] = [];
+                        if (hasFood) facilityParts.push("food");
+                        if (hasDropBag) facilityParts.push("drop bag support");
+                        const facilityStr = facilityParts.length > 0
+                          ? ` Stations offering ${facilityParts.join(" and ")} are available on the course.`
+                          : "";
+                        const noFoodStr = !hasFood ? " No food is provided at any station — all race nutrition must be carried." : "";
+                        const noDropStr = !hasDropBag && totalKm > 50 ? ` There is no drop bag support; all kit and nutrition must be self-carried for the full ${totalKm.toFixed(0)} km.` : "";
+                        return `${raceName} has ${sorted.length} aid ${stationWord} across ${totalKm.toFixed(0)} km, giving an average gap of ${avgGap.toFixed(1)} km between support points and a maximum unsupported stretch of ${maxGap.toFixed(1)} km.${facilityStr}${noFoodStr}${noDropStr}`;
+                      })();
+
+                      const assessmentPara = (() => {
+                        if (athleteRaceGaps.length === 0) {
+                          return `Without historical gap data, the priority preparation focus should be practising ${maxGap.toFixed(1)} km of continuous running self-supported — carrying the full hydration and nutrition load the race will require. Long training days without crew access are the most relevant preparation vehicle.`;
+                        }
+                        const parts: string[] = [];
+                        if (maxGap <= athleteMaxGap! * 1.05) {
+                          parts.push(`The goal race's longest unsupported stretch (${maxGap.toFixed(1)} km) is within the range ${athleteName} has already managed in competition — aid station logistics are unlikely to be a limiting factor.`);
+                        } else if (maxGap <= athleteMaxGap! * 1.2) {
+                          parts.push(`The goal race's maximum gap of ${maxGap.toFixed(1)} km is modestly beyond the athlete's recorded experience (${athleteMaxGap!.toFixed(1)} km). One or two long training runs practising self-sufficiency at this stretch should be sufficient preparation.`);
+                        } else {
+                          parts.push(`The goal race's maximum gap of ${maxGap.toFixed(1)} km is meaningfully longer than the largest gap ${athleteName} has managed (${athleteMaxGap!.toFixed(1)} km). Carrying capacity, hydration planning, and self-supported running at this distance all require specific training attention.`);
+                        }
+                        if (!hasFood) {
+                          parts.push(`With no food provision at stations, this is also a nutrition logistics challenge — the athlete must calculate and carry all carbohydrate needs from the start or between crew points.`);
+                        }
+                        return parts.join(" ");
+                      })();
+
+                      return (
+                        <div style={{ marginBottom: "16px" }}>
+                          <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px" }}>Summary</div>
+                          <div style={{ fontSize: "10px", color: "#333", lineHeight: 1.65, display: "flex", flexDirection: "column", gap: 8 }}>
+                            <p style={{ margin: 0 }}>{expPara}</p>
+                            <p style={{ margin: 0 }}>{demandPara}</p>
+                            <p style={{ margin: 0 }}>{assessmentPara}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Flags */}
                     {flags.length > 0 && (
                       <div>
