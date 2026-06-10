@@ -453,7 +453,8 @@ function RaceSearchCombobox({ races, selectedId, onSelect }: {
   const selectedRace = races.find(r => r.race_id === selectedId);
   const [query, setQuery] = useState(selectedRace?.race_name ?? "");
   const [open, setOpen]   = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const wrapRef  = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (selectedRace && !query) setQuery(selectedRace.race_name);
@@ -466,6 +467,13 @@ function RaceSearchCombobox({ races, selectedId, onSelect }: {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // If the input is already focused when races finish loading, open the dropdown
+  useEffect(() => {
+    if (races.length > 0 && inputRef.current && inputRef.current === document.activeElement) {
+      setOpen(true);
+    }
+  }, [races.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -485,9 +493,10 @@ function RaceSearchCombobox({ races, selectedId, onSelect }: {
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
       <input
+        ref={inputRef}
         type="text"
         value={query}
-        placeholder="Search races…"
+        placeholder={races.length === 0 ? "Loading races…" : "Search races…"}
         onChange={e => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         style={inS}

@@ -82,6 +82,7 @@ select {
   flex-direction: column;
   z-index: 50;
   overflow-y: auto;
+  transition: transform 0.22s ease;
 }
 
 .app-sidebar__logo {
@@ -211,6 +212,7 @@ select {
   padding: 0 24px;
   gap: 8px;
   z-index: 40;
+  transition: left 0.22s ease;
 }
 
 /* Main content area */
@@ -221,6 +223,42 @@ select {
   min-width: 0;
   padding: 32px 24px;
   max-width: calc(1280px + var(--sidebar-width));
+  transition: margin-left 0.22s ease;
+}
+
+/* Sidebar toggle button */
+.sidebar-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--slate-500);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  margin-right: auto;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-btn:hover {
+  background: var(--slate-100);
+  color: var(--slate-900);
+}
+
+/* Collapsed state */
+html.sidebar-collapsed .app-sidebar {
+  transform: translateX(-100%);
+}
+
+html.sidebar-collapsed .app-topbar {
+  left: 0;
+}
+
+html.sidebar-collapsed .app-content {
+  margin-left: 0;
 }
 
 /* ── Light color palette (legacy calendar/plan highlighting) ─────── */

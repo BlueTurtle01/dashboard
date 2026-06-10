@@ -8,6 +8,7 @@ import WarningsIcon from "./WarningsIcon";
 import UserAccountDropdown from "./UserAccountDropdown";
 import SidebarDropdown from "./SidebarDropdown";
 import RoleViewDropdown from "./RoleViewDropdown";
+import SidebarToggleButton from "./SidebarToggleButton";
 import "./Navbar.css";
 
 const VIEW_AS_ROLE_COOKIE = "ep_view_as_role";
@@ -459,6 +460,7 @@ export default async function Navbar() {
 
       {/* ── Fixed topbar ──────────────────────────────────────── */}
       <header className="app-topbar">
+        <SidebarToggleButton />
         <NotificationsIcon />
         <WarningsIcon />
       </header>
