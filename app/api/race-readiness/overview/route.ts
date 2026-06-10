@@ -12,6 +12,7 @@ import { getUserRoles } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
 import { parseGpxPoints } from "@/lib/race-analysis/gpx";
 import type { StoredSection } from "@/lib/race-analysis/pacing-model";
+import type { AidStation } from "@/app/api/admin/aid-stations/route";
 
 export const maxDuration = 30;
 
@@ -223,7 +224,7 @@ export async function POST(req: NextRequest) {
       .from("races_meta")
       .select("meta_key, meta_value")
       .eq("race_id", race_id)
-      .in("meta_key", ["elevation_profile", "sustained_segments", "race_pace_strategy"]);
+      .in("meta_key", ["elevation_profile", "sustained_segments", "race_pace_strategy", "aid_stations"]);
 
     const meta: Record<string, string> = {};
     for (const row of (metaRows ?? []) as { meta_key: string; meta_value: string }[]) {
@@ -267,6 +268,9 @@ export async function POST(req: NextRequest) {
       elevation_profile:  meta.elevation_profile  ?? null,
       sustained_segments: meta.sustained_segments ?? null,
       terrain_sections:   terrainSections,
+      aid_stations:       meta.aid_stations
+        ? (() => { try { return JSON.parse(meta.aid_stations) as AidStation[]; } catch { return null; } })()
+        : null,
     });
   } catch (err) {
     console.error("[race-readiness/overview]", err);

@@ -22,6 +22,16 @@ interface WindSection {
   median_wind_speed_ms: number; median_headwind_ms: number; median_crosswind_ms: number;
   wind_risk_label: string;
 }
+interface AidStation {
+  km: number;
+  name?: string;
+  water: boolean;
+  food: boolean;
+  medic: boolean;
+  toilets: boolean;
+  dropBags: boolean;
+}
+
 interface OverviewResponse {
   race: RaceMeta;
   route: { lat: number; lon: number }[];
@@ -29,6 +39,7 @@ interface OverviewResponse {
   elevation_profile: string | null;
   sustained_segments: string | null;
   terrain_sections: TerrainSection[];
+  aid_stations: AidStation[] | null;
 }
 interface DistributionBucket { min_min: number; max_min: number; count: number; }
 interface HalfwayAnalysis {
@@ -1113,6 +1124,7 @@ export default function RaceReadinessPage() {
   const [expContextLoading, setExpContextLoading] = useState(false);
   const [elevProfileMatch, setElevProfileMatch] = useState<ElevProfileMatchResult | null>(null);
   const [includedRaceKeys, setIncludedRaceKeys] = useState<Set<string>>(new Set());
+  const [athleteAidData, setAthleteAidData]     = useState<Record<string, AidStation[]>>({});
 
   const fetchAthlete = useCallback(async (key: string) => {
     if (!key.trim()) return;
@@ -1226,6 +1238,7 @@ export default function RaceReadinessPage() {
     setPrepRaces(null);
     setExpContext(null);
     setReportAthlete(null);
+    setAthleteAidData({});
 
     // ── Step 1: Race overview (sequential — its response feeds downstream calls) ──
     let effectiveResult: OverviewResponse;
@@ -1240,7 +1253,7 @@ export default function RaceReadinessPage() {
         setNoRaceProfile(true);
         effectiveResult = {
           race: { id: selectedRaceId, name: raceName, slug: null, total_distance_km: 0, total_ascent_m: 0, total_descent_m: 0, race_date: null, weather_lat: null, weather_lon: null },
-          route: [], wind_sections: null, elevation_profile: null, sustained_segments: null, terrain_sections: [],
+          route: [], wind_sections: null, elevation_profile: null, sustained_segments: null, terrain_sections: [], aid_stations: null,
         };
       } else if (!res.ok || json.error) {
         setGenError(json.error ?? "Failed to load race overview.");
@@ -1329,7 +1342,20 @@ export default function RaceReadinessPage() {
     setPrepRaces(prepRacesData);
     setExpContext(expContextData);
     setElevProfileMatch(elevProfileMatchData);
-    if (reportAthleteData) setReportAthlete(reportAthleteData);
+    if (reportAthleteData) {
+      setReportAthlete(reportAthleteData);
+      // Fetch aid station data for athlete's previous races
+      const raceIds = reportAthleteData.races.map((r: { race_id: string }) => r.race_id);
+      if (raceIds.length > 0) {
+        fetch("/api/race-readiness/aid-stations", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ race_ids: raceIds }),
+        })
+          .then(r => r.json())
+          .then((data: Record<string, AidStation[]>) => setAthleteAidData(data))
+          .catch(() => { /* aid station data is non-critical — silently skip */ });
+      }
+    }
     setGenerating(false);
   }
 
@@ -4162,6 +4188,52 @@ export default function RaceReadinessPage() {
               });
             }
 
+            // ── Aid station gap rules ─────────────────────────────────────────
+            if (result.aid_stations && result.aid_stations.length > 0) {
+              const sorted_stations = [...result.aid_stations].sort((a, b) => a.km - b.km);
+              const stops = [0, ...sorted_stations.map((s: AidStation) => s.km), totalKm];
+              const gaps = stops.slice(1).map((km, i) => km - stops[i]);
+              const maxGap = Math.max(...gaps);
+
+              // Athlete's max experienced gap across all races with data
+              const athleteMaxGap = Object.values(athleteAidData).reduce((best, stations) => {
+                if (stations.length === 0) return best;
+                const sortedS = [...stations].sort((a, b) => a.km - b.km);
+                const gapList = sortedS.slice(1).map((s, i) => s.km - sortedS[i].km);
+                return Math.max(best, ...gapList);
+              }, 0);
+
+              if (maxGap > 15) {
+                const isNewTerritory = athleteMaxGap === 0 || maxGap > athleteMaxGap * 1.2;
+                steps.push({
+                  category: "Race Preparation",
+                  title: "Carry nutrition for long unsupported stretches",
+                  detail: `The longest gap between aid stations on the course is ${maxGap.toFixed(1)} km${isNewTerritory && athleteMaxGap > 0 ? ` — your longest previously recorded gap is ${athleteMaxGap.toFixed(1)} km, so this is new territory` : ""}. ${maxGap > 20 ? "You will need to carry water and calories to cover this stretch safely." : "Take a gel or snack at the preceding station to cover this gap comfortably."} Practise carrying nutrition at race pace in your long training runs before the event.`,
+                  priority: maxGap > 20 ? "high" : "medium",
+                });
+              }
+
+              const hasNoFood = !sorted_stations.some((s: AidStation) => s.food);
+              if (hasNoFood) {
+                steps.push({
+                  category: "Race Preparation",
+                  title: "No food provision at aid stations — carry all nutrition",
+                  detail: `None of the recorded aid stations for this race offer food. You will need to carry your full race nutrition from the start, or rely on crew support if the race permits it. Calculate your carbohydrate needs (60–90 g/hr above 3 hours) and test your carrying strategy in training.`,
+                  priority: "high",
+                });
+              }
+
+              const hasNoDropBags = !sorted_stations.some((s: AidStation) => s.dropBags);
+              if (hasNoDropBags && totalKm > 50) {
+                steps.push({
+                  category: "Race Preparation",
+                  title: "No drop bag support — practise self-sufficiency",
+                  detail: `This race has no drop bag stations. For a ${totalKm.toFixed(0)} km event, that means everything you need must either be carried from the start or sourced at aid stations. Practise your full race kit and nutrition load in a long training day before the event.`,
+                  priority: "medium",
+                });
+              }
+            }
+
             if (steps.length === 0) return null;
 
             const categories = [...new Set(steps.map(s => s.category))];
@@ -4234,6 +4306,191 @@ export default function RaceReadinessPage() {
                 </div>
 
                 <PageNumber n={13} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 14 — Aid Station Analysis
+          ═══════════════════════════════════════ */}
+          {reportAthlete && (() => {
+            const stations: AidStation[] = result.aid_stations ?? [];
+            const sorted = [...stations].sort((a, b) => a.km - b.km);
+
+            // Gap computation
+            const stops = [0, ...sorted.map(s => s.km), totalKm];
+            const gaps  = stops.slice(1).map((km, i) => ({ km, gapKm: km - stops[i], fromKm: stops[i] }));
+            const maxGap     = gaps.length > 0 ? Math.max(...gaps.map(g => g.gapKm)) : 0;
+            const avgGap     = gaps.length > 0 ? gaps.reduce((s, g) => s + g.gapKm, 0) / gaps.length : 0;
+            const hasDropBag = sorted.some(s => s.dropBags);
+            const hasFood    = sorted.some(s => s.food);
+
+            // Athlete historical gaps
+            const athleteRaceGaps: { race_name: string; maxGap: number }[] = [];
+            for (const race of filteredAthleteRaces) {
+              const sts = athleteAidData[race.race_id];
+              if (!sts || sts.length === 0) continue;
+              const sortedSts = [...sts].sort((a, b) => a.km - b.km);
+              const raceGaps  = sortedSts.slice(1).map((s, i) => s.km - sortedSts[i].km);
+              athleteRaceGaps.push({ race_name: race.race_name, maxGap: Math.max(...raceGaps) });
+            }
+            const athleteMaxGap = athleteRaceGaps.length > 0
+              ? Math.max(...athleteRaceGaps.map(r => r.maxGap))
+              : null;
+
+            // Flags
+            interface AidFlag { color: string; bg: string; border: string; text: string; }
+            const flags: AidFlag[] = [];
+            if (maxGap > 20) flags.push({ color: "#c0392b", bg: "#fce4ec", border: "#ffcdd2", text: `Longest gap is ${maxGap.toFixed(1)} km — water carry is essential for this stretch.` });
+            else if (maxGap > 15) flags.push({ color: "#e65100", bg: "#fff3e0", border: "#ffe0b2", text: `Longest gap is ${maxGap.toFixed(1)} km — carry a gel or bar leaving the preceding station.` });
+            if (athleteMaxGap !== null && maxGap > athleteMaxGap * 1.2) flags.push({ color: "#c0392b", bg: "#fce4ec", border: "#ffcdd2", text: `Goal race max gap (${maxGap.toFixed(1)} km) exceeds the athlete's largest recorded gap (${athleteMaxGap.toFixed(1)} km) — self-supported carrying is new territory.` });
+            if (!hasFood) flags.push({ color: "#c0392b", bg: "#fce4ec", border: "#ffcdd2", text: `No food provided at any aid station — athlete must carry all race nutrition.` });
+            if (!hasDropBag && totalKm > 50) flags.push({ color: "#e65100", bg: "#fff3e0", border: "#ffe0b2", text: `No drop bag support on a ${totalKm.toFixed(0)} km race — confirm kit and nutrition strategy accounts for full self-sufficiency.` });
+            const longRunGaps = gaps.filter(g => g.gapKm > 10);
+            if (longRunGaps.length >= 3) flags.push({ color: "#e65100", bg: "#fff3e0", border: "#ffe0b2", text: `${longRunGaps.length} gaps exceed 10 km — a hydration pack may be worth considering over handheld bottles.` });
+
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Aid Station Analysis</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Aid Station Analysis</h2>
+                <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
+                  Gap analysis and logistics preparation for {result.race.name}
+                </p>
+
+                {stations.length === 0 ? (
+                  <div style={{ padding: "24px", border: "1px dashed #d1d5db", borderRadius: 8, textAlign: "center" }}>
+                    <div style={{ fontSize: "13px", color: "#9ca3af", marginBottom: 6 }}>No aid station data recorded for this race.</div>
+                    <div style={{ fontSize: "11px", color: "#bbb" }}>Add stations via <em>Admin → Aid Stations</em> or the race editor on the frontend.</div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Key metrics */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginBottom: "16px" }}>
+                      {[
+                        { label: "Stations", value: String(sorted.length) },
+                        { label: "Longest gap", value: `${maxGap.toFixed(1)} km`, highlight: maxGap > 20 ? "#c0392b" : maxGap > 15 ? "#e65100" : undefined },
+                        { label: "Average gap", value: `${avgGap.toFixed(1)} km` },
+                        { label: "Drop bags", value: hasDropBag ? "Yes" : "No", highlight: !hasDropBag && totalKm > 50 ? "#e65100" : hasDropBag ? "#2e7d32" : undefined },
+                      ].map(({ label, value, highlight }) => (
+                        <div key={label} style={{ border: "1px solid #e0e0e0", borderRadius: 6, padding: "8px 10px", textAlign: "center", background: "#fafafa" }}>
+                          <div style={{ fontSize: "8px", color: "#888", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>{label}</div>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: highlight ?? "#1e3a1e" }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Distance bar */}
+                    <div style={{ marginBottom: "14px" }}>
+                      <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Course Layout</div>
+                      <div style={{ position: "relative", height: "20px", background: "#e8f5e9", borderRadius: 4, overflow: "visible" }}>
+                        {sorted.map((s, i) => {
+                          const pct = totalKm > 0 ? (s.km / totalKm) * 100 : 0;
+                          return (
+                            <div key={i} title={`${s.name ?? `Station ${i+1}`} — ${s.km.toFixed(1)} km`} style={{
+                              position: "absolute", left: `${pct}%`, top: "-3px",
+                              transform: "translateX(-50%)",
+                              width: 6, height: 26, background: "#2e7d32",
+                              borderRadius: 2, cursor: "default",
+                            }} />
+                          );
+                        })}
+                        {/* Gap labels */}
+                        {gaps.map((g, i) => {
+                          if (g.gapKm < 3) return null;
+                          const midPct = totalKm > 0 ? ((g.fromKm + g.gapKm / 2) / totalKm) * 100 : 0;
+                          return (
+                            <div key={i} style={{
+                              position: "absolute", left: `${midPct}%`, top: "24px",
+                              transform: "translateX(-50%)", fontSize: "7px",
+                              color: g.gapKm > 15 ? "#c0392b" : "#666", whiteSpace: "nowrap",
+                            }}>{g.gapKm.toFixed(1)} km</div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "7.5px", color: "#999", marginTop: "22px" }}>
+                        <span>Start (0 km)</span>
+                        <span>Finish ({totalKm.toFixed(0)} km)</span>
+                      </div>
+                    </div>
+
+                    {/* Station table */}
+                    <div style={{ marginBottom: "16px" }}>
+                      <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Stations</div>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9px" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid #e0e0e0", background: "#f9fafb" }}>
+                            {["km", "Name", "Gap from prev", "💧", "🍊", "🩺", "🚻", "🎒"].map(h => (
+                              <th key={h} style={{ padding: "3px 6px", textAlign: h === "km" || h.startsWith("Gap") ? "right" : "center", fontSize: "8px", fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sorted.map((s, i) => {
+                            const gapKm = i === 0 ? s.km : s.km - sorted[i-1].km;
+                            const isLargeGap = gapKm > 15;
+                            return (
+                              <tr key={i} style={{ borderBottom: "1px solid #f3f4f6", background: isLargeGap ? "#fff8f0" : undefined }}>
+                                <td style={{ padding: "3px 6px", textAlign: "right", fontWeight: 600, color: "#1e3a1e", whiteSpace: "nowrap" }}>{s.km.toFixed(1)}</td>
+                                <td style={{ padding: "3px 6px", color: "#444" }}>{s.name ?? `Station ${i + 1}`}</td>
+                                <td style={{ padding: "3px 6px", textAlign: "right", color: isLargeGap ? "#c0392b" : "#555", fontWeight: isLargeGap ? 700 : 400 }}>{gapKm.toFixed(1)} km</td>
+                                {(["water", "food", "medic", "toilets", "dropBags"] as const).map(k => (
+                                  <td key={k} style={{ padding: "3px 6px", textAlign: "center", color: s[k] ? "#2e7d32" : "#ddd" }}>{s[k] ? "✓" : "–"}</td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Athlete comparison */}
+                    {athleteRaceGaps.length > 0 && (
+                      <div style={{ marginBottom: "14px" }}>
+                        <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Athlete's Historical Aid Station Experience</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                          {[
+                            { label: "Races with data", value: String(athleteRaceGaps.length) },
+                            { label: "Largest gap experienced", value: athleteMaxGap !== null ? `${athleteMaxGap.toFixed(1)} km` : "—", highlight: athleteMaxGap !== null && maxGap > athleteMaxGap * 1.2 ? "#c0392b" : undefined },
+                            { label: "Goal race max gap", value: `${maxGap.toFixed(1)} km` },
+                          ].map(({ label, value, highlight }) => (
+                            <div key={label} style={{ border: "1px solid #e0e0e0", borderRadius: 6, padding: "7px 10px", background: "#fafafa" }}>
+                              <div style={{ fontSize: "8px", color: "#888", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>{label}</div>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: highlight ?? "#1e3a1e" }}>{value}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {athleteRaceGaps.length === 0 && (
+                      <div style={{ padding: "10px 12px", background: "#f9fafb", border: "1px solid #e0e0e0", borderRadius: 6, fontSize: "9px", color: "#888", marginBottom: "14px" }}>
+                        No aid station data available for any of the athlete's previous races — gap comparison cannot be performed.
+                      </div>
+                    )}
+
+                    {/* Flags */}
+                    {flags.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Preparation Flags</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                          {flags.map((f, i) => (
+                            <div key={i} style={{ padding: "7px 10px", background: f.bg, border: `1px solid ${f.border}`, borderLeft: `3px solid ${f.color}`, borderRadius: 5, fontSize: "9.5px", color: "#333", lineHeight: 1.5 }}>
+                              {f.text}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <PageNumber n={14} />
               </div>
             );
           })()}
