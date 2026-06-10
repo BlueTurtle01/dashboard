@@ -89,6 +89,12 @@ export async function POST(req: NextRequest) {
       .eq("id", race_id)
       .maybeSingle();
     if (!race) return NextResponse.json({ error: "Race not found" }, { status: 404 });
+    if (!race.terrain_type) {
+      return NextResponse.json(
+        { error: `"${race.name}" has no terrain_type set. Set it on the race record before uploading a GPX profile.` },
+        { status: 422 }
+      );
+    }
 
     // ── Upload GPX to storage ─────────────────────────────────────────────────
     const uuid        = crypto.randomUUID();
@@ -148,6 +154,7 @@ export async function POST(req: NextRequest) {
 
     // ── Compute race profile ──────────────────────────────────────────────────
     const profile = computeRaceProfile(gpxPoints, race.terrain_type, undefined);
+
 
     // ── Upsert race_profiles ──────────────────────────────────────────────────
     const { error: profErr } = await adminClient.from("race_profiles").upsert(

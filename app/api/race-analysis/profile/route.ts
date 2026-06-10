@@ -46,6 +46,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!race.terrain_type) {
+      return NextResponse.json(
+        { error: `"${race.name}" has no terrain_type set. Set it on the race record before generating a profile.` },
+        { status: 422 }
+      );
+    }
+
     // ── Fetch race files ──────────────────────────────────────────────────────
     const { data: files } = await supabase
       .from("race_files")
@@ -102,6 +109,7 @@ export async function POST(req: NextRequest) {
       race.terrain_type,
       windCsvText ?? undefined
     );
+
 
     // ── Upsert into race_profiles ─────────────────────────────────────────────
     const adminClient = createAdminClient();

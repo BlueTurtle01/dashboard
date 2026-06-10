@@ -29,6 +29,7 @@ interface Race {
   name: string;
   slug: string;
   location: string | null;
+  terrain_type: string | null;
 }
 
 interface RaceWithFiles extends Race {
@@ -114,6 +115,9 @@ export default function RaceFilesPage() {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
 
+  const [batchReprocessing, setBatchReprocessing] = useState(false);
+  const [batchReprocessMsg, setBatchReprocessMsg] = useState<string | null>(null);
+
   // Hidden file inputs per (race × fileType)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -125,7 +129,7 @@ export default function RaceFilesPage() {
     try {
       const { data: racesData, error: racesErr } = await supabase
         .from("races")
-        .select("id, name, slug, location")
+        .select("id, name, slug, location, terrain_type")
         .order("name", { ascending: true });
 
       if (racesErr || !racesData) throw new Error(racesErr?.message ?? "Failed to load races");
@@ -489,6 +493,33 @@ export default function RaceFilesPage() {
     setBackfilling(false);
   }
 
+  async function handleBatchReprocess() {
+    const eligible = races.filter(
+      (r) => r.terrain_type && r.files.some((f) => f.file_type === "gpx")
+    );
+    if (eligible.length === 0) {
+      setBatchReprocessMsg("No races with both a GPX file and terrain_type set.");
+      return;
+    }
+    setBatchReprocessing(true);
+    setBatchReprocessMsg(null);
+    let done = 0, failed = 0;
+    for (const race of eligible) {
+      try {
+        const res = await fetch("/api/race-analysis/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ race_id: race.id }),
+        });
+        const json = await res.json() as { success?: boolean; error?: string };
+        if (!res.ok || !json.success) { failed++; } else { done++; }
+      } catch { failed++; }
+      setBatchReprocessMsg(`Processing… ${done + failed} / ${eligible.length}`);
+    }
+    setBatchReprocessing(false);
+    setBatchReprocessMsg(`Done — ${done} reprocessed, ${failed} failed.`);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -529,8 +560,43 @@ export default function RaceFilesPage() {
                 {backfillMsg}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => void handleBatchReprocess()}
+              disabled={batchReprocessing}
+              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 500, borderRadius: "7px", border: "1px solid #86efac", background: batchReprocessing ? "#f0fdf4" : "#dcfce7", color: "#15803d", cursor: batchReprocessing ? "default" : "pointer" }}
+            >
+              {batchReprocessing ? "⏳ Reprocessing…" : "♻ Batch Reprocess All Profiles"}
+            </button>
+            {batchReprocessMsg && (
+              <span style={{ fontSize: "12px", color: batchReprocessMsg.startsWith("Done") ? "#166534" : "#374151" }}>
+                {batchReprocessMsg}
+              </span>
+            )}
           </div>
         </div>
+
+        {/* Terrain warning banner */}
+        {!loading && (() => {
+          const missing = races.filter(
+            (r) => !r.terrain_type && r.files.some((f) => f.file_type === "gpx")
+          );
+          if (missing.length === 0) return null;
+          return (
+            <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderLeft: "4px solid #f59e0b", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px" }}>
+              <div style={{ fontWeight: 600, fontSize: "13px", color: "#92400e", marginBottom: "4px" }}>
+                ⚠ {missing.length} race{missing.length !== 1 ? "s" : ""} with a GPX file but no terrain_type set
+              </div>
+              <div style={{ fontSize: "12px", color: "#78350f", marginBottom: "6px" }}>
+                Profile generation is blocked for these races until terrain_type is set on the race record.
+                Set it via the database or the races admin page, then reprocess.
+              </div>
+              <div style={{ fontSize: "12px", color: "#92400e" }}>
+                {missing.map((r) => r.name).join(" · ")}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Search */}
         <input
@@ -577,7 +643,17 @@ export default function RaceFilesPage() {
                       </div>
                     )}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {race.files.some((f) => f.file_type === "gpx") && !race.terrain_type && (
+                      <span style={{ padding: "3px 10px", borderRadius: "20px", background: "#fffbeb", color: "#92400e", border: "1px solid #fcd34d", fontSize: "11px", fontWeight: 600 }}>
+                        ⚠ No terrain
+                      </span>
+                    )}
+                    {race.terrain_type && (
+                      <span style={{ padding: "3px 10px", borderRadius: "20px", background: "#f0fdf4", color: "#15803d", fontSize: "11px", fontWeight: 600 }}>
+                        {race.terrain_type}
+                      </span>
+                    )}
                     <span style={{
                       padding: "3px 10px",
                       borderRadius: "20px",
@@ -760,34 +836,40 @@ export default function RaceFilesPage() {
                     {/* Generate Race Profile */}
                     {filesByType.has("gpx") && (
                       <div style={{ marginTop: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                          <button
-                            disabled={!!profileGenerating[race.id]}
-                            onClick={() => handleGenerateProfile(race.id)}
-                            style={{
-                              display: "inline-flex", alignItems: "center", gap: "6px",
-                              padding: "7px 14px", borderRadius: "7px",
-                              border: "1px solid #86efac",
-                              background: profileGenerating[race.id] ? "#f0fdf4" : "#dcfce7",
-                              color: "#15803d", fontSize: "13px", fontWeight: 600,
-                              cursor: profileGenerating[race.id] ? "not-allowed" : "pointer",
-                              opacity: profileGenerating[race.id] ? 0.7 : 1,
-                            }}
-                          >
-                            {profileGenerating[race.id] ? "⏳ Generating…" : "📊 Generate Race Profile"}
-                          </button>
+                        {!race.terrain_type ? (
+                          <div style={{ padding: "8px 12px", borderRadius: "7px", background: "#fffbeb", border: "1px solid #fcd34d", fontSize: "12px", color: "#92400e" }}>
+                            ⚠ Profile generation is blocked — set <strong>terrain_type</strong> on this race record first.
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                            <button
+                              disabled={!!profileGenerating[race.id]}
+                              onClick={() => handleGenerateProfile(race.id)}
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: "6px",
+                                padding: "7px 14px", borderRadius: "7px",
+                                border: "1px solid #86efac",
+                                background: profileGenerating[race.id] ? "#f0fdf4" : "#dcfce7",
+                                color: "#15803d", fontSize: "13px", fontWeight: 600,
+                                cursor: profileGenerating[race.id] ? "not-allowed" : "pointer",
+                                opacity: profileGenerating[race.id] ? 0.7 : 1,
+                              }}
+                            >
+                              {profileGenerating[race.id] ? "⏳ Generating…" : "📊 Generate Race Profile"}
+                            </button>
 
-                          {profileError[race.id] && (
-                            <span style={{ fontSize: "12px", color: "#b91c1c" }}>
-                              {profileError[race.id]}
-                            </span>
-                          )}
-                          {profileSuccess[race.id] && (
-                            <span style={{ fontSize: "12px", color: "#15803d" }}>
-                              ✓ {profileSuccess[race.id]}
-                            </span>
-                          )}
-                        </div>
+                            {profileError[race.id] && (
+                              <span style={{ fontSize: "12px", color: "#b91c1c" }}>
+                                {profileError[race.id]}
+                              </span>
+                            )}
+                            {profileSuccess[race.id] && (
+                              <span style={{ fontSize: "12px", color: "#15803d" }}>
+                                ✓ {profileSuccess[race.id]}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <p style={{ fontSize: "12px", color: "#9ca3af", margin: "6px 0 0 0" }}>
                           Computes flat-equivalent difficulty score from GPX (+ wind if available).
                           Required before using the Race Comparison tool.

@@ -382,13 +382,12 @@ export function applyWindAdjustment(
  */
 export function computeRaceProfile(
   gpxPoints: GpxPoint[],
-  terrain: string | null | undefined,
+  terrain: string,
   windCsvText?: string | null
 ): RaceProfileData {
-  const t = terrain ?? "road";
   const sectionKm = 1.0; // match Python's CHUNK_KM default
 
-  const sections = buildCourseSections(gpxPoints, sectionKm, t);
+  const sections = buildCourseSections(gpxPoints, sectionKm, terrain);
 
   const totalDistanceKm = r3(
     sections.reduce((s, sec) => s + sec.distance_km, 0)
