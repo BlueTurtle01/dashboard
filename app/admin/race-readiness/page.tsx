@@ -1213,26 +1213,39 @@ export default function RaceReadinessPage() {
     return { total, fastestMin, medianMin, year: results.latest_year };
   })();
 
-  // Load races list — all races, with profile data (distance/ascent) where available
+  // Load races list — names only on mount (fast), profile data loads when a race is selected
   useEffect(() => {
     async function load() {
       const { data: raceRows } = await supabase.from("races").select("id, name").order("name");
       if (!raceRows) return;
-      const raceIds = raceRows.map(r => r.id as string);
-      const { data: profileRows } = await supabase
-        .from("race_profiles")
-        .select("race_id, total_distance_km, total_ascent_m")
-        .in("race_id", raceIds);
-      const profileMap = new Map((profileRows ?? []).map(r => [r.race_id as string, r]));
       setRaces(raceRows.map(r => ({
         race_id:           r.id as string,
         race_name:         r.name as string,
-        total_distance_km: profileMap.get(r.id as string)?.total_distance_km ?? null,
-        total_ascent_m:    profileMap.get(r.id as string)?.total_ascent_m ?? null,
+        total_distance_km: null,
+        total_ascent_m:    null,
       })));
     }
     void load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When a race is selected, lazily fetch its profile to show distance/ascent in the UI
+  function handleRaceSelect(id: string) {
+    setSelectedRaceId(id);
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from("race_profiles")
+          .select("race_id, total_distance_km, total_ascent_m")
+          .eq("race_id", id)
+          .maybeSingle();
+        if (!data) return;
+        const d = data as { total_distance_km: number | null; total_ascent_m: number | null };
+        setRaces(prev => prev.map(r =>
+          r.race_id === id ? { ...r, total_distance_km: d.total_distance_km ?? null, total_ascent_m: d.total_ascent_m ?? null } : r
+        ));
+      } catch { /* profile is optional — shown if available */ }
+    })();
+  }
 
   async function handleGenerate() {
     if (!selectedRaceId) { setGenError("Please select a race."); return; }
@@ -1447,7 +1460,7 @@ export default function RaceReadinessPage() {
           <RaceSearchCombobox
             races={races}
             selectedId={selectedRaceId}
-            onSelect={id => setSelectedRaceId(id)}
+            onSelect={handleRaceSelect}
           />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
