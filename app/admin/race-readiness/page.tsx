@@ -2087,23 +2087,27 @@ export default function RaceReadinessPage() {
 
                   const c1 = comparables[0];
                   const c1PerKm = Math.round(c1.perKm);
-                  const pct1 = Math.round(((goalPerKm - c1.perKm) / c1.perKm) * 100);
+                  // Use rounded values so the displayed numbers and the percentage are consistent
+                  const pct1 = c1PerKm > 0 ? Math.round(((goalPerKmRounded - c1PerKm) / c1PerKm) * 100) : 0;
 
                   let compText = "";
                   if (Math.abs(pct1) < 5) {
                     compText = `${c1.name} (${c1.year}, ${c1.distKm.toFixed(0)} km) averaged a similar ${c1PerKm} m/km.`;
                   } else if (pct1 > 0) {
-                    compText = `${c1.name} (${c1.year}, ${c1.distKm.toFixed(0)} km) averaged ${c1PerKm} m/km — the goal race has ${pct1}% more climbing per km over a comparable distance.`;
-                    if (comparables.length > 1) {
-                      const c2 = comparables[1];
-                      const c2PerKm = Math.round(c2.perKm);
-                      const pct2 = Math.round(((goalPerKm - c2.perKm) / c2.perKm) * 100);
-                      if (Math.abs(pct2) >= 5) {
-                        compText += ` ${c2.name} (${c2.year}, ${c2.distKm.toFixed(0)} km) averaged ${c2PerKm} m/km — ${pct2 > 0 ? `${pct2}% less` : `${Math.abs(pct2)}% more`} than the goal race.`;
-                      }
-                    }
+                    compText = `${c1.name} (${c1.year}, ${c1.distKm.toFixed(0)} km) averaged ${c1PerKm} m/km — the goal race has ${pct1}% more climbing per km.`;
                   } else {
-                    compText = `${c1.name} (${c1.year}, ${c1.distKm.toFixed(0)} km) averaged ${c1PerKm} m/km — the goal race has ${Math.abs(pct1)}% less climbing per km over a comparable distance.`;
+                    compText = `${c1.name} (${c1.year}, ${c1.distKm.toFixed(0)} km) averaged ${c1PerKm} m/km — the goal race has ${Math.abs(pct1)}% less climbing per km.`;
+                  }
+
+                  if (comparables.length > 1 && comparables[1].name !== c1.name) {
+                    const c2 = comparables[1];
+                    const c2PerKm = Math.round(c2.perKm);
+                    const pct2 = c2PerKm > 0 ? Math.round(((goalPerKmRounded - c2PerKm) / c2PerKm) * 100) : 0;
+                    if (Math.abs(pct2) < 5) {
+                      compText += ` ${c2.name} (${c2.year}, ${c2.distKm.toFixed(0)} km) also averaged a similar ${c2PerKm} m/km.`;
+                    } else {
+                      compText += ` ${c2.name} (${c2.year}, ${c2.distKm.toFixed(0)} km) averaged ${c2PerKm} m/km — ${pct2 > 0 ? `${pct2}% more` : `${Math.abs(pct2)}% less`} climbing per km than the goal race.`;
+                    }
                   }
 
                   return `${base} The course averages ${goalPerKmRounded} m of ascent per km. ${compText}`;
@@ -3076,53 +3080,33 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                {/* Gap table — split by ascent / descent / flat */}
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <th style={{ ...thStyle, width: "180px" }}>Terrain Demand</th>
-                      <th style={{ ...thStyle, width: "70px" }}>Race km</th>
-                      <th style={{ ...thStyle, width: "80px" }}>Your experience</th>
-                      <th style={thStyle}>On other surfaces</th>
-                      <th style={{ ...thStyle, width: "110px" }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {climbRows.length > 0 && (
-                      <>
+                {/* Gap tables — one per movement type */}
+                {[
+                  { rows: climbRows,   accent: "#c0392b", bg: "#f9ecec", border: "#f0c8c8", label: "▲ Ascent" },
+                  { rows: descentRows, accent: "#1565c0", bg: "#eaf2fb", border: "#c3d9f3", label: "▼ Descent" },
+                  { rows: flatRows,    accent: "#2e7d32", bg: "#f0f7f0", border: "#c3e6c3", label: "— Rolling / Flat" },
+                ].filter(g => g.rows.length > 0).map(g => (
+                  <div key={g.label} style={{ marginBottom: "16px" }}>
+                    <div style={{ padding: "5px 8px", background: g.bg, borderTop: `2px solid ${g.accent}`, borderBottom: `1px solid ${g.border}`, marginBottom: "0" }}>
+                      <span style={{ fontWeight: 700, fontSize: "10px", color: g.accent, textTransform: "uppercase", letterSpacing: "0.06em" }}>{g.label}</span>
+                      <span style={{ marginLeft: "10px", fontSize: "9px", color: "#999" }}>{sectionSummary(g.rows)}</span>
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
                         <tr>
-                          <td colSpan={5} style={{ padding: "5px 8px", background: "#f9ecec", borderTop: "2px solid #c0392b", borderBottom: "1px solid #f0c8c8" }}>
-                            <span style={{ fontWeight: 700, fontSize: "10px", color: "#c0392b", textTransform: "uppercase", letterSpacing: "0.06em" }}>▲ Ascent</span>
-                            <span style={{ marginLeft: "10px", fontSize: "9px", color: "#999" }}>{sectionSummary(climbRows)}</span>
-                          </td>
+                          <th style={{ ...thStyle, width: "180px" }}>Terrain Demand</th>
+                          <th style={{ ...thStyle, width: "70px" }}>Race km</th>
+                          <th style={{ ...thStyle, width: "80px" }}>Your experience</th>
+                          <th style={thStyle}>On other surfaces</th>
+                          <th style={{ ...thStyle, width: "110px" }}>Status</th>
                         </tr>
-                        {renderGapRows(climbRows)}
-                      </>
-                    )}
-                    {descentRows.length > 0 && (
-                      <>
-                        <tr>
-                          <td colSpan={5} style={{ padding: "5px 8px", background: "#eaf2fb", borderTop: "2px solid #1565c0", borderBottom: "1px solid #c3d9f3" }}>
-                            <span style={{ fontWeight: 700, fontSize: "10px", color: "#1565c0", textTransform: "uppercase", letterSpacing: "0.06em" }}>▼ Descent</span>
-                            <span style={{ marginLeft: "10px", fontSize: "9px", color: "#999" }}>{sectionSummary(descentRows)}</span>
-                          </td>
-                        </tr>
-                        {renderGapRows(descentRows)}
-                      </>
-                    )}
-                    {flatRows.length > 0 && (
-                      <>
-                        <tr>
-                          <td colSpan={5} style={{ padding: "5px 8px", background: "#f0f7f0", borderTop: "2px solid #2e7d32", borderBottom: "1px solid #c3e6c3" }}>
-                            <span style={{ fontWeight: 700, fontSize: "10px", color: "#2e7d32", textTransform: "uppercase", letterSpacing: "0.06em" }}>— Flat / Rolling</span>
-                            <span style={{ marginLeft: "10px", fontSize: "9px", color: "#999" }}>{sectionSummary(flatRows)}</span>
-                          </td>
-                        </tr>
-                        {renderGapRows(flatRows)}
-                      </>
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {renderGapRows(g.rows)}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
 
                 <div style={{ marginTop: "10px", fontSize: "8.5px", color: "#666", lineHeight: 1.6 }}>
                   <strong>Covered</strong> — raced this terrain at or above the required volume.{" "}
