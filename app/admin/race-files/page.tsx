@@ -29,7 +29,6 @@ interface Race {
   name: string;
   slug: string;
   location: string | null;
-  terrain_type: string | null;
   has_terrain_segments: boolean;
 }
 
@@ -130,7 +129,7 @@ export default function RaceFilesPage() {
     try {
       const { data: racesData, error: racesErr } = await supabase
         .from("races")
-        .select("id, name, slug, location, terrain_type")
+        .select("id, name, slug, location")
         .order("name", { ascending: true });
 
       if (racesErr || !racesData) throw new Error(racesErr?.message ?? "Failed to load races");
@@ -156,7 +155,7 @@ export default function RaceFilesPage() {
       }
 
       setRaces(
-        (racesData as Omit<Race, "has_terrain_segments">[]).map((r) => ({
+        (racesData as Omit<Race, "has_terrain_segments" | "files">[]).map((r) => ({
           ...r,
           has_terrain_segments: racesWithTerrain.has(r.id),
           files: filesByRace.get(r.id) ?? [],

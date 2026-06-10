@@ -34,8 +34,8 @@ export function gradientCostMultiplier(gradient: number): number {
  * Surface/terrain efficiency multiplier.
  * Unmapped terrain types default to road (1.00).
  */
-export function terrainMultiplier(terrain: string | null | undefined): number {
-  const t = (terrain ?? "road").toLowerCase().trim();
+export function terrainMultiplier(terrain: string): number {
+  const t = terrain.toLowerCase().trim();
   const map: Record<string, number> = {
     road: 1.00,
     pavement: 1.00,
@@ -74,9 +74,9 @@ export function fatigueMultiplier(
 export function downhillDamagePenalty(
   gradient: number,
   distanceKm: number,
-  terrain: string | null | undefined
+  terrain: string
 ): number {
-  const t = (terrain ?? "road").toLowerCase().trim();
+  const t = terrain.toLowerCase().trim();
   let penalty = 0.0;
 
   if (gradient <= -6)  penalty += 0.05;

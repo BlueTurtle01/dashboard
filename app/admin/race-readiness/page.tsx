@@ -1529,7 +1529,7 @@ export default function RaceReadinessPage() {
               },
               {
                 title: "Race Demands Profile (continued)",
-                body: "Demand summary cards quantify the four key physical challenges — climbing volume, descending load, final third demands, and effort variability. Late-race pattern data shows how much athletes typically fade on this course.",
+                body: "Demand summary cards quantify the four key physical challenges — climbing volume, descending load, final third demands, and effort variability. Late-race pattern data shows how athletes typically manage late-race fatigue on this course.",
                 visible: true,
               },
               {
@@ -2345,7 +2345,7 @@ export default function RaceReadinessPage() {
                     <>
                       {runnablePct}% of the course is near-flat (within ±3%), {steepClimbPct}% is steep uphill (≥8%), and {steepDescentPct}% is steep downhill (≥8%).
                       {" "}This course is {courseCharacter}.
-                      {runnablePct < 25 ? " With so little runnable terrain, athletes cannot rely on pace at all — effort and breathing rate must guide every section." : ""}
+                      {runnablePct < 25 ? " This matters for readiness because the athlete must tolerate repeated shifts in effort: steep climbing, steep descending, and short recovery sections. The race is unlikely to feel rhythmical or steady." : ""}
                     </>
                   ) : "Shows how much of the route falls into each slope band — a quick guide to whether the race is runnable, climb-heavy, descent-heavy, or constantly variable."}
                 </p>
@@ -2455,6 +2455,33 @@ export default function RaceReadinessPage() {
                 </div>
               )}
 
+              {/* ── Page 4 Readiness Summary ── */}
+              {(() => {
+                const positives: string[] = [];
+                const concerns:  string[] = [];
+                if (runnablePct >= 40) positives.push(`${runnablePct}% of the course is runnable terrain — a consistent rhythm is achievable for large stretches.`);
+                if (cvRatio < 0.3 && totalKm > 0) positives.push(`Effort variability is ${complexityLabel.toLowerCase()} — the course does not demand constant intensity switching.`);
+                if (runnablePct < 25 && totalKm > 0) concerns.push(`Only ${runnablePct}% of the course is near-flat. A fixed pace target will not work; the athlete must be practiced at managing effort by feel.`);
+                if ((steepClimbPct + steepDescentPct) > 30) concerns.push(`${steepClimbPct + steepDescentPct}% of the course is steep (≥8% gradient in either direction) — specific strength and technical movement skills are required.`);
+                if (cvRatio > 0.4 && totalKm > 0) concerns.push(`High effort variability means the athlete must absorb large, repeated intensity spikes. A single output strategy across the race will not work.`);
+                if (positives.length === 0 && concerns.length === 0) return null;
+                return (
+                  <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "2px solid #e8f5e9" }}>
+                    <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "7px" }}>What this section tells us about readiness</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <div>
+                        <div style={{ fontSize: "8px", fontWeight: 700, color: "#2e7d32", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Positive indicators</div>
+                        {positives.length > 0 ? positives.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #c8e6c9" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>None identified from course character alone.</div>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "8px", fontWeight: 700, color: "#c0392b", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Key considerations</div>
+                        {concerns.length > 0 ? concerns.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #ffcdd2" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>No major concerns from course character data.</div>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <PageNumber n={4} />
             </div>
           )}
@@ -2487,10 +2514,9 @@ export default function RaceReadinessPage() {
                 <DemandCard title="Climbing Demand" accent="#c0392b">
                   {totalAscentM > 0 && terrainSummary.climbing > 0 ? (
                     <>
-                      The race includes{" "}
-                      <strong>{Math.round(totalAscentM).toLocaleString()} m</strong> of ascent across{" "}
+                      Total ascent: <strong>{Math.round(totalAscentM).toLocaleString()} m</strong> across{" "}
                       <strong>{terrainSummary.climbing.toFixed(1)} km</strong> of climbing terrain
-                      {" "}({((terrainSummary.climbing / totalKm) * 100).toFixed(0)}% of course).
+                      ({((terrainSummary.climbing / totalKm) * 100).toFixed(0)}% of the course).
                       {halfwayAscentPct !== null ? (
                         halfwayAscentPct > 55
                           ? ` The climbing is front-loaded — ${halfwayAscentPct}% of all ascent is done before halfway. Starting conservatively on climbs protects performance in the second half.`
@@ -2499,7 +2525,7 @@ export default function RaceReadinessPage() {
                           : " Climbing is spread broadly across both halves, requiring repeatable climbing output rather than a single strong effort."
                       ) : null}
                       {steepestClimb ? (
-                        <> Steepest sustained section: <strong>{steepestClimb.avg_gradient_percent.toFixed(1)}%</strong> average gradient
+                        <> The steepest sustained section averages <strong>{steepestClimb.avg_gradient_percent.toFixed(1)}%</strong> gradient
                         {" "}(km {steepestClimb.start_km.toFixed(1)}–{steepestClimb.end_km.toFixed(1)}).</>
                       ) : null}
                     </>
@@ -2534,8 +2560,8 @@ export default function RaceReadinessPage() {
                 <DemandCard title="Final Third Demands" accent="#e65100">
                   {finalThirdLen > 0 ? (
                     <>
-                      The final third of the race (km {(finalThirdStart).toFixed(1)}–{totalKm.toFixed(1)}) covers{" "}
-                      <strong>{finalThirdLen.toFixed(1)} km</strong> with <strong>{Math.round(finalThirdAscent)}m</strong> of remaining ascent.
+                      The final third spans km {(finalThirdStart).toFixed(1)}–{totalKm.toFixed(1)}:{" "}
+                      <strong>{finalThirdLen.toFixed(1)} km</strong> with <strong>{Math.round(finalThirdAscent)} m</strong> of remaining ascent.
                       {" "}Effort multiplier is <strong style={{ color: finalThirdEffort > effortRatio * 1.1 ? "#c0392b" : finalThirdEffort < effortRatio * 0.9 ? "#2e7d32" : "#555" }}>{finalThirdEffort.toFixed(2)}×</strong>{" "}
                       ({finalThirdEffort > effortRatio * 1.1 ? "harder than average — fatigue management is critical" :
                         finalThirdEffort < effortRatio * 0.9 ? "easier than average — opportunity to push if reserves allow" :
@@ -2601,6 +2627,35 @@ export default function RaceReadinessPage() {
                   {late && " Race pattern data from official results."}
                 </p>
               </div>
+
+              {/* ── Page 5 Readiness Summary ── */}
+              {(() => {
+                const positives: string[] = [];
+                const concerns:  string[] = [];
+                if (totalAscentM > 0 && totalAscentM < 1800) positives.push(`Climbing volume (${Math.round(totalAscentM).toLocaleString()} m) is substantial but not extreme — within reach with consistent training.`);
+                if (totalDescentM > 0 && totalDescentM <= totalAscentM * 1.1) positives.push(`Descent volume is proportionate to ascent — no unusual eccentric loading beyond what climbing preparation covers.`);
+                if (finalThirdEffort > 0 && finalThirdEffort <= effortRatio * 1.08) positives.push(`The final third effort (${finalThirdEffort.toFixed(2)}×) is close to the course average — no severe late-race spike in difficulty.`);
+                if (totalAscentM >= 2500) concerns.push(`${Math.round(totalAscentM).toLocaleString()} m of ascent is a high-volume demand. Athletes without big-ascent training may find accumulated fatigue overwhelming.`);
+                if (totalDescentM >= 2000) concerns.push(`${Math.round(totalDescentM).toLocaleString()} m of descent creates substantial eccentric quad load. Downhill-specific durability training is essential.`);
+                if (finalThirdEffort > effortRatio * 1.15) concerns.push(`The final third is ${((finalThirdEffort / effortRatio - 1) * 100).toFixed(0)}% harder than the course average — late-race strength endurance is the primary training priority.`);
+                if (late && late.avg_fade_pct > 15) concerns.push(`Historical data shows ${late.avg_fade_pct.toFixed(1)}% average late-race slowing — this course historically tests durability hard.`);
+                if (positives.length === 0 && concerns.length === 0) return null;
+                return (
+                  <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "2px solid #e8f5e9" }}>
+                    <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "7px" }}>What this section tells us about readiness</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <div>
+                        <div style={{ fontSize: "8px", fontWeight: 700, color: "#2e7d32", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Positive indicators</div>
+                        {positives.length > 0 ? positives.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #c8e6c9" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>None identified from demand profile alone.</div>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "8px", fontWeight: 700, color: "#c0392b", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Key considerations</div>
+                        {concerns.length > 0 ? concerns.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #ffcdd2" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>No major concerns from this demand profile.</div>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <PageNumber n={5} />
             </div>
@@ -2796,6 +2851,38 @@ export default function RaceReadinessPage() {
                     <RaceHistoryRows races={highlightRaces} highlightIds={highlightIds} />
                   </div>
                 )}
+
+                {/* ── Page 6 Readiness Summary ── */}
+                {(() => {
+                  const positives: string[] = [];
+                  const concerns:  string[] = [];
+                  const longestDist = byDist[0]?.total_distance_km ?? 0;
+                  const highestAscent = byAscent[0]?.total_ascent_m ?? 0;
+                  if ((p.race_count ?? 0) >= 15) positives.push(`Strong race base — ${p.race_count} races across ${p.career_span_years ?? "?"} year${(p.career_span_years ?? 0) !== 1 ? "s" : ""} of competition.`);
+                  if (longestDist >= totalKm * 0.8) positives.push(`Comparable distance experience — longest race on record is ${longestDist.toFixed(0)} km (goal race: ${totalKm.toFixed(0)} km).`);
+                  if (highestAscent >= totalAscentM * 0.7 && totalAscentM > 0) positives.push(`Relevant vertical experience — career-best ascent is ${Math.round(highestAscent).toLocaleString()} m in a single race.`);
+                  if (recentRaces.length >= 3) positives.push(`Active recent form — ${recentRaces.length} races in the last two years.`);
+                  if ((p.race_count ?? 0) < 5) concerns.push(`Limited race experience (${p.race_count ?? 0} races on record) — race management under fatigue is an important unknown.`);
+                  if (longestDist < totalKm * 0.55 && totalKm > 0) concerns.push(`The goal race (${totalKm.toFixed(0)} km) is well beyond the longest race on record (${longestDist.toFixed(0)} km) — new territory by a significant margin.`);
+                  if (highestAscent < totalAscentM * 0.4 && totalAscentM > 500) concerns.push(`Career-best single-race ascent (${Math.round(highestAscent).toLocaleString()} m) is well below the goal race demands (${Math.round(totalAscentM).toLocaleString()} m).`);
+                  if (recentRaces.length === 0) concerns.push(`No races on record in the last two years — current fitness and form are unknown.`);
+                  if (positives.length === 0 && concerns.length === 0) return null;
+                  return (
+                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "2px solid #e8f5e9" }}>
+                      <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "7px" }}>What this section tells us about readiness</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                        <div>
+                          <div style={{ fontSize: "8px", fontWeight: 700, color: "#2e7d32", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Positive indicators</div>
+                          {positives.length > 0 ? positives.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #c8e6c9" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>None identified from experience base alone.</div>}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "8px", fontWeight: 700, color: "#c0392b", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Key considerations</div>
+                          {concerns.length > 0 ? concerns.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #ffcdd2" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>No major concerns from career profile.</div>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Footer note */}
                 <div style={{ marginTop: "auto", paddingTop: "16px", borderTop: "1px solid #eee" }}>
@@ -3114,6 +3201,37 @@ export default function RaceReadinessPage() {
                   <strong>No experience</strong> — this gradient and surface combination is untested in any race on record.
                   Demands ordered by course distance within each section — longer sections have greater physical consequence.
                 </div>
+
+                {/* ── Page 8 Readiness Summary ── */}
+                {(() => {
+                  const positives: string[] = [];
+                  const concerns:  string[] = [];
+                  const totalDemands = gapRows.length;
+                  if (metCount === totalDemands && totalDemands > 0) positives.push(`All ${totalDemands} terrain demand types are covered from race history — no unexperienced combinations.`);
+                  else if (metCount > 0) positives.push(`${metCount} of ${totalDemands} terrain demand types are fully covered, with volume matching or exceeding what the race requires.`);
+                  if (surfaceGapCount > 0 && noneCount === 0) positives.push(`Where specific surface experience is missing, the gradient pattern is familiar — aerobic and strength adaptation transfers.`);
+                  if (noneCount === 0 && surfaceGapCount === 0 && partialCount > 0) positives.push(`No completely untested combinations — all demand types appear in the race history in some form.`);
+                  if (noneCount > 0) concerns.push(`${noneCount} terrain demand type${noneCount !== 1 ? "s" : ""} are entirely untested — this gradient on this surface has never appeared in any race on record.`);
+                  if (surfaceGapCount > 0) concerns.push(`${surfaceGapCount} demand type${surfaceGapCount !== 1 ? "s" : ""} show a surface gap — the gradient band is familiar but the specific surface is not. Terrain-specific neuromuscular adaptation cannot be assumed.`);
+                  const highVolGaps = gapRows.filter(r => (r.status === "none" || r.status === "surface_gap") && r.km >= 5);
+                  if (highVolGaps.length > 0) concerns.push(`${highVolGaps.length} high-volume gap${highVolGaps.length !== 1 ? "s" : ""} (≥5 km each) represent substantial unexperienced course sections.`);
+                  if (positives.length === 0 && concerns.length === 0) return null;
+                  return (
+                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "2px solid #e8f5e9" }}>
+                      <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "7px" }}>What this section tells us about readiness</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                        <div>
+                          <div style={{ fontSize: "8px", fontWeight: 700, color: "#2e7d32", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Positive indicators</div>
+                          {positives.length > 0 ? positives.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #c8e6c9" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>None identified from gap analysis.</div>}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "8px", fontWeight: 700, color: "#c0392b", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Key considerations</div>
+                          {concerns.length > 0 ? concerns.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #ffcdd2" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>No significant gaps identified.</div>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <PageNumber n={8} />
               </div>
@@ -3640,6 +3758,228 @@ export default function RaceReadinessPage() {
                 )}
 
                 <PageNumber n={11} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 12 — Readiness Narrative
+          ═══════════════════════════════════════ */}
+          {reportAthlete && (() => {
+            const p = reportAthlete.profile;
+            const athleteName = p.athlete_key ?? "This athlete";
+            const allRaces    = filteredAthleteRaces;
+            const finished    = allRaces.filter(r => r.result_status === "FINISHED" && r.finish_seconds);
+            const byDist      = [...finished].filter(r => r.total_distance_km).sort((a, b) => (b.total_distance_km ?? 0) - (a.total_distance_km ?? 0));
+            const byAscent    = [...finished].filter(r => r.total_ascent_m).sort((a, b) => (b.total_ascent_m ?? 0) - (a.total_ascent_m ?? 0));
+            const lastYear    = p.last_result_year ?? new Date().getFullYear();
+            const recentRaces = allRaces.filter(r => r.result_year >= lastYear - 1).slice(0, 10);
+
+            // Re-compute gap counts for narrative
+            let gapNone = 0, gapSurface = 0, gapPartial = 0, gapMet = 0, gapTotal = 0;
+            if (result.terrain_sections.length > 0) {
+              const targetMap: Record<string, number> = {};
+              for (const sec of result.terrain_sections) {
+                const key = `${sec.section_type}|${sec.terrain}`;
+                targetMap[key] = (targetMap[key] ?? 0) + sec.distance_km;
+              }
+              const athleteExact: Record<string, number> = {};
+              const athleteCross: Record<string, number> = {};
+              for (const tp of reportAthlete.terrain_pairings ?? []) {
+                athleteExact[`${tp.section_type}|${tp.terrain}`] = tp.total_km;
+                athleteCross[tp.section_type] = (athleteCross[tp.section_type] ?? 0) + tp.total_km;
+              }
+              for (const [key, km] of Object.entries(targetMap)) {
+                if (km < 0.1) continue;
+                gapTotal++;
+                const [stype, terrain] = key.split("|");
+                const exact = athleteExact[key] ?? 0;
+                const cross = (athleteCross[stype] ?? 0) - exact;
+                if      (exact >= km)             gapMet++;
+                else if (exact > 0)               gapPartial++;
+                else if (cross > 0)               gapSurface++;
+                else                              gapNone++;
+              }
+            }
+
+            const longestDist   = byDist[0]?.total_distance_km ?? 0;
+            const highestAscent = byAscent[0]?.total_ascent_m ?? 0;
+            const hasProfile    = secs.length > 0;
+            const raceName      = result.race.name;
+
+            // ── Readiness verdict ──
+            const readinessScore = (() => {
+              let s = 0;
+              if (longestDist >= totalKm * 0.8) s += 2;
+              else if (longestDist >= totalKm * 0.5) s += 1;
+              if (highestAscent >= totalAscentM * 0.7 && totalAscentM > 0) s += 2;
+              else if (highestAscent >= totalAscentM * 0.4 && totalAscentM > 0) s += 1;
+              if (recentRaces.length >= 3) s += 1;
+              if ((p.race_count ?? 0) >= 15) s += 1;
+              if (gapNone === 0 && gapTotal > 0) s += 2;
+              else if (gapNone <= 1) s += 1;
+              return s;
+            })();
+
+            const verdictLabel = readinessScore >= 7
+              ? "Well-Prepared"
+              : readinessScore >= 4
+              ? "Partially Prepared — Targeted Gaps"
+              : "Significant Preparation Required";
+            const verdictColor = readinessScore >= 7 ? "#2e7d32" : readinessScore >= 4 ? "#e65100" : "#c0392b";
+            const verdictBg    = readinessScore >= 7 ? "#e8f5e9" : readinessScore >= 4 ? "#fff3e0" : "#fce4ec";
+
+            // ── Narrative paragraphs ──
+            const para1 = (() => {
+              const parts: string[] = [];
+              parts.push(`${athleteName} has ${p.race_count ?? 0} races on record across ${p.career_span_years ?? "?"} year${(p.career_span_years ?? 0) !== 1 ? "s" : ""} of competition.`);
+              if (longestDist > 0) parts.push(`The longest race on record is ${longestDist.toFixed(0)} km${highestAscent > 0 ? ` with a career-best single-race ascent of ${Math.round(highestAscent).toLocaleString()} m` : ""}.`);
+              if (recentRaces.length > 0) parts.push(`There are ${recentRaces.length} race${recentRaces.length !== 1 ? "s" : ""} on record from the last two years, indicating ${recentRaces.length >= 3 ? "active" : "limited"} recent competitive form.`);
+              else parts.push(`There are no races on record in the last two years — current fitness and form cannot be assessed from historical data alone.`);
+              return parts.join(" ");
+            })();
+
+            const para2 = (() => {
+              if (!hasProfile) return null;
+              const parts: string[] = [];
+              parts.push(`${raceName} is a ${totalKm.toFixed(0)} km course${totalAscentM > 0 ? ` with ${Math.round(totalAscentM).toLocaleString()} m of ascent and ${Math.round(totalDescentM).toLocaleString()} m of descent` : ""}.`);
+              if (effortRatio > 0) parts.push(`The average effort multiplier across the course is ${effortRatio.toFixed(2)}× — every kilometre costs roughly ${effortRatio.toFixed(2)} times the energy of flat running.`);
+              if (runnablePct < 30) parts.push(`With only ${runnablePct}% of the course near-flat, this is not a race where pace targets are meaningful — sustained effort management is required throughout.`);
+              else if (runnablePct >= 50) parts.push(`${runnablePct}% of the course is near-flat, giving the athlete extended opportunities for efficient, rhythmical running.`);
+              return parts.join(" ");
+            })();
+
+            const para3 = (() => {
+              const parts: string[] = [];
+              const distGap = totalKm > 0 && longestDist < totalKm * 0.55;
+              const ascentGap = totalAscentM > 500 && highestAscent < totalAscentM * 0.4;
+              if (distGap && ascentGap) {
+                parts.push(`The two most significant readiness gaps are distance and vertical. The goal race (${totalKm.toFixed(0)} km, ${Math.round(totalAscentM).toLocaleString()} m) substantially exceeds the athlete's recorded maximum in both dimensions.`);
+                parts.push(`This does not mean it is unachievable — but it means the event will introduce new physiological territory, and conservative pacing and careful preparation are particularly important.`);
+              } else if (distGap) {
+                parts.push(`Distance is the primary readiness gap: the goal race (${totalKm.toFixed(0)} km) is well beyond the longest race on record (${longestDist.toFixed(0)} km).`);
+                parts.push(`Specific long-run preparation and time-on-feet are the most important training priorities.`);
+              } else if (ascentGap) {
+                parts.push(`Vertical experience is the primary gap: the goal race requires ${Math.round(totalAscentM).toLocaleString()} m of ascent, where the career best is ${Math.round(highestAscent).toLocaleString()} m.`);
+                parts.push(`Dedicated hill and mountain training — both climbing strength and downhill durability — is the most important preparation focus.`);
+              } else if (longestDist >= totalKm * 0.8 && highestAscent >= totalAscentM * 0.7) {
+                parts.push(`From a distance and vertical perspective, ${athleteName} has demonstrated the capacity for what this race demands.`);
+                parts.push(`The primary readiness question shifts to terrain familiarity and race-specific preparation — not whether the distance and ascent are achievable.`);
+              } else {
+                parts.push(`The athlete has partial preparation for the race demands. Distance experience covers ${longestDist > 0 ? `${Math.round((longestDist / totalKm) * 100)}% of the goal distance` : "an unknown proportion"} and vertical experience covers ${highestAscent > 0 && totalAscentM > 0 ? `${Math.round((highestAscent / totalAscentM) * 100)}% of the goal ascent` : "an unknown proportion"}.`);
+              }
+              return parts.join(" ");
+            })();
+
+            const para4 = (() => {
+              if (gapTotal === 0) return null;
+              const parts: string[] = [];
+              if (gapNone === 0 && gapSurface === 0) {
+                parts.push(`The terrain experience gap analysis shows no entirely untested terrain demand types — every gradient and surface combination required by the race has appeared in the athlete's history in some form.`);
+                if (gapPartial > 0) parts.push(`${gapPartial} demand type${gapPartial !== 1 ? "s" : ""} are partially covered — the athlete has experience here, but not at the full volume the race requires.`);
+              } else {
+                if (gapNone > 0) parts.push(`The experience gap analysis identifies ${gapNone} terrain demand type${gapNone !== 1 ? "s" : ""} with no precedent in the athlete's race history — these are entirely new combinations of gradient and surface.`);
+                if (gapSurface > 0) parts.push(`${gapSurface} additional demand type${gapSurface !== 1 ? "s" : ""} show surface gaps — the gradient is familiar, but not on this specific terrain.`);
+                if (gapMet > 0) parts.push(`${gapMet} of ${gapTotal} demand types are fully covered, showing relevant preparation exists for a meaningful proportion of the course.`);
+              }
+              return parts.join(" ");
+            })();
+
+            const para5 = (() => {
+              const parts: string[] = [];
+              if (readinessScore >= 7) {
+                parts.push(`Taken together, the evidence across this report suggests ${athleteName} is well-placed for ${raceName}.`);
+                parts.push(`The experience base is relevant, the terrain demands are largely familiar, and the distance and vertical are within established range.`);
+                parts.push(`The focus going into the event should be on execution quality, course-specific pacing, and arriving at the start line healthy.`);
+              } else if (readinessScore >= 4) {
+                parts.push(`${athleteName} has a meaningful foundation for ${raceName}, but specific gaps remain.`);
+                parts.push(`These gaps are preparation opportunities rather than barriers — but they require targeted action before race day.`);
+                parts.push(`The most impactful preparation will address the specific terrain and distance gaps identified in this report, rather than general fitness work.`);
+              } else {
+                parts.push(`This report identifies significant preparation gaps for ${raceName}.`);
+                parts.push(`The race presents substantial new territory across multiple dimensions — distance, vertical, and terrain.`);
+                parts.push(`That does not make the race unachievable, but it does mean that the preparation period carries significant weight. The athlete would benefit from building experience progressively across the key gap areas before the event.`);
+              }
+              return parts.join(" ");
+            })();
+
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Readiness Narrative</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Readiness Narrative</h2>
+                <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
+                  A synthesised assessment drawing on all sections of this report
+                </p>
+
+                {/* Verdict */}
+                <div style={{ background: verdictBg, border: `2px solid ${verdictColor}`, borderRadius: "8px", padding: "12px 16px", marginBottom: "20px" }}>
+                  <div style={{ fontSize: "9px", fontWeight: 700, color: verdictColor, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "3px" }}>Overall Readiness Assessment</div>
+                  <div style={{ fontSize: "15px", fontWeight: 700, color: verdictColor }}>{verdictLabel}</div>
+                  <div style={{ fontSize: "10px", color: "#555", marginTop: "4px" }}>{raceName} · {athleteName}</div>
+                </div>
+
+                {/* Section summary grid */}
+                <div style={{ marginBottom: "18px" }}>
+                  <div style={{ fontSize: "9.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>Findings by Section</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    {[
+                      {
+                        title: "Race Character",
+                        positive: hasProfile && runnablePct >= 35 ? `${runnablePct}% runnable — rhythm is achievable.` : null,
+                        concern: hasProfile && runnablePct < 25 ? `Only ${runnablePct}% runnable — no consistent pace target is possible.` : hasProfile && (steepClimbPct + steepDescentPct) > 30 ? `${steepClimbPct + steepDescentPct}% steep gradient — strength is a requirement.` : null,
+                      },
+                      {
+                        title: "Race Demands",
+                        positive: hasProfile && finalThirdEffort <= effortRatio * 1.08 ? `Final third effort is close to the course average.` : null,
+                        concern: hasProfile && totalAscentM >= 2000 ? `${Math.round(totalAscentM).toLocaleString()} m ascent — high-volume climbing demand.` : hasProfile && finalThirdEffort > effortRatio * 1.15 ? `Final third is ${((finalThirdEffort / effortRatio - 1) * 100).toFixed(0)}% harder than course average.` : null,
+                      },
+                      {
+                        title: "Athlete Experience",
+                        positive: longestDist >= totalKm * 0.8 && totalKm > 0 ? `Distance-comparable experience on record.` : recentRaces.length >= 3 ? `Active recent form (${recentRaces.length} races in 2 years).` : null,
+                        concern: longestDist < totalKm * 0.55 && totalKm > 0 ? `Goal race is new territory by distance.` : recentRaces.length === 0 ? `No recent race form on record.` : null,
+                      },
+                      {
+                        title: "Experience Gaps",
+                        positive: gapTotal > 0 && gapNone === 0 ? `No entirely untested terrain demands.` : gapMet > gapTotal * 0.6 && gapTotal > 0 ? `${gapMet}/${gapTotal} demand types covered.` : null,
+                        concern: gapNone > 0 ? `${gapNone} demand type${gapNone !== 1 ? "s" : ""} with zero experience.` : gapSurface > 0 ? `${gapSurface} surface gap${gapSurface !== 1 ? "s" : ""} — terrain adaptation untested.` : null,
+                      },
+                    ].map(({ title, positive, concern }) => (
+                      <div key={title} style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "10px 12px", background: "#fafafa" }}>
+                        <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>{title}</div>
+                        {positive && <div style={{ fontSize: "9px", color: "#2e7d32", marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #c8e6c9", lineHeight: 1.4 }}>✓ {positive}</div>}
+                        {concern  && <div style={{ fontSize: "9px", color: "#c0392b", marginBottom: "0",  paddingLeft: "7px", borderLeft: "2px solid #ffcdd2", lineHeight: 1.4 }}>⚠ {concern}</div>}
+                        {!positive && !concern && <div style={{ fontSize: "9px", color: "#aaa" }}>Insufficient data.</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Narrative paragraphs */}
+                <div style={{ fontSize: "9.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>Full Assessment</div>
+                <div style={{ fontSize: "10.5px", color: "#333", lineHeight: 1.6 }}>
+                  <p style={{ margin: "0 0 10px" }}>{para1}</p>
+                  {para2 && <p style={{ margin: "0 0 10px" }}>{para2}</p>}
+                  {para3 && <p style={{ margin: "0 0 10px" }}>{para3}</p>}
+                  {para4 && <p style={{ margin: "0 0 10px" }}>{para4}</p>}
+                  <p style={{ margin: 0 }}>{para5}</p>
+                </div>
+
+                <div style={{ marginTop: "auto", paddingTop: "16px", borderTop: "1px solid #eee" }}>
+                  <p style={{ fontSize: "8.5px", color: "#bbb", margin: 0, lineHeight: 1.5 }}>
+                    This narrative is generated algorithmically from race profile data, athlete history, and terrain gap analysis.
+                    It reflects the data available at the time of report generation and should be read alongside the detailed sections above.
+                    Readiness assessments do not substitute for coach judgement.
+                  </p>
+                </div>
+
+                <PageNumber n={12} />
               </div>
             );
           })()}
