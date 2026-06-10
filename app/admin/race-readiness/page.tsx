@@ -179,6 +179,7 @@ interface ElevProfileMatch {
   halfway_pct: number;
   similarity_pct: number;
   partial_desc: string | null;
+  total_ascent_m: number;
 }
 interface ElevProfileMatchResult {
   goal_loading_label: LoadingLabel | null;
@@ -864,74 +865,80 @@ function GradientHistogram({ sections }: { sections: TerrainSection[] }) {
   );
 }
 
-/* Cumulative ascent line chart — axes in % of distance / % of total ascent */
+/* Cumulative ascent line chart — X axis: % of distance, Y axis: absolute metres */
 function CumulativeAscentChart({ profile, comparison }: {
   profile: RaceElevProfile;
-  comparison?: { curve: number[]; label: string } | null;
+  comparison?: { curve: number[]; totalAscentM: number; label: string } | null;
 }) {
-  const W = 698, H = 170, padL = 44, padR = 12, padT = 16, padB = 36;
+  const W = 698, H = 170, padL = 52, padR = 12, padT = 16, padB = 36;
   const chartW = W - padL - padR, chartH = H - padT - padB;
 
-  // Build goal race normalized curve from raw profile
+  // Build goal race cumulative ascent in absolute metres
   const pts = downsample(profile.points, 400);
-  const cumPts: { pct: number; ascentPct: number }[] = [{ pct: 0, ascentPct: 0 }];
+  const cumPts: { pct: number; ascent: number }[] = [{ pct: 0, ascent: 0 }];
   let running = 0;
   const totalKm = profile.totalDistanceKm;
   for (let i = 1; i < pts.length; i++) {
     const diff = pts[i].elevationM - pts[i - 1].elevationM;
     if (diff > 0) running += diff;
-    cumPts.push({ pct: (pts[i].distanceKm / totalKm) * 100, ascentPct: running });
+    cumPts.push({ pct: (pts[i].distanceKm / totalKm) * 100, ascent: running });
   }
-  const totalAscent = running;
-  // Normalize y to 0–100
-  const normPts = cumPts.map(p => ({ pct: p.pct, ascentPct: totalAscent > 0 ? (p.ascentPct / totalAscent) * 100 : 0 }));
+  const goalTotalAscent = running;
 
-  // Scale helpers (both axes 0–100%)
+  // Shared Y range — driven by whichever race climbs more
+  const compTotalAscent = comparison?.totalAscentM ?? 0;
+  const yMax = Math.max(goalTotalAscent, compTotalAscent, 1);
+
   const xS = (pct: number) => padL + (pct / 100) * chartW;
-  const yS = (pct: number) => padT + chartH - (pct / 100) * chartH;
+  const yS = (m: number)   => padT + chartH - (m / yMax) * chartH;
 
-  const goalLinePts = normPts.map(p => `${xS(p.pct).toFixed(1)},${yS(p.ascentPct).toFixed(1)}`).join(" ");
+  const goalLinePts = cumPts.map(p => `${xS(p.pct).toFixed(1)},${yS(p.ascent).toFixed(1)}`).join(" ");
   const goalAreaD =
     `M${xS(0).toFixed(1)},${(padT + chartH).toFixed(1)} ` +
-    normPts.map(p => `L${xS(p.pct).toFixed(1)},${yS(p.ascentPct).toFixed(1)}`).join(" ") +
+    cumPts.map(p => `L${xS(p.pct).toFixed(1)},${yS(p.ascent).toFixed(1)}`).join(" ") +
     ` L${xS(100).toFixed(1)},${(padT + chartH).toFixed(1)} Z`;
 
-  // Comparison line: N values in [0,1] at x = (i+1)/N * 100
+  // Comparison line: denormalize curve values back to absolute metres
   const compPts = comparison?.curve
     ? [{ x: 0, y: 0 }, ...comparison.curve.map((v, i) => ({
         x: ((i + 1) / comparison.curve.length) * 100,
-        y: v * 100,
+        y: v * comparison.totalAscentM,
       }))]
     : null;
   const compLinePts = compPts
     ? compPts.map(p => `${xS(p.x).toFixed(1)},${yS(p.y).toFixed(1)}`).join(" ")
     : null;
 
-  // Axes: 0%, 25%, 50%, 75%, 100%
-  const pctTicks = [0, 25, 50, 75, 100];
-  // Quarter distance markers (vertical dashed lines)
-  const quarters = [25, 50, 75];
+  // Y-axis ticks at 0%, 25%, 50%, 75%, 100% of yMax
+  const yTickFractions = [0, 0.25, 0.5, 0.75, 1];
+  const xPctTicks = [0, 25, 50, 75, 100];
 
-  // Cumulative ascent % reached at each quarter of distance (for goal race annotation)
+  // Quarter distance annotations (goal race ascent in metres at 25/50/75% distance)
+  const quarters = [25, 50, 75];
   const quartAnnotations = quarters.map(q => {
-    const pt = normPts.reduce((best, p) => Math.abs(p.pct - q) < Math.abs(best.pct - q) ? p : best);
-    return { q, ascentPct: Math.round(pt.ascentPct) };
+    const pt = cumPts.reduce((best, p) => Math.abs(p.pct - q) < Math.abs(best.pct - q) ? p : best);
+    return { q, ascent: Math.round(pt.ascent) };
   });
+
+  const fmtM = (m: number) => m >= 1000 ? `${(m / 1000).toFixed(1)}k m` : `${Math.round(m)} m`;
 
   return (
     <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
-      {/* Grid lines */}
-      {pctTicks.map((t, i) => (
-        <g key={i}>
-          <line x1={padL} y1={yS(t)} x2={W - padR} y2={yS(t)} stroke="#eee" strokeWidth="1" />
-          <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill="#888">{t}%</text>
-        </g>
-      ))}
+      {/* Y grid lines + labels */}
+      {yTickFractions.map((f, i) => {
+        const m = f * yMax;
+        return (
+          <g key={i}>
+            <line x1={padL} y1={yS(m)} x2={W - padR} y2={yS(m)} stroke="#eee" strokeWidth="1" />
+            <text x={padL - 4} y={yS(m) + 3.5} textAnchor="end" fontSize="7.5" fill="#888">{fmtM(m)}</text>
+          </g>
+        );
+      })}
       {/* Quarter distance markers */}
-      {quartAnnotations.map(({ q, ascentPct }, i) => (
+      {quartAnnotations.map(({ q, ascent }, i) => (
         <g key={i}>
           <line x1={xS(q)} y1={padT} x2={xS(q)} y2={padT + chartH} stroke="#e0e0e0" strokeWidth="1" strokeDasharray="3,3" />
-          <text x={xS(q)} y={padT - 3} textAnchor="middle" fontSize="7.5" fill="#aaa">{ascentPct}%</text>
+          <text x={xS(q)} y={padT - 3} textAnchor="middle" fontSize="7.5" fill="#aaa">{fmtM(ascent)}</text>
         </g>
       ))}
       {/* Goal race area + line */}
@@ -942,13 +949,11 @@ function CumulativeAscentChart({ profile, comparison }: {
         <polyline points={compLinePts} fill="none" stroke="#1565c0" strokeWidth="1.8"
           strokeLinejoin="round" strokeDasharray="5,3" />
       )}
-      {/* 50% ascent reference */}
-      <line x1={padL} y1={yS(50)} x2={W - padR} y2={yS(50)} stroke="#888" strokeWidth="1" strokeDasharray="4,4" opacity="0.35" />
       {/* Axes */}
       <line x1={padL} y1={padT} x2={padL} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
       <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
       {/* X-axis ticks */}
-      {pctTicks.map((t, i) => (
+      {xPctTicks.map((t, i) => (
         <g key={i}>
           <line x1={xS(t)} y1={padT + chartH} x2={xS(t)} y2={padT + chartH + 4} stroke="#ccc" strokeWidth="1" />
           <text x={xS(t)} y={padT + chartH + 12} textAnchor="middle" fontSize="8" fill="#888">{t}%</text>
@@ -960,17 +965,17 @@ function CumulativeAscentChart({ profile, comparison }: {
         x={10} y={padT + chartH / 2}
         textAnchor="middle" fontSize="7.5" fill="#aaa"
         transform={`rotate(-90, 10, ${padT + chartH / 2})`}
-      >% of total ascent</text>
+      >cumulative ascent (m)</text>
       {/* Legend */}
       {comparison && (
         <g transform={`translate(${padL + 8}, ${padT + 8})`}>
-          <rect x={0} y={0} width={280} height={22} fill="white" opacity={0.88} rx={3} />
+          <rect x={0} y={0} width={320} height={22} fill="white" opacity={0.88} rx={3} />
           <line x1={6} y1={11} x2={22} y2={11} stroke="#c0392b" strokeWidth="2" />
-          <text x={27} y={14.5} fontSize="8" fill="#333">Goal race</text>
+          <text x={27} y={14.5} fontSize="8" fill="#333">Goal race ({Math.round(goalTotalAscent).toLocaleString()} m ↑)</text>
           {compLinePts && (
             <>
-              <line x1={84} y1={11} x2={100} y2={11} stroke="#1565c0" strokeWidth="1.8" strokeDasharray="5,3" />
-              <text x={105} y={14.5} fontSize="8" fill="#333">{comparison.label}</text>
+              <line x1={140} y1={11} x2={156} y2={11} stroke="#1565c0" strokeWidth="1.8" strokeDasharray="5,3" />
+              <text x={161} y={14.5} fontSize="8" fill="#333">{comparison.label} ({comparison.totalAscentM.toLocaleString()} m ↑)</text>
             </>
           )}
         </g>
@@ -2191,7 +2196,11 @@ export default function RaceReadinessPage() {
                     profile={elevProfile}
                     comparison={
                       elevProfileMatch?.best_match && elevProfileMatch.match_curve
-                        ? { curve: elevProfileMatch.match_curve, label: `${elevProfileMatch.best_match.race_name} (${elevProfileMatch.best_match.year})` }
+                        ? {
+                            curve: elevProfileMatch.match_curve,
+                            totalAscentM: elevProfileMatch.best_match.total_ascent_m,
+                            label: `${elevProfileMatch.best_match.race_name} (${elevProfileMatch.best_match.year})`,
+                          }
                         : null
                     }
                   />
@@ -2262,21 +2271,45 @@ export default function RaceReadinessPage() {
                     <div style={{ fontSize: "10px", color: "#444", lineHeight: 1.55 }}>
                       {body}
                     </div>
-                    {m && (
-                      <div style={{ display: "flex", gap: "16px", marginTop: "8px", flexWrap: "wrap" }}>
-                        {[
-                          { label: "Similarity",   value: `${m.similarity_pct}%` },
-                          { label: "Past race",     value: `${m.race_km.toFixed(0)} km` },
-                          { label: "Loading",       value: m.loading_label === "front" ? "Front-loaded" : m.loading_label === "back" ? "Back-loaded" : "Even" },
-                          { label: "Halfway ascent", value: `${m.halfway_pct}% by halfway` },
-                        ].map(({ label, value }) => (
-                          <div key={label} style={{ fontSize: "9.5px" }}>
-                            <div style={{ color: "#aaa", marginBottom: "1px" }}>{label}</div>
-                            <div style={{ fontWeight: 600, color: "#333" }}>{value}</div>
+                    {m && (() => {
+                      const goalAscent = elevProfile?.points
+                        ? (() => {
+                            let acc = 0;
+                            const sorted = [...elevProfile.points].sort((a, b) => a.distanceKm - b.distanceKm);
+                            for (let i = 1; i < sorted.length; i++) {
+                              const d = sorted[i].elevationM - sorted[i - 1].elevationM;
+                              if (d > 0) acc += d;
+                            }
+                            return acc;
+                          })()
+                        : null;
+                      const lowVolumeNote = goalAscent && goalAscent > 0 && m.total_ascent_m < goalAscent * 0.5
+                        ? `Note: this past race has ${Math.round((m.total_ascent_m / goalAscent) * 100)}% of the goal race's climbing — the distribution pattern is similar but the volume is materially less.`
+                        : null;
+                      return (
+                        <>
+                          <div style={{ display: "flex", gap: "16px", marginTop: "8px", flexWrap: "wrap" }}>
+                            {[
+                              { label: "Similarity",        value: `${m.similarity_pct}%` },
+                              { label: "Past race dist.",   value: `${m.race_km.toFixed(0)} km` },
+                              { label: "Past race ascent",  value: `${m.total_ascent_m.toLocaleString()} m` },
+                              { label: "Loading",           value: m.loading_label === "front" ? "Front-loaded" : m.loading_label === "back" ? "Back-loaded" : "Even" },
+                              { label: "Halfway ascent",    value: `${m.halfway_pct}% by halfway` },
+                            ].map(({ label, value }) => (
+                              <div key={label} style={{ fontSize: "9.5px" }}>
+                                <div style={{ color: "#aaa", marginBottom: "1px" }}>{label}</div>
+                                <div style={{ fontWeight: 600, color: "#333" }}>{value}</div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          {lowVolumeNote && (
+                            <div style={{ marginTop: "6px", fontSize: "9px", color: "#888", fontStyle: "italic" }}>
+                              {lowVolumeNote}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     {!m && em.races_compared > 0 && goalDesc && (
                       <div style={{ marginTop: "6px", fontSize: "9px", color: "#888" }}>
                         {em.races_compared} past race{em.races_compared !== 1 ? "s" : ""} compared

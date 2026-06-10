@@ -45,6 +45,8 @@ export interface ElevProfileMatch {
    * e.g. "the first 42 km (first half)" or null when roughly same length.
    */
   partial_desc: string | null;
+  /** Total ascent of the matched past race in metres */
+  total_ascent_m: number;
 }
 
 export interface ElevProfileMatchResult {
@@ -82,35 +84,33 @@ function parseElevPoints(value: unknown): { points: ElevPoint[]; totalKm: number
 }
 
 /**
- * Compute an N-point normalized cumulative-ascent curve (default N=20).
- * Returns an array of N values in [0,1] representing the fraction of total
- * ascent accumulated at each (100/N)% step of the course distance.
- * Returns null when there is insufficient ascent data.
+ * Compute an N-point normalized cumulative-ascent curve (default N=20) plus
+ * the race's total ascent in metres. Returns null when there is insufficient
+ * ascent data (< 20m total).
  */
-function normalizedCurve(points: ElevPoint[], totalKm: number, N = 20): number[] | null {
+function computeElevData(points: ElevPoint[], totalKm: number, N = 20):
+  { curve: number[]; totalAscent: number } | null {
   if (totalKm <= 0 || points.length < 2) return null;
   const sorted = [...points].sort((a, b) => a.distanceKm - b.distanceKm);
 
-  // Pre-compute cumulative ascending altitude at every point
   const cumAscent: number[] = new Array(sorted.length).fill(0);
   for (let i = 1; i < sorted.length; i++) {
     const diff = sorted[i].elevationM - sorted[i - 1].elevationM;
     cumAscent[i] = cumAscent[i - 1] + (diff > 0 ? diff : 0);
   }
   const totalAscent = cumAscent[cumAscent.length - 1];
-  if (totalAscent < 20) return null; // essentially flat — skip
+  if (totalAscent < 20) return null;
 
-  const result: number[] = [];
+  const curve: number[] = [];
   for (let step = 1; step <= N; step++) {
     const targetKm = (step / N) * totalKm;
-    // Find last point at or before targetKm
     let idx = sorted.length - 1;
     for (let i = 0; i < sorted.length; i++) {
       if (sorted[i].distanceKm > targetKm) { idx = Math.max(0, i - 1); break; }
     }
-    result.push(cumAscent[idx] / totalAscent);
+    curve.push(cumAscent[idx] / totalAscent);
   }
-  return result;
+  return { curve, totalAscent };
 }
 
 function halfwayPct(curve: number[]): number {
@@ -187,8 +187,12 @@ export async function GET(req: NextRequest) {
   const goalParsed = parseElevPoints(goalMeta?.meta_value);
   if (!goalParsed) return NextResponse.json(empty);
 
-  const goalCurve = normalizedCurve(goalParsed.points, goalParsed.totalKm);
-  if (!goalCurve) return NextResponse.json(empty);
+  const goalElevData = computeElevData(goalParsed.points, goalParsed.totalKm);
+  if (!goalElevData) return NextResponse.json(empty);
+
+  const goalCurve = goalElevData.curve;
+  const goalTotalAscent = goalElevData.totalAscent;
+  const goalDensity = goalTotalAscent / goalParsed.totalKm; // m/km
 
   const goalHwPct = halfwayPct(goalCurve);
   const goalLabel = loadingLabel(goalHwPct);
@@ -239,20 +243,32 @@ export async function GET(req: NextRequest) {
     const parsed  = parseElevPoints(row.meta_value);
     if (!parsed) continue;
 
-    const curve = normalizedCurve(parsed.points, parsed.totalKm);
-    if (!curve) continue;
+    const elevData = computeElevData(parsed.points, parsed.totalKm);
+    if (!elevData) continue;
+
+    const { curve, totalAscent: compTotalAscent } = elevData;
 
     racesCompared++;
+
+    // Shape similarity (pure distribution match)
     const mae      = curveMAE(goalCurve, curve);
-    const simPct   = maeToPct(mae);
+    const shapeSim = 1 - mae * 2; // 0–1
+
+    // Climbing-density penalty: penalises races with very different m/km
+    const compDensity   = compTotalAscent / parsed.totalKm;
+    const densityRatio  = Math.min(goalDensity, compDensity) / Math.max(goalDensity, compDensity);
+    const adjustedSim   = shapeSim * Math.sqrt(densityRatio);
+    const adjustedMAE   = (1 - adjustedSim) / 2;
+
+    const simPct   = Math.max(0, Math.round(adjustedSim * 100));
     const hwPct    = halfwayPct(curve);
     const label    = loadingLabel(hwPct);
     const partial  = partialDesc(parsed.totalKm, goalParsed.totalKm);
     const raceName = nameMap[raceId] ?? "Unknown race";
     const year     = bestYearByRace[raceId] ?? 0;
 
-    if (mae < bestMAE) {
-      bestMAE = mae;
+    if (adjustedMAE < bestMAE) {
+      bestMAE = adjustedMAE;
       bestMatchCurve = curve;
       bestMatch = {
         race_name:       raceName,
@@ -262,11 +278,12 @@ export async function GET(req: NextRequest) {
         halfway_pct:     hwPct,
         similarity_pct:  simPct,
         partial_desc:    partial,
+        total_ascent_m:  Math.round(compTotalAscent),
       };
     }
   }
 
-  // Only surface a match if similarity is meaningful (MAE < 0.20 → sim > 60%)
+  // Only surface a match if similarity is meaningful (adjusted MAE < 0.20)
   const surfacedMatch = bestMAE < 0.20 ? bestMatch : null;
 
   return NextResponse.json({
