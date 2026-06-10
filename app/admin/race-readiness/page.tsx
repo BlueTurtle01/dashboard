@@ -2904,13 +2904,22 @@ export default function RaceReadinessPage() {
               return { ...tp, exactKm, crossKm, crossSurface, pct, status };
             });
 
+            const climbRows   = gapRows.filter(r => r.section_type.includes("climb"));
+            const descentRows = gapRows.filter(r => r.section_type.includes("descent"));
+            const flatRows    = gapRows.filter(r => !r.section_type.includes("climb") && !r.section_type.includes("descent"));
+
             const noneCount       = gapRows.filter(r => r.status === "none").length;
             const surfaceGapCount = gapRows.filter(r => r.status === "surface_gap").length;
             const partialCount    = gapRows.filter(r => r.status === "partial").length;
             const metCount        = gapRows.filter(r => r.status === "met").length;
 
-            const sectionTypeLabel = (s: string) =>
-              s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const sectionTypeLabel = (s: string, avgGrad?: number) => {
+              if (avgGrad !== undefined) {
+                if (s === "steep_climb"   && avgGrad >= 12) return "Very Steep Climb";
+                if (s === "steep_descent" && avgGrad <= -12) return "Very Steep Descent";
+              }
+              return s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            };
             const terrainLabel = (t: string) =>
               t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
             const pairingColor = (s: string) =>
@@ -2922,6 +2931,55 @@ export default function RaceReadinessPage() {
               if (row.status === "surface_gap")  return { label: "Surface gap",   bg: "#fff3e0", color: "#e65100" };
               return                                    { label: "No experience", bg: "#fce4ec", color: "#c0392b" };
             };
+
+            const sectionSummary = (rows: typeof gapRows) => {
+              const gaps    = rows.filter(r => r.status === "none").length;
+              const surface = rows.filter(r => r.status === "surface_gap").length;
+              const partial = rows.filter(r => r.status === "partial").length;
+              const covered = rows.filter(r => r.status === "met").length;
+              const parts: string[] = [];
+              if (gaps    > 0) parts.push(`${gaps} no experience`);
+              if (surface > 0) parts.push(`${surface} surface gap${surface !== 1 ? "s" : ""}`);
+              if (partial > 0) parts.push(`${partial} partial`);
+              if (covered > 0) parts.push(`${covered} covered`);
+              return parts.join(" · ");
+            };
+
+            const renderGapRows = (rows: typeof gapRows) =>
+              rows.map((row, i) => {
+                const col   = pairingColor(row.section_type);
+                const badge = statusBadge(row);
+                return (
+                  <tr key={`${row.section_type}|${row.terrain}`} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>
+                      <span style={{ color: col }}>{sectionTypeLabel(row.section_type, row.avg_gradient)}</span>
+                      <div style={{ fontSize: "8.5px", color: "#aaa", fontWeight: 400, marginTop: "1px" }}>
+                        {terrainLabel(row.terrain)} · avg {row.avg_gradient > 0 ? "+" : ""}{row.avg_gradient.toFixed(1)}%
+                      </div>
+                    </td>
+                    <td style={{ ...tdStyle, fontWeight: 700 }}>{row.km.toFixed(1)}</td>
+                    <td style={tdStyle}>
+                      <span style={{ color: row.exactKm > 0 ? "#333" : "#ccc", fontWeight: row.exactKm > 0 ? 600 : 400 }}>
+                        {row.exactKm > 0 ? `${row.exactKm.toFixed(1)} km` : "—"}
+                      </span>
+                    </td>
+                    <td style={tdStyle}>
+                      {row.crossKm > 0 && row.crossSurface ? (
+                        <span style={{ color: row.status === "surface_gap" ? "#e65100" : "#aaa", fontSize: "10px" }}>
+                          {row.crossKm.toFixed(1)} km on {terrainLabel(row.crossSurface)}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#ddd" }}>—</span>
+                      )}
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={{ background: badge.bg, color: badge.color, borderRadius: "10px", padding: "2px 8px", fontSize: "9.5px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {badge.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              });
 
             return (
               <div style={a4Page}>
@@ -2935,7 +2993,7 @@ export default function RaceReadinessPage() {
 
                 <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Experience Gaps</h2>
                 <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
-                  Every terrain demand of {result.race.name} — ordered by distance on course (most impactful first)
+                  Every terrain demand of {result.race.name} — split by ascent and descent
                 </p>
 
                 {/* Summary chips */}
@@ -2998,7 +3056,7 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                {/* Gap table — 5 columns */}
+                {/* Gap table — split by ascent / descent / flat */}
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
@@ -3010,40 +3068,39 @@ export default function RaceReadinessPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {gapRows.map((row, i) => {
-                      const col   = pairingColor(row.section_type);
-                      const badge = statusBadge(row);
-                      return (
-                        <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                          <td style={{ ...tdStyle, fontWeight: 600 }}>
-                            <span style={{ color: col }}>{sectionTypeLabel(row.section_type)}</span>
-                            <div style={{ fontSize: "8.5px", color: "#aaa", fontWeight: 400, marginTop: "1px" }}>
-                              {terrainLabel(row.terrain)} · avg {row.avg_gradient > 0 ? "+" : ""}{row.avg_gradient.toFixed(1)}%
-                            </div>
-                          </td>
-                          <td style={{ ...tdStyle, fontWeight: 700 }}>{row.km.toFixed(1)}</td>
-                          <td style={tdStyle}>
-                            <span style={{ color: row.exactKm > 0 ? "#333" : "#ccc", fontWeight: row.exactKm > 0 ? 600 : 400 }}>
-                              {row.exactKm > 0 ? `${row.exactKm.toFixed(1)} km` : "—"}
-                            </span>
-                          </td>
-                          <td style={tdStyle}>
-                            {row.crossKm > 0 && row.crossSurface ? (
-                              <span style={{ color: row.status === "surface_gap" ? "#e65100" : "#aaa", fontSize: "10px" }}>
-                                {row.crossKm.toFixed(1)} km on {terrainLabel(row.crossSurface)}
-                              </span>
-                            ) : (
-                              <span style={{ color: "#ddd" }}>—</span>
-                            )}
-                          </td>
-                          <td style={tdStyle}>
-                            <span style={{ background: badge.bg, color: badge.color, borderRadius: "10px", padding: "2px 8px", fontSize: "9.5px", fontWeight: 700, whiteSpace: "nowrap" }}>
-                              {badge.label}
-                            </span>
+                    {climbRows.length > 0 && (
+                      <>
+                        <tr>
+                          <td colSpan={5} style={{ padding: "5px 8px", background: "#f9ecec", borderTop: "2px solid #c0392b", borderBottom: "1px solid #f0c8c8" }}>
+                            <span style={{ fontWeight: 700, fontSize: "10px", color: "#c0392b", textTransform: "uppercase", letterSpacing: "0.06em" }}>▲ Ascent</span>
+                            <span style={{ marginLeft: "10px", fontSize: "9px", color: "#999" }}>{sectionSummary(climbRows)}</span>
                           </td>
                         </tr>
-                      );
-                    })}
+                        {renderGapRows(climbRows)}
+                      </>
+                    )}
+                    {descentRows.length > 0 && (
+                      <>
+                        <tr>
+                          <td colSpan={5} style={{ padding: "5px 8px", background: "#eaf2fb", borderTop: "2px solid #1565c0", borderBottom: "1px solid #c3d9f3" }}>
+                            <span style={{ fontWeight: 700, fontSize: "10px", color: "#1565c0", textTransform: "uppercase", letterSpacing: "0.06em" }}>▼ Descent</span>
+                            <span style={{ marginLeft: "10px", fontSize: "9px", color: "#999" }}>{sectionSummary(descentRows)}</span>
+                          </td>
+                        </tr>
+                        {renderGapRows(descentRows)}
+                      </>
+                    )}
+                    {flatRows.length > 0 && (
+                      <>
+                        <tr>
+                          <td colSpan={5} style={{ padding: "5px 8px", background: "#f0f7f0", borderTop: "2px solid #2e7d32", borderBottom: "1px solid #c3e6c3" }}>
+                            <span style={{ fontWeight: 700, fontSize: "10px", color: "#2e7d32", textTransform: "uppercase", letterSpacing: "0.06em" }}>— Flat / Rolling</span>
+                            <span style={{ marginLeft: "10px", fontSize: "9px", color: "#999" }}>{sectionSummary(flatRows)}</span>
+                          </td>
+                        </tr>
+                        {renderGapRows(flatRows)}
+                      </>
+                    )}
                   </tbody>
                 </table>
 
@@ -3051,7 +3108,7 @@ export default function RaceReadinessPage() {
                   <strong>Covered</strong> — raced this terrain at or above the required volume.{" "}
                   <strong>Surface gap</strong> — done this gradient on a different surface; aerobic fitness transfers but terrain-specific adaptation does not.{" "}
                   <strong>No experience</strong> — this gradient and surface combination is untested in any race on record.
-                  Demands ordered by course distance — longer sections have greater physical consequence.
+                  Demands ordered by course distance within each section — longer sections have greater physical consequence.
                 </div>
 
                 <PageNumber n={8} />
@@ -3084,8 +3141,13 @@ export default function RaceReadinessPage() {
             const pairings = (reportAthlete.terrain_pairings ?? []).slice(0, 10);
             const maxPairingKm = pairings.reduce((m, p) => Math.max(m, p.total_km), 0) || 1;
 
-            const sectionTypeLabel = (s: string) =>
-              s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const sectionTypeLabel = (s: string, avgGrad?: number) => {
+              if (avgGrad !== undefined) {
+                if (s === "steep_climb"   && avgGrad >= 12) return "Very Steep Climb";
+                if (s === "steep_descent" && avgGrad <= -12) return "Very Steep Descent";
+              }
+              return s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            };
             const terrainLabel = (t: string) =>
               t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
             const pairingColor = (s: string) =>
@@ -3196,7 +3258,7 @@ export default function RaceReadinessPage() {
                           return (
                             <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                               <td style={{ ...tdStyle, fontWeight: 600, color: col }}>
-                                {sectionTypeLabel(pair.section_type)}
+                                {sectionTypeLabel(pair.section_type, pair.avg_gradient)}
                                 <div style={{ fontSize: "8.5px", color: "#999", fontWeight: 400, marginTop: "1px" }}>
                                   avg {pair.avg_gradient > 0 ? "+" : ""}{pair.avg_gradient.toFixed(1)}%
                                 </div>
