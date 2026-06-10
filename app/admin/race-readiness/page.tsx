@@ -1717,12 +1717,14 @@ export default function RaceReadinessPage() {
             }
             if (ascentStatus === "major_gap" && athAscent > 0 && goalAscent > 0) {
               const ar = (goalAscent / athAscent).toFixed(1);
+              const goalPerKm = goalDist > 0 ? Math.round(goalAscent / goalDist) : 0;
               verdictParts.push(
-                `The main concern is not distance — it is vertical load. The target race demands ${Math.round(goalAscent).toLocaleString()} m of ascent, ` +
-                `${ar}× more than the best on record (${Math.round(athAscent).toLocaleString()} m).`
+                `The main concern is not distance — it is vertical load. The target race demands ${Math.round(goalAscent).toLocaleString()} m of ascent ` +
+                `(${goalPerKm} m/km), ${ar}× more than the best on record (${Math.round(athAscent).toLocaleString()} m).`
               );
             } else if (ascentStatus === "moderate" && athAscent > 0 && goalAscent > 0) {
-              verdictParts.push(`The ascent load is a step up: ${Math.round(goalAscent).toLocaleString()} m target vs ${Math.round(athAscent).toLocaleString()} m best recorded.`);
+              const goalPerKm = goalDist > 0 ? Math.round(goalAscent / goalDist) : 0;
+              verdictParts.push(`The ascent load is a step up: ${Math.round(goalAscent).toLocaleString()} m target (${goalPerKm} m/km) vs ${Math.round(athAscent).toLocaleString()} m best recorded.`);
             }
             if (verdictParts.length === 0) {
               verdictParts.push(`${firstName}'s readiness for ${result.race.name} has been assessed across distance, ascent, descent, and terrain specificity.`);
@@ -1768,7 +1770,6 @@ export default function RaceReadinessPage() {
             if (ascentStatus === "major_gap") risks.push("Repeated steep climbs causing unsustainable effort spikes — no equivalent training stimulus visible in race history.");
             if (descentStatus === "major_gap" || descentStatus === "moderate") risks.push("Steep descending creating quad fatigue and elevated injury risk over the second half of the course.");
             if (terrainStatus === "major_gap") risks.push("Limited trail and fell-specific experience — technical terrain adds time, effort, and navigational risk.");
-            if (wetPct !== null && wetPct > 50) risks.push(`Wet conditions (${wetPct}% historical chance of rain) increasing technical difficulty and energy expenditure.`);
             if (distStatus === "strong" && (ascentStatus === "major_gap" || terrainStatus === "major_gap")) risks.push("Pacing trap — the distance alone may feel manageable, masking the much larger vertical and terrain demands.");
             if (risks.length === 0) {
               risks.push("Maintain race-specific training quality and a disciplined taper approach.");
@@ -1863,9 +1864,26 @@ export default function RaceReadinessPage() {
                 </div>
 
                 <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Race Readiness Summary</h2>
-                <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
+                <p style={{ margin: "0 0 10px", fontSize: "12px", color: "#888" }}>
                   A plain-English assessment of whether {firstName} is currently prepared for {result.race.name}
                 </p>
+
+                {/* ── Race Ready definition ────────────────────────────────── */}
+                <div style={{
+                  background: "#f5f5f5", border: "1px solid #e0e0e0",
+                  borderLeft: "4px solid #546e7a", borderRadius: "6px",
+                  padding: "10px 14px", marginBottom: "12px",
+                }}>
+                  <div style={{ fontSize: "10px", fontWeight: 700, color: "#546e7a", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px" }}>
+                    What &ldquo;race ready&rdquo; means in this report
+                  </div>
+                  <div style={{ fontSize: "10.5px", color: "#444", lineHeight: 1.55 }}>
+                    Race ready means you have the physical foundation to complete this race safely and without being overwhelmed by its specific demands.
+                    {" "}It does not mean you will win, hit a target time, or that preparation is complete.
+                    {" "}It means the gap between what this race requires and what you have demonstrated in prior racing is manageable with appropriate preparation.
+                    {" "}Where gaps exist, this report identifies them specifically.
+                  </div>
+                </div>
 
                 {/* ── Overall verdict ─────────────────────────────────────── */}
                 <div style={{
@@ -2027,79 +2045,29 @@ export default function RaceReadinessPage() {
               );
             })()}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-              <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "8px", padding: "12px 14px" }}>
-                <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.05em" }}>Historical Weather</p>
-                {weatherLoading ? (
-                  <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>Loading…</p>
-                ) : weather.length > 0 && avgMaxTemp !== null ? (
-                  <>
-                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "10px" }}>
-                      {[
-                        { label: "Avg high",        value: `${avgMaxTemp.toFixed(1)}°C` },
-                        { label: "Avg low",          value: `${avgMinTemp!.toFixed(1)}°C` },
-                        { label: "Avg rain",         value: `${avgPrecip!.toFixed(1)} mm` },
-                        { label: "Wet probability",  value: `${wetPct}%` },
-                      ].map(({ label, value }) => (
-                        <div key={label} style={{ fontSize: "10px" }}>
-                          <div style={{ color: "#aaa" }}>{label}</div>
-                          <div style={{ fontWeight: 700, color: "#333", fontSize: "12px" }}>{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <p style={{ margin: 0, fontSize: "10px", color: "#555", lineHeight: "1.5" }}>
-                      {(() => {
-                        const meanAvg = (avgMaxTemp + avgMinTemp!) / 2;
-                        const wPct = wetPct ?? 0;
-                        const tempNote = meanAvg < 5 ? "Cold conditions typical." :
-                          meanAvg <= 13 ? "Near-optimal temperatures." :
-                          meanAvg <= 18 ? `Mild warmth (avg ${meanAvg.toFixed(0)}°C) — modest effort penalty.` :
-                          `Warm conditions (avg ${meanAvg.toFixed(0)}°C) — plan heat management.`;
-                        const rainNote = wPct < 30 ? "Rain uncommon." :
-                          wPct < 60 ? `Rain in ${wPct}% of years — pack wet-weather kit.` :
-                          `Rain likely (${wPct}% of years).`;
-                        return `${tempNote} ${rainNote}`;
-                      })()}
-                    </p>
-                    <p style={{ margin: "4px 0 0", fontSize: "9px", color: "#bbb" }}>ERA5 reanalysis · last {weather.length} years</p>
-                  </>
-                ) : (
-                  <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>
-                    {raceDate ? "No weather data available." : "No race date on record."}
-                  </p>
-                )}
-              </div>
-
-              <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "8px", padding: "12px 14px" }}>
+            {raceStats && (
+              <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "8px", padding: "12px 14px", marginBottom: "16px" }}>
                 <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Race History{raceStats?.year ? ` · ${raceStats.year}` : ""}
+                  Race History{raceStats.year ? ` · ${raceStats.year}` : ""}
                 </p>
-                {raceStats ? (
-                  <>
-                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "10px" }}>
-                      {[
-                        { label: "Finishers",    value: raceStats.total.toLocaleString() },
-                        { label: "Fastest",      value: formatRaceTime(raceStats.fastestMin) },
-                        { label: "Median time",  value: formatRaceTime(raceStats.medianMin) },
-                      ].map(({ label, value }) => (
-                        <div key={label} style={{ fontSize: "10px" }}>
-                          <div style={{ color: "#aaa" }}>{label}</div>
-                          <div style={{ fontWeight: 700, color: "#333", fontSize: "12px" }}>{value}</div>
-                        </div>
-                      ))}
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                  {[
+                    { label: "Finishers",    value: raceStats.total.toLocaleString() },
+                    { label: "Fastest",      value: formatRaceTime(raceStats.fastestMin) },
+                    { label: "Median time",  value: formatRaceTime(raceStats.medianMin) },
+                  ].map(({ label, value }) => (
+                    <div key={label} style={{ fontSize: "10px" }}>
+                      <div style={{ color: "#aaa" }}>{label}</div>
+                      <div style={{ fontWeight: 700, color: "#333", fontSize: "12px" }}>{value}</div>
                     </div>
-                    {results?.distribution && <DistributionMini dist={results.distribution} totalFinishers={raceStats.total} />}
-                  </>
-                ) : (
-                  <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>No results data on record.</p>
-                )}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{ marginTop: "auto", paddingTop: "12px", borderTop: "1px solid #eee" }}>
               <p style={{ margin: 0, fontSize: "9px", color: "#bbb", lineHeight: "1.5" }}>
                 Course data derived from GPX file. Elevation data from ERA5 reanalysis. Race results from official published results.
-                {weather.length > 0 && " Weather: Hersbach et al. (2023) ERA5 via Open-Meteo Historical Weather API."}
               </p>
             </div></>}
             <PageNumber n={2} />
@@ -2121,6 +2089,9 @@ export default function RaceReadinessPage() {
               <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Elevation</h2>
               <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#555", lineHeight: 1.5 }}>
                 The elevation profile, composition, and climbing load show how ascent is distributed across {result.race.name} — when the hard work arrives and how the course is weighted.
+                {result.race.total_ascent_m > 0 && result.race.total_distance_km > 0 && (
+                  <> The course averages <strong>{(result.race.total_ascent_m / result.race.total_distance_km).toFixed(0)} m of ascent per km</strong> — a distance-neutral measure that allows comparison across races of different lengths.</>
+                )}
               </p>
 
               {/* ── Elevation profile chart ── */}
@@ -2386,12 +2357,69 @@ export default function RaceReadinessPage() {
                 </div>
               </div>
 
-              {/* ── Section 4: Terrain colour strip ── */}
-              <div style={{ marginBottom: "20px" }}>
-                <p style={{ ...sectionLabel, marginBottom: "8px" }}>Terrain Character Strip — gradient colour across the course</p>
-                <TerrainStrip sections={secs} totalKm={totalKm} />
-                <div style={{ marginTop: "8px" }} />
-              </div>
+              {/* ── Technical terrain analysis ── */}
+              {(() => {
+                const technicalSecs = secs.filter(s => s.terrain === "trail" || s.terrain === "fell" || s.terrain === "mountain" || s.terrain === "technical_trail");
+                const totalTechnicalKm = Math.round(technicalSecs.reduce((sum, s) => sum + s.distance_km, 0) * 10) / 10;
+                const technicalPct = totalKm > 0 ? Math.round((totalTechnicalKm / totalKm) * 100) : 0;
+                const lateThirdStart = totalKm * (2 / 3);
+                const midThirdStart  = totalKm / 3;
+                const lateTechnicalKm  = Math.round(technicalSecs.filter(s => s.start_km >= lateThirdStart).reduce((sum, s) => sum + s.distance_km, 0) * 10) / 10;
+                const earlyTechnicalKm = Math.round(technicalSecs.filter(s => s.end_km   <= midThirdStart).reduce((sum, s) => sum + s.distance_km, 0) * 10) / 10;
+
+                let technicalSummary = "";
+                let technicalAccent = "#546e7a";
+                if (totalTechnicalKm === 0) {
+                  technicalSummary = "No technical (trail, fell, or mountain) terrain detected on this course. The route runs predominantly on road or gravel.";
+                } else if (lateTechnicalKm / totalTechnicalKm > 0.4) {
+                  technicalAccent = "#e65100";
+                  technicalSummary = `${lateTechnicalKm} km of technical terrain arrives in the final third of the race — when fatigue is highest and foot-placement errors are most likely. `
+                    + `Athletes with limited trail or fell experience are at elevated risk of slowing significantly, losing confidence on technical descents, or misjudging footing under fatigue. `
+                    + `Specific preparation on this terrain type, especially late in long training runs, is important.`;
+                } else if (earlyTechnicalKm / totalTechnicalKm > 0.4) {
+                  technicalAccent = "#f57c00";
+                  technicalSummary = `Most technical terrain is concentrated in the first third of the race. `
+                    + `Managing pace on this ground early is critical — going too hard on technical surface at the start will compound fatigue over the remainder of the course.`;
+                } else {
+                  technicalSummary = `Technical terrain is distributed across the course rather than concentrated in one section. `
+                    + `Consistent movement efficiency on variable ground will be required throughout the race.`;
+                }
+
+                if (totalTechnicalKm === 0) {
+                  return null;
+                }
+
+                return (
+                  <div style={{ marginBottom: "20px" }}>
+                    <p style={{ ...sectionLabel, marginBottom: "8px" }}>Technical Terrain on Course</p>
+                    <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+                      {[
+                        { label: "Technical km", value: `${totalTechnicalKm} km` },
+                        { label: "% of course",  value: `${technicalPct}%` },
+                        { label: "In final third", value: `${lateTechnicalKm} km` },
+                        { label: "In first third", value: `${earlyTechnicalKm} km` },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ border: "1px solid #e0e0e0", borderRadius: "5px", padding: "6px 12px", fontSize: "10px", background: "#fafafa" }}>
+                          <div style={{ color: "#aaa", marginBottom: "2px" }}>{label}</div>
+                          <div style={{ fontWeight: 700, color: "#1e3a1e", fontSize: "12px" }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{
+                      background: "#fafafa", border: "1px solid #e0e0e0",
+                      borderLeft: `4px solid ${technicalAccent}`, borderRadius: "6px",
+                      padding: "10px 14px",
+                    }}>
+                      <div style={{ fontSize: "10px", fontWeight: 700, color: technicalAccent, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>
+                        Technical Terrain Assessment
+                      </div>
+                      <div style={{ fontSize: "10.5px", color: "#333", lineHeight: 1.5 }}>
+                        {technicalSummary}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ── What this means for you ── */}
               {totalKm > 0 && totalAscentM > 0 && effortRatio > 0 && (
@@ -2407,8 +2435,6 @@ export default function RaceReadinessPage() {
                     {result.race.name} is not just a {totalKm.toFixed(0)} km endurance challenge.
                     {" "}The {Math.round(totalAscentM).toLocaleString()} m of ascent and {Math.round(totalDescentM).toLocaleString()} m of descent make each kilometre
                     significantly more costly than flat running — averaging {effortRatio.toFixed(2)}× the effort.
-                    {" "}Pacing by fixed pace targets is less reliable on terrain like this;
-                    effort, heart rate, or breathing rate are better guides.
                     {" "}The primary preparation need is vertical durability: climbing strength, downhill resilience,
                     and the ability to stay controlled after repeated effort spikes.
                   </div>
@@ -2522,71 +2548,35 @@ export default function RaceReadinessPage() {
                       a comparative load metric, not a literal distance prediction.
                     </>
                   ) : null}
-                  {halfway ? (
-                    <> Historical data: <strong>{halfway.pct_positive_split.toFixed(0)}%</strong> of athletes run a positive split (too fast in the first half).</>
-                  ) : null}
                 </DemandCard>
               </div>
 
-              {/* ── Race pattern data (if available) ── */}
-              {(halfway ?? late) && (
+              {/* ── Late race pattern data (if available) ── */}
+              {late && (
                 <div style={{ marginBottom: "16px" }}>
-                  <p style={sectionLabel}>Race Pattern — from {raceStats?.year ?? "historical"} results data</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    {halfway && (
-                      <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "6px", padding: "12px 14px" }}>
-                        <p style={{ margin: "0 0 8px", fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                          Halfway Split — {halfway.label}
-                        </p>
-                        <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
-                          {[
-                            { label: "Recommended split", value: formatSecs(halfway.recommended_seconds) },
-                            { label: "Aggressive split",  value: formatSecs(halfway.aggressive_seconds) },
-                            { label: "Positive split %",  value: `${halfway.pct_positive_split.toFixed(0)}%` },
-                            { label: "Typical ratio",     value: `${(halfway.typical_ratio * 100).toFixed(1)}% of finish` },
-                          ].map(({ label, value }) => (
-                            <div key={label} style={{ fontSize: "10px" }}>
-                              <div style={{ color: "#aaa", marginBottom: "2px" }}>{label}</div>
-                              <div style={{ fontWeight: 700, color: "#333", fontSize: "12px" }}>{value}</div>
-                            </div>
-                          ))}
+                  <p style={sectionLabel}>Late Race Pattern — from {raceStats?.year ?? "historical"} results data</p>
+                  <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "6px", padding: "12px 14px" }}>
+                    <p style={{ margin: "0 0 8px", fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Late Race — {late.final_dist_note}
+                    </p>
+                    <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
+                      {[
+                        { label: "Avg fade",          value: `+${late.avg_fade_pct.toFixed(1)}%` },
+                        { label: "Controlled finish", value: `${late.controlled_pct.toFixed(0)}%` },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ fontSize: "10px" }}>
+                          <div style={{ color: "#aaa", marginBottom: "2px" }}>{label}</div>
+                          <div style={{ fontWeight: 700, color: label === "Avg fade" ? "#e65100" : "#333", fontSize: "12px" }}>{value}</div>
                         </div>
-                        <p style={{ margin: "8px 0 0", fontSize: "10px", color: "#555", lineHeight: "1.5" }}>
-                          Based on {halfway.band_size} finishers near the median finish time.
-                          {halfway.pct_positive_split > 55
-                            ? " The majority go out too fast — a conserved first half is strongly advised."
-                            : halfway.pct_positive_split > 35
-                            ? " A significant proportion positive-split — disciplined pacing in the first half pays dividends."
-                            : " Most athletes manage pacing well on this course."}
-                        </p>
-                      </div>
-                    )}
-                    {late && (
-                      <div style={{ background: "#fafafa", border: "1px solid #eee", borderRadius: "6px", padding: "12px 14px" }}>
-                        <p style={{ margin: "0 0 8px", fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                          Late Race — {late.final_dist_note}
-                        </p>
-                        <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
-                          {[
-                            { label: "Avg final section", value: formatRaceTime(late.avg_final_section_minutes) },
-                            { label: "Avg fade",          value: `+${late.avg_fade_pct.toFixed(1)}%` },
-                            { label: "Controlled finish", value: `${late.controlled_pct.toFixed(0)}%` },
-                          ].map(({ label, value }) => (
-                            <div key={label} style={{ fontSize: "10px" }}>
-                              <div style={{ color: "#aaa", marginBottom: "2px" }}>{label}</div>
-                              <div style={{ fontWeight: 700, color: label === "Avg fade" ? "#e65100" : "#333", fontSize: "12px" }}>{value}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <p style={{ margin: "8px 0 0", fontSize: "10px", color: "#555", lineHeight: "1.5" }}>
-                          {late.avg_fade_pct > 15
-                            ? "Significant late-race fade is common on this course. Strength endurance and race-specific long runs in training are critical preparation."
-                            : late.avg_fade_pct > 7
-                            ? "Moderate fade is typical. Training should include race-specific fatigue tolerance work in the final phase."
-                            : "Athletes tend to finish strongly — the late course suits a consistent effort."}
-                        </p>
-                      </div>
-                    )}
+                      ))}
+                    </div>
+                    <p style={{ margin: "8px 0 0", fontSize: "10px", color: "#555", lineHeight: "1.5" }}>
+                      {late.avg_fade_pct > 15
+                        ? "Significant late-race fade is common on this course. Strength endurance and race-specific long runs in training are critical preparation."
+                        : late.avg_fade_pct > 7
+                        ? "Moderate fade is typical. Training should include race-specific fatigue tolerance work in the final phase."
+                        : "Athletes tend to finish strongly — the late course suits a consistent effort."}
+                    </p>
                   </div>
                 </div>
               )}
@@ -2594,7 +2584,7 @@ export default function RaceReadinessPage() {
               <div style={{ paddingTop: "12px", borderTop: "1px solid #eee" }}>
                 <p style={{ margin: 0, fontSize: "9px", color: "#bbb", lineHeight: "1.5" }}>
                   Effort multipliers derived from grade-adjusted energy cost modelling (Minetti et al. 2002). Gradient bands calculated from GPS-derived section gradients.
-                  {(halfway ?? late) && " Race pattern data from official results."}
+                  {late && " Race pattern data from official results."}
                 </p>
               </div>
 
@@ -3032,6 +3022,29 @@ export default function RaceReadinessPage() {
                   }
                   {` Each row is ordered by course distance — the longer the "Race km" value, the greater the physical consequence.`}
                 </p>
+
+                {/* Terrain type definitions */}
+                <div style={{ background: "#f5f5f5", border: "1px solid #e0e0e0", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px" }}>
+                  <div style={{ fontSize: "10px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "7px" }}>
+                    Terrain &amp; Section Type Glossary
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 20px" }}>
+                    {[
+                      { term: "Road",             def: "Paved or tarmac surface. Consistent grip; foot-strike patterns differ from off-road." },
+                      { term: "Trail",            def: "Unpaved path or track. Variable underfoot; higher ankle and calf demand than road." },
+                      { term: "Fell",             def: "Open moorland with no defined path. Rough, unpredictable footing; high ankle stability demand." },
+                      { term: "Sustained Climb",  def: "Long continuous uphill, typically 3+ km. Aerobic and muscular endurance is the key demand." },
+                      { term: "Steep Climb",      def: "Short to medium uphill above ~8–10%. Explosive leg drive; heart rate spikes quickly." },
+                      { term: "Mild Climb",       def: "Gradual uphill, 1–3%. Often runnable but accumulates fatigue over distance." },
+                      { term: "Sustained Descent",def: "Long continuous downhill. Eccentric quad load — the primary source of late-race leg failure." },
+                      { term: "Steep Descent",    def: "Short to medium downhill above ~8–10%. Technical foot placement and braking force required." },
+                    ].map(({ term, def }) => (
+                      <div key={term} style={{ fontSize: "9.5px", color: "#444", lineHeight: 1.4 }}>
+                        <span style={{ fontWeight: 700, color: "#333" }}>{term}: </span>{def}
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Profile coverage warning */}
                 {(() => {
@@ -3583,38 +3596,6 @@ export default function RaceReadinessPage() {
                       </div>
                     )}
 
-                    {/* ── Time on course ──────────────────────────── */}
-                    {te && (
-                      <div style={{ ...panelStyle, borderLeftColor: "#1565c0" }}>
-                        <div style={{ ...panelHead, color: "#1565c0" }}>Time on Course</div>
-                        <div style={insightLine}>
-                          Estimated {fmtH(te.estimated_min_hours)}–{fmtH(te.estimated_max_hours)} on course.
-                          {" "}Your longest event was {fmtH(te.athlete_longest_hours)} ({te.athlete_longest_race_name}).
-                        </div>
-                        <div style={detailLine}>
-                          Projected from your average pace across finished races, applied to the goal race effort load ({result.race.total_distance_km > 0 ? `${result.race.total_distance_km.toFixed(0)} km distance equivalent` : "flat-equivalent km"}).
-                          Upper estimate adds 25% for novelty and fatigue in unfamiliar terrain.
-                        </div>
-                        <div style={barTrack}>
-                          {(() => {
-                            const maxH = te.estimated_max_hours * 1.1;
-                            const longestPct = Math.min(100, (te.athlete_longest_hours / maxH) * 100);
-                            const minPct     = Math.min(100, (te.estimated_min_hours   / maxH) * 100);
-                            const maxPct     = Math.min(100, (te.estimated_max_hours   / maxH) * 100);
-                            return (
-                              <>
-                                <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${longestPct}%`, background: "#78909c", borderRadius: "3px" }} />
-                                <div style={{ position: "absolute", top: 0, left: `${minPct}%`, height: "100%", width: `${maxPct - minPct}%`, background: "#1565c0", borderRadius: "3px", opacity: 0.7 }} />
-                              </>
-                            );
-                          })()}
-                        </div>
-                        <div style={{ fontSize: "8.5px", color: "#888", marginTop: "2px", display: "flex", gap: "12px" }}>
-                          <span style={{ color: "#78909c" }}>▬ Your longest: {fmtH(te.athlete_longest_hours)}</span>
-                          <span style={{ color: "#1565c0" }}>▬ Estimated range: {fmtH(te.estimated_min_hours)}–{fmtH(te.estimated_max_hours)}</span>
-                        </div>
-                      </div>
-                    )}
 
                     {/* ── Biggest climb ────────────────────────────── */}
                     {bc && (
@@ -3657,20 +3638,6 @@ export default function RaceReadinessPage() {
                       </div>
                     )}
 
-                    {/* ── Typical conditions (from already-loaded weather) ─── */}
-                    {weather.length > 0 && avgMaxTemp != null && (
-                      <div style={{ ...panelStyle, borderLeftColor: "#6b6b6b" }}>
-                        <div style={{ ...panelHead, color: "#6b6b6b" }}>Typical Race Day Conditions</div>
-                        <div style={insightLine}>
-                          Historically {avgMaxTemp?.toFixed(0)}°C high / {avgMinTemp?.toFixed(0)}°C low, with a {wetPct}% chance of significant rain on race day.
-                        </div>
-                        <div style={detailLine}>
-                          Based on {weather.length} years of historical weather data at the race location
-                          {result.race.race_date ? ` around ${new Date(result.race.race_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long" })}` : ""}.
-                          {wetPct != null && wetPct > 50 ? " High likelihood of wet conditions — factor in grip and nutrition strategy." : ""}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -3679,106 +3646,6 @@ export default function RaceReadinessPage() {
             );
           })()}
 
-          {/* ═══════════════════════════════════════
-              PAGE 12 — Race Day Pacing Strategy CTA
-          ═══════════════════════════════════════ */}
-          {result && (
-            <div style={a4Page}>
-              <div style={printHeader}>
-                <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
-                  <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Race Day Pacing Strategy</div>
-                </div>
-              </div>
-
-              <h2 style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: 700, color: "#1e3a1e" }}>Your Race Day Pacing Strategy</h2>
-              <p style={{ margin: "0 0 22px", fontSize: "12px", color: "#888", lineHeight: 1.5 }}>
-                A personalised pacing document built around this exact course, forecast conditions, and your target finish time.
-              </p>
-
-              {/* Three feature panels */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "22px" }}>
-                {[
-                  {
-                    accent: "#c0392b",
-                    icon: "📍",
-                    title: "Route-Specific Zones",
-                    body: "Not one pace for the whole race. Each section of the course gets its own target effort band — based on the gradient, terrain, and cumulative fatigue expected at that point.",
-                  },
-                  {
-                    accent: "#1565c0",
-                    icon: "🌤",
-                    title: "Conditions Planning",
-                    body: "Wind direction and strength are factored into headwind and tailwind sections. Expected sun or rain and race-day temperature adjust your hydration and effort ceilings.",
-                  },
-                  {
-                    accent: "#e65100",
-                    icon: "⏱",
-                    title: "Target Time Splits",
-                    body: "Checkpoint-by-checkpoint split times based on your goal finish. Includes recommended halfway and final-third targets, and how much buffer to build early.",
-                  },
-                ].map(({ accent, icon, title, body }) => (
-                  <div key={title} style={{ background: "#fafafa", border: "1px solid #e0e0e0", borderTop: `4px solid ${accent}`, borderRadius: "6px", padding: "14px 14px" }}>
-                    <div style={{ fontSize: "20px", marginBottom: "8px" }}>{icon}</div>
-                    <div style={{ fontSize: "11px", fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>{title}</div>
-                    <div style={{ fontSize: "10.5px", color: "#555", lineHeight: 1.5 }}>{body}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* What's included */}
-              <div style={{ background: "#f4f8f4", border: "1px solid #c8dcc8", borderLeft: "4px solid #1e3a1e", borderRadius: "6px", padding: "14px 18px", marginBottom: "22px" }}>
-                <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>What&apos;s included</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px" }}>
-                  {[
-                    "Section-by-section effort targets (not just pace)",
-                    "Wind-adjusted effort bands for exposed sections",
-                    "Checkpoint split times with recommended tolerances",
-                    "Hydration and nutrition timing cues",
-                    "Early-warning signs of going too hard",
-                    "Conditions adjustment notes (sun, rain, heat)",
-                    "Final-third strategy based on your build-up",
-                    "Warm-up routine and pre-race activation checklist",
-                  ].map(item => (
-                    <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: "6px", fontSize: "10.5px", color: "#333" }}>
-                      <span style={{ color: "#1e3a1e", fontWeight: 700, flexShrink: 0 }}>✓</span>
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Training plans callout — only shown when the race has a published slug */}
-              {result.race.slug && (() => {
-                const raceUrl = `https://www.tortoiseendurance.com/feeder-races/${result.race.slug}`;
-                const qrSrc   = `https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(raceUrl)}`;
-                return (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "20px", alignItems: "center", background: "#fff", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "16px 20px", marginBottom: "22px" }}>
-                    <div>
-                      <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", marginBottom: "5px" }}>Training Plans Available for {result.race.name}</div>
-                      <div style={{ fontSize: "10.5px", color: "#555", lineHeight: 1.5, marginBottom: "8px" }}>
-                        We offer structured training plans tailored to this race — from 8-week programmes to full 6-month build cycles.
-                        Scan the QR code to view all available plans and start dates for {result.race.name}.
-                      </div>
-                      <div style={{ fontSize: "10px", color: "#888" }}>tortoiseendurance.com/feeder-races/{result.race.slug}</div>
-                    </div>
-                    <div style={{ textAlign: "center", flexShrink: 0 }}>
-                      <img
-                        src={qrSrc}
-                        alt={`QR code — ${raceUrl}`}
-                        width={90} height={90}
-                        style={{ display: "block", borderRadius: "4px" }}
-                      />
-                      <div style={{ fontSize: "8px", color: "#aaa", marginTop: "4px" }}>Scan to view plans</div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <PageNumber n={12} />
-            </div>
-          )}
 
         </div>
       )}
