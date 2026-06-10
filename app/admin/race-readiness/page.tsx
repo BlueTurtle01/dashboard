@@ -3984,6 +3984,260 @@ export default function RaceReadinessPage() {
             );
           })()}
 
+          {/* ═══════════════════════════════════════
+              PAGE 13 — Suggested Next Steps
+          ═══════════════════════════════════════ */}
+          {reportAthlete && (() => {
+            const p = reportAthlete.profile;
+            const allRaces    = filteredAthleteRaces;
+            const finished    = allRaces.filter(r => r.result_status === "FINISHED" && r.finish_seconds);
+            const byDist      = [...finished].filter(r => r.total_distance_km).sort((a, b) => (b.total_distance_km ?? 0) - (a.total_distance_km ?? 0));
+            const byAscent    = [...finished].filter(r => r.total_ascent_m).sort((a, b) => (b.total_ascent_m ?? 0) - (a.total_ascent_m ?? 0));
+            const lastYear    = p.last_result_year ?? new Date().getFullYear();
+            const recentRaces = allRaces.filter(r => r.result_year >= lastYear - 1).slice(0, 10);
+            const longestDist   = byDist[0]?.total_distance_km ?? 0;
+            const highestAscent = byAscent[0]?.total_ascent_m ?? 0;
+
+            // Terrain demand breakdown
+            const raceTerrainsKm: Record<string, number> = {};
+            for (const sec of result.terrain_sections) {
+              raceTerrainsKm[sec.terrain] = (raceTerrainsKm[sec.terrain] ?? 0) + sec.distance_km;
+            }
+            const athleteExact: Record<string, number> = {};
+            const athleteCross: Record<string, number> = {};
+            for (const tp of reportAthlete.terrain_pairings ?? []) {
+              athleteExact[`${tp.section_type}|${tp.terrain}`] = tp.total_km;
+              athleteCross[tp.section_type] = (athleteCross[tp.section_type] ?? 0) + tp.total_km;
+            }
+            // Which terrain types have a gap (no matched experience at all)?
+            const terrainGaps = new Set<string>();
+            for (const sec of result.terrain_sections) {
+              if (sec.distance_km < 0.1) continue;
+              const key = `${sec.section_type}|${sec.terrain}`;
+              const exact = athleteExact[key] ?? 0;
+              if (exact < sec.distance_km * 0.5) terrainGaps.add(sec.terrain);
+            }
+            const hasGravel    = (raceTerrainsKm["gravel"] ?? 0) > 1;
+            const hasTechnical = (raceTerrainsKm["technical_trail"] ?? 0) > 1;
+            const hasSand      = (raceTerrainsKm["sand"] ?? 0) > 0.5;
+            const gravelGap    = hasGravel    && terrainGaps.has("gravel");
+            const technicalGap = hasTechnical && terrainGaps.has("technical_trail");
+            const totalSteepDescentKm = result.terrain_sections.filter(s => s.section_type === "very_steep_descent" || s.section_type === "steep_descent").reduce((a, s) => a + s.distance_km, 0);
+
+            interface NextStep {
+              category: string;
+              title: string;
+              detail: string;
+              priority: "high" | "medium" | "low";
+            }
+            const steps: NextStep[] = [];
+
+            // ── Training Load ─────────────────────────────────────────────────
+            if (longestDist > 0 && longestDist < totalKm * 0.6) {
+              steps.push({
+                category: "Training Load",
+                title: "Build race-distance capacity",
+                detail: `Your longest race on record is ${longestDist.toFixed(0)} km — the goal race is ${totalKm.toFixed(0)} km. Prioritise progressive long runs and back-to-back training days to accumulate race-relevant time on feet. You don't need to run ${totalKm.toFixed(0)} km in training, but your longest effort should reach at least ${Math.round(totalKm * 0.7)} km before race day.`,
+                priority: "high",
+              });
+            } else if (longestDist > 0 && longestDist < totalKm * 0.8) {
+              steps.push({
+                category: "Training Load",
+                title: "Close the final distance gap",
+                detail: `Your longest race is ${longestDist.toFixed(0)} km. The goal race is ${totalKm.toFixed(0)} km — within reach, but leaving a meaningful volume gap. A long race or linked training day in the build-up will bridge this.`,
+                priority: "medium",
+              });
+            }
+
+            // ── Climbing strength ─────────────────────────────────────────────
+            if (totalAscentM > 500 && highestAscent < totalAscentM * 0.5) {
+              steps.push({
+                category: "Strength & Conditioning",
+                title: "Develop quad strength for climbing",
+                detail: `The race requires ${Math.round(totalAscentM).toLocaleString()} m of ascent; your career best in a single race is ${Math.round(highestAscent).toLocaleString()} m. Sustained climbing demands muscular endurance that flat running does not develop. Add loaded step-ups, uphill repeats, and weighted split squats to your training.`,
+                priority: "high",
+              });
+            } else if (totalAscentM > 1500) {
+              steps.push({
+                category: "Strength & Conditioning",
+                title: "Maintain climbing-specific conditioning",
+                detail: `With ${Math.round(totalAscentM).toLocaleString()} m of ascent on the course, uphill-specific conditioning should form a regular part of your training throughout the build. Don't let flat-running volume crowd it out.`,
+                priority: "medium",
+              });
+            }
+
+            // ── Downhill durability ───────────────────────────────────────────
+            if (totalSteepDescentKm > 5) {
+              steps.push({
+                category: "Strength & Conditioning",
+                title: "Eccentric loading for steep descents",
+                detail: `The course has ${totalSteepDescentKm.toFixed(1)} km of steep descent. Braking forces on steep downhills produce eccentric muscle damage — particularly in the quads and calves — that flat training does not replicate. Add downhill running repeats, eccentric step-downs, and loaded single-leg heel drops to build resilience and reduce late-race damage.`,
+                priority: totalSteepDescentKm > 12 ? "high" : "medium",
+              });
+            }
+
+            // ── Ankle stability ───────────────────────────────────────────────
+            if (gravelGap || technicalGap) {
+              steps.push({
+                category: "Strength & Conditioning",
+                title: "Ankle stability for uneven terrain",
+                detail: `The course includes ${[hasGravel && "gravel", hasTechnical && "technical/rocky terrain"].filter(Boolean).join(" and ")}, surfaces where lateral ankle stability is critical. Your race history shows limited experience here. Add single-leg balance progressions, resistance band eversion work, and prioritise trail over road in your build training.`,
+                priority: "high",
+              });
+            } else if (hasGravel || hasTechnical) {
+              steps.push({
+                category: "Strength & Conditioning",
+                title: "Maintain ankle stability work",
+                detail: `The course includes ${[hasGravel && "gravel", hasTechnical && "rocky terrain"].filter(Boolean).join(" and ")}. You have relevant experience, but continue ankle stability exercises throughout your build to arrive at the start line robust rather than just capable.`,
+                priority: "low",
+              });
+            }
+
+            // ── Technical terrain exposure ────────────────────────────────────
+            if (technicalGap) {
+              steps.push({
+                category: "Terrain Specificity",
+                title: "Seek technical trail exposure",
+                detail: `The race includes rocky, technical terrain — a surface with no direct precedent in your recent race history. Technical trail confidence requires specific exposure; you cannot develop it on road or groomed trail. Prioritise rough-surface training runs and at least one technical race or recce in the build-up.`,
+                priority: "high",
+              });
+            }
+
+            if (hasSand) {
+              steps.push({
+                category: "Terrain Specificity",
+                title: "Practise on sand",
+                detail: `The course includes sand sections. Sand running costs significantly more energy per kilometre than any other surface. If you have no sand experience, one or two beach runs before race day will calibrate your effort expectations and reduce the risk of overcooking those sections.`,
+                priority: "medium",
+              });
+            }
+
+            // ── Power hiking ──────────────────────────────────────────────────
+            if (secs.length > 0 && runnablePct < 30) {
+              steps.push({
+                category: "Terrain Specificity",
+                title: "Practise efficient power hiking",
+                detail: `Only ${runnablePct}% of the course is near-flat — most athletes will hike the majority of the climbing. Efficient power hiking is a trainable skill. Practise uphill hiking at race effort specifically, focusing on arm drive and cadence rather than pace. Poor hiking technique burns disproportionate energy on races like this.`,
+                priority: "medium",
+              });
+            }
+
+            // ── Warm-up race ──────────────────────────────────────────────────
+            if (recentRaces.length < 2) {
+              steps.push({
+                category: "Race Preparation",
+                title: "Enter a warm-up race",
+                detail: `Limited recent competitive form on record. A build-up race (ideally on similar terrain, 4–10 weeks out) will help calibrate nutrition, race management, and equipment well before the main event. Race-day skills fade without regular use.`,
+                priority: "medium",
+              });
+            }
+
+            // ── Effort-based pacing ───────────────────────────────────────────
+            if (effortRatio > 1.4) {
+              steps.push({
+                category: "Race Preparation",
+                title: "Train by effort, not pace",
+                detail: `The course's average effort multiplier is ${effortRatio.toFixed(2)}× — pace is meaningless as a metric here. Train using perceived effort and heart rate zones. If you have never raced without a pace target, practise this discipline in your long training runs well before race day.`,
+                priority: "medium",
+              });
+            }
+
+            // ── Nutrition ─────────────────────────────────────────────────────
+            if (totalKm > 50) {
+              steps.push({
+                category: "Race Preparation",
+                title: "Build a fuelling strategy",
+                detail: `For a ${totalKm.toFixed(0)} km race, active fuelling is non-negotiable — the majority of DNFs and performance collapses in long races are nutrition-related. Practise taking on calories at race pace in your long sessions. Target 60–90 g carbohydrate per hour once you are moving above 3–4 hours, adjusted for your tolerance.`,
+                priority: totalKm > 80 ? "high" : "medium",
+              });
+            }
+
+            // ── Footwear ──────────────────────────────────────────────────────
+            if (hasTechnical || (hasGravel && gravelGap)) {
+              steps.push({
+                category: "Equipment",
+                title: "Confirm footwear for the terrain",
+                detail: `The course includes ${[hasTechnical && "technical rocky sections", hasGravel && "gravel tracks"].filter(Boolean).join(" and ")}. Ensure your race shoes provide ${hasTechnical ? "a rock plate and maximum grip" : "adequate grip on loose surfaces"}. Road or lightly lugged shoes are likely insufficient for parts of this course — test your footwear choice on comparable terrain before race day.`,
+                priority: "medium",
+              });
+            }
+
+            if (steps.length === 0) return null;
+
+            const categories = [...new Set(steps.map(s => s.category))];
+            const priorityOrder: Record<NextStep["priority"], number> = { high: 0, medium: 1, low: 2 };
+            const sorted = [...steps].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+
+            const priorityStyle: Record<NextStep["priority"], { dot: string; label: string; bg: string; border: string }> = {
+              high:   { dot: "#c0392b", label: "Priority", bg: "#fce4ec", border: "#ffcdd2" },
+              medium: { dot: "#e65100", label: "Recommended", bg: "#fff3e0", border: "#ffe0b2" },
+              low:    { dot: "#1565c0", label: "Maintenance", bg: "#e3f2fd", border: "#bbdefb" },
+            };
+
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Suggested Next Steps</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Suggested Next Steps</h2>
+                <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
+                  Specific preparation actions derived from the gap analysis and course demands
+                </p>
+
+                {/* Category legend */}
+                <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
+                  {(["high", "medium", "low"] as const).filter(pri => steps.some(s => s.priority === pri)).map(pri => (
+                    <div key={pri} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: priorityStyle[pri].dot, flexShrink: 0 }} />
+                      <span style={{ fontSize: "9px", color: "#555", fontWeight: 600 }}>{priorityStyle[pri].label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Steps grouped by category */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {categories.map(cat => {
+                    const catSteps = sorted.filter(s => s.category === cat);
+                    return (
+                      <div key={cat}>
+                        <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "5px", borderBottom: "1px solid #e0e0e0", paddingBottom: "3px" }}>{cat}</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                          {catSteps.map((step, i) => {
+                            const ps = priorityStyle[step.priority];
+                            return (
+                              <div key={i} style={{ display: "flex", gap: "10px", padding: "8px 10px", background: ps.bg, border: `1px solid ${ps.border}`, borderRadius: "6px", borderLeft: `3px solid ${ps.dot}` }}>
+                                <div style={{ flexShrink: 0, paddingTop: "2px" }}>
+                                  <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: ps.dot }} />
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", marginBottom: "3px" }}>{step.title}</div>
+                                  <div style={{ fontSize: "9.5px", color: "#444", lineHeight: 1.5 }}>{step.detail}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ marginTop: "auto", paddingTop: "12px", borderTop: "1px solid #eee" }}>
+                  <p style={{ fontSize: "8.5px", color: "#bbb", margin: 0, lineHeight: 1.5 }}>
+                    These recommendations are generated from race profile data and athlete history. They are a starting point for coach and athlete discussion, not a complete training plan.
+                  </p>
+                </div>
+
+                <PageNumber n={13} />
+              </div>
+            );
+          })()}
+
 
         </div>
       )}
