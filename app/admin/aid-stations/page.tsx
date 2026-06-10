@@ -23,6 +23,9 @@ const FACILITY_LABELS: Record<string, string> = {
   water: "💧 Water", food: "🍊 Food", medic: "🩺 Medic", toilets: "🚻 Toilets", dropBags: "🎒 Drop bags",
 };
 
+const KM_TO_MI = 0.621371;
+const MI_TO_KM = 1.60934;
+
 function blankStation(): AidStation {
   return { km: 0, name: "", water: true, food: false, medic: false, toilets: false, dropBags: false };
 }
@@ -33,6 +36,11 @@ export default function AidStationsPage() {
   const [races, setRaces] = useState<RaceRow[]>([]);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [useMiles, setUseMiles] = useState(false);
+
+  const toDisp = (km: number) => useMiles ? +(km * KM_TO_MI).toFixed(2) : km;
+  const fromDisp = (val: number) => useMiles ? +(val * MI_TO_KM).toFixed(4) : val;
+  const unitLabel = useMiles ? "mi" : "km";
 
   useEffect(() => {
     async function init() {
@@ -158,17 +166,33 @@ export default function AidStationsPage() {
         </p>
       </div>
 
-      <input
-        type="text"
-        placeholder="Search races…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        style={{
-          width: "100%", boxSizing: "border-box", padding: "8px 12px",
-          border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13,
-          marginBottom: 16, outline: "none",
-        }}
-      />
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <input
+          type="text"
+          placeholder="Search races…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            flex: 1, boxSizing: "border-box", padding: "8px 12px",
+            border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13,
+            outline: "none",
+          }}
+        />
+        <div style={{ display: "flex", border: "1px solid #d1d5db", borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
+          {(["km", "mi"] as const).map(unit => (
+            <button
+              key={unit}
+              onClick={() => setUseMiles(unit === "mi")}
+              style={{
+                padding: "8px 14px", fontSize: 12, fontWeight: 600, border: "none",
+                cursor: "pointer",
+                background: (unit === "mi") === useMiles ? "#2563eb" : "#fff",
+                color: (unit === "mi") === useMiles ? "#fff" : "#374151",
+              }}
+            >{unit}</button>
+          ))}
+        </div>
+      </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {filtered.map(race => {
@@ -213,7 +237,7 @@ export default function AidStationsPage() {
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                         <thead>
                           <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
-                            <th style={thStyle}>km</th>
+                            <th style={thStyle}>{unitLabel}</th>
                             <th style={thStyle}>Name (optional)</th>
                             {FACILITY_KEYS.map(k => (
                               <th key={k} style={{ ...thStyle, textAlign: "center" }}>{FACILITY_LABELS[k].split(" ")[0]}</th>
@@ -227,10 +251,10 @@ export default function AidStationsPage() {
                               <td style={tdStyle}>
                                 <input
                                   type="number"
-                                  value={s.km}
+                                  value={toDisp(s.km)}
                                   step="0.1"
                                   min="0"
-                                  onChange={e => updateStation(race.id, idx, { km: parseFloat(e.target.value) || 0 })}
+                                  onChange={e => updateStation(race.id, idx, { km: fromDisp(parseFloat(e.target.value) || 0) })}
                                   style={inputStyle}
                                 />
                               </td>
@@ -303,8 +327,8 @@ export default function AidStationsPage() {
                     const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
                     return (
                       <div style={{ marginTop: 12, padding: "8px 12px", background: "#f9fafb", borderRadius: 6, fontSize: 11, color: "#6b7280" }}>
-                        Largest gap: <strong style={{ color: maxGap > 20 ? "#dc2626" : maxGap > 12 ? "#d97706" : "#111827" }}>{maxGap.toFixed(1)} km</strong>
-                        {" · "}Average gap: <strong style={{ color: "#111827" }}>{avgGap.toFixed(1)} km</strong>
+                        Largest gap: <strong style={{ color: maxGap > 20 ? "#dc2626" : maxGap > 12 ? "#d97706" : "#111827" }}>{toDisp(maxGap).toFixed(1)} {unitLabel}</strong>
+                        {" · "}Average gap: <strong style={{ color: "#111827" }}>{toDisp(avgGap).toFixed(1)} {unitLabel}</strong>
                         {" · "}{sorted.filter(s => s.dropBags).length > 0
                           ? <span style={{ color: "#2563eb" }}>Drop bags: ✓</span>
                           : <span>No drop bag support</span>}
