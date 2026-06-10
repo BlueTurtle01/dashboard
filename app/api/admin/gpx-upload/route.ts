@@ -2,8 +2,11 @@
  * POST /api/admin/gpx-upload
  *
  * Uploads a GPX file for a specific race, links it in race_files, computes
- * the race_profile, and writes elevation_profile + sustained_segments to
- * races_meta — all in one step.
+ * the race_profile, and writes elevation_profile + sustained_segments +
+ * terrain_segments to races_meta — all in one step.
+ *
+ * Terrain is derived from OSM via the Overpass API (per-section, variable).
+ * Falls back to terrain_type if Overpass is unavailable.
  *
  * FormData fields:
  *   race_id  string   UUID of the race
@@ -17,6 +20,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parseGpxPoints } from "@/lib/race-analysis/gpx";
 import { computeRaceProfile, type CourseSection } from "@/lib/race-analysis/course-profile";
 import { haversineKm } from "@/lib/race-analysis/sections";
+import {
+  analyzeTerrainFromGpx,
+  buildTerrainLookup,
+  type TerrainSegment,
+} from "@/lib/race-analysis/terrain-from-osm";
 import type { GpxPoint } from "@/lib/race-analysis/types";
 
 export const maxDuration = 60;
@@ -89,12 +97,6 @@ export async function POST(req: NextRequest) {
       .eq("id", race_id)
       .maybeSingle();
     if (!race) return NextResponse.json({ error: "Race not found" }, { status: 404 });
-    if (!race.terrain_type) {
-      return NextResponse.json(
-        { error: `"${race.name}" has no terrain_type set. Set it on the race record before uploading a GPX profile.` },
-        { status: 422 }
-      );
-    }
 
     // ── Upload GPX to storage ─────────────────────────────────────────────────
     const uuid        = crypto.randomUUID();
@@ -152,9 +154,27 @@ export async function POST(req: NextRequest) {
         .eq("id", race_id);
     }
 
-    // ── Compute race profile ──────────────────────────────────────────────────
-    const profile = computeRaceProfile(gpxPoints, race.terrain_type, undefined);
+    // ── Terrain analysis ──────────────────────────────────────────────────────
+    // GPX upload always triggers a fresh OSM analysis (old segments may be stale)
+    let terrainSegments: TerrainSegment[] | null = await analyzeTerrainFromGpx(gpxPoints);
 
+    if (terrainSegments) {
+      await adminClient.from("races_meta").upsert(
+        { race_id, meta_key: "terrain_segments", meta_value: JSON.stringify(terrainSegments) },
+        { onConflict: "race_id,meta_key" }
+      );
+      console.log(`[gpx-upload] Stored ${terrainSegments.length} terrain segments for ${race.name}`);
+    } else {
+      console.warn(`[gpx-upload] Overpass unavailable for ${race.name} — falling back to terrain_type`);
+    }
+
+    const fallback = race.terrain_type ?? "trail";
+    const terrainLookup = terrainSegments
+      ? buildTerrainLookup(terrainSegments, fallback)
+      : () => fallback;
+
+    // ── Compute race profile ──────────────────────────────────────────────────
+    const profile = computeRaceProfile(gpxPoints, terrainLookup, undefined);
 
     // ── Upsert race_profiles ──────────────────────────────────────────────────
     const { error: profErr } = await adminClient.from("race_profiles").upsert(
@@ -172,7 +192,13 @@ export async function POST(req: NextRequest) {
         wind_adjusted_flat_equivalent_km:   null,
         wind_adjusted_difficulty_ratio:     null,
         sections_json:                      profile.sections,
-        metadata: { race_name: race.name, terrain_type: race.terrain_type, gpx_points: gpxPoints.length, sections_count: profile.sections.length },
+        metadata: {
+          race_name:              race.name,
+          terrain_source:         terrainSegments ? "osm" : "terrain_type_fallback",
+          terrain_segments_count: terrainSegments?.length ?? 0,
+          gpx_points:             gpxPoints.length,
+          sections_count:         profile.sections.length,
+        },
       },
       { onConflict: "race_id" }
     );
@@ -191,12 +217,14 @@ export async function POST(req: NextRequest) {
     );
 
     return NextResponse.json({
-      success:           true,
-      race_name:         race.name,
-      total_distance_km: profile.total_distance_km,
-      total_ascent_m:    profile.total_ascent_m,
-      total_descent_m:   profile.total_descent_m,
-      sections_count:    profile.sections.length,
+      success:                true,
+      race_name:              race.name,
+      terrain_source:         terrainSegments ? "osm" : "terrain_type_fallback",
+      terrain_segments_count: terrainSegments?.length ?? 0,
+      total_distance_km:      profile.total_distance_km,
+      total_ascent_m:         profile.total_ascent_m,
+      total_descent_m:        profile.total_descent_m,
+      sections_count:         profile.sections.length,
     });
   } catch (err) {
     console.error("[gpx-upload]", err);

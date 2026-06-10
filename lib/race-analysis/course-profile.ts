@@ -206,7 +206,7 @@ function windMultiplierForSection(
 export function buildCourseSections(
   points: GpxPoint[],
   sectionKm: number,
-  terrain: string
+  terrainLookup: (midpointKm: number) => string
 ): CourseSection[] {
   const totalDistanceKm = (() => {
     let d = 0;
@@ -258,6 +258,7 @@ export function buildCourseSections(
       const gradient = (elevChange / (dist * 1000)) * 100;
 
       const midpoint = totalDist + dist / 2;
+      const terrain = terrainLookup(midpoint);
       const gradCost = gradientCostMultiplier(gradient);
       const terrCost = terrainMultiplier(terrain);
       const fatigue = fatigueMultiplier(midpoint, totalDistanceKm);
@@ -314,6 +315,7 @@ export function buildCourseSections(
     const dist = currentDist;
     const gradient = (elevChange / (dist * 1000)) * 100;
     const midpoint = totalDist + dist / 2;
+    const terrain = terrainLookup(midpoint);
     const gradCost = gradientCostMultiplier(gradient);
     const terrCost = terrainMultiplier(terrain);
     const fatigue = fatigueMultiplier(midpoint, totalDistanceKm);
@@ -382,12 +384,12 @@ export function applyWindAdjustment(
  */
 export function computeRaceProfile(
   gpxPoints: GpxPoint[],
-  terrain: string,
+  terrainLookup: (midKm: number) => string,
   windCsvText?: string | null
 ): RaceProfileData {
   const sectionKm = 1.0; // match Python's CHUNK_KM default
 
-  const sections = buildCourseSections(gpxPoints, sectionKm, terrain);
+  const sections = buildCourseSections(gpxPoints, sectionKm, terrainLookup);
 
   const totalDistanceKm = r3(
     sections.reduce((s, sec) => s + sec.distance_km, 0)

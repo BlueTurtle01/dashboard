@@ -4,8 +4,10 @@
  * Computes and stores a race difficulty profile from the race's uploaded GPX
  * (and optionally its wind_analysis CSV).
  *
- * The profile's flat_equivalent_km is the foundation for cross-race finish
- * time estimation via Riegel's formula.
+ * Terrain is derived from OSM via the Overpass API (per-section, variable terrain).
+ * Results are stored in races_meta.terrain_segments so both Dashboard and frontend
+ * share the same canonical terrain data.  Falls back to terrain_type if Overpass
+ * is unavailable.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +16,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseGpxPoints } from "@/lib/race-analysis/gpx";
 import { computeRaceProfile } from "@/lib/race-analysis/course-profile";
+import {
+  analyzeTerrainFromGpx,
+  buildTerrainLookup,
+  type TerrainSegment,
+} from "@/lib/race-analysis/terrain-from-osm";
 
 export const maxDuration = 60;
 
@@ -32,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = await createClient();
 
-    // ── Get race info (for terrain_type) ─────────────────────────────────────
+    // ── Get race info ─────────────────────────────────────────────────────────
     const { data: race, error: raceErr } = await supabase
       .from("races")
       .select("id, name, terrain_type")
@@ -43,13 +50,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: raceErr?.message ?? "Race not found" },
         { status: 404 }
-      );
-    }
-
-    if (!race.terrain_type) {
-      return NextResponse.json(
-        { error: `"${race.name}" has no terrain_type set. Set it on the race record before generating a profile.` },
-        { status: 422 }
       );
     }
 
@@ -87,9 +87,7 @@ export async function POST(req: NextRequest) {
       const windRes = await fetch(windFile.public_url, {
         signal: AbortSignal.timeout(15_000),
       });
-      if (windRes.ok) {
-        windCsvText = await windRes.text();
-      }
+      if (windRes.ok) windCsvText = await windRes.text();
     }
 
     // ── Parse GPX ─────────────────────────────────────────────────────────────
@@ -103,17 +101,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Compute profile ───────────────────────────────────────────────────────
-    const profile = computeRaceProfile(
-      gpxPoints,
-      race.terrain_type,
-      windCsvText ?? undefined
-    );
-
-
-    // ── Upsert into race_profiles ─────────────────────────────────────────────
+    // ── Terrain analysis ──────────────────────────────────────────────────────
     const adminClient = createAdminClient();
 
+    // 1. Check if terrain_segments already exists in races_meta
+    let terrainSegments: TerrainSegment[] | null = null;
+    const { data: existingMeta } = await supabase
+      .from("races_meta")
+      .select("meta_value")
+      .eq("race_id", race_id)
+      .eq("meta_key", "terrain_segments")
+      .maybeSingle();
+
+    if (existingMeta?.meta_value) {
+      try {
+        const parsed = JSON.parse(existingMeta.meta_value) as TerrainSegment[];
+        if (Array.isArray(parsed) && parsed.length > 0) terrainSegments = parsed;
+      } catch {
+        // malformed — will re-run analysis
+      }
+    }
+
+    // 2. If not found (or corrupt), run Overpass analysis and store it
+    if (!terrainSegments) {
+      terrainSegments = await analyzeTerrainFromGpx(gpxPoints);
+      if (terrainSegments) {
+        await adminClient.from("races_meta").upsert(
+          { race_id, meta_key: "terrain_segments", meta_value: JSON.stringify(terrainSegments) },
+          { onConflict: "race_id,meta_key" }
+        );
+        console.log(`[race-profile] Stored ${terrainSegments.length} terrain segments for ${race.name}`);
+      } else {
+        console.warn(`[race-profile] Overpass unavailable for ${race.name} — falling back to terrain_type`);
+      }
+    }
+
+    // 3. Build per-section lookup (falls back to terrain_type, then "trail")
+    const fallback = race.terrain_type ?? "trail";
+    const terrainLookup = terrainSegments
+      ? buildTerrainLookup(terrainSegments, fallback)
+      : () => fallback;
+
+    // ── Compute profile ───────────────────────────────────────────────────────
+    const profile = computeRaceProfile(gpxPoints, terrainLookup, windCsvText ?? undefined);
+
+    // ── Upsert into race_profiles ─────────────────────────────────────────────
     const { error: upsertErr } = await adminClient
       .from("race_profiles")
       .upsert(
@@ -135,7 +167,8 @@ export async function POST(req: NextRequest) {
           sections_json: profile.sections,
           metadata: {
             race_name: race.name,
-            terrain_type: race.terrain_type,
+            terrain_source: terrainSegments ? "osm" : "terrain_type_fallback",
+            terrain_segments_count: terrainSegments?.length ?? 0,
             gpx_points: gpxPoints.length,
             sections_count: profile.sections.length,
           },
@@ -155,6 +188,8 @@ export async function POST(req: NextRequest) {
       success: true,
       race_name: race.name,
       profile_source: profile.profile_source,
+      terrain_source: terrainSegments ? "osm" : "terrain_type_fallback",
+      terrain_segments_count: terrainSegments?.length ?? 0,
       total_distance_km: profile.total_distance_km,
       total_ascent_m: profile.total_ascent_m,
       total_descent_m: profile.total_descent_m,

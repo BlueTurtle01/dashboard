@@ -30,6 +30,7 @@ interface Race {
   slug: string;
   location: string | null;
   terrain_type: string | null;
+  has_terrain_segments: boolean;
 }
 
 interface RaceWithFiles extends Race {
@@ -141,6 +142,13 @@ export default function RaceFilesPage() {
 
       if (filesErr) throw new Error(filesErr.message);
 
+      const { data: terrainMeta } = await supabase
+        .from("races_meta")
+        .select("race_id")
+        .eq("meta_key", "terrain_segments");
+
+      const racesWithTerrain = new Set((terrainMeta ?? []).map((m: { race_id: string }) => m.race_id));
+
       const filesByRace = new Map<string, RaceFile[]>();
       for (const f of (filesData ?? []) as RaceFile[]) {
         if (!filesByRace.has(f.race_id)) filesByRace.set(f.race_id, []);
@@ -148,8 +156,9 @@ export default function RaceFilesPage() {
       }
 
       setRaces(
-        (racesData as Race[]).map((r) => ({
+        (racesData as Omit<Race, "has_terrain_segments">[]).map((r) => ({
           ...r,
+          has_terrain_segments: racesWithTerrain.has(r.id),
           files: filesByRace.get(r.id) ?? [],
         }))
       );
@@ -335,8 +344,12 @@ export default function RaceFilesPage() {
           (json.difficulty_ratio ? ` (${json.difficulty_ratio}×)` : "") +
           (json.wind_adjusted_flat_equivalent_km
             ? ` · wind-adj ${json.wind_adjusted_flat_equivalent_km} km`
-            : ""),
+            : "") +
+          (json.terrain_source === "osm"
+            ? ` · OSM terrain (${json.terrain_segments_count} segments)`
+            : " · fallback terrain"),
       }));
+      await loadData();
     } catch (err) {
       setProfileError((prev) => ({
         ...prev,
@@ -494,11 +507,9 @@ export default function RaceFilesPage() {
   }
 
   async function handleBatchReprocess() {
-    const eligible = races.filter(
-      (r) => r.terrain_type && r.files.some((f) => f.file_type === "gpx")
-    );
+    const eligible = races.filter((r) => r.files.some((f) => f.file_type === "gpx"));
     if (eligible.length === 0) {
-      setBatchReprocessMsg("No races with both a GPX file and terrain_type set.");
+      setBatchReprocessMsg("No races with a GPX file to reprocess.");
       return;
     }
     setBatchReprocessing(true);
@@ -579,17 +590,17 @@ export default function RaceFilesPage() {
         {/* Terrain warning banner */}
         {!loading && (() => {
           const missing = races.filter(
-            (r) => !r.terrain_type && r.files.some((f) => f.file_type === "gpx")
+            (r) => !r.has_terrain_segments && r.files.some((f) => f.file_type === "gpx")
           );
           if (missing.length === 0) return null;
           return (
             <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderLeft: "4px solid #f59e0b", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px" }}>
               <div style={{ fontWeight: 600, fontSize: "13px", color: "#92400e", marginBottom: "4px" }}>
-                ⚠ {missing.length} race{missing.length !== 1 ? "s" : ""} with a GPX file but no terrain_type set
+                ⚠ {missing.length} race{missing.length !== 1 ? "s" : ""} with a GPX file but no terrain analysis yet
               </div>
               <div style={{ fontSize: "12px", color: "#78350f", marginBottom: "6px" }}>
-                Profile generation is blocked for these races until terrain_type is set on the race record.
-                Set it via the database or the races admin page, then reprocess.
+                Click "Generate Race Profile" on each race, or use "Batch Reprocess All Profiles" above.
+                The OSM terrain analysis runs automatically during profile generation.
               </div>
               <div style={{ fontSize: "12px", color: "#92400e" }}>
                 {missing.map((r) => r.name).join(" · ")}
@@ -644,14 +655,14 @@ export default function RaceFilesPage() {
                     )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    {race.files.some((f) => f.file_type === "gpx") && !race.terrain_type && (
+                    {race.files.some((f) => f.file_type === "gpx") && !race.has_terrain_segments && (
                       <span style={{ padding: "3px 10px", borderRadius: "20px", background: "#fffbeb", color: "#92400e", border: "1px solid #fcd34d", fontSize: "11px", fontWeight: 600 }}>
-                        ⚠ No terrain
+                        ⚠ No terrain analysis
                       </span>
                     )}
-                    {race.terrain_type && (
+                    {race.has_terrain_segments && (
                       <span style={{ padding: "3px 10px", borderRadius: "20px", background: "#f0fdf4", color: "#15803d", fontSize: "11px", fontWeight: 600 }}>
-                        {race.terrain_type}
+                        ✓ OSM terrain
                       </span>
                     )}
                     <span style={{
@@ -836,42 +847,36 @@ export default function RaceFilesPage() {
                     {/* Generate Race Profile */}
                     {filesByType.has("gpx") && (
                       <div style={{ marginTop: "12px" }}>
-                        {!race.terrain_type ? (
-                          <div style={{ padding: "8px 12px", borderRadius: "7px", background: "#fffbeb", border: "1px solid #fcd34d", fontSize: "12px", color: "#92400e" }}>
-                            ⚠ Profile generation is blocked — set <strong>terrain_type</strong> on this race record first.
-                          </div>
-                        ) : (
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                            <button
-                              disabled={!!profileGenerating[race.id]}
-                              onClick={() => handleGenerateProfile(race.id)}
-                              style={{
-                                display: "inline-flex", alignItems: "center", gap: "6px",
-                                padding: "7px 14px", borderRadius: "7px",
-                                border: "1px solid #86efac",
-                                background: profileGenerating[race.id] ? "#f0fdf4" : "#dcfce7",
-                                color: "#15803d", fontSize: "13px", fontWeight: 600,
-                                cursor: profileGenerating[race.id] ? "not-allowed" : "pointer",
-                                opacity: profileGenerating[race.id] ? 0.7 : 1,
-                              }}
-                            >
-                              {profileGenerating[race.id] ? "⏳ Generating…" : "📊 Generate Race Profile"}
-                            </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                          <button
+                            disabled={!!profileGenerating[race.id]}
+                            onClick={() => handleGenerateProfile(race.id)}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "6px",
+                              padding: "7px 14px", borderRadius: "7px",
+                              border: "1px solid #86efac",
+                              background: profileGenerating[race.id] ? "#f0fdf4" : "#dcfce7",
+                              color: "#15803d", fontSize: "13px", fontWeight: 600,
+                              cursor: profileGenerating[race.id] ? "not-allowed" : "pointer",
+                              opacity: profileGenerating[race.id] ? 0.7 : 1,
+                            }}
+                          >
+                            {profileGenerating[race.id] ? "⏳ Generating…" : "📊 Generate Race Profile"}
+                          </button>
 
-                            {profileError[race.id] && (
-                              <span style={{ fontSize: "12px", color: "#b91c1c" }}>
-                                {profileError[race.id]}
-                              </span>
-                            )}
-                            {profileSuccess[race.id] && (
-                              <span style={{ fontSize: "12px", color: "#15803d" }}>
-                                ✓ {profileSuccess[race.id]}
-                              </span>
-                            )}
-                          </div>
-                        )}
+                          {profileError[race.id] && (
+                            <span style={{ fontSize: "12px", color: "#b91c1c" }}>
+                              {profileError[race.id]}
+                            </span>
+                          )}
+                          {profileSuccess[race.id] && (
+                            <span style={{ fontSize: "12px", color: "#15803d" }}>
+                              ✓ {profileSuccess[race.id]}
+                            </span>
+                          )}
+                        </div>
                         <p style={{ fontSize: "12px", color: "#9ca3af", margin: "6px 0 0 0" }}>
-                          Computes flat-equivalent difficulty score from GPX (+ wind if available).
+                          Runs OSM terrain analysis then computes flat-equivalent difficulty score (+ wind if available).
                           Required before using the Race Comparison tool.
                         </p>
                       </div>
