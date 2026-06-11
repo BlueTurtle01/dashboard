@@ -1128,7 +1128,7 @@ function EffortProfileChart({ sections, totalKm }: { sections: TerrainSection[];
 /* Demand card */
 function DemandCard({ title, accent, children }: { title: string; accent: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#fafafa", border: `1px solid #e0e0e0`, borderLeft: `3px solid ${accent}`, borderRadius: "6px", padding: "10px 12px" }}>
+    <div style={{ background: "#fafafa", border: `1px solid #e0e0e0`, borderLeft: `3px solid ${accent}`, borderRadius: "6px", padding: "10px 12px", breakInside: "avoid", pageBreakInside: "avoid" }}>
       <p style={{ margin: "0 0 5px", fontSize: "11px", fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>{title}</p>
       <div style={{ fontSize: "11px", color: "#444", lineHeight: "1.5" }}>{children}</div>
     </div>
@@ -1137,15 +1137,15 @@ function DemandCard({ title, accent, children }: { title: string; accent: string
 
 /* Page number */
 function PageNumber({ n }: { n: number }) {
-  return <div style={{ position: "absolute", bottom: "24px", right: "48px", fontSize: "11px", color: "#aaa" }}>{n}</div>;
+  return <div style={{ textAlign: "right", fontSize: "11px", color: "#aaa", marginTop: "12px" }}>{n}</div>;
 }
 
 /* ══════════════════════════════════════════════════════════════════
    STYLE CONSTANTS
 ══════════════════════════════════════════════════════════════════ */
-const a4Page: React.CSSProperties = { width: "794px", minHeight: "1123px", background: "#fff", padding: "40px 48px 52px", boxSizing: "border-box", position: "relative", breakAfter: "page", pageBreakAfter: "always", marginBottom: "-1px" };
+const a4Page: React.CSSProperties = { width: "794px", background: "#fff", padding: "40px 48px 40px", boxSizing: "border-box", breakBefore: "page", pageBreakBefore: "always" };
 const canvas: React.CSSProperties = { background: "#6b6b6b", padding: "32px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" };
-const printHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #1e3a1e", paddingBottom: "12px", marginBottom: "18px" };
+const printHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #1e3a1e", paddingBottom: "12px", marginBottom: "18px", breakAfter: "avoid", pageBreakAfter: "avoid" };
 const logoImg: React.CSSProperties = { height: "36px", width: "auto", objectFit: "contain" };
 const sectionLabel: React.CSSProperties = { margin: "0 0 4px", fontSize: "11px", fontWeight: 600, color: "#555", textTransform: "uppercase", letterSpacing: "0.05em" };
 const labelStyle: React.CSSProperties = { fontSize: "12px", fontWeight: 600, color: "#555", marginBottom: "6px" };
@@ -1627,6 +1627,7 @@ export default function RaceReadinessPage() {
 
       {result && (
         <div style={canvas} className="race-strategy-canvas">
+          <style dangerouslySetInnerHTML={{ __html: `@media print { @page { margin: 15mm 20mm; } body { margin: 0; } .race-strategy-canvas { background: transparent !important; padding: 0 !important; gap: 0 !important; } }` }} />
 
           {/* ═══════════════════════════════════════
               TABLE OF CONTENTS
@@ -1763,7 +1764,7 @@ export default function RaceReadinessPage() {
             );
             return (
               <>
-                <div style={a4Page}>
+                <div style={{ ...a4Page, breakBefore: "auto", pageBreakBefore: "auto" }}>
                   {tocHeader("What each section covers and what to look for")}
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     {tocPage1.map((entry, i) => tocItemRow(entry, i, i + 1, i === tocPage1.length - 1))}
@@ -3054,8 +3055,7 @@ export default function RaceReadinessPage() {
                 if (cvRatio > 0.4 && totalKm > 0) concerns.push(`High effort variability means the athlete must absorb large, repeated intensity spikes. A single output strategy across the race will not work.`);
                 if (positives.length === 0 && concerns.length === 0) return null;
                 return (
-                  <div style={{ paddingTop: "40px", breakInside: "avoid", pageBreakInside: "avoid" }}>
-                  <div style={{ paddingTop: "10px", borderTop: "2px solid #e8f5e9" }}>
+                  <div style={{ paddingTop: "10px", borderTop: "2px solid #e8f5e9", breakInside: "avoid", pageBreakInside: "avoid" }}>
                     <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "7px" }}>What this section tells us about readiness</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                       <div>
@@ -3067,7 +3067,6 @@ export default function RaceReadinessPage() {
                         {concerns.length > 0 ? concerns.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #ffcdd2" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>No major concerns from course character data.</div>}
                       </div>
                     </div>
-                  </div>
                   </div>
                 );
               })()}
@@ -3599,7 +3598,7 @@ export default function RaceReadinessPage() {
                 const col   = pairingColor(row.section_type);
                 const badge = statusBadge(row);
                 return (
-                  <tr key={`${row.section_type}|${row.terrain}`} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                  <tr key={`${row.section_type}|${row.terrain}`} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa", breakInside: "avoid", pageBreakInside: "avoid" }}>
                     <td style={{ ...tdStyle, fontWeight: 600 }}>
                       <span style={{ color: col }}>{sectionTypeLabel(row.section_type, row.avg_gradient)}</span>
                       <div style={{ fontSize: "8.5px", color: "#aaa", fontWeight: 400, marginTop: "1px" }}>
@@ -3903,7 +3902,6 @@ export default function RaceReadinessPage() {
             ];
 
             return (
-              <>
               <div style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
@@ -4021,12 +4019,8 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={11} />
-              </div>
-
-              {/* ── Race history continuation (own page to keep PageNumber in correct position) ── */}
-              {tableRaces.length > 0 && (
-                <div style={{ width: "794px", background: "#fff", padding: "40px 48px 52px", boxSizing: "border-box", position: "relative", breakAfter: "page", pageBreakAfter: "always", marginBottom: "-1px" }}>
+                {tableRaces.length > 0 && (
+                  <div style={{ marginTop: "16px" }}>
                     <p style={sectionLabel}>Finished Race History — Demands vs Target</p>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
@@ -4071,9 +4065,11 @@ export default function RaceReadinessPage() {
                     {(targetDist || targetAscent) && (
                       <div style={{ marginTop: "8px", fontSize: "8.5px", color: "#999" }}>Red line on each bar = target race demand</div>
                     )}
-                </div>
-              )}
-              </>
+                  </div>
+                )}
+
+                <PageNumber n={11} />
+              </div>
             );
           })()}
 
@@ -4488,7 +4484,7 @@ export default function RaceReadinessPage() {
             const panelStyle: React.CSSProperties = {
               borderLeft: "4px solid #1e3a1e", borderRadius: "6px", padding: "14px 18px",
               background: "#fafafa", border: "1px solid #e8e8e8", borderLeftColor: "#1e3a1e",
-              marginBottom: "10px",
+              marginBottom: "10px", breakInside: "avoid", pageBreakInside: "avoid",
             };
             const panelHead: React.CSSProperties = { fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px" };
             const insightLine: React.CSSProperties = { fontSize: "13.5px", fontWeight: 700, color: "#111", lineHeight: 1.35, marginBottom: "6px" };
@@ -4675,7 +4671,7 @@ export default function RaceReadinessPage() {
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
                   {questions.map(({ icon, question, why, color }) => (
-                    <div key={question} style={{ border: `1px solid #e8e8e8`, borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
+                    <div key={question} style={{ border: `1px solid #e8e8e8`, borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", background: "#fafafa", breakInside: "avoid", pageBreakInside: "avoid" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
                         <div style={{ fontSize: "18px", lineHeight: 1, flexShrink: 0, marginTop: "1px" }}>{icon}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
