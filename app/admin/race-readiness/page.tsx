@@ -1485,7 +1485,8 @@ export default function RaceReadinessPage() {
       if (diff > 0) running += diff;
       if (pts[i].distanceKm <= halfKm) halfwayAscent = running;
     }
-    return Math.round((halfwayAscent / running) * 100);
+    const pct = Math.round((halfwayAscent / running) * 100);
+    return Number.isFinite(pct) ? pct : null;
   })();
 
   // Race pattern (from results)
@@ -3058,12 +3059,12 @@ export default function RaceReadinessPage() {
               {/* ── Demand summary (4 cards) ── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
                 <DemandCard title="Climbing Demand" accent="#c0392b">
-                  {totalAscentM > 0 && terrainSummary.climbing > 0 ? (
+                  {totalAscentM > 0 && terrainSummary.climbing > 0 && totalKm > 0 ? (
                     <>
                       Total ascent: <strong>{Math.round(totalAscentM).toLocaleString()} m</strong> across{" "}
                       <strong>{terrainSummary.climbing.toFixed(1)} km</strong> of climbing terrain
-                      ({((terrainSummary.climbing / totalKm) * 100).toFixed(0)}% of the course).
-                      {halfwayAscentPct !== null ? (
+                      ({Math.round((terrainSummary.climbing / totalKm) * 100)}% of the course).
+                      {halfwayAscentPct !== null && Number.isFinite(halfwayAscentPct) ? (
                         halfwayAscentPct > 55
                           ? ` The climbing is front-loaded — ${halfwayAscentPct}% of all ascent is done before halfway. Starting conservatively on climbs protects performance in the second half.`
                           : halfwayAscentPct < 45
@@ -3076,17 +3077,17 @@ export default function RaceReadinessPage() {
                       ) : null}
                     </>
                   ) : (
-                    <span style={{ color: "#aaa" }}>Insufficient course data.</span>
+                    <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate this section reliably.</span>
                   )}
                 </DemandCard>
 
                 <DemandCard title="Descending Demand" accent="#1565c0">
-                  {totalDescentM > 0 && terrainSummary.descending > 0 ? (
+                  {totalDescentM > 0 && terrainSummary.descending > 0 && totalKm > 0 ? (
                     <>
                       The race includes{" "}
                       <strong>{Math.round(totalDescentM).toLocaleString()} m</strong> of descent across{" "}
                       <strong>{terrainSummary.descending.toFixed(1)} km</strong> of descending terrain
-                      {" "}({((terrainSummary.descending / totalKm) * 100).toFixed(0)}% of course).
+                      {" "}({Math.round((terrainSummary.descending / totalKm) * 100)}% of course).
                       {steepestDescent ? (
                         <> Steepest descent: <strong>{Math.abs(steepestDescent.avg_gradient_percent).toFixed(1)}%</strong> average gradient
                         {" "}(km {steepestDescent.start_km.toFixed(1)}–{steepestDescent.end_km.toFixed(1)}).</>
@@ -3099,41 +3100,54 @@ export default function RaceReadinessPage() {
                         : "Descending load is limited relative to the climbing volume."}
                     </>
                   ) : (
-                    <span style={{ color: "#aaa" }}>Insufficient course data.</span>
+                    <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate this section reliably.</span>
                   )}
                 </DemandCard>
 
                 <DemandCard title="Final Third Demands" accent="#e65100">
-                  {finalThirdLen > 0 ? (
+                  {finalThirdLen > 0 && totalKm > 0 && effortRatio > 0 && Number.isFinite(effortRatio) && Number.isFinite(finalThirdEffort) ? (
                     <>
-                      The final third spans km {(finalThirdStart).toFixed(1)}–{totalKm.toFixed(1)}:{" "}
-                      <strong>{finalThirdLen.toFixed(1)} km</strong> with <strong>{Math.round(finalThirdAscent)} m</strong> of remaining ascent.
-                      {" "}Effort multiplier is <strong style={{ color: finalThirdEffort > effortRatio * 1.1 ? "#c0392b" : finalThirdEffort < effortRatio * 0.9 ? "#2e7d32" : "#555" }}>{finalThirdEffort.toFixed(2)}×</strong>{" "}
-                      ({finalThirdEffort > effortRatio * 1.1 ? "harder than average — fatigue management is critical" :
-                        finalThirdEffort < effortRatio * 0.9 ? "easier than average — opportunity to push if reserves allow" :
-                        "similar to overall average — consistent effort required to the finish"}).
+                      The final third spans km {finalThirdStart.toFixed(1)}–{totalKm.toFixed(1)}:{" "}
+                      <strong>{finalThirdLen.toFixed(1)} km</strong> with <strong>{Math.round(finalThirdAscent).toLocaleString()} m</strong> of remaining ascent.
+                      {" "}Effort multiplier is{" "}
+                      <strong style={{ color: finalThirdEffort > effortRatio * 1.1 ? "#c0392b" : finalThirdEffort < effortRatio * 0.9 ? "#2e7d32" : "#555" }}>
+                        {finalThirdEffort.toFixed(2)}×
+                      </strong>{" "}
+                      ({finalThirdEffort > effortRatio * 1.1
+                        ? "harder than average — fatigue management is critical"
+                        : finalThirdEffort < effortRatio * 0.9
+                        ? "easier than average — opportunity to push if reserves allow"
+                        : "similar to overall average — consistent effort required to the finish"}).
                       {late && (
                         <> Results data shows athletes typically slow by <strong>{late.avg_fade_pct.toFixed(1)}%</strong> in the final section, with <strong>{late.controlled_pct.toFixed(0)}%</strong> maintaining a controlled finish.</>
                       )}
                     </>
-                  ) : <span style={{ color: "#aaa" }}>No data available.</span>}
+                  ) : (
+                    <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate this section reliably.</span>
+                  )}
                 </DemandCard>
 
                 <DemandCard title="Effort Variability" accent={complexityColor}>
-                  <strong style={{ color: complexityColor }}>{complexityLabel} effort variability.</strong>
-                  {" "}
-                  {cvRatio > 0.45
-                    ? "The energy cost changes sharply from section to section. Managing intensity by effort feel, heart rate, or breathing rate is essential — the course does not allow a single consistent output level."
-                    : cvRatio > 0.25
-                    ? "Effort varies noticeably between sections. Adapting output section-by-section is important; a single constant output will either over-stress on the climbs or under-utilise on the flats."
-                    : "Effort is relatively consistent across sections. A steady, measured approach is appropriate for most of this course."
-                  }
-                  {totalFlatEq > 0 && totalKm > 0 ? (
+                  {secs.length > 0 && totalKm > 0 ? (
                     <>
-                      {" "}Estimated flat-effort equivalent: <strong>{totalFlatEq.toFixed(1)} km</strong> ({effortRatio.toFixed(2)}× the actual {totalKm.toFixed(1)} km) —
-                      a comparative load metric, not a literal distance prediction.
+                      <strong style={{ color: complexityColor }}>{complexityLabel} effort variability.</strong>
+                      {" "}
+                      {cvRatio > 0.45
+                        ? "The energy cost changes sharply from section to section. Managing intensity by effort feel, heart rate, or breathing rate is essential — the course does not allow a single consistent output level."
+                        : cvRatio > 0.25
+                        ? "Effort varies noticeably between sections. Adapting output section-by-section is important; a single constant output will either over-stress on the climbs or under-utilise on the flats."
+                        : "Effort is relatively consistent across sections. A steady, measured approach is appropriate for most of this course."
+                      }
+                      {totalFlatEq > 0 && Number.isFinite(effortRatio) ? (
+                        <>
+                          {" "}Estimated flat-effort equivalent: <strong>{totalFlatEq.toFixed(1)} km</strong> ({effortRatio.toFixed(2)}× the actual {totalKm.toFixed(1)} km) —
+                          a comparative load metric, not a literal distance prediction.
+                        </>
+                      ) : null}
                     </>
-                  ) : null}
+                  ) : (
+                    <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate this section reliably.</span>
+                  )}
                 </DemandCard>
               </div>
 
