@@ -26,6 +26,7 @@ export default function CreateAssessmentTestPage() {
   const [aim, setAim] = useState("");
   const [notes, setNotes] = useState("");
   const [whatToRecord, setWhatToRecord] = useState("");
+  const [unit, setUnit] = useState("");
 
   const [instructions, setInstructions] = useState<string[]>([]);
   const [newInstruction, setNewInstruction] = useState("");
@@ -155,6 +156,7 @@ export default function CreateAssessmentTestPage() {
       aim: aim.trim() || null,
       notes: notes.trim() || null,
       what_to_record: whatToRecord.trim() || null,
+      unit: unit.trim() || null,
       rating_uphill: ratingUphill,
       rating_downhill: ratingDownhill,
       rating_technical: ratingTechnical,
@@ -184,6 +186,7 @@ export default function CreateAssessmentTestPage() {
     setAim("");
     setNotes("");
     setWhatToRecord("");
+    setUnit("");
     setRatingUphill(null);
     setRatingDownhill(null);
     setRatingTechnical(null);
@@ -438,6 +441,15 @@ export default function CreateAssessmentTestPage() {
               style={addButtonStyle}
             >Add</button>
           </div>
+
+          <label htmlFor="unit" style={labelStyle}>Unit</label>
+          <input
+            id="unit"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="e.g. reps, seconds, cm"
+            style={inputStyle}
+          />
 
           <label style={labelStyle}>Relatability ratings</label>
           <p style={helperStyle}>

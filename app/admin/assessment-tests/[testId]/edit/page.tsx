@@ -19,6 +19,7 @@ type AssessmentTestRow = {
   aim: string | null;
   notes: string | null;
   what_to_record: string | null;
+  unit: string | null;
   rating_uphill: number | null;
   rating_downhill: number | null;
   rating_technical: number | null;
@@ -42,6 +43,7 @@ export default function EditAssessmentTestPage() {
   const [aim, setAim] = useState("");
   const [notes, setNotes] = useState("");
   const [whatToRecord, setWhatToRecord] = useState("");
+  const [unit, setUnit] = useState("");
   const [ratingUphill, setRatingUphill] = useState<number | null>(null);
   const [ratingDownhill, setRatingDownhill] = useState<number | null>(null);
   const [ratingTechnical, setRatingTechnical] = useState<number | null>(null);
@@ -79,7 +81,7 @@ export default function EditAssessmentTestPage() {
           .order("label", { ascending: true }),
         supabase
           .from("assessment_tests")
-          .select("id, name, category, description, aim, notes, what_to_record, rating_uphill, rating_downhill, rating_technical, rating_gravel_stability, rating_general_asymmetry, instructions, video_urls, target_muscles")
+          .select("id, name, category, description, aim, notes, what_to_record, unit, rating_uphill, rating_downhill, rating_technical, rating_gravel_stability, rating_general_asymmetry, instructions, video_urls, target_muscles")
           .eq("id", testId)
           .single(),
       ]);
@@ -102,6 +104,7 @@ export default function EditAssessmentTestPage() {
         setAim(test.aim ?? "");
         setNotes(test.notes ?? "");
         setWhatToRecord(test.what_to_record ?? "");
+        setUnit(test.unit ?? "");
         setRatingUphill(test.rating_uphill ?? null);
         setRatingDownhill(test.rating_downhill ?? null);
         setRatingTechnical(test.rating_technical ?? null);
@@ -163,6 +166,7 @@ export default function EditAssessmentTestPage() {
       aim: aim.trim() || null,
       notes: notes.trim() || null,
       what_to_record: whatToRecord.trim() || null,
+      unit: unit.trim() || null,
       rating_uphill: ratingUphill,
       rating_downhill: ratingDownhill,
       rating_technical: ratingTechnical,
@@ -390,6 +394,15 @@ export default function EditAssessmentTestPage() {
               style={addButtonStyle}
             >Add</button>
           </div>
+
+          <label htmlFor="unit" style={labelStyle}>Unit</label>
+          <input
+            id="unit"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="e.g. reps, seconds, cm"
+            style={inputStyle}
+          />
 
           <label style={labelStyle}>Relatability ratings</label>
           <p style={helperStyle}>
