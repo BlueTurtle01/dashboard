@@ -1137,7 +1137,7 @@ function DemandCard({ title, accent, children }: { title: string; accent: string
 
 /* Page number */
 function PageNumber({ n }: { n: number }) {
-  return <div style={{ textAlign: "right", fontSize: "11px", color: "#aaa", marginTop: "12px" }}>{n}</div>;
+  return <div className="rr-page-number" style={{ textAlign: "right", fontSize: "11px", color: "#aaa", marginTop: "12px" }}>{n}</div>;
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1631,18 +1631,60 @@ export default function RaceReadinessPage() {
             @media print {
               @page { margin: 15mm 20mm; }
               body { margin: 0; }
-              .race-strategy-canvas { background: transparent !important; padding: 0 !important; gap: 0 !important; }
+              .race-strategy-canvas { background: transparent !important; display: block !important; padding: 0 !important; gap: 0 !important; }
               .rr-page {
+                width: auto !important;
+                height: auto !important;
                 min-height: 0 !important;
+                overflow: visible !important;
                 position: static !important;
                 margin-bottom: 0 !important;
                 padding: 40px 48px 40px !important;
                 break-before: page !important;
                 page-break-before: always !important;
+                break-inside: auto !important;
+                page-break-inside: auto !important;
               }
               .rr-page-first {
                 break-before: auto !important;
                 page-break-before: auto !important;
+              }
+              .rr-page table {
+                break-inside: auto !important;
+                page-break-inside: auto !important;
+              }
+              .rr-page thead {
+                display: table-header-group;
+              }
+              .rr-page tfoot {
+                display: table-footer-group;
+              }
+              .rr-page tr,
+              .rr-page th,
+              .rr-page td {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+              }
+              .rr-page h2,
+              .rr-page p:first-child,
+              .rr-page-number {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+              }
+              .rr-page-number {
+                break-before: avoid !important;
+                page-break-before: avoid !important;
+              }
+              .rr-card-stack {
+                display: block !important;
+              }
+              .rr-card-stack > * {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                margin-bottom: 8px !important;
+              }
+              .rr-card-stack > *:last-child {
+                margin-bottom: 0 !important;
               }
             }
           ` }} />
@@ -4294,7 +4336,7 @@ export default function RaceReadinessPage() {
                       return (
                         <div style={{ marginBottom: "16px" }}>
                           <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px" }}>Summary</div>
-                          <div style={{ fontSize: "10px", color: "#333", lineHeight: 1.65, display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div className="rr-card-stack" style={{ fontSize: "10px", color: "#333", lineHeight: 1.65, display: "flex", flexDirection: "column", gap: 8 }}>
                             <p style={{ margin: 0 }}>{expPara}</p>
                             <p style={{ margin: 0 }}>{demandPara}</p>
                             <p style={{ margin: 0 }}>{assessmentPara}</p>
@@ -4306,7 +4348,7 @@ export default function RaceReadinessPage() {
                     {flags.length > 0 && (
                       <div>
                         <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Preparation Flags</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                        <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                           {flags.map((f, i) => (
                             <div key={i} style={{ padding: "7px 10px", background: f.bg, border: `1px solid ${f.border}`, borderLeft: `3px solid ${f.color}`, borderRadius: 5, fontSize: "9.5px", color: "#333", lineHeight: 1.5 }}>
                               {f.text}
@@ -4366,7 +4408,7 @@ export default function RaceReadinessPage() {
                 )}
 
                 {suggestions.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     {suggestions.slice(0, 3).map((s, i) => {
                       const col = scoreColor(s.gap_fill_score);
                       return (
@@ -4687,7 +4729,7 @@ export default function RaceReadinessPage() {
                   Questions the data cannot answer — {firstName} should consider each one honestly before race day
                 </p>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
+                <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
                   {questions.map(({ icon, question, why, color }) => (
                     <div key={question} style={{ border: `1px solid #e8e8e8`, borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", background: "#fafafa", breakInside: "avoid", pageBreakInside: "avoid" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
@@ -4863,7 +4905,7 @@ export default function RaceReadinessPage() {
                       Priority assessments
                     </div>
                     <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>{gapSentence}</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                       {priorityItems.map(s => renderCard(s, true))}
                     </div>
                   </div>
@@ -4879,7 +4921,7 @@ export default function RaceReadinessPage() {
                         These tests cover areas not highlighted by your specific gap profile but may reveal underlying physical limitations worth addressing with your coach.
                       </p>
                     )}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                       {optionalItems.map(s => renderCard(s, false))}
                     </div>
                   </div>
@@ -5151,7 +5193,7 @@ export default function RaceReadinessPage() {
                 </div>
 
                 {/* Steps grouped by priority tier */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   {(["high", "medium", "low"] as const).map(pri => {
                     const tierSteps = sorted.filter(s => s.priority === pri);
                     if (tierSteps.length === 0) return null;
@@ -5161,7 +5203,7 @@ export default function RaceReadinessPage() {
                         <div style={{ fontSize: "8.5px", fontWeight: 700, color: ps.dot, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "5px", borderBottom: `1px solid ${ps.border}`, paddingBottom: "3px" }}>
                           {ps.label}
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "10px" }}>
+                        <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "10px" }}>
                           {tierSteps.map((step, i) => (
                             <div key={i} style={{ display: "flex", gap: "10px", padding: "8px 10px", background: ps.bg, border: `1px solid ${ps.border}`, borderRadius: "6px", borderLeft: `3px solid ${ps.dot}`, breakInside: "avoid", pageBreakInside: "avoid" }}>
                               <div style={{ flexShrink: 0, paddingTop: "2px" }}>
@@ -5274,7 +5316,7 @@ export default function RaceReadinessPage() {
           .app-topbar  { display: none !important; }
           body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
           .app-content { margin: 0 !important; padding: 0 !important; }
-          .race-strategy-canvas { background: #fff !important; padding: 0 !important; gap: 0 !important; }
+          .race-strategy-canvas { background: #fff !important; display: block !important; padding: 0 !important; gap: 0 !important; }
           @page { size: A4 portrait; margin: 0; }
         }
       `}</style>
