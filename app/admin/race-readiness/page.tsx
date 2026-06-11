@@ -184,6 +184,11 @@ interface AssessmentTest {
   notes: string | null;
   category: "strength" | "imbalance" | "flexibility" | null;
   what_to_record: string | null;
+  rating_uphill: number | null;
+  rating_downhill: number | null;
+  rating_technical: number | null;
+  rating_gravel_stability: number | null;
+  rating_general_asymmetry: number | null;
 }
 
 interface PrepRacesResult {
@@ -1293,7 +1298,7 @@ export default function RaceReadinessPage() {
     async function load() {
       const { data } = await supabase
         .from("assessment_tests")
-        .select("id, name, description, aim, instructions, target_muscles, notes, category, what_to_record")
+        .select("id, name, description, aim, instructions, target_muscles, notes, category, what_to_record, rating_uphill, rating_downhill, rating_technical, rating_gravel_stability, rating_general_asymmetry")
         .order("category, name");
       if (data) setAssessmentTests(data as AssessmentTest[]);
     }
@@ -4694,15 +4699,121 @@ export default function RaceReadinessPage() {
               PAGE 16 — Physical Self-Assessments
           ═══════════════════════════════════════ */}
           {reportAthlete && assessmentTests.length > 0 && (() => {
-            const categories: { key: "strength" | "imbalance" | "flexibility"; label: string; color: string }[] = [
-              { key: "strength",    label: "Strength",    color: "#1565c0" },
-              { key: "imbalance",   label: "Imbalance",   color: "#c0392b" },
-              { key: "flexibility", label: "Flexibility", color: "#2e7d32" },
+            // ── Weakness scores per dimension (0–1) from race terrain gaps ──
+            const athleteMap: Record<string, number> = {};
+            for (const p of reportAthlete.terrain_pairings ?? []) {
+              const k = `${p.section_type}|${p.terrain}`;
+              athleteMap[k] = (athleteMap[k] ?? 0) + p.total_km;
+            }
+            const dims = {
+              uphill:   { demand: 0, gap: 0 },
+              downhill: { demand: 0, gap: 0 },
+              technical:{ demand: 0, gap: 0 },
+              gravel:   { demand: 0, gap: 0 },
+            };
+            for (const sec of result?.terrain_sections ?? []) {
+              const covered = athleteMap[`${sec.section_type}|${sec.terrain}`] ?? 0;
+              const gap = Math.max(0, sec.distance_km - covered);
+              if (sec.section_type.includes("climb"))   { dims.uphill.demand   += sec.distance_km; dims.uphill.gap   += gap; }
+              if (sec.section_type.includes("descent")) { dims.downhill.demand += sec.distance_km; dims.downhill.gap += gap; }
+              if (sec.terrain === "technical_trail")    { dims.technical.demand+= sec.distance_km; dims.technical.gap+= gap; }
+              if (sec.terrain === "gravel")             { dims.gravel.demand   += sec.distance_km; dims.gravel.gap   += gap; }
+            }
+            const w = {
+              uphill:            dims.uphill.demand   > 0 ? Math.min(1, dims.uphill.gap   / dims.uphill.demand)   : 0,
+              downhill:          dims.downhill.demand > 0 ? Math.min(1, dims.downhill.gap / dims.downhill.demand) : 0,
+              technical:         dims.technical.demand> 0 ? Math.min(1, dims.technical.gap/ dims.technical.demand): 0,
+              gravel_stability:  dims.gravel.demand   > 0 ? Math.min(1, dims.gravel.gap   / dims.gravel.demand)   : 0,
+              // General asymmetry is always at least partly relevant; scales with overall gap severity
+              general_asymmetry: Math.min(1, 0.4 + (reportAthlete.profile.dnf_rate ?? 0) * 0.6),
+            };
+
+            // ── Dimension labels shown as tags on priority cards ──
+            const DIM_META: { key: keyof typeof w; ratingKey: keyof AssessmentTest; label: string }[] = [
+              { key: "uphill",           ratingKey: "rating_uphill",            label: "Uphill" },
+              { key: "downhill",         ratingKey: "rating_downhill",          label: "Downhill" },
+              { key: "technical",        ratingKey: "rating_technical",         label: "Technical" },
+              { key: "gravel_stability", ratingKey: "rating_gravel_stability",  label: "Gravel stability" },
+              { key: "general_asymmetry",ratingKey: "rating_general_asymmetry", label: "General asymmetry" },
             ];
-            const grouped = categories
-              .map(cat => ({ ...cat, tests: assessmentTests.filter(t => t.category === cat.key) }))
-              .filter(g => g.tests.length > 0);
-            const uncategorised = assessmentTests.filter(t => !t.category);
+
+            // ── Score each test ──
+            type ScoredTest = { test: AssessmentTest; score: number; gapTags: string[] };
+            const scored: ScoredTest[] = assessmentTests.map(test => {
+              let score = 0;
+              const gapTags: string[] = [];
+              for (const { key, ratingKey, label } of DIM_META) {
+                const rating = (test[ratingKey] as number | null) ?? 0;
+                score += rating * w[key];
+                if (rating >= 3 && w[key] >= 0.25) gapTags.push(label);
+              }
+              return { test, score, gapTags };
+            }).sort((a, b) => b.score - a.score);
+
+            // ── Split priority vs optional ──
+            const hasGaps = Object.values(w).some(v => v > 0.25);
+            const priorityCount = hasGaps ? Math.min(5, Math.ceil(assessmentTests.length / 2)) : 0;
+            const priorityItems = scored.slice(0, priorityCount).filter(s => s.score > 0);
+            const optionalItems = scored.slice(priorityItems.length);
+
+            // ── Active gap labels for the intro sentence ──
+            const activeGapLabels = DIM_META
+              .filter(({ key }) => w[key] >= 0.25)
+              .map(({ label }) => label.toLowerCase());
+            const gapSentence = activeGapLabels.length > 0
+              ? `Based on ${activeGapLabels.slice(0, -1).join(", ")}${activeGapLabels.length > 1 ? " and " : ""}${activeGapLabels[activeGapLabels.length - 1]} gaps identified in your experience analysis, the following tests are most relevant.`
+              : "Complete the tests below to build a full picture of your physical readiness.";
+
+            // ── Card colour by category ──
+            const catColor = (cat: string | null) =>
+              cat === "strength" ? "#1565c0" : cat === "imbalance" ? "#c0392b" : cat === "flexibility" ? "#2e7d32" : "#4a148c";
+            const catLabel = (cat: string | null) =>
+              cat === "strength" ? "Strength" : cat === "imbalance" ? "Imbalance" : cat === "flexibility" ? "Flexibility" : "General";
+
+            const renderCard = ({ test, gapTags }: ScoredTest, showTags: boolean) => {
+              const color = catColor(test.category);
+              return (
+                <div key={test.id} style={{ border: "1px solid #e8e8e8", borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2px" }}>
+                    <div style={{ fontSize: "12px", fontWeight: 700, color: "#111" }}>{test.name}</div>
+                    <span style={{ fontSize: "9px", fontWeight: 600, color, background: `${color}18`, padding: "1px 7px", borderRadius: "4px", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
+                      {catLabel(test.category)}
+                    </span>
+                  </div>
+                  {showTags && gapTags.length > 0 && (
+                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "6px" }}>
+                      {gapTags.map(tag => (
+                        <span key={tag} style={{ fontSize: "9px", fontWeight: 600, color: "#b45309", background: "#fffbeb", padding: "1px 6px", borderRadius: "10px", border: "1px solid #fde68a" }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {test.aim && (
+                    <div style={{ fontSize: "10px", color, fontWeight: 600, marginBottom: "6px" }}>Identifies: {test.aim}</div>
+                  )}
+                  {test.description && (
+                    <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, marginBottom: "6px" }}>{test.description}</div>
+                  )}
+                  {test.instructions.length > 0 && (
+                    <ol style={{ margin: "0 0 6px", paddingLeft: "18px", listStyleType: "decimal" }}>
+                      {test.instructions.map((step, i) => (
+                        <li key={i} style={{ fontSize: "10px", color: "#444", lineHeight: 1.6, marginBottom: "1px" }}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
+                  {test.what_to_record && (
+                    <div style={{ fontSize: "10px", color: "#555", background: "#f0f4f0", borderRadius: "4px", padding: "5px 8px", marginTop: "4px" }}>
+                      <span style={{ fontWeight: 600 }}>Record: </span>{test.what_to_record}
+                    </div>
+                  )}
+                  {test.notes && (
+                    <div style={{ fontSize: "10px", color: "#888", fontStyle: "italic", marginTop: "4px" }}>{test.notes}</div>
+                  )}
+                </div>
+              );
+            };
+
             return (
               <div style={a4Page}>
                 <div style={printHeader}>
@@ -4715,82 +4826,36 @@ export default function RaceReadinessPage() {
 
                 <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Physical Self-Assessments</h2>
                 <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
-                  Tests to identify strength gaps, imbalances, and flexibility limitations that may not be visible in race data. Complete each one honestly and flag any concerns to your coach.
+                  Tests to identify strength gaps, imbalances, and flexibility limitations that may not be visible in race data.
                 </p>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                  {grouped.map(({ key, label, color, tests }) => (
-                    <div key={key}>
-                      <div style={{ fontSize: "10px", fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px", borderBottom: `2px solid ${color}`, paddingBottom: "4px" }}>
-                        {label}
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        {tests.map((test) => (
-                          <div key={test.id} style={{ border: "1px solid #e8e8e8", borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
-                            <div style={{ fontSize: "12px", fontWeight: 700, color: "#111", marginBottom: "2px" }}>{test.name}</div>
-                            {test.aim && (
-                              <div style={{ fontSize: "10px", color, fontWeight: 600, marginBottom: "6px" }}>Identifies: {test.aim}</div>
-                            )}
-                            {test.description && (
-                              <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, marginBottom: "6px" }}>{test.description}</div>
-                            )}
-                            {test.instructions.length > 0 && (
-                              <ol style={{ margin: "0 0 6px", paddingLeft: "18px", listStyleType: "decimal" }}>
-                                {test.instructions.map((step, i) => (
-                                  <li key={i} style={{ fontSize: "10px", color: "#444", lineHeight: 1.6, marginBottom: "1px" }}>{step}</li>
-                                ))}
-                              </ol>
-                            )}
-                            {test.what_to_record && (
-                              <div style={{ fontSize: "10px", color: "#555", background: "#f0f4f0", borderRadius: "4px", padding: "5px 8px", marginTop: "4px" }}>
-                                <span style={{ fontWeight: 600 }}>Record: </span>{test.what_to_record}
-                              </div>
-                            )}
-                            {test.notes && (
-                              <div style={{ fontSize: "10px", color: "#888", fontStyle: "italic", marginTop: "4px" }}>{test.notes}</div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                {priorityItems.length > 0 && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ fontSize: "10px", fontWeight: 700, color: "#b45309", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "2px solid #f59e0b", paddingBottom: "4px", marginBottom: "6px" }}>
+                      Priority assessments
                     </div>
-                  ))}
+                    <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>{gapSentence}</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {priorityItems.map(s => renderCard(s, true))}
+                    </div>
+                  </div>
+                )}
 
-                  {uncategorised.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: "10px", fontWeight: 700, color: "#4a148c", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px", borderBottom: "2px solid #4a148c", paddingBottom: "4px" }}>
-                        General
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        {uncategorised.map((test) => (
-                          <div key={test.id} style={{ border: "1px solid #e8e8e8", borderLeft: "4px solid #4a148c", borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
-                            <div style={{ fontSize: "12px", fontWeight: 700, color: "#111", marginBottom: "2px" }}>{test.name}</div>
-                            {test.aim && (
-                              <div style={{ fontSize: "10px", color: "#4a148c", fontWeight: 600, marginBottom: "6px" }}>Identifies: {test.aim}</div>
-                            )}
-                            {test.description && (
-                              <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, marginBottom: "6px" }}>{test.description}</div>
-                            )}
-                            {test.instructions.length > 0 && (
-                              <ol style={{ margin: "0 0 6px", paddingLeft: "18px", listStyleType: "decimal" }}>
-                                {test.instructions.map((step, i) => (
-                                  <li key={i} style={{ fontSize: "10px", color: "#444", lineHeight: 1.6, marginBottom: "1px" }}>{step}</li>
-                                ))}
-                              </ol>
-                            )}
-                            {test.what_to_record && (
-                              <div style={{ fontSize: "10px", color: "#555", background: "#f0f4f0", borderRadius: "4px", padding: "5px 8px", marginTop: "4px" }}>
-                                <span style={{ fontWeight: 600 }}>Record: </span>{test.what_to_record}
-                              </div>
-                            )}
-                            {test.notes && (
-                              <div style={{ fontSize: "10px", color: "#888", fontStyle: "italic", marginTop: "4px" }}>{test.notes}</div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                {optionalItems.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: "10px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "2px solid #ddd", paddingBottom: "4px", marginBottom: "6px" }}>
+                      {priorityItems.length > 0 ? "For a fuller picture" : "All assessments"}
                     </div>
-                  )}
-                </div>
+                    {priorityItems.length > 0 && (
+                      <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>
+                        These tests cover areas not highlighted by your specific gap profile but may reveal underlying physical limitations worth addressing with your coach.
+                      </p>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {optionalItems.map(s => renderCard(s, false))}
+                    </div>
+                  </div>
+                )}
 
                 <PageNumber n={16} />
               </div>
