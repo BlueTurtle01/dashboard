@@ -3054,7 +3054,8 @@ export default function RaceReadinessPage() {
                 if (cvRatio > 0.4 && totalKm > 0) concerns.push(`High effort variability means the athlete must absorb large, repeated intensity spikes. A single output strategy across the race will not work.`);
                 if (positives.length === 0 && concerns.length === 0) return null;
                 return (
-                  <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "2px solid #e8f5e9", breakInside: "avoid", pageBreakInside: "avoid" }}>
+                  <div style={{ paddingTop: "40px", breakInside: "avoid", pageBreakInside: "avoid" }}>
+                  <div style={{ paddingTop: "10px", borderTop: "2px solid #e8f5e9" }}>
                     <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "7px" }}>What this section tells us about readiness</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                       <div>
@@ -3066,6 +3067,7 @@ export default function RaceReadinessPage() {
                         {concerns.length > 0 ? concerns.map((t, i) => <div key={i} style={{ fontSize: "8.5px", color: "#333", lineHeight: 1.45, marginBottom: "3px", paddingLeft: "7px", borderLeft: "2px solid #ffcdd2" }}>{t}</div>) : <div style={{ fontSize: "8.5px", color: "#aaa" }}>No major concerns from course character data.</div>}
                       </div>
                     </div>
+                  </div>
                   </div>
                 );
               })()}
@@ -3901,6 +3903,7 @@ export default function RaceReadinessPage() {
             ];
 
             return (
+              <>
               <div style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
@@ -4012,9 +4015,18 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                {/* Race history table with demand bars */}
-                {tableRaces.length > 0 ? (
-                  <div style={{ breakInside: "avoid", pageBreakInside: "avoid" }}>
+                {tableRaces.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: "#aaa", fontSize: "14px" }}>
+                    No finished race data found for this athlete.
+                  </div>
+                )}
+
+                <PageNumber n={11} />
+              </div>
+
+              {/* ── Race history continuation (own page to keep PageNumber in correct position) ── */}
+              {tableRaces.length > 0 && (
+                <div style={{ width: "794px", background: "#fff", padding: "40px 48px 52px", boxSizing: "border-box", position: "relative", breakAfter: "page", pageBreakAfter: "always", marginBottom: "-1px" }}>
                     <p style={sectionLabel}>Finished Race History — Demands vs Target</p>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
@@ -4059,15 +4071,9 @@ export default function RaceReadinessPage() {
                     {(targetDist || targetAscent) && (
                       <div style={{ marginTop: "8px", fontSize: "8.5px", color: "#999" }}>Red line on each bar = target race demand</div>
                     )}
-                  </div>
-                ) : (
-                  <div style={{ textAlign: "center", padding: "40px 0", color: "#aaa", fontSize: "14px" }}>
-                    No finished race data found for this athlete.
-                  </div>
-                )}
-
-                <PageNumber n={11} />
-              </div>
+                </div>
+              )}
+              </>
             );
           })()}
 
