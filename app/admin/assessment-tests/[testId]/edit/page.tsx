@@ -18,6 +18,7 @@ type AssessmentTestRow = {
   description: string | null;
   aim: string | null;
   notes: string | null;
+  what_to_record: string | null;
   instructions: string[];
   video_urls: string[];
   target_muscles: string[];
@@ -31,10 +32,11 @@ export default function EditAssessmentTestPage() {
   const testId = typeof params.testId === "string" ? params.testId : "";
 
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<"strength" | "imbalance" | "">("");
+  const [category, setCategory] = useState<"strength" | "imbalance" | "flexibility" | "">("");
   const [description, setDescription] = useState("");
   const [aim, setAim] = useState("");
   const [notes, setNotes] = useState("");
+  const [whatToRecord, setWhatToRecord] = useState("");
 
   const [instructions, setInstructions] = useState<string[]>([]);
   const [newInstruction, setNewInstruction] = useState("");
@@ -67,7 +69,7 @@ export default function EditAssessmentTestPage() {
           .order("label", { ascending: true }),
         supabase
           .from("assessment_tests")
-          .select("id, name, category, description, aim, notes, instructions, video_urls, target_muscles")
+          .select("id, name, category, description, aim, notes, what_to_record, instructions, video_urls, target_muscles")
           .eq("id", testId)
           .single(),
       ]);
@@ -85,10 +87,11 @@ export default function EditAssessmentTestPage() {
       } else {
         const test = testResult.data as AssessmentTestRow;
         setName(test.name);
-        setCategory((test.category as "strength" | "imbalance" | "") ?? "");
+        setCategory((test.category as "strength" | "imbalance" | "flexibility" | "") ?? "");
         setDescription(test.description ?? "");
         setAim(test.aim ?? "");
         setNotes(test.notes ?? "");
+        setWhatToRecord(test.what_to_record ?? "");
         setInstructions(test.instructions ?? []);
         setVideoUrls(test.video_urls ?? []);
 
@@ -144,6 +147,7 @@ export default function EditAssessmentTestPage() {
       description: description.trim() || null,
       aim: aim.trim() || null,
       notes: notes.trim() || null,
+      what_to_record: whatToRecord.trim() || null,
       instructions: instructions.filter((s) => s.trim().length > 0),
       video_urls: videoUrls.filter((u) => u.trim().length > 0),
       target_muscles: selectedMuscles.map((m) => m.slug),
@@ -191,14 +195,14 @@ export default function EditAssessmentTestPage() {
 
           <label style={labelStyle}>Category</label>
           <div style={segmentedControlStyle}>
-            {(["strength", "imbalance"] as const).map((opt) => (
+            {(["strength", "imbalance", "flexibility"] as const).map((opt) => (
               <button
                 key={opt}
                 type="button"
                 onClick={() => setCategory(category === opt ? "" : opt)}
                 style={category === opt ? segmentActiveStyle : segmentStyle}
               >
-                {opt === "strength" ? "Strength" : "Imbalance"}
+                {opt.charAt(0).toUpperCase() + opt.slice(1)}
               </button>
             ))}
           </div>
@@ -229,6 +233,16 @@ export default function EditAssessmentTestPage() {
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
             placeholder="What should the assessor watch out for? Common compensations, red flags, technique cues..."
+            style={textareaStyle}
+          />
+
+          <label htmlFor="what-to-record" style={labelStyle}>What to record</label>
+          <textarea
+            id="what-to-record"
+            value={whatToRecord}
+            onChange={(e) => setWhatToRecord(e.target.value)}
+            rows={3}
+            placeholder="e.g. Time held, number of reps achieved, side-to-side difference in centimetres..."
             style={textareaStyle}
           />
 

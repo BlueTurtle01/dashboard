@@ -21,10 +21,11 @@ export default function CreateAssessmentTestPage() {
   const supabase = createClient();
 
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<"strength" | "imbalance" | "">("");
+  const [category, setCategory] = useState<"strength" | "imbalance" | "flexibility" | "">("");
   const [description, setDescription] = useState("");
   const [aim, setAim] = useState("");
   const [notes, setNotes] = useState("");
+  const [whatToRecord, setWhatToRecord] = useState("");
 
   const [instructions, setInstructions] = useState<string[]>([]);
   const [newInstruction, setNewInstruction] = useState("");
@@ -147,6 +148,7 @@ export default function CreateAssessmentTestPage() {
       description: description.trim() || null,
       aim: aim.trim() || null,
       notes: notes.trim() || null,
+      what_to_record: whatToRecord.trim() || null,
       instructions: instructions.filter((s) => s.trim().length > 0),
       video_urls: videoUrls.filter((u) => u.trim().length > 0),
       target_muscles: selectedMuscles.map((m) => m.slug),
@@ -170,6 +172,7 @@ export default function CreateAssessmentTestPage() {
     setDescription("");
     setAim("");
     setNotes("");
+    setWhatToRecord("");
     setInstructions([]);
     setNewInstruction("");
     setVideoUrls([]);
@@ -243,14 +246,14 @@ export default function CreateAssessmentTestPage() {
 
           <label style={labelStyle}>Category</label>
           <div style={segmentedControlStyle}>
-            {(["strength", "imbalance"] as const).map((opt) => (
+            {(["strength", "imbalance", "flexibility"] as const).map((opt) => (
               <button
                 key={opt}
                 type="button"
                 onClick={() => setCategory(category === opt ? "" : opt)}
                 style={category === opt ? segmentActiveStyle : segmentStyle}
               >
-                {opt === "strength" ? "Strength" : "Imbalance"}
+                {opt.charAt(0).toUpperCase() + opt.slice(1)}
               </button>
             ))}
           </div>
@@ -282,6 +285,16 @@ export default function CreateAssessmentTestPage() {
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
             placeholder="What should the assessor watch out for? Common compensations, red flags, technique cues..."
+            style={textareaStyle}
+          />
+
+          <label htmlFor="what-to-record" style={labelStyle}>What to record</label>
+          <textarea
+            id="what-to-record"
+            value={whatToRecord}
+            onChange={(e) => setWhatToRecord(e.target.value)}
+            rows={3}
+            placeholder="e.g. Time held, number of reps achieved, side-to-side difference in centimetres..."
             style={textareaStyle}
           />
 

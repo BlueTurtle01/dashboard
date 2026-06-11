@@ -181,6 +181,9 @@ interface AssessmentTest {
   aim: string | null;
   instructions: string[];
   target_muscles: string[];
+  notes: string | null;
+  category: "strength" | "imbalance" | "flexibility" | null;
+  what_to_record: string | null;
 }
 
 interface PrepRacesResult {
@@ -1290,8 +1293,8 @@ export default function RaceReadinessPage() {
     async function load() {
       const { data } = await supabase
         .from("assessment_tests")
-        .select("id, name, description, aim, instructions, target_muscles")
-        .order("name");
+        .select("id, name, description, aim, instructions, target_muscles, notes, category, what_to_record")
+        .order("category, name");
       if (data) setAssessmentTests(data as AssessmentTest[]);
     }
     void load();
@@ -1693,8 +1696,13 @@ export default function RaceReadinessPage() {
               },
               {
                 title: "Self-Reflection",
-                body: "Questions the data cannot answer — areas where honest self-assessment can significantly change the outlook for race day. Injuries, sleep, consistency, footwear, nutrition, pain, and goal realism. Also includes physical self-assessment tests to identify common imbalances.",
+                body: "Questions the data cannot answer — areas where honest self-assessment can significantly change the outlook for race day. Injuries, sleep, consistency, footwear, nutrition, pain, and goal realism.",
                 visible: !!reportAthlete,
+              },
+              {
+                title: "Physical Self-Assessments",
+                body: "Practical tests to identify strength gaps, imbalances, and flexibility limitations that may not be visible in race data. Grouped by category with step-by-step instructions and what to record.",
+                visible: !!reportAthlete && assessmentTests.length > 0,
               },
               {
                 title: "Suggested Next Steps",
@@ -4670,37 +4678,6 @@ export default function RaceReadinessPage() {
                   ))}
                 </div>
 
-                {assessmentTests.length > 0 && (
-                  <div style={{ marginTop: "20px" }}>
-                    <div style={{ fontSize: "10px", fontWeight: 700, color: "#4a148c", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px", borderBottom: "1px solid #e8e8e8", paddingBottom: "6px" }}>
-                      Physical Self-Assessments
-                    </div>
-                    <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.6 }}>
-                      The following tests can identify physical imbalances or weaknesses that may not be visible in race data. Complete each one honestly and flag any concerns to your coach.
-                    </p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      {assessmentTests.map((test) => (
-                        <div key={test.id} style={{ border: "1px solid #e8e8e8", borderLeft: "4px solid #4a148c", borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
-                          <div style={{ fontSize: "12px", fontWeight: 700, color: "#111", marginBottom: "2px" }}>{test.name}</div>
-                          {test.aim && (
-                            <div style={{ fontSize: "10px", color: "#4a148c", fontWeight: 600, marginBottom: "6px" }}>Identifies: {test.aim}</div>
-                          )}
-                          {test.description && (
-                            <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, marginBottom: "6px" }}>{test.description}</div>
-                          )}
-                          {test.instructions.length > 0 && (
-                            <ol style={{ margin: 0, paddingLeft: "18px", listStyleType: "decimal" }}>
-                              {test.instructions.map((step, i) => (
-                                <li key={i} style={{ fontSize: "10px", color: "#444", lineHeight: 1.6, marginBottom: "1px" }}>{step}</li>
-                              ))}
-                            </ol>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 <div style={{ marginTop: "18px", padding: "12px 16px", background: "#f0f4f0", borderRadius: "6px", border: "1px solid #c8d8c8" }}>
                   <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px" }}>A note on self-honesty</div>
                   <div style={{ fontSize: "10.5px", color: "#444", lineHeight: 1.6 }}>
@@ -4714,7 +4691,114 @@ export default function RaceReadinessPage() {
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 15 — Suggested Next Steps
+              PAGE 16 — Physical Self-Assessments
+          ═══════════════════════════════════════ */}
+          {reportAthlete && assessmentTests.length > 0 && (() => {
+            const categories: { key: "strength" | "imbalance" | "flexibility"; label: string; color: string }[] = [
+              { key: "strength",    label: "Strength",    color: "#1565c0" },
+              { key: "imbalance",   label: "Imbalance",   color: "#c0392b" },
+              { key: "flexibility", label: "Flexibility", color: "#2e7d32" },
+            ];
+            const grouped = categories
+              .map(cat => ({ ...cat, tests: assessmentTests.filter(t => t.category === cat.key) }))
+              .filter(g => g.tests.length > 0);
+            const uncategorised = assessmentTests.filter(t => !t.category);
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{reportAthlete.profile.athlete_key}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Physical Self-Assessments</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Physical Self-Assessments</h2>
+                <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
+                  Tests to identify strength gaps, imbalances, and flexibility limitations that may not be visible in race data. Complete each one honestly and flag any concerns to your coach.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                  {grouped.map(({ key, label, color, tests }) => (
+                    <div key={key}>
+                      <div style={{ fontSize: "10px", fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px", borderBottom: `2px solid ${color}`, paddingBottom: "4px" }}>
+                        {label}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {tests.map((test) => (
+                          <div key={test.id} style={{ border: "1px solid #e8e8e8", borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
+                            <div style={{ fontSize: "12px", fontWeight: 700, color: "#111", marginBottom: "2px" }}>{test.name}</div>
+                            {test.aim && (
+                              <div style={{ fontSize: "10px", color, fontWeight: 600, marginBottom: "6px" }}>Identifies: {test.aim}</div>
+                            )}
+                            {test.description && (
+                              <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, marginBottom: "6px" }}>{test.description}</div>
+                            )}
+                            {test.instructions.length > 0 && (
+                              <ol style={{ margin: "0 0 6px", paddingLeft: "18px", listStyleType: "decimal" }}>
+                                {test.instructions.map((step, i) => (
+                                  <li key={i} style={{ fontSize: "10px", color: "#444", lineHeight: 1.6, marginBottom: "1px" }}>{step}</li>
+                                ))}
+                              </ol>
+                            )}
+                            {test.what_to_record && (
+                              <div style={{ fontSize: "10px", color: "#555", background: "#f0f4f0", borderRadius: "4px", padding: "5px 8px", marginTop: "4px" }}>
+                                <span style={{ fontWeight: 600 }}>Record: </span>{test.what_to_record}
+                              </div>
+                            )}
+                            {test.notes && (
+                              <div style={{ fontSize: "10px", color: "#888", fontStyle: "italic", marginTop: "4px" }}>{test.notes}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  {uncategorised.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: "10px", fontWeight: 700, color: "#4a148c", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px", borderBottom: "2px solid #4a148c", paddingBottom: "4px" }}>
+                        General
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {uncategorised.map((test) => (
+                          <div key={test.id} style={{ border: "1px solid #e8e8e8", borderLeft: "4px solid #4a148c", borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
+                            <div style={{ fontSize: "12px", fontWeight: 700, color: "#111", marginBottom: "2px" }}>{test.name}</div>
+                            {test.aim && (
+                              <div style={{ fontSize: "10px", color: "#4a148c", fontWeight: 600, marginBottom: "6px" }}>Identifies: {test.aim}</div>
+                            )}
+                            {test.description && (
+                              <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, marginBottom: "6px" }}>{test.description}</div>
+                            )}
+                            {test.instructions.length > 0 && (
+                              <ol style={{ margin: "0 0 6px", paddingLeft: "18px", listStyleType: "decimal" }}>
+                                {test.instructions.map((step, i) => (
+                                  <li key={i} style={{ fontSize: "10px", color: "#444", lineHeight: 1.6, marginBottom: "1px" }}>{step}</li>
+                                ))}
+                              </ol>
+                            )}
+                            {test.what_to_record && (
+                              <div style={{ fontSize: "10px", color: "#555", background: "#f0f4f0", borderRadius: "4px", padding: "5px 8px", marginTop: "4px" }}>
+                                <span style={{ fontWeight: 600 }}>Record: </span>{test.what_to_record}
+                              </div>
+                            )}
+                            {test.notes && (
+                              <div style={{ fontSize: "10px", color: "#888", fontStyle: "italic", marginTop: "4px" }}>{test.notes}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <PageNumber n={16} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 17 — Suggested Next Steps
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -5009,7 +5093,7 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={16} />
+                <PageNumber n={17} />
               </div>
             );
           })()}
@@ -5081,7 +5165,7 @@ export default function RaceReadinessPage() {
                   </table>
                 )}
 
-                <PageNumber n={17} />
+                <PageNumber n={18} />
               </div>
             );
           })()}
