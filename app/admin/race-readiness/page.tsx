@@ -1855,6 +1855,12 @@ export default function RaceReadinessPage() {
                 : `Completing multiple ultra-distance events demonstrates commitment and the ability to manage race-day adversity over extended periods.`;
 
             // ── Biggest limiter ────────────────────────────────────────────
+            const zeroRows = summaryGapRows.filter(r => r.status === "none");
+            const technicalZeroRows = summaryGapRows.filter(r =>
+              ["technical_trail", "fell"].includes(r.terrain) && r.status === "none"
+            );
+            const moderateStatuses = [ascentStatus, terrainStatus, descentStatus, flatStatus]
+              .filter((s): s is "moderate" => s === "moderate");
             let limiterText =
               ascentStatus === "major_gap"
                 ? (() => {
@@ -1872,7 +1878,27 @@ export default function RaceReadinessPage() {
                 ? `Descending volume is the main limiter. The race includes ${goalDescent > 0 ? Math.round(goalDescent).toLocaleString() : "—"} m of descent, with limited proven experience of equivalent descent loads. Eccentric quad loading over repeated technical descents is a specific risk.`
               : flatStatus === "major_gap"
                 ? `Total effort duration is the key gap. The race effort load exceeds anything clearly on record and will require sustained output at a level not yet fully replicated in training or racing.`
-                : `No single dominant limiter identified. Focus on maintaining race-specific training quality and arriving at the start line healthy and rested.`;
+              : technicalZeroRows.length > 0 && zeroRows.length >= 3
+                ? (() => {
+                    const techNames = technicalZeroRows.map(r =>
+                      r.terrain.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+                    ).join(", ");
+                    const strengthClause =
+                      distStatus === "strong"
+                        ? `${firstName} has the endurance and distance evidence to complete this race`
+                        : flatStatus === "strong"
+                        ? `${firstName} has the effort capacity for this race`
+                        : `${firstName} has demonstrated race completion ability`;
+                    const descentClause = descentStatus !== "strong" ? " and steep descending" : "";
+                    return `Primary limiter: specificity, not volume. ${strengthClause} — the gap is in terrain-specific preparation. The race contains ${techNames}${descentClause} terrain with no equivalent in the confirmed race record, alongside ${zeroRows.length} demand type${zeroRows.length !== 1 ? "s" : ""} with zero coverage overall.`;
+                  })()
+              : zeroRows.length >= 4 && moderateStatuses.length >= 2
+                ? `No single critical limiter, but several preparation risks are stacking. ${zeroRows.length} of ${summaryGapRows.length} terrain demand types have no coverage in ${firstName}'s race history, combined with moderate gaps in both ascent load and terrain specificity. These moderate gaps can compound on race day even if none individually crosses into major-gap territory.`
+              : ascentStatus === "moderate" && terrainStatus === "moderate"
+                ? `Two specific preparation risks to manage: ascent load and trail specificity. Neither is a critical gap individually, but both require targeted attention — the combination of a step-up in climbing volume and unfamiliar terrain character raises the risk of a difficult second half.`
+              : moderateStatuses.length >= 2
+                ? `No critical single limiter, but ${moderateStatuses.length} moderate preparation gaps are present. The priority is to avoid race-day surprises by targeting the specific terrain and conditions the course demands in training, rather than accumulating general volume.`
+                : `No significant preparation gaps identified across distance, ascent, descent, or terrain specificity. Focus on a disciplined taper, race-day nutrition execution, and arriving at the start line healthy.`;
 
             // ── Race-day risks ─────────────────────────────────────────────
             const risks: string[] = [];
@@ -2039,7 +2065,6 @@ export default function RaceReadinessPage() {
                   {feederRace ? (
                     <div style={{ marginTop: "6px", fontSize: "10.5px", color: "#1565c0", fontWeight: 600 }}>
                       Suitable preparation race: {feederRace.race_name}
-                      {feederRace.next_date ? ` — ${new Date(feederRace.next_date + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}` : ""}
                       {feederRace.gap_fill_score > 0 ? ` (${Math.round(feederRace.gap_fill_score)}% demand coverage)` : ""}
                     </div>
                   ) : raceDate ? (
@@ -2481,7 +2506,7 @@ export default function RaceReadinessPage() {
 
             <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Race Overview</h2>
             <p style={{ margin: "0 0 18px", fontSize: "12px", color: "#888" }}>
-              Course profile, terrain character, and historical conditions{raceDateLabel ? ` · ${raceDateLabel}` : ""}
+              Course profile, terrain character, and historical conditions
             </p>
 
             {noRaceProfile && (
@@ -2496,7 +2521,6 @@ export default function RaceReadinessPage() {
                 { label: "Total ascent",  value: `${Math.round(result.race.total_ascent_m)} m ↑` },
                 { label: "Total descent", value: `${Math.round(result.race.total_descent_m)} m ↓` },
                 { label: "Climb / km",    value: `${(result.race.total_ascent_m / result.race.total_distance_km).toFixed(0)} m/km` },
-                ...(raceDateLabel ? [{ label: "Race date", value: raceDateLabel }] : []),
               ].map(({ label, value }) => (
                 <div key={label} style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "8px 14px", fontSize: "11px", background: "#fafafa" }}>
                   <div style={{ color: "#888", marginBottom: "2px" }}>{label}</div>
@@ -4265,7 +4289,6 @@ export default function RaceReadinessPage() {
                           {/* Stats row */}
                           <div style={{ fontSize: "10.5px", color: "#666", marginBottom: "8px", display: "flex", gap: "14px", flexWrap: "wrap" }}>
                             <span>📍 {s.distance_miles.toFixed(1)} mi away</span>
-                            {s.next_date && <span>📅 Next: {formatDate(s.next_date)}</span>}
                             {s.total_distance_km != null && <span>↔ {s.total_distance_km.toFixed(1)} km</span>}
                             {s.total_ascent_m != null && <span>↑ {Math.round(s.total_ascent_m).toLocaleString()} m</span>}
                           </div>
@@ -4821,7 +4844,6 @@ export default function RaceReadinessPage() {
 
             if (steps.length === 0) return null;
 
-            const categories = [...new Set(steps.map(s => s.category))];
             const priorityOrder: Record<NextStep["priority"], number> = { high: 0, medium: 1, low: 2 };
             const sorted = [...steps].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
 
@@ -4856,28 +4878,30 @@ export default function RaceReadinessPage() {
                   ))}
                 </div>
 
-                {/* Steps grouped by category */}
+                {/* Steps grouped by priority tier */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {categories.map(cat => {
-                    const catSteps = sorted.filter(s => s.category === cat);
+                  {(["high", "medium", "low"] as const).map(pri => {
+                    const tierSteps = sorted.filter(s => s.priority === pri);
+                    if (tierSteps.length === 0) return null;
+                    const ps = priorityStyle[pri];
                     return (
-                      <div key={cat}>
-                        <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "5px", borderBottom: "1px solid #e0e0e0", paddingBottom: "3px" }}>{cat}</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                          {catSteps.map((step, i) => {
-                            const ps = priorityStyle[step.priority];
-                            return (
-                              <div key={i} style={{ display: "flex", gap: "10px", padding: "8px 10px", background: ps.bg, border: `1px solid ${ps.border}`, borderRadius: "6px", borderLeft: `3px solid ${ps.dot}` }}>
-                                <div style={{ flexShrink: 0, paddingTop: "2px" }}>
-                                  <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: ps.dot }} />
-                                </div>
-                                <div>
-                                  <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", marginBottom: "3px" }}>{step.title}</div>
-                                  <div style={{ fontSize: "9.5px", color: "#444", lineHeight: 1.5 }}>{step.detail}</div>
-                                </div>
+                      <div key={pri}>
+                        <div style={{ fontSize: "8.5px", fontWeight: 700, color: ps.dot, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "5px", borderBottom: `1px solid ${ps.border}`, paddingBottom: "3px" }}>
+                          {ps.label}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "10px" }}>
+                          {tierSteps.map((step, i) => (
+                            <div key={i} style={{ display: "flex", gap: "10px", padding: "8px 10px", background: ps.bg, border: `1px solid ${ps.border}`, borderRadius: "6px", borderLeft: `3px solid ${ps.dot}` }}>
+                              <div style={{ flexShrink: 0, paddingTop: "2px" }}>
+                                <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: ps.dot }} />
                               </div>
-                            );
-                          })}
+                              <div>
+                                <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", marginBottom: "2px" }}>{step.title}</div>
+                                <div style={{ fontSize: "8.5px", color: "#aaa", marginBottom: "3px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{step.category}</div>
+                                <div style={{ fontSize: "9.5px", color: "#444", lineHeight: 1.5 }}>{step.detail}</div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     );
