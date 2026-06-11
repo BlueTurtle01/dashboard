@@ -1143,7 +1143,7 @@ function PageNumber({ n }: { n: number }) {
 /* ══════════════════════════════════════════════════════════════════
    STYLE CONSTANTS
 ══════════════════════════════════════════════════════════════════ */
-const a4Page: React.CSSProperties = { width: "794px", background: "#fff", padding: "40px 48px 40px", boxSizing: "border-box", breakBefore: "page", pageBreakBefore: "always" };
+const a4Page: React.CSSProperties = { width: "794px", minHeight: "1123px", background: "#fff", padding: "40px 48px 52px", boxSizing: "border-box", position: "relative", marginBottom: "24px" };
 const canvas: React.CSSProperties = { background: "#6b6b6b", padding: "32px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" };
 const printHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #1e3a1e", paddingBottom: "12px", marginBottom: "18px", breakAfter: "avoid", pageBreakAfter: "avoid" };
 const logoImg: React.CSSProperties = { height: "36px", width: "auto", objectFit: "contain" };
@@ -1627,7 +1627,25 @@ export default function RaceReadinessPage() {
 
       {result && (
         <div style={canvas} className="race-strategy-canvas">
-          <style dangerouslySetInnerHTML={{ __html: `@media print { @page { margin: 15mm 20mm; } body { margin: 0; } .race-strategy-canvas { background: transparent !important; padding: 0 !important; gap: 0 !important; } }` }} />
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              @page { margin: 15mm 20mm; }
+              body { margin: 0; }
+              .race-strategy-canvas { background: transparent !important; padding: 0 !important; gap: 0 !important; }
+              .rr-page {
+                min-height: 0 !important;
+                position: static !important;
+                margin-bottom: 0 !important;
+                padding: 40px 48px 40px !important;
+                break-before: page !important;
+                page-break-before: always !important;
+              }
+              .rr-page-first {
+                break-before: auto !important;
+                page-break-before: auto !important;
+              }
+            }
+          ` }} />
 
           {/* ═══════════════════════════════════════
               TABLE OF CONTENTS
@@ -1764,14 +1782,14 @@ export default function RaceReadinessPage() {
             );
             return (
               <>
-                <div style={{ ...a4Page, breakBefore: "auto", pageBreakBefore: "auto" }}>
+                <div className="rr-page rr-page-first" style={a4Page}>
                   {tocHeader("What each section covers and what to look for")}
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     {tocPage1.map((entry, i) => tocItemRow(entry, i, i + 1, i === tocPage1.length - 1))}
                   </div>
                 </div>
                 {tocPage2.length > 0 && (
-                  <div style={a4Page}>
+                  <div className="rr-page" style={a4Page}>
                     {tocHeader("Continued")}
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       {tocPage2.map((entry, i) => tocItemRow(entry, i, tocSplit + i + 1, i === tocPage2.length - 1))}
@@ -2054,7 +2072,7 @@ export default function RaceReadinessPage() {
             };
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -2289,7 +2307,7 @@ export default function RaceReadinessPage() {
             })();
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -2512,7 +2530,7 @@ export default function RaceReadinessPage() {
             ];
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -2560,7 +2578,7 @@ export default function RaceReadinessPage() {
           {/* ═══════════════════════════════════════
               PAGE 4 — Race Overview
           ═══════════════════════════════════════ */}
-          <div style={a4Page}>
+          <div className="rr-page" style={a4Page}>
             <div style={printHeader}>
               <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
               <div style={{ textAlign: "right" }}>
@@ -2641,7 +2659,7 @@ export default function RaceReadinessPage() {
               PAGE 5 — Elevation
           ═══════════════════════════════════════ */}
           {(elevProfile || terrainSummary.total > 0) && (
-            <div style={a4Page}>
+            <div className="rr-page" style={a4Page}>
               <div style={printHeader}>
                 <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                 <div style={{ textAlign: "right" }}>
@@ -2901,7 +2919,7 @@ export default function RaceReadinessPage() {
               PAGE 6 — Race Demands Profile
           ═══════════════════════════════════════ */}
           {secs.length > 0 && (
-            <div style={a4Page}>
+            <div className="rr-page" style={a4Page}>
               <div style={printHeader}>
                 <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                 <div style={{ textAlign: "right" }}>
@@ -3079,7 +3097,7 @@ export default function RaceReadinessPage() {
               PAGE 7 — Race Demands Profile (continued)
           ═══════════════════════════════════════ */}
           {secs.length > 0 && (
-            <div style={a4Page}>
+            <div className="rr-page" style={a4Page}>
               <div style={printHeader}>
                 <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                 <div style={{ textAlign: "right" }}>
@@ -3313,7 +3331,7 @@ export default function RaceReadinessPage() {
             ];
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 {/* Header */}
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
@@ -3631,7 +3649,7 @@ export default function RaceReadinessPage() {
 
             return (
               <>
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -3770,7 +3788,7 @@ export default function RaceReadinessPage() {
               </div>
 
               {/* PAGE 10 — Experience Gaps (continued) */}
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -3902,7 +3920,7 @@ export default function RaceReadinessPage() {
             ];
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -4110,7 +4128,7 @@ export default function RaceReadinessPage() {
             if (longRunGaps.length >= 3) flags.push({ color: "#e65100", bg: "#fff3e0", border: "#ffe0b2", text: `${longRunGaps.length} gaps exceed 10 km — a hydration pack may be worth considering over handheld bottles.` });
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -4318,7 +4336,7 @@ export default function RaceReadinessPage() {
             const suggestions = prepRaces?.suggestions ?? [];
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -4498,7 +4516,7 @@ export default function RaceReadinessPage() {
             const om = ec?.opening_match;
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -4655,7 +4673,7 @@ export default function RaceReadinessPage() {
             ];
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -4825,7 +4843,7 @@ export default function RaceReadinessPage() {
             };
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -5108,7 +5126,7 @@ export default function RaceReadinessPage() {
             };
 
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -5186,7 +5204,7 @@ export default function RaceReadinessPage() {
               return h > 0 ? `${h}h ${m.toString().padStart(2, "0")}m` : `${m}m`;
             };
             return (
-              <div style={a4Page}>
+              <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
