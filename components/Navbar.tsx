@@ -393,6 +393,8 @@ export default async function Navbar() {
                     { href: "/admin/stretches/create", label: "Create Stretch" },
                     { href: "/admin/assessment-tests", label: "Assessment Tests" },
                     { href: "/admin/assessment-tests/create", label: "Create Assessment Test" },
+                    { href: "/admin/muscles", label: "Muscles" },
+                    { href: "/admin/muscles/create", label: "Create Muscle" },
                   ]}
                 />
               )}
