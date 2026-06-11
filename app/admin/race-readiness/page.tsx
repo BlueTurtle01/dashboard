@@ -4349,10 +4349,10 @@ export default function RaceReadinessPage() {
 
                 {suggestions.length > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    {suggestions.map((s, i) => {
+                    {suggestions.slice(0, 3).map((s, i) => {
                       const col = scoreColor(s.gap_fill_score);
                       return (
-                        <div key={s.race_id} style={{ border: `1px solid #e5e5e5`, borderLeft: `4px solid ${col}`, borderRadius: "6px", padding: "12px 14px", background: "#fff" }}>
+                        <div key={s.race_id} style={{ border: `1px solid #e5e5e5`, borderLeft: `4px solid ${col}`, borderRadius: "6px", padding: "12px 14px", background: "#fff", breakInside: "avoid", pageBreakInside: "avoid" }}>
                           {/* Header row */}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
                             <div style={{ fontWeight: 700, fontSize: "13px", color: "#111" }}>
@@ -4783,7 +4783,7 @@ export default function RaceReadinessPage() {
             const renderCard = ({ test, gapTags }: ScoredTest, showTags: boolean) => {
               const color = catColor(test.category);
               return (
-                <div key={test.id} style={{ border: "1px solid #e8e8e8", borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
+                <div key={test.id} style={{ border: "1px solid #e8e8e8", borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", background: "#fafafa", breakInside: "avoid", pageBreakInside: "avoid" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2px" }}>
                     <div style={{ fontSize: "12px", fontWeight: 700, color: "#111" }}>{test.name}</div>
                     <span style={{ fontSize: "9px", fontWeight: 600, color, background: `${color}18`, padding: "1px 7px", borderRadius: "4px", whiteSpace: "nowrap", marginLeft: "8px", flexShrink: 0 }}>
@@ -5145,7 +5145,7 @@ export default function RaceReadinessPage() {
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "10px" }}>
                           {tierSteps.map((step, i) => (
-                            <div key={i} style={{ display: "flex", gap: "10px", padding: "8px 10px", background: ps.bg, border: `1px solid ${ps.border}`, borderRadius: "6px", borderLeft: `3px solid ${ps.dot}` }}>
+                            <div key={i} style={{ display: "flex", gap: "10px", padding: "8px 10px", background: ps.bg, border: `1px solid ${ps.border}`, borderRadius: "6px", borderLeft: `3px solid ${ps.dot}`, breakInside: "avoid", pageBreakInside: "avoid" }}>
                               <div style={{ flexShrink: 0, paddingTop: "2px" }}>
                                 <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: ps.dot }} />
                               </div>
