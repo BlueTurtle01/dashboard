@@ -3043,7 +3043,7 @@ export default function RaceReadinessPage() {
                 </div>
               )}
 
-              {/* ── Page 4 Readiness Summary ── */}
+              {/* ── What this section tells us about readiness ── */}
               {(() => {
                 const positives: string[] = [];
                 const concerns:  string[] = [];
@@ -3054,7 +3054,7 @@ export default function RaceReadinessPage() {
                 if (cvRatio > 0.4 && totalKm > 0) concerns.push(`High effort variability means the athlete must absorb large, repeated intensity spikes. A single output strategy across the race will not work.`);
                 if (positives.length === 0 && concerns.length === 0) return null;
                 return (
-                  <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "2px solid #e8f5e9" }}>
+                  <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "2px solid #e8f5e9", breakInside: "avoid", pageBreakInside: "avoid" }}>
                     <div style={{ fontSize: "8.5px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "7px" }}>What this section tells us about readiness</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                       <div>
@@ -4014,7 +4014,7 @@ export default function RaceReadinessPage() {
 
                 {/* Race history table with demand bars */}
                 {tableRaces.length > 0 ? (
-                  <div>
+                  <div style={{ breakInside: "avoid", pageBreakInside: "avoid" }}>
                     <p style={sectionLabel}>Finished Race History — Demands vs Target</p>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
@@ -4033,7 +4033,7 @@ export default function RaceReadinessPage() {
                           const tgtDPct = targetDist   ? Math.min(100, (targetDist   / normDist)   * 100) : null;
                           const tgtAPct = targetAscent ? Math.min(100, (targetAscent / normAscent) * 100) : null;
                           return (
-                            <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                            <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa", breakInside: "avoid", pageBreakInside: "avoid" }}>
                               <td style={tdStyle}>{r.race_name}</td>
                               <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{r.result_year}</td>
                               <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{r.finish_seconds ? fmtTime(r.finish_seconds) : "—"}</td>
@@ -4057,9 +4057,7 @@ export default function RaceReadinessPage() {
                       </tbody>
                     </table>
                     {(targetDist || targetAscent) && (
-                      <div style={{ marginTop: "8px", fontSize: "8.5px", color: "#999" }}>
-                        Red line on each bar = target race demand
-                      </div>
+                      <div style={{ marginTop: "8px", fontSize: "8.5px", color: "#999" }}>Red line on each bar = target race demand</div>
                     )}
                   </div>
                 ) : (
