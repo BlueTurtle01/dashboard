@@ -174,6 +174,15 @@ interface PrepRaceSuggestion {
   gap_fill_score: number;
   gaps_filled: PrepRaceGapFill[];
 }
+interface AssessmentTest {
+  id: string;
+  name: string;
+  description: string | null;
+  aim: string | null;
+  instructions: string[];
+  target_muscles: string[];
+}
+
 interface PrepRacesResult {
   centroid: { lat: number; lon: number } | null;
   radius_miles: number;
@@ -1141,6 +1150,7 @@ export default function RaceReadinessPage() {
   const [elevProfileMatch, setElevProfileMatch] = useState<ElevProfileMatchResult | null>(null);
   const [includedRaceKeys, setIncludedRaceKeys] = useState<Set<string>>(new Set());
   const [athleteAidData, setAthleteAidData]     = useState<Record<string, AidStation[]>>({});
+  const [assessmentTests, setAssessmentTests]   = useState<AssessmentTest[]>([]);
 
   const fetchAthlete = useCallback(async (key: string) => {
     if (!key.trim()) return;
@@ -1243,6 +1253,18 @@ export default function RaceReadinessPage() {
         .select("athlete_key, race_count")
         .order("race_count", { ascending: false });
       if (data) setAthleteNames(data as { athlete_key: string; race_count: number }[]);
+    }
+    void load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load assessment tests once on mount
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from("assessment_tests")
+        .select("id, name, description, aim, instructions, target_muscles")
+        .order("name");
+      if (data) setAssessmentTests(data as AssessmentTest[]);
     }
     void load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1642,7 +1664,7 @@ export default function RaceReadinessPage() {
               },
               {
                 title: "Self-Reflection",
-                body: "Questions the data cannot answer — areas where honest self-assessment can significantly change the outlook for race day. Injuries, sleep, consistency, footwear, nutrition, pain, and goal realism.",
+                body: "Questions the data cannot answer — areas where honest self-assessment can significantly change the outlook for race day. Injuries, sleep, consistency, footwear, nutrition, pain, and goal realism. Also includes physical self-assessment tests to identify common imbalances.",
                 visible: !!reportAthlete,
               },
               {
@@ -4605,6 +4627,37 @@ export default function RaceReadinessPage() {
                     </div>
                   ))}
                 </div>
+
+                {assessmentTests.length > 0 && (
+                  <div style={{ marginTop: "20px" }}>
+                    <div style={{ fontSize: "10px", fontWeight: 700, color: "#4a148c", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px", borderBottom: "1px solid #e8e8e8", paddingBottom: "6px" }}>
+                      Physical Self-Assessments
+                    </div>
+                    <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.6 }}>
+                      The following tests can identify physical imbalances or weaknesses that may not be visible in race data. Complete each one honestly and flag any concerns to your coach.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {assessmentTests.map((test) => (
+                        <div key={test.id} style={{ border: "1px solid #e8e8e8", borderLeft: "4px solid #4a148c", borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: "#111", marginBottom: "2px" }}>{test.name}</div>
+                          {test.aim && (
+                            <div style={{ fontSize: "10px", color: "#4a148c", fontWeight: 600, marginBottom: "6px" }}>Identifies: {test.aim}</div>
+                          )}
+                          {test.description && (
+                            <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, marginBottom: "6px" }}>{test.description}</div>
+                          )}
+                          {test.instructions.length > 0 && (
+                            <ol style={{ margin: 0, paddingLeft: "16px" }}>
+                              {test.instructions.map((step, i) => (
+                                <li key={i} style={{ fontSize: "10px", color: "#444", lineHeight: 1.6, marginBottom: "1px" }}>{step}</li>
+                              ))}
+                            </ol>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ marginTop: "18px", padding: "12px 16px", background: "#f0f4f0", borderRadius: "6px", border: "1px solid #c8d8c8" }}>
                   <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px" }}>A note on self-honesty</div>
