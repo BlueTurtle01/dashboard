@@ -1641,6 +1641,11 @@ export default function RaceReadinessPage() {
                 visible: !!(reportAthlete && expContext),
               },
               {
+                title: "Self-Reflection",
+                body: "Questions the data cannot answer — areas where honest self-assessment can significantly change the outlook for race day. Injuries, sleep, consistency, footwear, nutrition, pain, and goal realism.",
+                visible: !!reportAthlete,
+              },
+              {
                 title: "Suggested Next Steps",
                 body: "Prioritised actions for the preparation period — specific training focus areas, race-day logistics to confirm, and the most impactful gaps to address before the start line.",
                 visible: !!reportAthlete,
@@ -4500,7 +4505,98 @@ export default function RaceReadinessPage() {
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 14 — Suggested Next Steps
+              PAGE 14 — Self-Reflection
+          ═══════════════════════════════════════ */}
+          {reportAthlete && (() => {
+            const firstName = reportAthlete.profile.athlete_key.split(" ")[0];
+            const questions: { icon: string; question: string; why: string; color: string }[] = [
+              {
+                icon: "🩹",
+                question: "Have you been injured in the last few months?",
+                why: "Recent injuries — even ones that feel resolved — often leave residual weakness or altered movement patterns that can re-emerge under race-day load. Be honest about whether you have truly recovered or are managing something.",
+                color: "#c0392b",
+              },
+              {
+                icon: "😴",
+                question: "Have you slept enough and at sufficient quality in the last few months?",
+                why: "Sleep is when the body adapts to training stress. Chronic underslept athletes carry accumulated fatigue into race day that no taper fully reverses. Poor sleep also impairs decision-making during a long effort.",
+                color: "#6d4c41",
+              },
+              {
+                icon: "📅",
+                question: "Have you trained consistently for at least 16 weeks?",
+                why: "Fitness built on a large base of consistent weeks is far more robust than the same volume crammed into a shorter window. Gaps, illnesses, or life disruptions matter — 16 solid weeks is the minimum foundation for most ultra-distance events.",
+                color: "#1565c0",
+              },
+              {
+                icon: "👟",
+                question: "Have you considered whether your footwear is correct for the demands of this race?",
+                why: "Terrain, drop, stack height, grip pattern, and fit under swelling all interact with the specific demands of your race. Footwear that feels fine on training runs can become a serious problem at km 60 on unfamiliar terrain.",
+                color: "#4a148c",
+              },
+              {
+                icon: "🍏",
+                question: "Have you practised your race nutrition strategy — and does your body tolerate your planned gels or food?",
+                why: "GI distress is one of the leading causes of DNF and dramatically slowed racing. Nutrition that works in training at low intensity may fail at race pace. Every product and quantity you plan to use on race day should have been tested at effort.",
+                color: "#2e7d32",
+              },
+              {
+                icon: "⚠️",
+                question: "Are you currently carrying any pain or tightness that you are hoping will be fine on the day?",
+                why: "Race day magnifies small problems. Niggles rarely disappear under 10+ hours of sustained stress — they usually escalate. If something needs addressing, address it now, not on the start line.",
+                color: "#e65100",
+              },
+              {
+                icon: "🎯",
+                question: "Is your goal time based on evidence — or is it hopeful?",
+                why: "An honest goal is built from comparable race times, this course's demands, and realistic adjustments for conditions. A hopeful goal leads to an aggressive early pace and a painful second half. The readiness analysis in this report gives you the data — the question is whether your target reflects it.",
+                color: "#00695c",
+              },
+            ];
+
+            return (
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Self-Reflection</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Self-Reflection</h2>
+                <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
+                  Questions the data cannot answer — {firstName} should consider each one honestly before race day
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
+                  {questions.map(({ icon, question, why, color }) => (
+                    <div key={question} style={{ border: `1px solid #e8e8e8`, borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", background: "#fafafa" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                        <div style={{ fontSize: "18px", lineHeight: 1, flexShrink: 0, marginTop: "1px" }}>{icon}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: "12.5px", fontWeight: 700, color: "#111", lineHeight: 1.35, marginBottom: "4px" }}>{question}</div>
+                          <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.6 }}>{why}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: "18px", padding: "12px 16px", background: "#f0f4f0", borderRadius: "6px", border: "1px solid #c8d8c8" }}>
+                  <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px" }}>A note on self-honesty</div>
+                  <div style={{ fontSize: "10.5px", color: "#444", lineHeight: 1.6 }}>
+                    These questions are not designed to discourage you. They are designed to surface the factors that predictive models cannot see. Addressing even one of them honestly before race day will do more for your outcome than any additional training session.
+                  </div>
+                </div>
+
+                <PageNumber n={15} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 15 — Suggested Next Steps
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -4794,7 +4890,7 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={15} />
+                <PageNumber n={16} />
               </div>
             );
           })()}
@@ -4866,7 +4962,7 @@ export default function RaceReadinessPage() {
                   </table>
                 )}
 
-                <PageNumber n={16} />
+                <PageNumber n={17} />
               </div>
             );
           })()}
