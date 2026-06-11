@@ -21,8 +21,10 @@ export default function CreateAssessmentTestPage() {
   const supabase = createClient();
 
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<"strength" | "imbalance" | "">("");
   const [description, setDescription] = useState("");
   const [aim, setAim] = useState("");
+  const [notes, setNotes] = useState("");
 
   const [instructions, setInstructions] = useState<string[]>([]);
   const [newInstruction, setNewInstruction] = useState("");
@@ -141,8 +143,10 @@ export default function CreateAssessmentTestPage() {
     const payload = {
       id,
       name: name.trim(),
+      category: category || null,
       description: description.trim() || null,
       aim: aim.trim() || null,
+      notes: notes.trim() || null,
       instructions: instructions.filter((s) => s.trim().length > 0),
       video_urls: videoUrls.filter((u) => u.trim().length > 0),
       target_muscles: selectedMuscles.map((m) => m.slug),
@@ -162,8 +166,10 @@ export default function CreateAssessmentTestPage() {
 
     setSuccessMessage("Assessment test created successfully.");
     setName("");
+    setCategory("");
     setDescription("");
     setAim("");
+    setNotes("");
     setInstructions([]);
     setNewInstruction("");
     setVideoUrls([]);
@@ -235,6 +241,20 @@ export default function CreateAssessmentTestPage() {
             )}
           </div>
 
+          <label style={labelStyle}>Category</label>
+          <div style={segmentedControlStyle}>
+            {(["strength", "imbalance"] as const).map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setCategory(category === opt ? "" : opt)}
+                style={category === opt ? segmentActiveStyle : segmentStyle}
+              >
+                {opt === "strength" ? "Strength" : "Imbalance"}
+              </button>
+            ))}
+          </div>
+
           <label htmlFor="description" style={labelStyle}>Description</label>
           <textarea
             id="description"
@@ -252,6 +272,16 @@ export default function CreateAssessmentTestPage() {
             onChange={(e) => setAim(e.target.value)}
             rows={3}
             placeholder="What imbalance or weakness does this test reveal?"
+            style={textareaStyle}
+          />
+
+          <label htmlFor="notes" style={labelStyle}>Notes</label>
+          <textarea
+            id="notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            placeholder="What should the assessor watch out for? Common compensations, red flags, technique cues..."
             style={textareaStyle}
           />
 
@@ -595,4 +625,30 @@ const warningLinkStyle: React.CSSProperties = {
   padding: 0,
   textDecoration: "underline",
   fontSize: "13px",
+};
+
+const segmentedControlStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  marginBottom: "24px",
+};
+
+const segmentStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "10px 16px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  background: "#fff",
+  color: "#374151",
+  fontWeight: 500,
+  fontSize: "14px",
+  cursor: "pointer",
+};
+
+const segmentActiveStyle: React.CSSProperties = {
+  ...segmentStyle,
+  background: "#111827",
+  color: "#fff",
+  border: "1px solid #111827",
+  fontWeight: 700,
 };

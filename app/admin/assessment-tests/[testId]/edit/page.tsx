@@ -14,8 +14,10 @@ type MuscleOption = {
 type AssessmentTestRow = {
   id: string;
   name: string;
+  category: string | null;
   description: string | null;
   aim: string | null;
+  notes: string | null;
   instructions: string[];
   video_urls: string[];
   target_muscles: string[];
@@ -29,8 +31,10 @@ export default function EditAssessmentTestPage() {
   const testId = typeof params.testId === "string" ? params.testId : "";
 
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<"strength" | "imbalance" | "">("");
   const [description, setDescription] = useState("");
   const [aim, setAim] = useState("");
+  const [notes, setNotes] = useState("");
 
   const [instructions, setInstructions] = useState<string[]>([]);
   const [newInstruction, setNewInstruction] = useState("");
@@ -63,7 +67,7 @@ export default function EditAssessmentTestPage() {
           .order("label", { ascending: true }),
         supabase
           .from("assessment_tests")
-          .select("id, name, description, aim, instructions, video_urls, target_muscles")
+          .select("id, name, category, description, aim, notes, instructions, video_urls, target_muscles")
           .eq("id", testId)
           .single(),
       ]);
@@ -81,8 +85,10 @@ export default function EditAssessmentTestPage() {
       } else {
         const test = testResult.data as AssessmentTestRow;
         setName(test.name);
+        setCategory((test.category as "strength" | "imbalance" | "") ?? "");
         setDescription(test.description ?? "");
         setAim(test.aim ?? "");
+        setNotes(test.notes ?? "");
         setInstructions(test.instructions ?? []);
         setVideoUrls(test.video_urls ?? []);
 
@@ -134,8 +140,10 @@ export default function EditAssessmentTestPage() {
 
     const payload = {
       name: name.trim(),
+      category: category || null,
       description: description.trim() || null,
       aim: aim.trim() || null,
+      notes: notes.trim() || null,
       instructions: instructions.filter((s) => s.trim().length > 0),
       video_urls: videoUrls.filter((u) => u.trim().length > 0),
       target_muscles: selectedMuscles.map((m) => m.slug),
@@ -181,6 +189,20 @@ export default function EditAssessmentTestPage() {
             required
           />
 
+          <label style={labelStyle}>Category</label>
+          <div style={segmentedControlStyle}>
+            {(["strength", "imbalance"] as const).map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setCategory(category === opt ? "" : opt)}
+                style={category === opt ? segmentActiveStyle : segmentStyle}
+              >
+                {opt === "strength" ? "Strength" : "Imbalance"}
+              </button>
+            ))}
+          </div>
+
           <label htmlFor="description" style={labelStyle}>Description</label>
           <textarea
             id="description"
@@ -197,6 +219,16 @@ export default function EditAssessmentTestPage() {
             onChange={(e) => setAim(e.target.value)}
             rows={3}
             placeholder="What imbalance or weakness does this test reveal?"
+            style={textareaStyle}
+          />
+
+          <label htmlFor="notes" style={labelStyle}>Notes</label>
+          <textarea
+            id="notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            placeholder="What should the assessor watch out for? Common compensations, red flags, technique cues..."
             style={textareaStyle}
           />
 
@@ -509,4 +541,30 @@ const secondaryButtonStyle: React.CSSProperties = {
   color: "#111111",
   fontWeight: 700,
   cursor: "pointer",
+};
+
+const segmentedControlStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  marginBottom: "24px",
+};
+
+const segmentStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "10px 16px",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  background: "#fff",
+  color: "#374151",
+  fontWeight: 500,
+  fontSize: "14px",
+  cursor: "pointer",
+};
+
+const segmentActiveStyle: React.CSSProperties = {
+  ...segmentStyle,
+  background: "#111827",
+  color: "#fff",
+  border: "1px solid #111827",
+  fontWeight: 700,
 };

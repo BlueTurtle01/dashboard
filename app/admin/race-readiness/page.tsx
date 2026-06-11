@@ -4689,7 +4689,7 @@ export default function RaceReadinessPage() {
                             <div style={{ fontSize: "10px", color: "#666", lineHeight: 1.5, marginBottom: "6px" }}>{test.description}</div>
                           )}
                           {test.instructions.length > 0 && (
-                            <ol style={{ margin: 0, paddingLeft: "16px" }}>
+                            <ol style={{ margin: 0, paddingLeft: "18px", listStyleType: "decimal" }}>
                               {test.instructions.map((step, i) => (
                                 <li key={i} style={{ fontSize: "10px", color: "#444", lineHeight: 1.6, marginBottom: "1px" }}>{step}</li>
                               ))}
