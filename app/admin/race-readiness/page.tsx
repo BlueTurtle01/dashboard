@@ -1099,7 +1099,7 @@ function PageNumber({ n }: { n: number }) {
 /* ══════════════════════════════════════════════════════════════════
    STYLE CONSTANTS
 ══════════════════════════════════════════════════════════════════ */
-const a4Page: React.CSSProperties = { width: "794px", minHeight: "1123px", background: "#fff", padding: "40px 48px 52px", boxSizing: "border-box", position: "relative", breakAfter: "page", pageBreakAfter: "always" };
+const a4Page: React.CSSProperties = { width: "794px", minHeight: "1123px", background: "#fff", padding: "40px 48px 52px", boxSizing: "border-box", position: "relative", breakAfter: "page", pageBreakAfter: "always", marginBottom: "-1px" };
 const canvas: React.CSSProperties = { background: "#6b6b6b", padding: "32px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" };
 const printHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #1e3a1e", paddingBottom: "12px", marginBottom: "18px" };
 const logoImg: React.CSSProperties = { height: "36px", width: "auto", objectFit: "contain" };
@@ -1652,8 +1652,35 @@ export default function RaceReadinessPage() {
               },
             ];
             const visible = entries.filter(e => e.visible);
-            return (
-              <div style={a4Page}>
+            const tocSplit = 8;
+            const tocPage1 = visible.slice(0, tocSplit);
+            const tocPage2 = visible.slice(tocSplit);
+            const tocItemRow = (entry: TocEntry, i: number, num: number, last: boolean) => (
+              <div key={i} style={{
+                display: "flex", gap: "16px", padding: "14px 0",
+                borderBottom: last ? "none" : "1px solid #f0f0f0",
+                alignItems: "flex-start",
+              }}>
+                <div style={{
+                  flexShrink: 0, width: "26px", height: "26px", borderRadius: "50%",
+                  background: "#1e3a1e", color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "11px", fontWeight: 700, marginTop: "2px",
+                }}>
+                  {num}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e", marginBottom: "4px" }}>
+                    {entry.title}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#555", lineHeight: 1.65 }}>
+                    {entry.body}
+                  </div>
+                </div>
+              </div>
+            );
+            const tocHeader = (subtitle: string) => (
+              <>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
                   <div style={{ textAlign: "right" }}>
@@ -1662,36 +1689,26 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
                 <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Report Contents</h2>
-                <p style={{ margin: "0 0 24px", fontSize: "12px", color: "#888" }}>
-                  What each section covers and what to look for
-                </p>
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  {visible.map((entry, i) => (
-                    <div key={i} style={{
-                      display: "flex", gap: "16px", padding: "14px 0",
-                      borderBottom: i < visible.length - 1 ? "1px solid #f0f0f0" : "none",
-                      alignItems: "flex-start",
-                    }}>
-                      <div style={{
-                        flexShrink: 0, width: "26px", height: "26px", borderRadius: "50%",
-                        background: "#1e3a1e", color: "#fff",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "11px", fontWeight: 700, marginTop: "2px",
-                      }}>
-                        {i + 1}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e", marginBottom: "4px" }}>
-                          {entry.title}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#555", lineHeight: 1.65 }}>
-                          {entry.body}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <p style={{ margin: "0 0 24px", fontSize: "12px", color: "#888" }}>{subtitle}</p>
+              </>
+            );
+            return (
+              <>
+                <div style={a4Page}>
+                  {tocHeader("What each section covers and what to look for")}
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    {tocPage1.map((entry, i) => tocItemRow(entry, i, i + 1, i === tocPage1.length - 1))}
+                  </div>
                 </div>
-              </div>
+                {tocPage2.length > 0 && (
+                  <div style={a4Page}>
+                    {tocHeader("Continued")}
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      {tocPage2.map((entry, i) => tocItemRow(entry, i, tocSplit + i + 1, i === tocPage2.length - 1))}
+                    </div>
+                  </div>
+                )}
+              </>
             );
           })()}
 
