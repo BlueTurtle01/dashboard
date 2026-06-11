@@ -4740,13 +4740,23 @@ export default function RaceReadinessPage() {
             // ── Score each test ──
             type ScoredTest = { test: AssessmentTest; score: number; gapTags: string[] };
             const scored: ScoredTest[] = assessmentTests.map(test => {
+              // Total score across all dims
               let score = 0;
-              const gapTags: string[] = [];
-              for (const { key, ratingKey, label } of DIM_META) {
+              for (const { key, ratingKey } of DIM_META) {
                 const rating = (test[ratingKey] as number | null) ?? 0;
                 score += rating * w[key];
-                if (rating >= 3 && w[key] >= 0.25) gapTags.push(label);
               }
+              // Tags: only dims where rating >= 4 (test specifically targets this) AND athlete has a gap
+              // Show top 3 by contribution (rating × weakness) so generic high-rated tests don't flood tags
+              const gapTags = DIM_META
+                .map(({ key, ratingKey, label }) => {
+                  const rating = (test[ratingKey] as number | null) ?? 0;
+                  return { label, rating, contribution: rating * w[key] };
+                })
+                .filter(t => t.rating >= 4 && t.contribution > 0)
+                .sort((a, b) => b.contribution - a.contribution)
+                .slice(0, 3)
+                .map(t => t.label);
               return { test, score, gapTags };
             }).sort((a, b) => b.score - a.score);
 
