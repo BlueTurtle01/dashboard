@@ -1113,7 +1113,7 @@ function PageNumber({ n }: { n: number }) {
 /* ══════════════════════════════════════════════════════════════════
    STYLE CONSTANTS
 ══════════════════════════════════════════════════════════════════ */
-const a4Page: React.CSSProperties = { width: "794px", minHeight: "1123px", background: "#fff", padding: "40px 48px", boxSizing: "border-box", position: "relative", breakAfter: "page", pageBreakAfter: "always" };
+const a4Page: React.CSSProperties = { width: "794px", minHeight: "1123px", background: "#fff", padding: "40px 48px 52px", boxSizing: "border-box", position: "relative", breakAfter: "page", pageBreakAfter: "always" };
 const canvas: React.CSSProperties = { background: "#6b6b6b", padding: "32px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" };
 const printHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #1e3a1e", paddingBottom: "12px", marginBottom: "18px" };
 const logoImg: React.CSSProperties = { height: "36px", width: "auto", objectFit: "contain" };
@@ -3506,6 +3506,7 @@ export default function RaceReadinessPage() {
               });
 
             return (
+              <>
               <div style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
@@ -3617,9 +3618,45 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                {/* Gap tables — one per movement type */}
+                {/* Ascent — page 9 */}
+                {climbRows.length > 0 && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <div style={{ padding: "5px 8px", background: "#f9ecec", borderTop: "2px solid #c0392b", borderBottom: "1px solid #f0c8c8", marginBottom: "0" }}>
+                      <span style={{ fontWeight: 700, fontSize: "10px", color: "#c0392b", textTransform: "uppercase", letterSpacing: "0.06em" }}>▲ Ascent</span>
+                      <span style={{ marginLeft: "10px", fontSize: "9px", color: "#999" }}>{sectionSummary(climbRows)}</span>
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, width: "180px" }}>Terrain Demand</th>
+                          <th style={{ ...thStyle, width: "70px" }}>Race km</th>
+                          <th style={{ ...thStyle, width: "80px" }}>Your experience</th>
+                          <th style={thStyle}>On other surfaces</th>
+                          <th style={{ ...thStyle, width: "110px" }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {renderGapRows(climbRows)}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <PageNumber n={9} />
+              </div>
+
+              {/* PAGE 10 — Experience Gaps (continued) */}
+              <div style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{p.athlete_key}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Experience Gaps</div>
+                  </div>
+                </div>
+
+                {/* Descent and flat — page 10 */}
                 {[
-                  { rows: climbRows,   accent: "#c0392b", bg: "#f9ecec", border: "#f0c8c8", label: "▲ Ascent" },
                   { rows: descentRows, accent: "#1565c0", bg: "#eaf2fb", border: "#c3d9f3", label: "▼ Descent" },
                   { rows: flatRows,    accent: "#2e7d32", bg: "#f0f7f0", border: "#c3e6c3", label: "— Rolling / Flat" },
                 ].filter(g => g.rows.length > 0).map(g => (
@@ -3683,13 +3720,14 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={9} />
+                <PageNumber n={10} />
               </div>
+              </>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 10 — Demands Built Up
+              PAGE 11 — Demands Built Up
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -3907,13 +3945,13 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={10} />
+                <PageNumber n={11} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 11 — Aid Station Analysis
+              PAGE 12 — Aid Station Analysis
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const stations: AidStation[] = result.aid_stations ?? [];
@@ -4139,7 +4177,7 @@ export default function RaceReadinessPage() {
                   </>
                 )}
 
-                <PageNumber n={11} />
+                <PageNumber n={12} />
               </div>
             );
           })()}
@@ -4305,7 +4343,7 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={12} />
+                <PageNumber n={13} />
               </div>
             );
           })()}
@@ -4439,7 +4477,7 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={13} />
+                <PageNumber n={14} />
               </div>
             );
           })()}
@@ -4739,7 +4777,7 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={14} />
+                <PageNumber n={15} />
               </div>
             );
           })()}
@@ -4811,7 +4849,7 @@ export default function RaceReadinessPage() {
                   </table>
                 )}
 
-                <PageNumber n={15} />
+                <PageNumber n={16} />
               </div>
             );
           })()}
