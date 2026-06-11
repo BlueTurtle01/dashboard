@@ -546,23 +546,21 @@ function RaceSearchCombobox({ races, selectedId, onSelect }: {
   );
 }
 
-/* Athlete search combobox — shown in the no-print config panel */
-function AthleteSearchCombobox({ onSelect, selectedKey }: {
+/* Athlete search combobox — client-side filter over preloaded names, same pattern as RaceSearchCombobox */
+function AthleteSearchCombobox({ athletes, onSelect, selectedKey }: {
+  athletes: { athlete_key: string; race_count: number }[];
   onSelect: (key: string) => void;
   selectedKey: string;
 }) {
-  const [query, setQuery]       = useState(selectedKey);
-  const [hits, setHits]         = useState<AthleteSearchHit[]>([]);
-  const [open, setOpen]         = useState(false);
-  const [searching, setSearching] = useState(false);
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [query, setQuery] = useState(selectedKey);
+  const [open, setOpen]   = useState(false);
   const wrapRef  = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (selectedKey && !query) setQuery(selectedKey);
   }, [selectedKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
@@ -571,29 +569,20 @@ function AthleteSearchCombobox({ onSelect, selectedKey }: {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  function handleInput(value: string) {
-    setQuery(value);
-    if (debounce.current) clearTimeout(debounce.current);
-    if (value.trim().length < 2) { setHits([]); setOpen(false); return; }
-    debounce.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await fetch(`/api/admin/athlete-similarity/athletes?search=${encodeURIComponent(value.trim())}&limit=8`);
-        if (res.ok) {
-          const json = await res.json() as { athletes: AthleteSearchHit[] };
-          setHits(json.athletes ?? []);
-          setOpen(true);
-        }
-      } catch { /* ignore */ }
-      setSearching(false);
-    }, 300);
-  }
+  useEffect(() => {
+    if (athletes.length > 0 && inputRef.current === document.activeElement) setOpen(true);
+  }, [athletes.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function select(hit: AthleteSearchHit) {
-    setQuery(hit.athlete_key);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = q ? athletes.filter(a => a.athlete_key.toLowerCase().includes(q)) : athletes;
+    return list.slice(0, 30);
+  }, [query, athletes]);
+
+  function select(a: { athlete_key: string }) {
+    setQuery(a.athlete_key);
     setOpen(false);
-    setHits([]);
-    onSelect(hit.athlete_key);
+    onSelect(a.athlete_key);
   }
 
   const inputS: React.CSSProperties = { padding: "8px 12px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "14px", color: "#111", background: "#fff", outline: "none", width: "260px" };
@@ -601,31 +590,28 @@ function AthleteSearchCombobox({ onSelect, selectedKey }: {
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
       <input
+        ref={inputRef}
         type="text"
         value={query}
-        placeholder="Search athlete name…"
-        onChange={e => handleInput(e.target.value)}
-        onFocus={() => hits.length > 0 && setOpen(true)}
+        placeholder={athletes.length === 0 ? "Loading athletes…" : "Search athlete name…"}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
         style={inputS}
       />
-      {searching && <span style={{ position: "absolute", right: "12px", top: "10px", fontSize: "11px", color: "#aaa" }}>…</span>}
-      {open && hits.length > 0 && (
+      {open && filtered.length > 0 && (
         <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 100, background: "#fff", border: "1px solid #ddd", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: "320px", maxHeight: "320px", overflowY: "auto", marginTop: "4px" }}>
-          {hits.map(h => (
+          {filtered.map(a => (
             <button
-              key={h.athlete_key}
+              key={a.athlete_key}
               type="button"
-              onClick={() => select(h)}
+              onClick={() => select(a)}
               style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 14px", border: "none", background: "none", cursor: "pointer", borderBottom: "1px solid #f0f0f0" }}
               onMouseEnter={e => (e.currentTarget.style.background = "#f9f9f9")}
               onMouseLeave={e => (e.currentTarget.style.background = "none")}
             >
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "#111" }}>{h.athlete_key}</div>
-              <div style={{ fontSize: "11px", color: "#888", marginTop: "2px", display: "flex", gap: "10px" }}>
-                <span>{h.race_count} race{h.race_count !== 1 ? "s" : ""}</span>
-                {h.first_result_year && <span>{h.first_result_year}{h.last_result_year && h.last_result_year !== h.first_result_year ? `–${h.last_result_year}` : ""}</span>}
-                {h.avg_ascent_m && <span>{Math.round(h.avg_ascent_m)}m avg ↑</span>}
-                {h.cluster_label && <span style={{ color: "#1e3a1e", fontStyle: "italic" }}>{h.cluster_label}</span>}
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "#111" }}>{a.athlete_key}</div>
+              <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
+                {a.race_count} race{a.race_count !== 1 ? "s" : ""}
               </div>
             </button>
           ))}
@@ -1132,6 +1118,7 @@ export default function RaceReadinessPage() {
   const supabase = createClient();
 
   const [races, setRaces]                 = useState<RaceOption[]>([]);
+  const [athleteNames, setAthleteNames]   = useState<{ athlete_key: string; race_count: number }[]>([]);
   const [selectedRaceId, setSelectedRaceId] = useState("");
   const [generating, setGenerating]       = useState(false);
   const [genError, setGenError]           = useState("");
@@ -1244,6 +1231,18 @@ export default function RaceReadinessPage() {
         total_distance_km: null,
         total_ascent_m:    null,
       })));
+    }
+    void load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load athlete names only on mount — profile data loads when an athlete is selected
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from("als_athlete_profiles")
+        .select("athlete_key, race_count")
+        .order("race_count", { ascending: false });
+      if (data) setAthleteNames(data as { athlete_key: string; race_count: number }[]);
     }
     void load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1492,6 +1491,7 @@ export default function RaceReadinessPage() {
         <div>
           <div style={labelStyle}>Athlete</div>
           <AthleteSearchCombobox
+            athletes={athleteNames}
             selectedKey={selectedAthleteKey}
             onSelect={key => { setSelectedAthleteKey(key); void fetchAthlete(key); }}
           />
