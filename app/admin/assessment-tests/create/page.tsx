@@ -38,6 +38,12 @@ export default function CreateAssessmentTestPage() {
   const [selectedMuscles, setSelectedMuscles] = useState<MuscleOption[]>([]);
   const [loadingMuscles, setLoadingMuscles] = useState(true);
 
+  const [ratingUphill, setRatingUphill] = useState<number | null>(null);
+  const [ratingDownhill, setRatingDownhill] = useState<number | null>(null);
+  const [ratingTechnical, setRatingTechnical] = useState<number | null>(null);
+  const [ratingGravelStability, setRatingGravelStability] = useState<number | null>(null);
+  const [ratingGeneralAsymmetry, setRatingGeneralAsymmetry] = useState<number | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -149,6 +155,11 @@ export default function CreateAssessmentTestPage() {
       aim: aim.trim() || null,
       notes: notes.trim() || null,
       what_to_record: whatToRecord.trim() || null,
+      rating_uphill: ratingUphill,
+      rating_downhill: ratingDownhill,
+      rating_technical: ratingTechnical,
+      rating_gravel_stability: ratingGravelStability,
+      rating_general_asymmetry: ratingGeneralAsymmetry,
       instructions: instructions.filter((s) => s.trim().length > 0),
       video_urls: videoUrls.filter((u) => u.trim().length > 0),
       target_muscles: selectedMuscles.map((m) => m.slug),
@@ -173,6 +184,11 @@ export default function CreateAssessmentTestPage() {
     setAim("");
     setNotes("");
     setWhatToRecord("");
+    setRatingUphill(null);
+    setRatingDownhill(null);
+    setRatingTechnical(null);
+    setRatingGravelStability(null);
+    setRatingGeneralAsymmetry(null);
     setInstructions([]);
     setNewInstruction("");
     setVideoUrls([]);
@@ -423,6 +439,40 @@ export default function CreateAssessmentTestPage() {
             >Add</button>
           </div>
 
+          <label style={labelStyle}>Relatability ratings</label>
+          <p style={helperStyle}>
+            Rate how relevant this assessment is for each context (0 = not relevant, 5 = highly relevant). Leave blank if unknown.
+          </p>
+          <div style={ratingsGridStyle}>
+            {(
+              [
+                { label: "Uphill", value: ratingUphill, set: setRatingUphill },
+                { label: "Downhill", value: ratingDownhill, set: setRatingDownhill },
+                { label: "Technical", value: ratingTechnical, set: setRatingTechnical },
+                { label: "Gravel stability", value: ratingGravelStability, set: setRatingGravelStability },
+                { label: "General asymmetry", value: ratingGeneralAsymmetry, set: setRatingGeneralAsymmetry },
+              ] as { label: string; value: number | null; set: (v: number | null) => void }[]
+            ).map(({ label, value, set }) => (
+              <div key={label} style={ratingRowStyle}>
+                <span style={ratingLabelStyle}>{label}</span>
+                <div style={ratingStarsStyle}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => set(value === n ? null : n)}
+                      style={value !== null && n <= value ? ratingDotActiveStyle : ratingDotStyle}
+                      title={String(n)}
+                    />
+                  ))}
+                  {value !== null && (
+                    <button type="button" onClick={() => set(null)} style={ratingClearStyle}>clear</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
           {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
           {successMessage ? <p style={successStyle}>{successMessage}</p> : null}
 
@@ -638,6 +688,59 @@ const warningLinkStyle: React.CSSProperties = {
   padding: 0,
   textDecoration: "underline",
   fontSize: "13px",
+};
+
+const ratingsGridStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+  marginBottom: "24px",
+};
+
+const ratingRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "16px",
+};
+
+const ratingLabelStyle: React.CSSProperties = {
+  width: "150px",
+  flexShrink: 0,
+  fontSize: "14px",
+  color: "#374151",
+  fontWeight: 500,
+};
+
+const ratingStarsStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+};
+
+const ratingDotStyle: React.CSSProperties = {
+  width: "28px",
+  height: "28px",
+  borderRadius: "50%",
+  border: "2px solid #d1d5db",
+  background: "#fff",
+  cursor: "pointer",
+  padding: 0,
+};
+
+const ratingDotActiveStyle: React.CSSProperties = {
+  ...ratingDotStyle,
+  background: "#111827",
+  border: "2px solid #111827",
+};
+
+const ratingClearStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "#9ca3af",
+  fontSize: "12px",
+  cursor: "pointer",
+  padding: "0 4px",
+  textDecoration: "underline",
 };
 
 const segmentedControlStyle: React.CSSProperties = {

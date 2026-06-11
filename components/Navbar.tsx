@@ -395,6 +395,8 @@ export default async function Navbar() {
                     { href: "/admin/assessment-tests/create", label: "Create Assessment Test" },
                     { href: "/admin/muscles", label: "Muscles" },
                     { href: "/admin/muscles/create", label: "Create Muscle" },
+                    { href: "/admin/assessment-tags", label: "Assessment Tags" },
+                    { href: "/admin/assessment-tags/create", label: "Create Assessment Tag" },
                   ]}
                 />
               )}

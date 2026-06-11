@@ -19,6 +19,11 @@ type AssessmentTestRow = {
   aim: string | null;
   notes: string | null;
   what_to_record: string | null;
+  rating_uphill: number | null;
+  rating_downhill: number | null;
+  rating_technical: number | null;
+  rating_gravel_stability: number | null;
+  rating_general_asymmetry: number | null;
   instructions: string[];
   video_urls: string[];
   target_muscles: string[];
@@ -37,6 +42,11 @@ export default function EditAssessmentTestPage() {
   const [aim, setAim] = useState("");
   const [notes, setNotes] = useState("");
   const [whatToRecord, setWhatToRecord] = useState("");
+  const [ratingUphill, setRatingUphill] = useState<number | null>(null);
+  const [ratingDownhill, setRatingDownhill] = useState<number | null>(null);
+  const [ratingTechnical, setRatingTechnical] = useState<number | null>(null);
+  const [ratingGravelStability, setRatingGravelStability] = useState<number | null>(null);
+  const [ratingGeneralAsymmetry, setRatingGeneralAsymmetry] = useState<number | null>(null);
 
   const [instructions, setInstructions] = useState<string[]>([]);
   const [newInstruction, setNewInstruction] = useState("");
@@ -69,7 +79,7 @@ export default function EditAssessmentTestPage() {
           .order("label", { ascending: true }),
         supabase
           .from("assessment_tests")
-          .select("id, name, category, description, aim, notes, what_to_record, instructions, video_urls, target_muscles")
+          .select("id, name, category, description, aim, notes, what_to_record, rating_uphill, rating_downhill, rating_technical, rating_gravel_stability, rating_general_asymmetry, instructions, video_urls, target_muscles")
           .eq("id", testId)
           .single(),
       ]);
@@ -92,6 +102,11 @@ export default function EditAssessmentTestPage() {
         setAim(test.aim ?? "");
         setNotes(test.notes ?? "");
         setWhatToRecord(test.what_to_record ?? "");
+        setRatingUphill(test.rating_uphill ?? null);
+        setRatingDownhill(test.rating_downhill ?? null);
+        setRatingTechnical(test.rating_technical ?? null);
+        setRatingGravelStability(test.rating_gravel_stability ?? null);
+        setRatingGeneralAsymmetry(test.rating_general_asymmetry ?? null);
         setInstructions(test.instructions ?? []);
         setVideoUrls(test.video_urls ?? []);
 
@@ -148,6 +163,11 @@ export default function EditAssessmentTestPage() {
       aim: aim.trim() || null,
       notes: notes.trim() || null,
       what_to_record: whatToRecord.trim() || null,
+      rating_uphill: ratingUphill,
+      rating_downhill: ratingDownhill,
+      rating_technical: ratingTechnical,
+      rating_gravel_stability: ratingGravelStability,
+      rating_general_asymmetry: ratingGeneralAsymmetry,
       instructions: instructions.filter((s) => s.trim().length > 0),
       video_urls: videoUrls.filter((u) => u.trim().length > 0),
       target_muscles: selectedMuscles.map((m) => m.slug),
@@ -371,6 +391,40 @@ export default function EditAssessmentTestPage() {
             >Add</button>
           </div>
 
+          <label style={labelStyle}>Relatability ratings</label>
+          <p style={helperStyle}>
+            Rate how relevant this assessment is for each context (0 = not relevant, 5 = highly relevant). Leave blank if unknown.
+          </p>
+          <div style={ratingsGridStyle}>
+            {(
+              [
+                { label: "Uphill", value: ratingUphill, set: setRatingUphill },
+                { label: "Downhill", value: ratingDownhill, set: setRatingDownhill },
+                { label: "Technical", value: ratingTechnical, set: setRatingTechnical },
+                { label: "Gravel stability", value: ratingGravelStability, set: setRatingGravelStability },
+                { label: "General asymmetry", value: ratingGeneralAsymmetry, set: setRatingGeneralAsymmetry },
+              ] as { label: string; value: number | null; set: (v: number | null) => void }[]
+            ).map(({ label, value, set }) => (
+              <div key={label} style={ratingRowStyle}>
+                <span style={ratingLabelStyle}>{label}</span>
+                <div style={ratingStarsStyle}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => set(value === n ? null : n)}
+                      style={value !== null && n <= value ? ratingDotActiveStyle : ratingDotStyle}
+                      title={String(n)}
+                    />
+                  ))}
+                  {value !== null && (
+                    <button type="button" onClick={() => set(null)} style={ratingClearStyle}>clear</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
           {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
           {successMessage ? <p style={successStyle}>{successMessage}</p> : null}
 
@@ -556,6 +610,14 @@ const secondaryButtonStyle: React.CSSProperties = {
   fontWeight: 700,
   cursor: "pointer",
 };
+
+const ratingsGridStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" };
+const ratingRowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "16px" };
+const ratingLabelStyle: React.CSSProperties = { width: "150px", flexShrink: 0, fontSize: "14px", color: "#374151", fontWeight: 500 };
+const ratingStarsStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "6px" };
+const ratingDotStyle: React.CSSProperties = { width: "28px", height: "28px", borderRadius: "50%", border: "2px solid #d1d5db", background: "#fff", cursor: "pointer", padding: 0 };
+const ratingDotActiveStyle: React.CSSProperties = { ...ratingDotStyle, background: "#111827", border: "2px solid #111827" };
+const ratingClearStyle: React.CSSProperties = { background: "none", border: "none", color: "#9ca3af", fontSize: "12px", cursor: "pointer", padding: "0 4px", textDecoration: "underline" };
 
 const segmentedControlStyle: React.CSSProperties = {
   display: "flex",
