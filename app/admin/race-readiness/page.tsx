@@ -555,14 +555,17 @@ function RaceSearchCombobox({ races, selectedId, onSelect }: {
   );
 }
 
-/* Athlete search combobox — client-side filter over preloaded names, same pattern as RaceSearchCombobox */
+/* Athlete search combobox — client-side filter over preloaded names, with API fallback
+   for athletes only in race_results (not in als_athlete_profiles) */
 function AthleteSearchCombobox({ athletes, onSelect, selectedKey }: {
   athletes: { athlete_key: string; race_count: number }[];
   onSelect: (key: string) => void;
   selectedKey: string;
 }) {
-  const [query, setQuery] = useState(selectedKey);
-  const [open, setOpen]   = useState(false);
+  const [query, setQuery]         = useState(selectedKey);
+  const [open, setOpen]           = useState(false);
+  const [apiHits, setApiHits]     = useState<{ athlete_key: string; race_count: number }[]>([]);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef  = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -582,15 +585,39 @@ function AthleteSearchCombobox({ athletes, onSelect, selectedKey }: {
     if (athletes.length > 0 && inputRef.current === document.activeElement) setOpen(true);
   }, [athletes.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = useMemo(() => {
+  const localFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = q ? athletes.filter(a => a.athlete_key.toLowerCase().includes(q)) : athletes;
-    return list.slice(0, 30);
+    if (!q) return athletes.slice(0, 30);
+    return athletes.filter(a => a.athlete_key.toLowerCase().includes(q)).slice(0, 30);
   }, [query, athletes]);
+
+  // Fall back to API when local list returns sparse results (covers race_results-only athletes)
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) { setApiHits([]); return; }
+    if (localFiltered.length >= 5) { setApiHits([]); return; }
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/athlete-similarity/athletes?search=${encodeURIComponent(q)}&limit=30`);
+        if (res.ok) {
+          const json = await res.json() as { athletes: { athlete_key: string; race_count: number }[] };
+          const localKeys = new Set(athletes.map(a => a.athlete_key));
+          setApiHits((json.athletes ?? []).filter(a => !localKeys.has(a.athlete_key)));
+        }
+      } catch { /* ignore */ }
+    }, 300);
+  }, [query, localFiltered.length, athletes]);
+
+  const displayed = useMemo(() => {
+    const combined = [...localFiltered, ...apiHits];
+    return combined.slice(0, 30);
+  }, [localFiltered, apiHits]);
 
   function select(a: { athlete_key: string }) {
     setQuery(a.athlete_key);
     setOpen(false);
+    setApiHits([]);
     onSelect(a.athlete_key);
   }
 
@@ -607,9 +634,9 @@ function AthleteSearchCombobox({ athletes, onSelect, selectedKey }: {
         onFocus={() => setOpen(true)}
         style={inputS}
       />
-      {open && filtered.length > 0 && (
+      {open && displayed.length > 0 && (
         <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 100, background: "#fff", border: "1px solid #ddd", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: "320px", maxHeight: "320px", overflowY: "auto", marginTop: "4px" }}>
-          {filtered.map(a => (
+          {displayed.map(a => (
             <button
               key={a.athlete_key}
               type="button"
@@ -1245,13 +1272,14 @@ export default function RaceReadinessPage() {
     void load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load athlete names only on mount — profile data loads when an athlete is selected
+  // Load athlete names only on mount — explicit range overrides PostgREST's default row cap
   useEffect(() => {
     async function load() {
       const { data } = await supabase
         .from("als_athlete_profiles")
         .select("athlete_key, race_count")
-        .order("race_count", { ascending: false });
+        .order("race_count", { ascending: false })
+        .range(0, 9999);
       if (data) setAthleteNames(data as { athlete_key: string; race_count: number }[]);
     }
     void load();
