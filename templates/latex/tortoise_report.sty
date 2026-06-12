@@ -1,0 +1,269 @@
+%% tortoise_report.sty
+%% Tortoise Endurance — Race Readiness Report brand style
+%% Compatible with pdflatex. Load AFTER geometry, fontenc, inputenc.
+%%
+%% Required packages (load in .tex document):
+%%   xcolor, tcolorbox (with skins + breakable), tabularray (with booktabs),
+%%   fancyhdr, titlesec, pgfplots, tikz, booktabs, longtable, array,
+%%   microtype, enumitem, ragged2e, xstring, calc
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{tortoise_report}[2024/01/01 Tortoise Endurance Report Style]
+
+%% ── Colour palette ────────────────────────────────────────────────────────────
+\definecolor{TortoiseGreen}{HTML}{1F4D3A}
+\definecolor{TortoiseLightGreen}{HTML}{EAF4EF}
+\definecolor{TortoiseRed}{HTML}{B23A3A}
+\definecolor{TortoiseLightRed}{HTML}{F8EAEA}
+\definecolor{TortoiseAmber}{HTML}{C97916}
+\definecolor{TortoiseLightAmber}{HTML}{FFF4E0}
+\definecolor{TortoiseBlue}{HTML}{2F6FA3}
+\definecolor{TortoiseLightBlue}{HTML}{EAF1F8}
+\definecolor{TortoiseGrey}{HTML}{F5F6F4}
+\definecolor{TortoiseTableAlt}{HTML}{EEEEEC}
+\definecolor{TortoiseMidGrey}{HTML}{BBBBBB}
+\definecolor{TortoiseDarkGrey}{HTML}{444444}
+\definecolor{TortoiseWhite}{HTML}{FFFFFF}
+
+%% Keep legacy colour names working (used in pgfplots + existing code)
+\colorlet{darkgreen}{TortoiseGreen}
+\colorlet{accentgreen}{TortoiseGreen}
+\colorlet{accentred}{TortoiseRed}
+\colorlet{accentorange}{TortoiseAmber}
+\colorlet{accentblue}{TortoiseBlue}
+\colorlet{rowred}{TortoiseLightRed}
+\colorlet{roworange}{TortoiseLightAmber}
+\colorlet{rowgreen}{TortoiseLightGreen}
+\colorlet{rowgray}{TortoiseGrey}
+
+%% ── Page geometry ─────────────────────────────────────────────────────────────
+%% (geometry is set in the .tex preamble; we only tweak text width usage here)
+
+%% ── Header / footer ───────────────────────────────────────────────────────────
+\RequirePackage{fancyhdr}
+\RequirePackage{calc}
+
+\newcommand{\@racename}{Race Readiness Report}
+\newcommand{\racenameset}[1]{\gdef\@racename{#1}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{%
+  \small\textsc{\color{TortoiseGreen}Tortoise Endurance}%
+}
+\fancyhead[R]{%
+  \small\color{TortoiseDarkGrey}\@racename%
+}
+\fancyfoot[C]{%
+  \small\color{TortoiseDarkGrey}\thepage%
+}
+\renewcommand{\headrulewidth}{0.6pt}
+\renewcommand{\headrule}{%
+  {\color{TortoiseGreen}\hrule height 0.6pt width\headwidth}%
+}
+\renewcommand{\footrulewidth}{0pt}
+\setlength{\headheight}{14pt}
+
+%% Plain style for title + TOC pages
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyfoot[C]{\small\color{TortoiseDarkGrey}\thepage}%
+  \renewcommand{\headrulewidth}{0pt}%
+}
+
+%% ── Section / subsection formatting ──────────────────────────────────────────
+\RequirePackage{titlesec}
+
+\titleformat{\section}
+  {\large\bfseries\color{TortoiseGreen}}
+  {}{0em}{}
+  [\vspace{2pt}\textcolor{TortoiseGreen}{\titlerule[1.5pt]}\vspace{4pt}]
+
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{TortoiseDarkGrey}}
+  {}{0em}{}
+  [\vspace{1pt}\textcolor{TortoiseMidGrey}{\titlerule[0.5pt]}\vspace{2pt}]
+
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+
+%% ── tcolorbox environments ────────────────────────────────────────────────────
+\RequirePackage[skins,breakable]{tcolorbox}
+
+%% Neutral metric card (grey)
+\newtcolorbox{MetricCardBox}[1]{
+  enhanced, breakable,
+  colback=TortoiseGrey, colframe=TortoiseMidGrey,
+  coltitle=TortoiseGreen, fonttitle=\bfseries\small,
+  title=\textsc{#1},
+  boxrule=0.5pt, arc=3pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  before skip=4pt, after skip=4pt
+}
+%% Green / positive variant
+\newtcolorbox{MetricCardGreen}[1]{
+  enhanced, breakable,
+  colback=TortoiseLightGreen, colframe=TortoiseGreen,
+  coltitle=TortoiseGreen, fonttitle=\bfseries\small,
+  title=\textsc{#1},
+  boxrule=0.8pt, arc=3pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  before skip=4pt, after skip=4pt
+}
+%% Amber / warning variant
+\newtcolorbox{MetricCardAmber}[1]{
+  enhanced, breakable,
+  colback=TortoiseLightAmber, colframe=TortoiseAmber,
+  coltitle=TortoiseAmber, fonttitle=\bfseries\small,
+  title=\textsc{#1},
+  boxrule=0.8pt, arc=3pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  before skip=4pt, after skip=4pt
+}
+%% Red / risk variant
+\newtcolorbox{MetricCardRed}[1]{
+  enhanced, breakable,
+  colback=TortoiseLightRed, colframe=TortoiseRed,
+  coltitle=TortoiseRed, fonttitle=\bfseries\small,
+  title=\textsc{#1},
+  boxrule=0.8pt, arc=3pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  before skip=4pt, after skip=4pt
+}
+
+%% Callout: Insight (blue left border)
+\newtcolorbox{InsightBox}[1]{
+  enhanced, breakable,
+  colback=TortoiseLightBlue, colframe=TortoiseBlue,
+  coltitle=TortoiseBlue, fonttitle=\bfseries,
+  title=\textbf{#1},
+  leftrule=4pt, toprule=0pt, rightrule=0pt, bottomrule=0pt,
+  arc=0pt,
+  left=8pt, right=8pt, top=4pt, bottom=4pt,
+  before skip=8pt, after skip=8pt
+}
+%% Callout: Positive (green left border)
+\newtcolorbox{PositiveBox}[1]{
+  enhanced, breakable,
+  colback=TortoiseLightGreen, colframe=TortoiseGreen,
+  coltitle=TortoiseGreen, fonttitle=\bfseries,
+  title=\textbf{#1},
+  leftrule=4pt, toprule=0pt, rightrule=0pt, bottomrule=0pt,
+  arc=0pt,
+  left=8pt, right=8pt, top=4pt, bottom=4pt,
+  before skip=8pt, after skip=8pt
+}
+%% Callout: Risk (red left border)
+\newtcolorbox{RiskBox}[1]{
+  enhanced, breakable,
+  colback=TortoiseLightRed, colframe=TortoiseRed,
+  coltitle=TortoiseRed, fonttitle=\bfseries,
+  title=\textbf{#1},
+  leftrule=4pt, toprule=0pt, rightrule=0pt, bottomrule=0pt,
+  arc=0pt,
+  left=8pt, right=8pt, top=4pt, bottom=4pt,
+  before skip=8pt, after skip=8pt
+}
+%% Callout: Priority (amber left border)
+\newtcolorbox{PriorityBox}[1]{
+  enhanced, breakable,
+  colback=TortoiseLightAmber, colframe=TortoiseAmber,
+  coltitle=TortoiseAmber, fonttitle=\bfseries,
+  title=\textbf{#1},
+  leftrule=4pt, toprule=0pt, rightrule=0pt, bottomrule=0pt,
+  arc=0pt,
+  left=8pt, right=8pt, top=4pt, bottom=4pt,
+  before skip=8pt, after skip=8pt
+}
+%% Assessment card (breakable card for Physical Assessments section)
+\newtcolorbox{AssessmentCard}[1]{
+  enhanced, breakable,
+  colback=TortoiseGrey, colframe=TortoiseMidGrey,
+  coltitle=TortoiseGreen, fonttitle=\bfseries,
+  title=\textbf{#1},
+  boxrule=0.5pt, arc=4pt,
+  left=8pt, right=8pt, top=5pt, bottom=6pt,
+  before skip=8pt, after skip=8pt
+}
+
+%% ── Status badge ──────────────────────────────────────────────────────────────
+%% Safe inside table cells. Uses xstring for matching.
+\RequirePackage{xstring}
+
+\newcommand{\StatusBadge}[1]{%
+  \IfEqCase*{#1}{%
+    {Strong}{\colorbox{TortoiseGreen}{\color{white}\footnotesize\bfseries~Strong~}}%
+    {Covered}{\colorbox{TortoiseGreen}{\color{white}\footnotesize\bfseries~Covered~}}%
+    {Moderate}{\colorbox{TortoiseAmber}{\color{white}\footnotesize\bfseries~Moderate~}}%
+    {Partial}{\colorbox{TortoiseAmber}{\color{white}\footnotesize\bfseries~Partial~}}%
+    {Major gap}{\colorbox{TortoiseRed}{\color{white}\footnotesize\bfseries~Major gap~}}%
+    {None}{\colorbox{TortoiseRed}{\color{white}\footnotesize\bfseries~None~}}%
+    {Surface gap}{\colorbox{TortoiseAmber}{\color{white}\footnotesize\bfseries~Surface gap~}}%
+    {Unknown}{\colorbox{TortoiseGrey}{\color{TortoiseDarkGrey}\footnotesize\bfseries~Unknown~}}%
+  }[\colorbox{TortoiseGrey}{\color{TortoiseDarkGrey}\footnotesize\bfseries~#1~}]%
+}
+
+%% Priority badge (for Next Steps section)
+\newcommand{\PriorityBadge}[1]{%
+  \IfEqCase*{#1}{%
+    {Priority}{\colorbox{TortoiseRed}{\color{white}\footnotesize\bfseries~Priority~}}%
+    {Recommended}{\colorbox{TortoiseAmber}{\color{white}\footnotesize\bfseries~Recommended~}}%
+    {Optional}{\colorbox{TortoiseMidGrey}{\color{TortoiseDarkGrey}\footnotesize\bfseries~Optional~}}%
+  }[\colorbox{TortoiseGrey}{\color{TortoiseDarkGrey}\footnotesize\bfseries~#1~}]%
+}
+
+%% ── Progress bar ──────────────────────────────────────────────────────────────
+%% \ProgressBar[color]{ratio}  — ratio in [0,1], full width = 6cm
+\newcommand{\ProgressBar}[2][TortoiseGreen]{%
+  \begin{tikzpicture}[baseline=-0.5ex]
+    \fill[TortoiseMidGrey!40] (0,0) rectangle (6cm,0.22cm);
+    \pgfmathsetmacro{\barwidth}{min(6, #2 * 6)}%
+    \fill[#1] (0,0) rectangle (\barwidth cm, 0.22cm);
+  \end{tikzpicture}%
+}
+
+%% \LabelledProgressBar{label}{value text}{ratio}
+\newcommand{\LabelledProgressBar}[3]{%
+  \noindent
+  \begin{minipage}[t]{0.30\linewidth}
+    \small\RaggedRight #1
+  \end{minipage}%
+  \hfill
+  \begin{minipage}[t]{0.40\linewidth}
+    \centering\ProgressBar{#3}
+  \end{minipage}%
+  \hfill
+  \begin{minipage}[t]{0.22\linewidth}
+    \small\RaggedLeft #2
+  \end{minipage}%
+  \vspace{3pt}
+}
+
+%% ── tabularray branded long table ─────────────────────────────────────────────
+\RequirePackage{tabularray}
+\UseTblrLibrary{booktabs}
+
+\NewTblrEnviron{TortoiseLongTable}
+\SetTblrInner[TortoiseLongTable]{
+  hline{1,2}={TortoiseGreen,1.5pt},
+  hline{Z}={TortoiseGreen,1.5pt},
+  hline{3-Y}={TortoiseMidGrey,0.3pt},
+  row{odd}={bg=TortoiseGrey},
+  row{even}={bg=TortoiseWhite},
+  row{1}={bg=TortoiseGreen, fg=TortoiseWhite, font=\bfseries\small},
+  rowhead=1,
+  width=\linewidth,
+  cells={font=\small, valign=m, rowsep=3pt, colsep=5pt},
+}
+
+%% Short compact booktabs table (non-breaking, centred)
+%% Use directly in document with \begin{booktabs-like} commands
+%% No environment needed here — generators use standard tabular/booktabs.
+
+%% ── Ragged2e ──────────────────────────────────────────────────────────────────
+\RequirePackage{ragged2e}
+
+%% ── enumitem ──────────────────────────────────────────────────────────────────
+\RequirePackage{enumitem}
+\setlist[itemize]{leftmargin=1.2em, itemsep=2pt, topsep=4pt}
+\setlist[enumerate]{leftmargin=1.4em, itemsep=2pt, topsep=4pt}

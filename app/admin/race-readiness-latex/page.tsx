@@ -4,6 +4,20 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
+import {
+  tex as rTex,
+  renderMetricGrid,
+  renderCallout,
+  renderBadge,
+  renderProgressRow,
+  renderLongTable,
+  renderShortTable,
+  renderSectionHeader,
+  renderSubsectionHeader,
+  renderTwoColumnCallouts,
+  renderAssessmentCard,
+  type MetricCard,
+} from "@/lib/latex/render";
 
 /* ── API types (mirrored from race-readiness/page.tsx) ── */
 interface RaceMeta { id: string; name: string; slug: string | null; total_distance_km: number; total_ascent_m: number; total_descent_m: number; race_date: string | null; weather_lat: number | null; weather_lon: number | null; }
@@ -85,24 +99,7 @@ function downsample(points: ElevationPoint[], maxPts: number): ElevationPoint[] 
 }
 
 /* ── LaTeX helpers ── */
-function tex(s: string | number | null | undefined): string {
-  if (s == null) return "{--}";
-  const str = String(s);
-  return str
-    .replace(/\\/g, "\\textbackslash{}")
-    .replace(/&/g, "\\&")
-    .replace(/%/g, "\\%")
-    .replace(/\$/g, "\\$")
-    .replace(/#/g, "\\#")
-    .replace(/_/g, "\\_")
-    .replace(/\{/g, "\\{")
-    .replace(/\}/g, "\\}")
-    .replace(/~/g, "\\textasciitilde{}")
-    .replace(/\^/g, "\\textasciicircum{}")
-    .replace(/</g, "\\textless{}")
-    .replace(/>/g, "\\textgreater{}")
-    .replace(/\|/g, "\\textbar{}");
-}
+const tex = rTex; // delegate to shared helper
 
 function stl(s: string) { return s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" "); }
 function tl(t: string) { return t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" "); }
@@ -283,63 +280,61 @@ function generateLatex(p: GenParams): string {
     "\\documentclass[a4paper,11pt]{article}",
     "\\usepackage[T1]{fontenc}",
     "\\usepackage[utf8]{inputenc}",
-    "\\usepackage[margin=2cm]{geometry}",
-    "\\usepackage{booktabs}",
+    "\\usepackage[top=2.4cm,bottom=2.2cm,left=2cm,right=2cm]{geometry}",
     "\\usepackage[table,dvipsnames]{xcolor}",
+    "\\usepackage{booktabs}",
     "\\usepackage{longtable}",
     "\\usepackage{array}",
     "\\usepackage{microtype}",
     "\\usepackage{pgfplots}",
     "\\pgfplotsset{compat=1.18}",
+    "\\usepackage{tikz}",
     "\\usepackage{parskip}",
-    "\\usepackage{titlesec}",
     "\\usepackage{tabularx}",
     "\\usepackage[hidelinks]{hyperref}",
     "\\usepackage{makecell}",
+    "\\usepackage{lmodern}",
+    "\\usepackage{tortoise_report}",  // brand style (copied to tmpDir at compile time)
     "",
-    "\\definecolor{darkgreen}{HTML}{1e3a1e}",
-    "\\definecolor{accentgreen}{HTML}{2e7d32}",
-    "\\definecolor{accentred}{HTML}{c0392b}",
-    "\\definecolor{accentorange}{HTML}{e65100}",
-    "\\definecolor{accentblue}{HTML}{1565c0}",
-    "\\definecolor{rowred}{HTML}{fce4ec}",
-    "\\definecolor{roworange}{HTML}{fff3e0}",
-    "\\definecolor{rowgreen}{HTML}{e8f5e9}",
-    "\\definecolor{rowgray}{HTML}{f5f5f5}",
+    `\\racenameset{${tex(race.name)}}`,
     "",
-    "\\titleformat{\\section}{\\large\\bfseries\\color{darkgreen}}{}{0em}{}[\\vspace{-0.5em}\\hrulefill]",
-    "\\titleformat{\\subsection}{\\normalsize\\bfseries\\color{darkgreen}}{}{0em}{}",
-    "",
-    `\\title{\\textbf{\\color{darkgreen}Race Readiness Report}\\\\[4pt]\\large ${tex(race.name)}}`,
-    reportAthlete ? `\\author{${tex(reportAthlete.profile.athlete_key)}}` : "\\author{}",
-    "\\date{\\today}",
+    `\\title{%`,
+    `  \\vspace{-1cm}%`,
+    `  {\\color{TortoiseGreen}\\rule{\\linewidth}{1.5pt}}\\\\[8pt]%`,
+    `  \\textbf{\\color{TortoiseGreen}\\Large Race Readiness Report}\\\\[6pt]%`,
+    `  {\\large\\color{TortoiseDarkGrey}${tex(race.name)}}\\\\[4pt]%`,
+    `  {\\color{TortoiseGreen}\\rule{\\linewidth}{1.5pt}}%`,
+    `}`,
+    reportAthlete ? `\\author{\\normalsize\\color{TortoiseDarkGrey}${tex(reportAthlete.profile.athlete_key)}}` : "\\author{}",
+    "\\date{\\normalsize\\color{TortoiseDarkGrey}\\today}",
     "",
     "\\begin{document}",
+    "\\thispagestyle{plain}",
     "\\maketitle",
+    "\\thispagestyle{plain}",
     "\\tableofcontents",
     "\\newpage",
+    "\\pagestyle{fancy}",
   );
 
   /* ══════════════════════════════════════════════════════════════════
      SECTION 1 — Executive Readiness Verdict
   ══════════════════════════════════════════════════════════════════ */
   if (reportAthlete && expContext) {
-    ln(
-      "",
-      "\\section{Executive Readiness Verdict}",
-      "\\textit{Overall verdict, main strength, primary risk, and what this report does and does not assess.}",
-      "",
-      "\\subsection*{What ``race ready'' means in this report}",
-      "Race ready means you have the physical foundation to complete this race safely and without being overwhelmed by its specific demands.",
-      "It does not mean you will win, hit a target time, or that preparation is complete.",
-      "It means the gap between what this race requires and what you have demonstrated in prior racing is manageable with appropriate preparation.",
-      "",
-      `\\noindent\\textbf{\\color{darkgreen}Overall Verdict:} \\textbf{${tex(overallLabel)}}`,
-      "",
-      tex(verdictText),
-    );
+    ln("", renderSectionHeader("Executive Readiness Verdict", "Overall verdict, main strength, primary risk, and what this report does and does not assess."));
 
-    /* Score cards table */
+    /* What "race ready" means */
+    ln(renderCallout("insight", "What \\textquotedblleft race ready\\textquotedblright\\ means in this report",
+      "Race ready means you have the physical foundation to complete this race safely and without being overwhelmed by its specific demands. " +
+      "It does not mean you will win, hit a target time, or that preparation is complete. " +
+      "It means the gap between what this race requires and what you have demonstrated in prior racing is manageable with appropriate preparation."
+    ));
+
+    /* Overall verdict callout */
+    const verdictCalloutType = majorCount >= 2 ? "risk" : majorCount === 1 ? "priority" : statusList.includes("moderate") ? "priority" : "positive";
+    ln(renderCallout(verdictCalloutType, `Overall Verdict: ${tex(overallLabel)}`, tex(verdictText)));
+
+    /* Readiness scorecard using TortoiseLongTable */
     const scoreCards: { title: string; level: ReadinessLevel; detail: string }[] = [
       { title: "Distance", level: distStatus, detail: athDist > 0 && totalKm > 0 ? `${athDist.toFixed(0)} km max vs ${totalKm.toFixed(0)} km target` : "Insufficient data" },
       { title: "Ascent", level: ascentStatus, detail: athAscent > 0 && totalAscentM > 0 ? `${Math.round(athAscent).toLocaleString()} m max vs ${Math.round(totalAscentM).toLocaleString()} m target` : "Insufficient data" },
@@ -348,13 +343,13 @@ function generateLatex(p: GenParams): string {
       { title: "Time-on-feet load", level: flatStatus, detail: athFlatEq > 0 && goalFlatEq > 0 ? `${athFlatEq.toFixed(1)} km effort-equiv vs ${goalFlatEq.toFixed(1)} km goal` : "Insufficient data" },
       { title: "Aid logistics", level: aidStatus, detail: aidSorted.length > 0 ? `${aidSorted.length} station${aidSorted.length !== 1 ? "s" : ""}, longest gap ${aidMaxGap.toFixed(1)} km` : "No aid station data" },
     ];
-    ln("", "\\begin{center}", "\\begin{tabular}{lll}", "\\toprule", "\\textbf{Dimension} & \\textbf{Rating} & \\textbf{Detail} \\\\", "\\midrule");
-    for (const card of scoreCards) {
-      ln(`${tex(card.title)} & \\textbf{\\color{${levelColor(card.level)}}${tex(levelLabel(card.level))}} & \\small ${tex(card.detail)} \\\\`);
-    }
-    ln("\\bottomrule", "\\end{tabular}", "\\end{center}");
+    ln(renderLongTable(
+      "X[2,l] X[1,c] X[3,l]",
+      ["Dimension", "Rating", "Detail"],
+      scoreCards.map(c => [tex(c.title), renderBadge(c.level), `\\small ${tex(c.detail)}`]),
+    ));
 
-    /* Strength / Limiter */
+    /* Strength / Limiter side-by-side */
     const zeroRows = summaryGapRows.filter(r => r.status === "none");
     const strengthText = distStatus === "strong" && sc?.athlete_max_dist
       ? `${firstName} has already proven the ability to complete ultra-distance events longer than ${race.name}. The longest recorded race -- ${sc.athlete_max_dist.race_name} (${sc.athlete_max_dist.km.toFixed(0)} km, ${sc.athlete_max_dist.year}) -- shows basic endurance is not in question.`
@@ -376,81 +371,72 @@ function generateLatex(p: GenParams): string {
       ? `Primary limiter: specificity, not volume. ${zeroRows.length} demand types have zero coverage in the confirmed race record.`
       : "No significant preparation gaps identified across distance, ascent, descent, or terrain specificity.";
 
-    ln(
-      "",
-      "\\subsection*{Biggest Strength}",
-      tex(strengthText),
-      "",
-      "\\subsection*{Biggest Limiter}",
-      tex(limiterText),
-    );
+    ln(renderTwoColumnCallouts(
+      "positive", "Biggest Strength", tex(strengthText),
+      majorCount >= 1 ? "risk" : "priority", "Biggest Limiter", tex(limiterText),
+    ));
   }
 
   /* ══════════════════════════════════════════════════════════════════
      SECTION 2 — Race Overview
   ══════════════════════════════════════════════════════════════════ */
-  ln(
-    "",
-    "\\section{Race Overview}",
-    "\\textit{Course profile, terrain character, and key metrics.}",
-    "",
-    "\\begin{center}",
-    "\\begin{tabular}{ll}",
-    "\\toprule",
-    "\\textbf{Metric} & \\textbf{Value} \\\\",
-    "\\midrule",
-    `Distance & ${tex(totalKm.toFixed(1))} km \\\\`,
-    `Total ascent & ${tex(Math.round(totalAscentM).toLocaleString())} m \\\\`,
-    `Total descent & ${tex(Math.round(totalDescentM).toLocaleString())} m \\\\`,
-    `Climbing density & ${totalKm > 0 ? tex((totalAscentM / totalKm).toFixed(0)) : "{--}"} m/km \\\\`,
-    `Flat-equivalent effort & ${totalKm > 0 ? tex(totalFlatEq.toFixed(1)) : "{--}"} km \\\\`,
-    `Effort multiplier & ${tex(effortRatio.toFixed(2))}x \\\\`,
-    raceDateLabel ? `Race date & ${tex(raceDateLabel)} \\\\` : "",
-    raceStats ? `Finishers (${tex(String(raceStats.year))}) & ${tex(raceStats.total.toLocaleString())} \\\\` : "",
-    raceStats ? `Fastest recorded & ${tex(formatRaceTime(raceStats.fastestMin))} \\\\` : "",
-    raceStats ? `Median time & ${tex(formatRaceTime(raceStats.medianMin))} \\\\` : "",
-    "\\bottomrule",
-    "\\end{tabular}",
-    "\\end{center}",
-  );
+  ln("", renderSectionHeader("Race Overview", "Course profile, terrain character, and key metrics."));
 
+  /* 4-up metric cards */
+  const raceMetricCards: MetricCard[] = [
+    { label: "Distance", value: `${tex(totalKm.toFixed(1))} km`, note: "Total course distance", variant: "neutral" },
+    { label: "Total Ascent", value: `${tex(Math.round(totalAscentM).toLocaleString())} m`, note: `${totalKm > 0 ? tex((totalAscentM / totalKm).toFixed(0)) : "{--}"} m/km`, variant: "neutral" },
+    { label: "Total Descent", value: `${tex(Math.round(totalDescentM).toLocaleString())} m`, note: "Total descent", variant: "neutral" },
+    { label: "Effort Multiplier", value: `${tex(effortRatio.toFixed(2))}\\texttimes`, note: `${tex(totalFlatEq.toFixed(1))} km flat-equiv`, variant: effortRatio >= 1.5 ? "warning" : "neutral" },
+  ];
+  ln(renderMetricGrid(raceMetricCards, 4));
+
+  /* Race date + finisher stats (small secondary cards) */
+  const statsCards: MetricCard[] = [];
+  if (raceDateLabel) statsCards.push({ label: "Race Date", value: `\\normalsize ${tex(raceDateLabel)}`, variant: "neutral" });
+  if (raceStats) {
+    statsCards.push({ label: `Finishers (${tex(String(raceStats.year))})`, value: tex(raceStats.total.toLocaleString()), variant: "neutral" });
+    statsCards.push({ label: "Median Finish", value: `\\normalsize ${tex(formatRaceTime(raceStats.medianMin))}`, variant: "neutral" });
+    statsCards.push({ label: "Course Record", value: `\\normalsize ${tex(formatRaceTime(raceStats.fastestMin))}`, variant: "neutral" });
+  }
+  if (statsCards.length > 0) ln(renderMetricGrid(statsCards, statsCards.length <= 2 ? 2 : statsCards.length <= 3 ? 3 : 4));
+
+  /* Terrain composition progress bars */
   if (terrainSummary.total > 0) {
-    ln("", "\\subsection*{Elevation Composition}",
-      "\\begin{center}\\begin{tabular}{lrr}\\toprule",
-      "\\textbf{Type} & \\textbf{km} & \\textbf{\\%} \\\\\\midrule",
-      `Climbing & ${tex(terrainSummary.climbing.toFixed(1))} & ${tex((terrainSummary.total > 0 ? terrainSummary.climbing / terrainSummary.total * 100 : 0).toFixed(0))}\\% \\\\`,
-      `Descending & ${tex(terrainSummary.descending.toFixed(1))} & ${tex((terrainSummary.total > 0 ? terrainSummary.descending / terrainSummary.total * 100 : 0).toFixed(0))}\\% \\\\`,
-      `Flat / Rolling & ${tex(terrainSummary.flat.toFixed(1))} & ${tex((terrainSummary.total > 0 ? terrainSummary.flat / terrainSummary.total * 100 : 0).toFixed(0))}\\% \\\\`,
-      "\\bottomrule\\end{tabular}\\end{center}",
-    );
+    ln("", renderSubsectionHeader("Terrain Composition"));
+    const climbPct  = terrainSummary.total > 0 ? terrainSummary.climbing  / terrainSummary.total : 0;
+    const descPct   = terrainSummary.total > 0 ? terrainSummary.descending / terrainSummary.total : 0;
+    const flatPct   = terrainSummary.total > 0 ? terrainSummary.flat       / terrainSummary.total : 0;
+    ln(renderProgressRow("Climbing",   `${tex(terrainSummary.climbing.toFixed(1))} km (${tex((climbPct*100).toFixed(0))}\\%)`,  climbPct, "TortoiseRed"));
+    ln(renderProgressRow("Descending", `${tex(terrainSummary.descending.toFixed(1))} km (${tex((descPct*100).toFixed(0))}\\%)`, descPct, "TortoiseAmber"));
+    ln(renderProgressRow("Flat / Rolling", `${tex(terrainSummary.flat.toFixed(1))} km (${tex((flatPct*100).toFixed(0))}\\%)`,   flatPct, "TortoiseGreen"));
   }
 
+  /* Surface composition table */
   if (surfaceSummary.total > 0) {
     const SURFACE_LABEL: Record<string, string> = { road: "Road", pavement: "Pavement", track: "Track", gravel: "Gravel", trail: "Trail", technical_trail: "Technical Trail", fell: "Fell", mud: "Mud", sand: "Sand", snow: "Snow" };
-    ln("", "\\subsection*{Surface Composition}",
-      "\\begin{center}\\begin{tabular}{lrr}\\toprule",
-      "\\textbf{Surface} & \\textbf{km} & \\textbf{\\%} \\\\\\midrule",
-    );
-    for (const [surface, km] of surfaceSummary.entries) {
-      const pct = surfaceSummary.total > 0 ? (km / surfaceSummary.total * 100) : 0;
-      const label = SURFACE_LABEL[surface] ?? stl(surface);
-      ln(`${tex(label)} & ${tex(km.toFixed(1))} & ${tex(pct.toFixed(0))}\\% \\\\`);
-    }
-    ln("\\bottomrule\\end{tabular}\\end{center}");
+    ln("", renderSubsectionHeader("Surface Composition"));
+    ln(renderShortTable(
+      "lrr",
+      ["Surface", "km", "\\%"],
+      surfaceSummary.entries.map(([surface, km]) => {
+        const pct = surfaceSummary.total > 0 ? (km / surfaceSummary.total * 100) : 0;
+        const label = SURFACE_LABEL[surface] ?? stl(surface);
+        return [tex(label), tex(km.toFixed(1)), `${tex(pct.toFixed(0))}\\%`];
+      }),
+    ));
   }
 
   /* ══════════════════════════════════════════════════════════════════
      SECTION 3 — Elevation
   ══════════════════════════════════════════════════════════════════ */
   if (elevProfile || terrainSummary.total > 0) {
-    ln("", "\\section{Elevation Profile}",
-      "\\textit{Elevation profile, composition, and climbing load.}",
-    );
+    ln("", renderSectionHeader("Elevation Profile", "Elevation profile, composition, and climbing load."));
 
     if (elevProfile) {
       /* Key segments table */
       if (notable.length > 0) {
-        ln("", "\\subsection*{Key Segments}",
+        ln("", renderSubsectionHeader("Key Segments"),
           "\\begin{center}\\begin{tabular}{lrr}\\toprule",
           "\\textbf{Segment} & \\textbf{Elevation} & \\textbf{Distance} \\\\\\midrule",
         );
@@ -466,7 +452,7 @@ function generateLatex(p: GenParams): string {
       const coordStr = pts.map(pt => `(${pt.distanceKm.toFixed(2)},${pt.elevationM.toFixed(1)})`).join(" ");
       ln(
         "",
-        "\\subsection*{Course Elevation Profile}",
+        renderSubsectionHeader("Course Elevation Profile"),
         "\\begin{center}",
         "\\begin{tikzpicture}",
         "\\begin{axis}[",
@@ -480,7 +466,7 @@ function generateLatex(p: GenParams): string {
         "  label style={font=\\small},",
         "  fill between/on layer=axis background,",
         "]",
-        `\\addplot[darkgreen, thick, fill=darkgreen!10] coordinates { ${coordStr} } \\closedcycle;`,
+        `\\addplot[TortoiseGreen, thick, fill=TortoiseLightGreen] coordinates { ${coordStr} } \\closedcycle;`,
         "\\end{axis}",
         "\\end{tikzpicture}",
         "\\end{center}",
@@ -493,7 +479,7 @@ function generateLatex(p: GenParams): string {
       const loadDesc: Record<LoadingLabel, string> = { front: "front-loaded (most climbing in the first half)", back: "back-loaded (most climbing in the second half)", even: "evenly loaded (climbing spread across both halves)" };
       const goalDesc = em.goal_loading_label ? loadDesc[em.goal_loading_label] : null;
       const m = em.best_match;
-      ln("", "\\subsection*{Elevation Profile Match}");
+      ln("", renderSubsectionHeader("Elevation Profile Match"));
       if (m) {
         ln(`${tex(race.name)} is ${goalDesc ?? "—"}. Closest profile match: \\textbf{${tex(m.race_name)}} (${tex(String(m.year))}, similarity ${tex(m.similarity_pct.toFixed(0))}\\%).`);
       } else if (goalDesc) {
@@ -505,9 +491,7 @@ function generateLatex(p: GenParams): string {
   /* ══════════════════════════════════════════════════════════════════
      SECTION 4 — Race Demands Profile
   ══════════════════════════════════════════════════════════════════ */
-  ln("", "\\section{Race Demands Profile}",
-    "\\textit{What the course requires: gradient distribution, effort multiplier, and demand summary.}",
-  );
+  ln("", renderSectionHeader("Race Demands Profile", "What the course requires: gradient distribution, effort multiplier, and demand summary."));
 
   /* Demand summary */
   const steepestClimb = [...secs].filter(s => s.section_type.includes("climb") && s.distance_km >= 1).sort((a, b) => b.avg_gradient_percent - a.avg_gradient_percent)[0] ?? null;
@@ -524,43 +508,38 @@ function generateLatex(p: GenParams): string {
   const cvRatio = meanRatio > 0 ? stdRatio / meanRatio : 0;
   const complexityLabel = cvRatio > 0.45 ? "High" : cvRatio > 0.25 ? "Moderate" : "Low";
 
-  ln("", "\\subsection*{Key Demand Metrics}",
-    "\\begin{center}\\begin{tabular}{ll}\\toprule",
-    "\\textbf{Metric} & \\textbf{Value} \\\\\\midrule",
-    `Total climbing volume & ${tex(Math.round(totalAscentM).toLocaleString())} m \\\\`,
-    `Total descending & ${tex(Math.round(totalDescentM).toLocaleString())} m \\\\`,
-    `Runnable terrain & ${tex(runnablePct)}\\% \\\\`,
-    `Average effort multiplier & ${tex(effortRatio.toFixed(2))}x \\\\`,
-    steepestClimb ? `Steepest climb & km ${tex(steepestClimb.start_km.toFixed(1))}--${tex(steepestClimb.end_km.toFixed(1))}, avg +${tex(steepestClimb.avg_gradient_percent.toFixed(1))}\\%, ${tex(steepestClimb.distance_km.toFixed(1))} km \\\\` : "",
-    steepestDescent ? `Steepest descent & km ${tex(steepestDescent.start_km.toFixed(1))}--${tex(steepestDescent.end_km.toFixed(1))}, avg ${tex(steepestDescent.avg_gradient_percent.toFixed(1))}\\%, ${tex(steepestDescent.distance_km.toFixed(1))} km \\\\` : "",
-    `Final third ascent & ${tex(Math.round(finalThirdAscent))} m over ${tex(finalThirdLen.toFixed(1))} km \\\\`,
-    `Final third effort & ${tex(finalThirdEffort.toFixed(2))}x \\\\`,
-    `Pacing complexity & ${tex(complexityLabel)} (CV = ${tex(cvRatio.toFixed(2))}) \\\\`,
-    "\\bottomrule\\end{tabular}\\end{center}",
-  );
+  ln("", renderSubsectionHeader("Key Demand Metrics"));
+  {
+    const demandMetricRows: string[][] = [
+      ["Total climbing volume",   `${tex(Math.round(totalAscentM).toLocaleString())} m`],
+      ["Total descending",        `${tex(Math.round(totalDescentM).toLocaleString())} m`],
+      ["Runnable terrain",        `${tex(runnablePct)}\\%`],
+      ["Average effort multiplier", `${tex(effortRatio.toFixed(2))}\\texttimes`],
+    ];
+    if (steepestClimb)   demandMetricRows.push(["Steepest climb",   `km ${tex(steepestClimb.start_km.toFixed(1))}--${tex(steepestClimb.end_km.toFixed(1))}, avg +${tex(steepestClimb.avg_gradient_percent.toFixed(1))}\\%, ${tex(steepestClimb.distance_km.toFixed(1))} km`]);
+    if (steepestDescent) demandMetricRows.push(["Steepest descent", `km ${tex(steepestDescent.start_km.toFixed(1))}--${tex(steepestDescent.end_km.toFixed(1))}, avg ${tex(steepestDescent.avg_gradient_percent.toFixed(1))}\\%, ${tex(steepestDescent.distance_km.toFixed(1))} km`]);
+    demandMetricRows.push(["Final third ascent",     `${tex(Math.round(finalThirdAscent))} m over ${tex(finalThirdLen.toFixed(1))} km`]);
+    demandMetricRows.push(["Final third effort",      `${tex(finalThirdEffort.toFixed(2))}\\texttimes`]);
+    demandMetricRows.push(["Pacing complexity",       `${tex(complexityLabel)} (CV~=~${tex(cvRatio.toFixed(2))})`]);
+    ln(renderShortTable("ll", ["Metric", "Value"], demandMetricRows));
+  }
 
   /* Late-race pattern */
   const halfway = splitAnalysis?.halfway_analysis ?? null;
   const late = splitAnalysis?.late_analysis ?? null;
   if (halfway || late) {
-    ln("", "\\subsection*{Late-Race Pattern}",
-      "\\begin{center}\\begin{tabular}{ll}\\toprule",
-      "\\textbf{Metric} & \\textbf{Value} \\\\\\midrule",
-    );
+    ln("", renderSubsectionHeader("Late-Race Pattern"));
+    const lateRows: string[][] = [];
     if (halfway) {
-      ln(
-        `Median halfway & ${tex(formatSecs(halfway.recommended_seconds))} \\\\`,
-        `Positive split rate & ${tex(Math.round(halfway.pct_positive_split * 100))}\\% \\\\`,
-      );
+      lateRows.push(["Median halfway",       formatSecs(halfway.recommended_seconds)]);
+      lateRows.push(["Positive split rate",  `${tex(Math.round(halfway.pct_positive_split * 100))}\\%`]);
     }
     if (late) {
-      ln(
-        `Final section avg & ${tex(late.avg_final_section_minutes.toFixed(1))} min \\\\`,
-        `Average fade & ${tex(late.avg_fade_pct.toFixed(1))}\\% \\\\`,
-        `Controlled finish & ${tex(late.controlled_pct.toFixed(0))}\\% \\\\`,
-      );
+      lateRows.push(["Final section avg",    `${tex(late.avg_final_section_minutes.toFixed(1))} min`]);
+      lateRows.push(["Average fade",         `${tex(late.avg_fade_pct.toFixed(1))}\\%`]);
+      lateRows.push(["Controlled finish",    `${tex(late.controlled_pct.toFixed(0))}\\%`]);
     }
-    ln("\\bottomrule\\end{tabular}\\end{center}");
+    ln(renderShortTable("ll", ["Metric", "Value"], lateRows));
   }
 
   /* ══════════════════════════════════════════════════════════════════
@@ -592,11 +571,7 @@ function generateLatex(p: GenParams): string {
       ? `${race.name} is a ${totalKm.toFixed(0)} km course with ${Math.round(totalAscentM).toLocaleString()} m of ascent and ${Math.round(totalDescentM).toLocaleString()} m of descent. The average effort multiplier across the course is ${effortRatio.toFixed(2)}x. ${runnablePct < 30 ? `With only ${runnablePct}% of the course near-flat, this is not a race where pace targets are meaningful.` : runnablePct >= 50 ? `${runnablePct}% of the course is near-flat, giving extended opportunities for efficient running.` : ""}`
       : null;
 
-    ln("", "\\section{Readiness Narrative}",
-      `\\textit{Overall assessment: \\textbf{${tex(verdictLabel)}}}`,
-      "",
-      tex(para1),
-    );
+    ln("", renderSectionHeader("Readiness Narrative", `Overall assessment: ${tex(verdictLabel)}`), tex(para1));
     if (para2) ln("", tex(para2));
 
     if (longestDist > 0 && longestDist < totalKm * 0.55 && highestAscent < totalAscentM * 0.4) {
@@ -610,74 +585,90 @@ function generateLatex(p: GenParams): string {
     /* ══════════════════════════════════════════════════════════════════
        SECTION 6 — Athlete Overview
     ══════════════════════════════════════════════════════════════════ */
-    ln("", "\\section{Athlete Overview}",
-      "\\textit{Career profile and recent results.}",
-      "",
-      "\\begin{center}\\begin{tabular}{ll}\\toprule",
-      "\\textbf{Field} & \\textbf{Value} \\\\\\midrule",
-      `Total races & ${tex(String(p.race_count ?? 0))} \\\\`,
-      `Finishes & ${tex(String(p.finish_count))} \\\\`,
-      `DNFs & ${tex(String(p.dnf_count))} (${tex((p.dnf_rate != null ? (p.dnf_rate * 100).toFixed(1) : "?"))}\\%) \\\\`,
-      p.gender ? `Gender & ${tex(p.gender)} \\\\` : "",
-      p.age_group ? `Age group & ${tex(p.age_group)} \\\\` : "",
-      p.club ? `Club & ${tex(p.club)} \\\\` : "",
-      `Career span & ${tex(String(p.first_result_year ?? "?"))}--${tex(String(p.last_result_year ?? "?"))} \\\\`,
-      p.avg_ascent_m ? `Avg ascent/race & ${tex(Math.round(p.avg_ascent_m).toLocaleString())} m \\\\` : "",
-      p.max_ascent_m ? `Best single-race ascent & ${tex(Math.round(p.max_ascent_m).toLocaleString())} m \\\\` : "",
-      p.avg_flat_equiv_km ? `Avg flat-equiv & ${tex(p.avg_flat_equiv_km.toFixed(1))} km \\\\` : "",
-      p.max_flat_equiv_km ? `Best flat-equiv & ${tex(p.max_flat_equiv_km.toFixed(1))} km \\\\` : "",
-      p.cluster_label ? `Athlete type & ${tex(p.cluster_label)} \\\\` : "",
-      "\\bottomrule\\end{tabular}\\end{center}",
-    );
+    ln("", renderSectionHeader("Athlete Overview", "Career profile and recent results."));
 
-    /* Recent results table */
+    /* Key stat cards */
+    const athCards: MetricCard[] = [
+      { label: "Races",   value: tex(String(p.race_count ?? 0)),  note: "Total on record",                              variant: "neutral" },
+      { label: "Finishes", value: tex(String(p.finish_count)),     note: `${tex((p.dnf_rate != null ? (p.dnf_rate * 100).toFixed(1) : "?"))}\\% DNF rate`, variant: "neutral" },
+    ];
+    if (p.max_ascent_m)    athCards.push({ label: "Best Ascent",   value: `${tex(Math.round(p.max_ascent_m).toLocaleString())} m`, note: "Single-race best", variant: "neutral" });
+    if (p.max_flat_equiv_km) athCards.push({ label: "Best Effort", value: `${tex(p.max_flat_equiv_km.toFixed(1))} km`,              note: "Flat-equiv best",  variant: "neutral" });
+    ln(renderMetricGrid(athCards, athCards.length >= 4 ? 4 : 2));
+
+    /* Profile detail table */
+    const profileRows: string[][] = [];
+    if (p.gender)         profileRows.push(["Gender",     tex(p.gender)]);
+    if (p.age_group)      profileRows.push(["Age group",  tex(p.age_group)]);
+    if (p.club)           profileRows.push(["Club",       tex(p.club)]);
+    profileRows.push(["Career span", `${tex(String(p.first_result_year ?? "?"))}--${tex(String(p.last_result_year ?? "?"))}`]);
+    if (p.avg_ascent_m)   profileRows.push(["Avg ascent/race", `${tex(Math.round(p.avg_ascent_m).toLocaleString())} m`]);
+    if (p.avg_flat_equiv_km) profileRows.push(["Avg flat-equiv",  `${tex(p.avg_flat_equiv_km.toFixed(1))} km`]);
+    if (p.cluster_label)  profileRows.push(["Athlete type", tex(p.cluster_label)]);
+    if (profileRows.length > 0) ln(renderShortTable("ll", ["Field", "Value"], profileRows));
+
+    /* Recent results */
     const recentFinished = filteredRaces.filter(r => r.result_year >= lastYear - 1).slice(0, 15);
     if (recentFinished.length > 0) {
-      ln("", "\\subsection*{Recent Results (Last 2 Years)}",
-        "\\begin{center}\\begin{tabular}{lrrrr}\\toprule",
-        "\\textbf{Race} & \\textbf{Year} & \\textbf{Status} & \\textbf{Time} & \\textbf{Pos.} \\\\\\midrule",
-      );
-      for (const r of recentFinished) {
-        const time = r.finish_seconds ? formatSecs(r.finish_seconds) : r.result_status === "FINISHED" ? "—" : r.result_status;
-        const pos = r.position != null ? String(r.position) : "—";
-        ln(`${tex(r.race_name)} & ${tex(String(r.result_year))} & ${tex(r.result_status)} & ${tex(time)} & ${tex(pos)} \\\\`);
-      }
-      ln("\\bottomrule\\end{tabular}\\end{center}");
+      ln("", renderSubsectionHeader("Recent Results (Last 2 Years)"));
+      ln(renderLongTable(
+        "X[3,l] X[1,c] X[1.5,c] X[1.8,r] X[1,r]",
+        ["Race", "Year", "Status", "Time", "Pos."],
+        recentFinished.map(r => {
+          const time = r.finish_seconds ? formatSecs(r.finish_seconds) : r.result_status === "FINISHED" ? "{--}" : tex(r.result_status);
+          const pos  = r.position != null ? String(r.position) : "{--}";
+          return [tex(r.race_name), tex(String(r.result_year)), tex(r.result_status), time, pos];
+        }),
+      ));
     }
 
     /* ══════════════════════════════════════════════════════════════════
        SECTION 7 — Experience Gaps
     ══════════════════════════════════════════════════════════════════ */
     if (secs.length > 0 && gapRows.length > 0) {
-      ln("", "\\section{Experience Gaps}",
-        "\\textit{Terrain demand types required by the race vs what the athlete has covered in previous races.}",
-        "",
-        "\\rowcolors{2}{white}{rowgray}",
-        "\\begin{center}\\begin{tabular}{llrrl}\\toprule",
-        "\\textbf{Demand type} & \\textbf{Surface} & \\textbf{Goal km} & \\textbf{Covered km} & \\textbf{Status} \\\\\\midrule",
-      );
-      for (const row of gapRows) {
-        const sLabel = row.section_type.includes("steep") && (row.avg_gradient >= 12 || row.avg_gradient <= -12) ? `Very ${stl(row.section_type).replace("Very ", "")}` : stl(row.section_type);
-        const badge = row.status === "met" ? "\\textcolor{accentgreen}{Covered}" : row.status === "partial" ? `\\textcolor{accentorange}{${row.pct}\\% met}` : row.status === "surface_gap" ? "\\textcolor{accentorange}{Surface gap}" : "\\textcolor{accentred}{None}";
-        const coveredStr = row.exactKm > 0 ? `${row.exactKm.toFixed(1)}` : "—";
-        ln(`${tex(sLabel)} & ${tex(tl(row.terrain))} & ${tex(row.km.toFixed(1))} & ${tex(coveredStr)} & ${badge} \\\\`);
-      }
-      ln("\\bottomrule\\end{tabular}\\end{center}", "\\rowcolors{1}{}{}");
+      ln("", renderSectionHeader("Experience Gaps", "Terrain demand types required by the race vs what the athlete has covered in previous races."));
+
+      /* Summary line */
+      const coveredCount  = gapRows.filter(r => r.status === "met").length;
+      const partialCount  = gapRows.filter(r => r.status === "partial" || r.status === "surface_gap").length;
+      const noneCount     = gapRows.filter(r => r.status === "none").length;
+      ln(renderCallout("insight", "Coverage Summary",
+        `\\textbf{${coveredCount}} demand type${coveredCount !== 1 ? "s" : ""} covered \\quad ` +
+        `\\textbf{${partialCount}} partial \\quad ` +
+        `\\textbf{${noneCount}} with no experience`
+      ));
+
+      ln(renderLongTable(
+        "X[2.2,l] X[1.5,l] X[1,r] X[1.2,r] X[1.6,c]",
+        ["Demand type", "Surface", "Goal km", "Covered km", "Status"],
+        gapRows.map(row => {
+          const sLabel = row.section_type.includes("steep") && (row.avg_gradient >= 12 || row.avg_gradient <= -12)
+            ? `Very ${stl(row.section_type).replace("Very ", "")}` : stl(row.section_type);
+          const coveredStr = row.exactKm > 0 ? `${row.exactKm.toFixed(1)} km` : "{--}";
+          const partialNote = row.status === "partial" ? ` (${row.pct}\\%)` : "";
+          const statusKey = row.status === "partial" ? "partial" : row.status;
+          return [
+            tex(sLabel),
+            tex(tl(row.terrain)),
+            `${tex(row.km.toFixed(1))} km`,
+            `${coveredStr}${partialNote}`,
+            renderBadge(statusKey),
+          ];
+        }),
+      ));
     }
 
     /* ══════════════════════════════════════════════════════════════════
        SECTION 8 — Demands Built Up
     ══════════════════════════════════════════════════════════════════ */
-    ln("", "\\section{Demands Built Up}",
-      "\\textit{Athlete's peak single-race load vs what this race demands.}",
-      "",
-      "\\begin{center}\\begin{tabular}{lrrr}\\toprule",
-      "\\textbf{Dimension} & \\textbf{Athlete best} & \\textbf{Goal race} & \\textbf{Ratio} \\\\\\midrule",
-    );
-    if (athDist > 0 && totalKm > 0) ln(`Distance & ${tex(athDist.toFixed(0))} km & ${tex(totalKm.toFixed(0))} km & ${tex((athDist / totalKm).toFixed(2))}x \\\\`);
-    if (athAscent > 0 && totalAscentM > 0) ln(`Ascent & ${tex(Math.round(athAscent).toLocaleString())} m & ${tex(Math.round(totalAscentM).toLocaleString())} m & ${tex((athAscent / totalAscentM).toFixed(2))}x \\\\`);
-    if (athFlatEq > 0 && goalFlatEq > 0) ln(`Flat-equivalent effort & ${tex(athFlatEq.toFixed(1))} km & ${tex(goalFlatEq.toFixed(1))} km & ${tex((athFlatEq / goalFlatEq).toFixed(2))}x \\\\`);
-    ln("\\bottomrule\\end{tabular}\\end{center}");
+    ln("", renderSectionHeader("Demands Built Up", "Athlete's peak single-race load vs what this race demands."));
+    {
+      const demandRows: string[][] = [];
+      if (athDist > 0 && totalKm > 0)         demandRows.push(["Distance",               `${tex(athDist.toFixed(0))} km`,                         `${tex(totalKm.toFixed(0))} km`,                         `${tex((athDist / totalKm).toFixed(2))}\\texttimes`]);
+      if (athAscent > 0 && totalAscentM > 0)  demandRows.push(["Ascent",                  `${tex(Math.round(athAscent).toLocaleString())} m`,       `${tex(Math.round(totalAscentM).toLocaleString())} m`,   `${tex((athAscent / totalAscentM).toFixed(2))}\\texttimes`]);
+      if (athFlatEq > 0 && goalFlatEq > 0)    demandRows.push(["Flat-equivalent effort",  `${tex(athFlatEq.toFixed(1))} km`,                        `${tex(goalFlatEq.toFixed(1))} km`,                      `${tex((athFlatEq / goalFlatEq).toFixed(2))}\\texttimes`]);
+      if (demandRows.length > 0) ln(renderShortTable("lrrr", ["Dimension", "Athlete best", "Goal race", "Ratio"], demandRows));
+    }
 
     /* ══════════════════════════════════════════════════════════════════
        SECTION 9 — Aid Station Analysis
@@ -686,28 +677,33 @@ function generateLatex(p: GenParams): string {
       const hasDropBag = aidSorted.some(s => s.dropBags);
       const avgGap = aidGapValues.length > 0 ? aidGapValues.reduce((a, b) => a + b, 0) / aidGapValues.length : 0;
 
-      ln("", "\\section{Aid Station Analysis}",
-        "\\textit{Gap analysis, nutrition logistics, and drop bag strategy.}",
-        "",
-        "\\begin{center}\\begin{tabular}{ll}\\toprule",
-        "\\textbf{Metric} & \\textbf{Value} \\\\\\midrule",
-        `Stations & ${tex(String(aidSorted.length))} \\\\`,
-        `Longest gap & ${tex(aidMaxGap.toFixed(1))} km \\\\`,
-        `Average gap & ${tex(avgGap.toFixed(1))} km \\\\`,
-        `Drop bags available & ${tex(hasDropBag ? "Yes" : "No")} \\\\`,
-        "\\bottomrule\\end{tabular}\\end{center}",
-        "",
-        "\\subsection*{Stations}",
-        "\\begin{center}\\begin{tabular}{lrrlllll}\\toprule",
-        "\\textbf{km} & \\textbf{Gap} & \\textbf{Name} & \\textbf{Water} & \\textbf{Food} & \\textbf{Medic} & \\textbf{WC} & \\textbf{Bags} \\\\\\midrule",
-      );
-      for (let i = 0; i < aidSorted.length; i++) {
-        const s = aidSorted[i];
-        const gapKm = i === 0 ? s.km : s.km - aidSorted[i - 1].km;
-        const y = (v: boolean) => v ? "Y" : "--";
-        ln(`${tex(s.km.toFixed(1))} & ${tex(gapKm.toFixed(1))} km & ${tex(s.name ?? `Station ${i + 1}`)} & ${y(s.water)} & ${y(s.food)} & ${y(s.medic)} & ${y(s.toilets)} & ${y(s.dropBags)} \\\\`);
-      }
-      ln("\\bottomrule\\end{tabular}\\end{center}");
+      ln("", renderSectionHeader("Aid Station Analysis", "Gap analysis, nutrition logistics, and drop bag strategy."));
+
+      /* Summary metric cards */
+      const aidGapVariant: MetricCard["variant"] = aidMaxGap <= 15 ? "positive" : aidMaxGap <= 25 ? "warning" : "risk";
+      ln(renderMetricGrid([
+        { label: "Stations",       value: tex(String(aidSorted.length)),    note: "Total aid stops",            variant: "neutral"  },
+        { label: "Longest Gap",    value: `${tex(aidMaxGap.toFixed(1))} km`, note: "Unsupported stretch",       variant: aidGapVariant },
+        { label: "Average Gap",    value: `${tex(avgGap.toFixed(1))} km`,    note: "Between stations",          variant: "neutral"  },
+        { label: "Drop Bags",      value: hasDropBag ? "Yes" : "No",         note: "Available on course",       variant: hasDropBag ? "positive" : "neutral" },
+      ], 4));
+
+      /* Stations table */
+      ln("", renderSubsectionHeader("Aid Stations"));
+      ln(renderLongTable(
+        "X[1,r] X[1.2,r] X[2.5,l] X[0.8,c] X[0.8,c] X[0.8,c] X[0.8,c] X[0.8,c]",
+        ["km", "Gap", "Name", "Water", "Food", "Medic", "WC", "Bags"],
+        aidSorted.map((s, i) => {
+          const gapKm = i === 0 ? s.km : s.km - aidSorted[i - 1].km;
+          const y = (v: boolean) => v ? "\\textcolor{TortoiseGreen}{\\textbullet}" : "{--}";
+          return [
+            tex(s.km.toFixed(1)),
+            `${tex(gapKm.toFixed(1))} km`,
+            tex(s.name ?? `Station ${i + 1}`),
+            y(s.water), y(s.food), y(s.medic), y(s.toilets), y(s.dropBags),
+          ];
+        }),
+      ));
 
       /* Athlete's historical aid gaps */
       const athleteRaceGaps: { raceName: string; maxGapKm: number }[] = [];
@@ -723,10 +719,11 @@ function generateLatex(p: GenParams): string {
       }
       if (athleteRaceGaps.length > 0) {
         const athleteMaxGap = Math.max(...athleteRaceGaps.map(g => g.maxGapKm));
-        ln("", "\\subsection*{Athlete's Historical Aid Experience}",
-          `Largest unsupported stretch previously managed: \\textbf{${tex(athleteMaxGap.toFixed(1))} km}. Goal race maximum gap: \\textbf{${tex(aidMaxGap.toFixed(1))} km}.`,
-          aidMaxGap > athleteMaxGap * 1.2 ? `\\textbf{\\color{accentred}Warning:} The goal race maximum gap is significantly larger than the athlete's previous experience.` : "",
-        );
+        const gapCalloutType = aidMaxGap > athleteMaxGap * 1.2 ? "risk" : "positive";
+        const gapBody = aidMaxGap > athleteMaxGap * 1.2
+          ? `Largest gap previously managed: \\textbf{${tex(athleteMaxGap.toFixed(1))} km}. Goal race maximum: \\textbf{${tex(aidMaxGap.toFixed(1))} km}. The goal race includes a substantially larger unsupported stretch than previously experienced.`
+          : `Largest gap previously managed: \\textbf{${tex(athleteMaxGap.toFixed(1))} km}. Goal race maximum: \\textbf{${tex(aidMaxGap.toFixed(1))} km}. Within historical experience.`;
+        ln("", renderCallout(gapCalloutType, "Historical Aid Gap Experience", gapBody));
       }
     }
 
@@ -734,18 +731,16 @@ function generateLatex(p: GenParams): string {
        SECTION 10 — Suggested Preparation Races
     ══════════════════════════════════════════════════════════════════ */
     if (prepRaces && prepRaces.suggestions.length > 0) {
-      ln("", "\\section{Suggested Preparation Races}",
-        "\\textit{Nearby races ranked by how effectively they close the athlete's experience gaps.}",
-        "",
-        "\\begin{center}\\begin{tabular}{lrrl}\\toprule",
-        "\\textbf{Race} & \\textbf{Dist.} & \\textbf{Ascent} & \\textbf{Next date} \\\\\\midrule",
-      );
-      for (const s of prepRaces.suggestions.slice(0, 8)) {
-        const dist = s.total_distance_km ? `${s.total_distance_km.toFixed(0)} km` : `${s.distance_miles.toFixed(0)} mi`;
-        const asc = s.total_ascent_m ? `${Math.round(s.total_ascent_m).toLocaleString()} m` : "—";
-        ln(`${tex(s.race_name)} & ${tex(dist)} & ${tex(asc)} & ${tex(s.next_date ?? "—")} \\\\`);
-      }
-      ln("\\bottomrule\\end{tabular}\\end{center}");
+      ln("", renderSectionHeader("Suggested Preparation Races", "Nearby races ranked by how effectively they close the athlete's experience gaps."));
+      ln(renderLongTable(
+        "X[3,l] X[1.2,r] X[1.5,r] X[2,c]",
+        ["Race", "Dist.", "Ascent", "Next date"],
+        prepRaces.suggestions.slice(0, 8).map(s => {
+          const dist = s.total_distance_km ? `${s.total_distance_km.toFixed(0)} km` : `${s.distance_miles.toFixed(0)} mi`;
+          const asc  = s.total_ascent_m ? `${Math.round(s.total_ascent_m).toLocaleString()} m` : "{--}";
+          return [tex(s.race_name), tex(dist), tex(asc), tex(s.next_date ?? "{--}")];
+        }),
+      ));
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -758,23 +753,19 @@ function generateLatex(p: GenParams): string {
       const bc = ec.biggest_climb;
       const om = ec.opening_match;
 
-      ln("", "\\section{Experience Context}",
-        `\\textit{How ${tex(firstName)}'s past races compare to the demands of ${tex(race.name)}.}`,
-      );
+      ln("", renderSectionHeader("Experience Context", `How ${tex(firstName)}'s past races compare to the demands of ${tex(race.name)}.`));
 
       if (scl) {
-        ln("", "\\subsection*{Course Scale}",
-          "\\begin{center}\\begin{tabular}{lrrr}\\toprule",
-          "\\textbf{Dimension} & \\textbf{Goal race} & \\textbf{Athlete best} & \\textbf{Ratio} \\\\\\midrule",
-          `Distance & ${tex(scl.goal_distance_km.toFixed(0))} km & ${tex(scl.athlete_max_dist ? scl.athlete_max_dist.km.toFixed(0) : "—")} km & ${tex(scl.distance_ratio)}x \\\\`,
-          `Ascent & ${tex(Math.round(scl.goal_ascent_m).toLocaleString())} m & ${tex(scl.athlete_max_ascent ? Math.round(scl.athlete_max_ascent.m).toLocaleString() : "—")} m & ${tex(scl.ascent_ratio)}x \\\\`,
-          `Flat-equiv effort & ${tex(scl.goal_flat_equiv_km.toFixed(1))} km & ${tex(scl.athlete_max_flat_equiv ? scl.athlete_max_flat_equiv.km.toFixed(1) : "—")} km & ${tex(scl.flat_equiv_ratio)}x \\\\`,
-          "\\bottomrule\\end{tabular}\\end{center}",
-        );
+        ln("", renderSubsectionHeader("Course Scale"));
+        ln(renderShortTable("lrrr", ["Dimension", "Goal race", "Athlete best", "Ratio"], [
+          ["Distance",          `${tex(scl.goal_distance_km.toFixed(0))} km`,                       `${tex(scl.athlete_max_dist    ? scl.athlete_max_dist.km.toFixed(0)                       : "{--}")} km`, `${tex(scl.distance_ratio)}\\texttimes`],
+          ["Ascent",            `${tex(Math.round(scl.goal_ascent_m).toLocaleString())} m`,         `${tex(scl.athlete_max_ascent  ? Math.round(scl.athlete_max_ascent.m).toLocaleString()    : "{--}")} m`,  `${tex(scl.ascent_ratio)}\\texttimes`],
+          ["Flat-equiv effort", `${tex(scl.goal_flat_equiv_km.toFixed(1))} km`,                     `${tex(scl.athlete_max_flat_equiv ? scl.athlete_max_flat_equiv.km.toFixed(1)             : "{--}")} km`, `${tex(scl.flat_equiv_ratio)}\\texttimes`],
+        ]));
       }
 
       if (te) {
-        ln("", "\\subsection*{Time Estimate}",
+        ln("", renderSubsectionHeader("Time Estimate"),
           `Estimated finish time: \\textbf{${tex(te.estimated_min_hours.toFixed(1))}h -- ${tex(te.estimated_max_hours.toFixed(1))}h}`,
           `(based on ${tex(te.basis_race_name)}, finished in ${tex(te.basis_finish_hours.toFixed(1))}h).`,
           `Athlete's longest previous effort: ${tex(te.athlete_longest_race_name)} at ${tex(te.athlete_longest_hours.toFixed(1))}h.`,
@@ -782,7 +773,7 @@ function generateLatex(p: GenParams): string {
       }
 
       if (bc) {
-        ln("", "\\subsection*{Biggest Climb on Course}",
+        ln("", renderSubsectionHeader("Biggest Climb on Course"),
           `Goal race main climb: km ${tex(bc.goal.start_km.toFixed(1))}--${tex(bc.goal.end_km.toFixed(1))}, `,
           `${tex(Math.round(bc.goal.ascent_m).toLocaleString())} m over ${tex(bc.goal.km.toFixed(1))} km at avg ${tex(bc.goal.avg_grad.toFixed(1))}\\%.`,
         );
@@ -797,7 +788,7 @@ function generateLatex(p: GenParams): string {
       }
 
       if (om) {
-        ln("", "\\subsection*{Opening Profile Match}",
+        ln("", renderSubsectionHeader("Opening Profile Match"),
           om.matched_race_name
             ? `The opening ${tex(om.goal_opening_km.toFixed(0))} km (${tex(om.goal_climb_pct.toFixed(0))}\\% climbing, ${tex(tl(om.goal_dominant_terrain))} terrain) resembles the start of \\textbf{${tex(om.matched_race_name)}} (${tex(String(om.matched_race_year))}, similarity ${tex(Math.round(om.similarity * 100))}\\%).`
             : `The opening ${tex(om.goal_opening_km.toFixed(0))} km -- ${tex(stl(om.goal_dominant_type))} on ${tex(tl(om.goal_dominant_terrain))} terrain -- has no close match in the athlete's race history.`,
@@ -817,11 +808,8 @@ function generateLatex(p: GenParams): string {
       { q: "Are you carrying any pain or tightness you are hoping will be fine on the day?", why: "Race day magnifies small problems. Niggles rarely disappear under 10+ hours of sustained stress." },
       { q: "Is your goal time based on evidence or is it hopeful?", why: "An honest goal is built from comparable race times, this course's demands, and realistic adjustments for conditions." },
     ];
-    ln("", "\\section{Self-Reflection}",
-      `\\textit{Questions the data cannot answer -- ${tex(firstName)} should consider each one honestly before race day.}`,
-      "",
-      "\\begin{enumerate}",
-    );
+    ln("", renderSectionHeader("Self-Reflection", `Questions the data cannot answer -- ${tex(firstName)} should consider each one honestly before race day.`));
+    ln("\\begin{enumerate}");
     for (const { q, why } of questions) {
       ln(`\\item \\textbf{${tex(q)}}`, `  \\\\\\small{\\textit{${tex(why)}}}`);
     }
@@ -831,46 +819,120 @@ function generateLatex(p: GenParams): string {
        SECTION 13 — Physical Self-Assessments
     ══════════════════════════════════════════════════════════════════ */
     if (assessmentTests.length > 0) {
-      ln("", "\\section{Physical Self-Assessments}",
-        "\\textit{Tests to identify strength gaps, imbalances, and flexibility limitations.}",
-      );
-      for (const test of assessmentTests) {
-        ln("", `\\subsection*{${tex(test.name)}}`);
-        if (test.category) ln(`\\textbf{Category:} ${tex(test.category.charAt(0).toUpperCase() + test.category.slice(1))}`);
-        if (test.aim) ln(`\\\\\\textbf{Identifies:} ${tex(test.aim)}`);
-        if (test.description) ln("", tex(test.description));
-        if (test.instructions.length > 0) {
-          ln("\\begin{enumerate}");
-          for (const step of test.instructions) ln(`\\item ${tex(step)}`);
-          ln("\\end{enumerate}");
+      ln("", renderSectionHeader("Physical Self-Assessments", "Tests to identify strength gaps, imbalances, and flexibility limitations."));
+
+      /* Priority assessments first (uphill/downhill rating ≥ 3) */
+      const priorityTests = assessmentTests.filter(t => (t.rating_uphill ?? 0) >= 3 || (t.rating_downhill ?? 0) >= 3 || (t.rating_technical ?? 0) >= 3);
+      const otherTests    = assessmentTests.filter(t => !priorityTests.includes(t));
+
+      if (priorityTests.length > 0) {
+        ln(renderCallout("priority", "Priority Assessments", "These tests are most relevant to the demands of this course."));
+        for (const test of priorityTests) {
+          ln(renderAssessmentCard({
+            name: tex(test.name),
+            category: test.category ?? undefined,
+            aim: test.aim ? tex(test.aim) : undefined,
+            description: test.description ? tex(test.description) : undefined,
+            instructions: test.instructions.map(s => tex(s)),
+            whatToRecord: test.what_to_record ? tex(test.what_to_record) : undefined,
+            notes: test.notes ? tex(test.notes) : undefined,
+          }));
         }
-        if (test.what_to_record) ln(`\\textbf{Record:} ${tex(test.what_to_record)}`);
-        if (test.notes) ln(`\\\\\\textit{${tex(test.notes)}}`);
+      }
+
+      if (otherTests.length > 0) {
+        if (priorityTests.length > 0) ln(renderCallout("insight", "For a Fuller Picture", "Additional assessments that provide valuable supplementary data."));
+        for (const test of otherTests) {
+          ln(renderAssessmentCard({
+            name: tex(test.name),
+            category: test.category ?? undefined,
+            aim: test.aim ? tex(test.aim) : undefined,
+            description: test.description ? tex(test.description) : undefined,
+            instructions: test.instructions.map(s => tex(s)),
+            whatToRecord: test.what_to_record ? tex(test.what_to_record) : undefined,
+            notes: test.notes ? tex(test.notes) : undefined,
+          }));
+        }
       }
     }
 
     /* ══════════════════════════════════════════════════════════════════
-       SECTION 14 — Appendix: Complete Race History
+       SECTION 14 — Suggested Next Steps
+    ══════════════════════════════════════════════════════════════════ */
+    ln("", renderSectionHeader("Suggested Next Steps", "Prioritised actions to improve race-specific readiness."));
+
+    type NextStep = { category: string; action: string; why: string; priority: "Priority" | "Recommended" | "Optional" };
+    const nextSteps: NextStep[] = [
+      /* Strength & conditioning */
+      { category: "Strength \\& Conditioning", action: "Complete the physical self-assessments in this report", why: "Identify specific weaknesses before programming targeted exercises.", priority: "Priority" },
+      { category: "Strength \\& Conditioning", action: "Add eccentric downhill loading to your training", why: `${race.name} includes ${Math.round(totalDescentM).toLocaleString()} m of descent. Quads must absorb sustained braking force.`, priority: totalDescentM >= 2000 ? "Priority" : "Recommended" },
+      { category: "Strength \\& Conditioning", action: "Single-leg strength work 2x per week", why: "Asymmetric failure under fatigue is the most common cause of late-race injury.", priority: "Recommended" },
+      /* Terrain specificity */
+      ...(trailDemandKm > 0 && trailCoveredKm < trailDemandKm * 0.6 ? [{
+        category: "Terrain Specificity",
+        action: "Increase time on technical off-road terrain",
+        why: "Experience gap identified: trail/fell demand significantly exceeds covered kilometres.",
+        priority: "Priority" as const,
+      }] : []),
+      ...(totalAscentM >= 1000 && athAscent < totalAscentM * 0.5 && athAscent > 0 ? [{
+        category: "Terrain Specificity",
+        action: "Add back-to-back climbing days in preparation blocks",
+        why: `Goal race ascent (${Math.round(totalAscentM).toLocaleString()} m) exceeds athlete's best single-race ascent by more than 50\\%.`,
+        priority: "Priority" as const,
+      }] : []),
+      { category: "Terrain Specificity", action: "Practice hiking poles on extended climbs if permitted", why: "Efficient pole use can save 5--10\\% effort on sustained climbs.", priority: "Optional" },
+      /* Race preparation */
+      ...(prepRaces && prepRaces.suggestions.length > 0 ? [{
+        category: "Race Preparation",
+        action: `Race at one of the ${Math.min(prepRaces.suggestions.length, 3)} suggested preparation races in this report`,
+        why: "Preparation races close specific terrain experience gaps and provide race-day practice.",
+        priority: "Recommended" as const,
+      }] : []),
+      { category: "Race Preparation", action: "Simulate the race distance in a 2-day back-to-back training weekend", why: "Back-to-back tired-legs training builds tolerance for the effort duration specific to this race.", priority: "Recommended" },
+      { category: "Race Preparation", action: "Test all nutrition products at target race intensity", why: "GI failure during racing is one of the most common preventable causes of DNF.", priority: "Priority" },
+      /* Equipment */
+      { category: "Equipment", action: "Verify footwear grip is suitable for the dominant surface", why: `${tex(surfaceSummary.entries[0]?.[0] ? stl(surfaceSummary.entries[0][0]) : "Trail")} is the primary surface. Wrong grip costs both energy and confidence.`, priority: "Recommended" },
+      ...(aidSorted.some(s => s.dropBags) ? [{
+        category: "Equipment",
+        action: "Plan drop bag contents and practice accessing them quickly",
+        why: "Drop bags are available on course. Plan what you need and where, and rehearse transitions.",
+        priority: "Recommended" as const,
+      }] : []),
+      /* Logistics */
+      { category: "Logistics", action: "Recce the start, key climbs, and the finish", why: "Knowing what to expect removes cognitive load during the race.", priority: "Recommended" },
+      { category: "Logistics", action: "Finalise crew / support plan if applicable", why: "Support crew uncertainty is a source of anxiety and wasted time on race day.", priority: "Optional" },
+    ];
+
+    /* Group by category */
+    const categories = [...new Set(nextSteps.map(s => s.category))];
+    for (const cat of categories) {
+      const steps = nextSteps.filter(s => s.category === cat);
+      ln("", renderSubsectionHeader(cat));
+      ln("\\begin{itemize}[leftmargin=1.2em,itemsep=4pt,topsep=4pt]");
+      for (const s of steps) {
+        ln(`\\item \\PriorityBadge{${s.priority}}\\quad \\textbf{${s.action}}\\\\{\\small\\color{TortoiseDarkGrey}${s.why}}`);
+      }
+      ln("\\end{itemize}");
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       SECTION 15 — Appendix: Complete Race History
     ══════════════════════════════════════════════════════════════════ */
     const allRacesSorted = [...filteredRaces].sort((a, b) => b.result_year - a.result_year || a.race_name.localeCompare(b.race_name));
     if (allRacesSorted.length > 0) {
-      ln("", "\\section{Appendix A -- Complete Race History}",
-        "\\rowcolors{2}{white}{rowgray}",
-        "\\begin{longtable}{lllrrl}",
-        "\\toprule",
-        "\\textbf{Year} & \\textbf{Race} & \\textbf{Status} & \\textbf{Dist.} & \\textbf{Ascent} & \\textbf{Time / Pos.} \\\\",
-        "\\midrule\\endhead",
-        "\\bottomrule\\endfoot",
-      );
-      for (const r of allRacesSorted) {
-        const dist = r.total_distance_km ? `${r.total_distance_km.toFixed(0)} km` : "—";
-        const asc = r.total_ascent_m ? `${Math.round(r.total_ascent_m).toLocaleString()} m` : "—";
-        const time = r.finish_seconds ? formatSecs(r.finish_seconds) : r.result_status === "FINISHED" ? "—" : r.result_status;
-        const pos = r.position != null ? `P${r.position}` : "";
-        const combined = [time, pos].filter(Boolean).join(" / ");
-        ln(`${tex(String(r.result_year))} & ${tex(r.race_name)} & ${tex(r.result_status)} & ${tex(dist)} & ${tex(asc)} & ${tex(combined)} \\\\`);
-      }
-      ln("\\end{longtable}", "\\rowcolors{1}{}{}");
+      ln("", renderSectionHeader("Appendix A -- Complete Race History"));
+      ln(renderLongTable(
+        "X[1,c] X[3,l] X[1.5,c] X[1.2,r] X[1.5,r] X[2,r]",
+        ["Year", "Race", "Status", "Dist.", "Ascent", "Time / Pos."],
+        allRacesSorted.map(r => {
+          const dist = r.total_distance_km ? `${r.total_distance_km.toFixed(0)} km` : "{--}";
+          const asc  = r.total_ascent_m    ? `${Math.round(r.total_ascent_m).toLocaleString()} m` : "{--}";
+          const time = r.finish_seconds    ? formatSecs(r.finish_seconds) : r.result_status === "FINISHED" ? "{--}" : tex(r.result_status);
+          const pos  = r.position != null  ? `P${r.position}` : "";
+          const combined = [time, pos].filter(Boolean).join(" / ");
+          return [tex(String(r.result_year)), tex(r.race_name), tex(r.result_status), dist, asc, combined];
+        }),
+      ));
     }
   }
 
@@ -982,6 +1044,16 @@ export default function RaceReadinessLatexPage() {
   const [includedRaceKeys, setIncludedRaceKeys] = useState<Set<string>>(new Set());
   const [assessmentTests, setAssessmentTests] = useState<AssessmentTest[]>([]);
   const [lastFilename, setLastFilename] = useState("");
+  const [latexContent, setLatexContent] = useState<string | null>(null);
+  const [compiling, setCompiling] = useState(false);
+  const [compileError, setCompileError] = useState("");
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const pdfUrlRef = useRef<string | null>(null);
+
+  // Revoke the previous blob URL whenever a new PDF is produced
+  useEffect(() => {
+    return () => { if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current); };
+  }, []);
 
   const fetchAthlete = useCallback(async (key: string) => {
     if (!key.trim()) return;
@@ -1120,11 +1192,62 @@ export default function RaceReadinessLatexPage() {
     a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
     setLastFilename(filename);
+
+    // Store latex for the in-page viewer and clear any previous compiled PDF
+    setLatexContent(latex);
+    if (pdfUrlRef.current) { URL.revokeObjectURL(pdfUrlRef.current); pdfUrlRef.current = null; }
+    setPdfUrl(null);
+    setCompileError("");
     setGenerating(false);
+  }
+
+  async function handleCompile() {
+    if (!latexContent) return;
+    setCompiling(true);
+    setCompileError("");
+    if (pdfUrlRef.current) { URL.revokeObjectURL(pdfUrlRef.current); pdfUrlRef.current = null; }
+    setPdfUrl(null);
+
+    try {
+      const res = await fetch("/api/race-readiness-latex/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ latex: latexContent }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json() as { error?: string };
+        setCompileError(json.error ?? "Compilation failed.");
+      } else {
+        const pdfBlob = await res.blob();
+        const objectUrl = URL.createObjectURL(pdfBlob);
+        pdfUrlRef.current = objectUrl;
+        setPdfUrl(objectUrl);
+      }
+    } catch {
+      setCompileError("Network error during compilation.");
+    }
+    setCompiling(false);
+  }
+
+  function handleDownloadCurrentLatex() {
+    if (!latexContent || !lastFilename) return;
+    const blob = new Blob([latexContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = lastFilename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleCopyLatex() {
+    if (!latexContent) return;
+    void navigator.clipboard.writeText(latexContent);
   }
 
   const labelStyle: React.CSSProperties = { fontSize: "12px", fontWeight: 600, color: "#555", marginBottom: "6px" };
   const generateBtn: React.CSSProperties = { padding: "10px 24px", border: "none", borderRadius: "8px", background: "#1e3a1e", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: "14px" };
+  const outlineBtn = (disabled: boolean): React.CSSProperties => ({ padding: "10px 20px", border: "1px solid #1e3a1e", borderRadius: "8px", background: disabled ? "#f5f5f5" : "#fff", color: disabled ? "#aaa" : "#1e3a1e", fontWeight: 600, cursor: disabled ? "default" : "pointer", fontSize: "14px" });
+  const compileBtn = (disabled: boolean): React.CSSProperties => ({ padding: "10px 20px", border: "none", borderRadius: "8px", background: disabled ? "#ccc" : "#1565c0", color: "#fff", fontWeight: 700, cursor: disabled ? "default" : "pointer", fontSize: "14px" });
 
   return (
     <main style={{ minHeight: "100vh", background: "#f9f9f9" }}>
@@ -1147,11 +1270,22 @@ export default function RaceReadinessLatexPage() {
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <button type="button" onClick={() => void handleGenerateAndDownload()} disabled={generating} style={generateBtn}>
-            {generating ? "Generating…" : "Generate & Download .tex"}
-          </button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button type="button" onClick={() => void handleGenerateAndDownload()} disabled={generating} style={generateBtn}>
+              {generating ? "Generating…" : "Generate & Download .tex"}
+            </button>
+            <button type="button" onClick={() => void handleCompile()} disabled={!latexContent || compiling || generating} style={compileBtn(!latexContent || compiling || generating)}>
+              {compiling ? "Compiling…" : "Compile to PDF"}
+            </button>
+            {latexContent && (
+              <button type="button" onClick={handleDownloadCurrentLatex} style={outlineBtn(false)}>
+                Re-download .tex
+              </button>
+            )}
+          </div>
           {genError && <span style={{ fontSize: "12px", color: "#b00020" }}>{genError}</span>}
           {lastFilename && !generating && <span style={{ fontSize: "11px", color: "#2e7d32" }}>Downloaded: {lastFilename}</span>}
+          {compileError && <span style={{ fontSize: "12px", color: "#b00020", whiteSpace: "pre-wrap" }}>{compileError}</span>}
         </div>
       </div>
 
@@ -1186,17 +1320,93 @@ export default function RaceReadinessLatexPage() {
         </div>
       )}
 
-      <div style={{ padding: "32px", maxWidth: "700px" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1e3a1e", marginBottom: "12px" }}>Race Readiness — LaTeX Export</h2>
-        <p style={{ fontSize: "13px", color: "#555", lineHeight: 1.6, marginBottom: "16px" }}>
-          Select a race (and optionally an athlete) then click <strong>Generate &amp; Download .tex</strong> to produce a LaTeX document containing the same sections, tables, and analysis as the Race Readiness report.
-        </p>
-        <p style={{ fontSize: "12px", color: "#888", lineHeight: 1.6 }}>
-          The downloaded <code>.tex</code> file requires a LaTeX distribution (e.g. TeX Live, MiKTeX) with the following packages:
-          <code> booktabs, xcolor, longtable, pgfplots, tikz, geometry, parskip, titlesec, hyperref, microtype, tabularx, makecell</code>.
-          Compile with <code>pdflatex</code> (twice for the table of contents).
-        </p>
-      </div>
+      {!latexContent && (
+        <div style={{ padding: "32px", maxWidth: "700px" }}>
+          <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1e3a1e", marginBottom: "12px" }}>Race Readiness — LaTeX Export</h2>
+          <p style={{ fontSize: "13px", color: "#555", lineHeight: 1.6, marginBottom: "16px" }}>
+            Select a race (and optionally an athlete) then click <strong>Generate &amp; Download .tex</strong> to produce a LaTeX document containing the same sections, tables, and analysis as the Race Readiness report.
+            The source will appear below for review, and <strong>Compile to PDF</strong> will render it inline using <code>pdflatex</code> on the server.
+          </p>
+          <p style={{ fontSize: "12px", color: "#888", lineHeight: 1.6 }}>
+            Compilation requires a LaTeX distribution (TeX Live or MiKTeX) installed on the server with packages:
+            <code> booktabs, xcolor, longtable, pgfplots, tikz, geometry, parskip, titlesec, hyperref, microtype, tabularx, makecell</code>.
+          </p>
+        </div>
+      )}
+
+      {latexContent && (
+        <div style={{ display: "flex", height: "calc(100vh - 180px)", minHeight: "600px", borderTop: "1px solid #e0e0e0" }}>
+
+          {/* ── LaTeX source panel ── */}
+          <div style={{ width: "40%", display: "flex", flexDirection: "column", borderRight: "1px solid #e0e0e0", background: "#fafafa" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", background: "#fff", borderBottom: "1px solid #e0e0e0", flexShrink: 0 }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", flex: 1 }}>LaTeX Source</span>
+              <span style={{ fontSize: "11px", color: "#aaa" }}>{latexContent.split("\n").length} lines</span>
+              <button
+                type="button"
+                onClick={handleCopyLatex}
+                style={{ fontSize: "11px", padding: "3px 10px", border: "1px solid #ccc", borderRadius: "5px", background: "#fff", cursor: "pointer", color: "#555" }}
+              >
+                Copy
+              </button>
+            </div>
+            <pre style={{ flex: 1, overflow: "auto", margin: 0, padding: "14px 16px", fontSize: "10.5px", lineHeight: 1.55, color: "#222", fontFamily: "monospace", whiteSpace: "pre" }}>
+              {latexContent}
+            </pre>
+          </div>
+
+          {/* ── PDF viewer panel ── */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f0f0f0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", background: "#fff", borderBottom: "1px solid #e0e0e0", flexShrink: 0 }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", flex: 1 }}>Compiled PDF</span>
+              {pdfUrl && (
+                <a
+                  href={pdfUrl}
+                  download="race-readiness.pdf"
+                  style={{ fontSize: "11px", padding: "3px 10px", border: "1px solid #1e3a1e", borderRadius: "5px", background: "#fff", cursor: "pointer", color: "#1e3a1e", textDecoration: "none" }}
+                >
+                  Download PDF
+                </a>
+              )}
+            </div>
+
+            <div style={{ flex: 1, position: "relative" }}>
+              {compiling && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", color: "#888" }}>
+                  <div style={{ width: "32px", height: "32px", border: "3px solid #e0e0e0", borderTop: "3px solid #1565c0", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                  <span style={{ fontSize: "13px" }}>Compiling with pdflatex…</span>
+                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+              )}
+              {!compiling && compileError && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px" }}>
+                  <div style={{ background: "#fff0f0", border: "1px solid #ffcdd2", borderRadius: "8px", padding: "20px 24px", maxWidth: "500px", width: "100%" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#c0392b", marginBottom: "8px" }}>Compilation Error</div>
+                    <pre style={{ fontSize: "11px", color: "#555", whiteSpace: "pre-wrap", margin: 0, lineHeight: 1.5 }}>{compileError}</pre>
+                    <div style={{ marginTop: "12px", fontSize: "11px", color: "#888" }}>
+                      Ensure <code>pdflatex</code> is installed (TeX Live or MiKTeX) and available on the server PATH, with all required packages.
+                    </div>
+                  </div>
+                </div>
+              )}
+              {!compiling && !pdfUrl && !compileError && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px", color: "#aaa" }}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                  <span style={{ fontSize: "13px" }}>Click <strong style={{ color: "#1565c0" }}>Compile to PDF</strong> to preview here</span>
+                </div>
+              )}
+              {pdfUrl && !compiling && (
+                <iframe
+                  src={pdfUrl}
+                  style={{ width: "100%", height: "100%", border: "none" }}
+                  title="Compiled Race Readiness PDF"
+                />
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
     </main>
   );
 }
