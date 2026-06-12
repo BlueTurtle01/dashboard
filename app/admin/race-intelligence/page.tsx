@@ -259,6 +259,40 @@ async function exportRaceIntelligencePdf(
     { 3: { cellWidth: 28 }, 4: { cellWidth: 28 } },
   );
 
+  // Course character breakdown — gradient-surface pairings
+  (() => {
+    const map = new Map<string, { section_type: string; terrain: string; km: number; flatEq: number; gradients: number[] }>();
+    for (const s of result.terrain_sections) {
+      const key = `${s.section_type}|${s.terrain}`;
+      if (!map.has(key)) map.set(key, { section_type: s.section_type, terrain: s.terrain, km: 0, flatEq: 0, gradients: [] });
+      const p = map.get(key)!;
+      p.km += s.distance_km;
+      p.flatEq += s.flat_equivalent_km;
+      p.gradients.push(s.avg_gradient_percent);
+    }
+    const grand = [...map.values()].reduce((s, p) => s + p.km, 0);
+    const rows = [...map.values()]
+      .sort((a, b) => b.km - a.km)
+      .map(p => {
+        const avgGrad = p.gradients.reduce((a, b) => a + b, 0) / Math.max(p.gradients.length, 1);
+        const effort = p.km > 0 ? p.flatEq / p.km : 1;
+        return [
+          p.section_type.replaceAll("_", " "),
+          p.terrain.replaceAll("_", " "),
+          `${p.km.toFixed(1)} km`,
+          `${grand > 0 ? ((p.km / grand) * 100).toFixed(0) : "0"}%`,
+          `${avgGrad > 0 ? "+" : ""}${avgGrad.toFixed(1)}%`,
+          `${effort.toFixed(2)}×`,
+        ];
+      });
+    addTable(
+      "Course Character Breakdown",
+      ["Gradient type", "Surface", "Distance", "% course", "Avg gradient", "Effort"],
+      rows,
+      { 0: { cellWidth: 38 }, 1: { cellWidth: 32 } },
+    );
+  })();
+
   addTable(
     "Aid Stations",
     ["Km", "Name", "Water", "Food", "Medic", "Toilets", "Drop bags"],
@@ -411,10 +445,10 @@ function RouteMap({ route, windSections, width = 694, height = 200 }: {
     const lats = route.map(p => p.lat), lons = route.map(p => p.lon);
     const r0lat = Math.min(...lats), r1lat = Math.max(...lats), r0lon = Math.min(...lons), r1lon = Math.max(...lons);
     const dlat = r1lat - r0lat, dlon = r1lon - r0lon;
-    const minLat = r0lat - dlat * 0.15 - 0.005, maxLat = r1lat + dlat * 0.15 + 0.005;
-    const minLon = r0lon - dlon * 0.15 - 0.008, maxLon = r1lon + dlon * 0.15 + 0.008;
-    let z = 14;
-    for (; z >= 8; z--) { if ((osmTileX(maxLon, z) - osmTileX(minLon, z) + 1) * (osmTileY(minLat, z) - osmTileY(maxLat, z) + 1) <= 16) break; }
+    const minLat = r0lat - dlat * 0.4 - 0.02, maxLat = r1lat + dlat * 0.4 + 0.02;
+    const minLon = r0lon - dlon * 0.4 - 0.03, maxLon = r1lon + dlon * 0.4 + 0.03;
+    let z = 12;
+    for (; z >= 7; z--) { if ((osmTileX(maxLon, z) - osmTileX(minLon, z) + 1) * (osmTileY(minLat, z) - osmTileY(maxLat, z) + 1) <= 16) break; }
     const zPow = Math.pow(2, z);
     const mx0 = osmMercX(minLon), mx1 = osmMercX(maxLon), my0 = osmMercY(maxLat), my1 = osmMercY(minLat);
     const sc = Math.max(width / (mx1 - mx0), height / (my1 - my0));
@@ -431,8 +465,8 @@ function RouteMap({ route, windSections, width = 694, height = 200 }: {
   const lats = route.map(p => p.lat), lons = route.map(p => p.lon);
   const r0lat = Math.min(...lats), r1lat = Math.max(...lats), r0lon = Math.min(...lons), r1lon = Math.max(...lons);
   const dlat = r1lat - r0lat, dlon = r1lon - r0lon;
-  const minLat = r0lat - dlat * 0.15 - 0.005, maxLat = r1lat + dlat * 0.15 + 0.005;
-  const minLon = r0lon - dlon * 0.15 - 0.008, maxLon = r1lon + dlon * 0.15 + 0.008;
+  const minLat = r0lat - dlat * 0.4 - 0.02, maxLat = r1lat + dlat * 0.4 + 0.02;
+  const minLon = r0lon - dlon * 0.4 - 0.03, maxLon = r1lon + dlon * 0.4 + 0.03;
   const mx0 = osmMercX(minLon), mx1 = osmMercX(maxLon), my0 = osmMercY(maxLat), my1 = osmMercY(minLat);
   const sc = Math.max(width / (mx1 - mx0), height / (my1 - my0));
   const ox = (width - (mx1 - mx0) * sc) / 2, oy = (height - (my1 - my0) * sc) / 2;
@@ -865,6 +899,33 @@ export default function RaceIntelligencePage() {
   const steepDescentKm = secs.filter(s => s.avg_gradient_percent < -8).reduce((a, s) => a + s.distance_km, 0);
   const runnableKm     = secs.filter(s => s.avg_gradient_percent >= -3 && s.avg_gradient_percent < 3).reduce((a, s) => a + s.distance_km, 0);
 
+  // Terrain × gradient pairings — what the course actually asks of you
+  const terrainPairings = useMemo(() => {
+    const map = new Map<string, {
+      section_type: string; terrain: string;
+      total_km: number; ascent_m: number; descent_m: number; flat_equiv_km: number; gradients: number[];
+    }>();
+    for (const s of secs) {
+      const key = `${s.section_type}|${s.terrain}`;
+      if (!map.has(key)) map.set(key, { section_type: s.section_type, terrain: s.terrain, total_km: 0, ascent_m: 0, descent_m: 0, flat_equiv_km: 0, gradients: [] });
+      const p = map.get(key)!;
+      p.total_km += s.distance_km;
+      p.ascent_m += s.ascent_m;
+      p.descent_m += s.descent_m;
+      p.flat_equiv_km += s.flat_equivalent_km;
+      p.gradients.push(s.avg_gradient_percent);
+    }
+    const grand = [...map.values()].reduce((s, p) => s + p.total_km, 0);
+    return [...map.values()]
+      .sort((a, b) => b.total_km - a.total_km)
+      .map(p => ({
+        ...p,
+        pct:          grand > 0 ? (p.total_km / grand) * 100 : 0,
+        avg_gradient: p.gradients.reduce((a, b) => a + b, 0) / Math.max(p.gradients.length, 1),
+        effort_ratio: p.total_km > 0 ? p.flat_equiv_km / p.total_km : 1,
+      }));
+  }, [secs]);
+
   // Aid station largest gap
   const aidGaps = useMemo(() => {
     const sorted = (result?.aid_stations ?? []).sort((a, b) => a.km - b.km);
@@ -1187,11 +1248,34 @@ export default function RaceIntelligencePage() {
               </div>
 
               <p style={sectionLabel}>Effort Multiplier by Section</p>
+              <div style={{ background: "#f8faf8", border: "1px solid #dde8dd", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px", color: "#444", lineHeight: "1.65" }}>
+                <p style={{ margin: "0 0 6px" }}>
+                  Each bar shows the <strong>metabolic cost multiplier</strong> for that section relative to flat road running.
+                  The calculation uses the <strong>Minetti grade-adjusted energy cost model</strong> (Minetti et al., 2002, <em>J. Physiol.</em> 543:405–412),
+                  which expresses the oxygen cost of locomotion at gradient <em>g</em> as:
+                </p>
+                <p style={{ margin: "0 0 6px", fontFamily: "monospace", fontSize: "10.5px", paddingLeft: "12px" }}>
+                  C(g) = 1 + 4.5g + 19g² − 43.3g³
+                </p>
+                <p style={{ margin: 0 }}>
+                  A bar at <strong>1.5×</strong> means that section demands 50% more energy than the same distance on flat ground.
+                  Bars <em>below</em> 1.0× represent descents where gravity reduces locomotion cost —
+                  but note that steep downhill running imposes high <strong>eccentric quad load</strong> even when the energy figure looks favourable,
+                  and is a primary driver of late-race muscle damage and slowing.
+                  The overall effort ratio of <strong>{effortRatio.toFixed(2)}×</strong> is the flat-equivalent distance divided by
+                  the actual course distance — a useful single-number summary of total course difficulty.
+                </p>
+              </div>
               <div style={{ marginBottom: "24px" }}>
                 <EffortProfileChart sections={result.terrain_sections} totalKm={totalKm} />
-                <p style={{ margin: "4px 0 0", fontSize: "9.5px", color: "#888" }}>
-                  1.0× = flat-road equivalent effort. Bars above baseline = harder than flat; below = easier (descent assistance).
-                </p>
+                <div style={{ display: "flex", gap: "16px", marginTop: "5px", flexWrap: "wrap" }}>
+                  {[{ color: "#c0392b", label: "≥1.5× very hard" }, { color: "#e65100", label: "1.2–1.5× hard" }, { color: "#78909c", label: "0.9–1.2× moderate" }, { color: "#64b5f6", label: "0.7–0.9× easy descent" }, { color: "#1976d2", label: "<0.7× steep descent" }].map(({ color, label }) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <div style={{ width: "10px", height: "10px", background: color, borderRadius: "2px", opacity: 0.85 }} />
+                      <span style={{ fontSize: "9px", color: "#666" }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <p style={sectionLabel}>Demand Summary</p>
@@ -1218,6 +1302,71 @@ export default function RaceIntelligencePage() {
                     : "No technical trail or fell sections detected."}
                 </DemandCard>
               </div>
+
+              {terrainPairings.length > 0 && (
+                <>
+                  <p style={{ ...sectionLabel, marginTop: "28px", marginBottom: "8px" }}>Course Character Breakdown</p>
+                  <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
+                    Every gradient-surface combination on this course, ranked by distance. This shows exactly what type of effort is required
+                    and on what terrain — useful for identifying specific preparation needs (e.g. downhill running on technical trail, sustained climbing on fell).
+                  </p>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        <th style={thStyle}>Gradient type</th>
+                        <th style={thStyle}>Surface</th>
+                        <th style={thStyle}>Distance</th>
+                        <th style={thStyle}>% of course</th>
+                        <th style={thStyle}>Avg gradient</th>
+                        <th style={thStyle}>Effort ratio</th>
+                        <th style={thStyle}>What to expect</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {terrainPairings.map((p, i) => {
+                        const gradColor = p.avg_gradient > 8 ? "#c0392b" : p.avg_gradient > 3 ? "#e65100" : p.avg_gradient < -8 ? "#0d47a1" : p.avg_gradient < -3 ? "#1976d2" : "#546e7a";
+                        const effortColor = p.effort_ratio >= 1.5 ? "#c0392b" : p.effort_ratio >= 1.2 ? "#e65100" : p.effort_ratio <= 0.7 ? "#0d47a1" : p.effort_ratio <= 0.9 ? "#1976d2" : "#555";
+                        const noteMap: Record<string, string> = {
+                          "steep_climb|technical_trail": "Hard anaerobic climbing — hands may be needed",
+                          "steep_climb|fell":            "Steep fell climbing — expect power hiking",
+                          "steep_climb|road":            "Sustained road climb — manageable gradient but high volume",
+                          "steep_climb|trail":           "Trail climb — rhythmic effort, poles recommended",
+                          "sustained_climb|technical_trail": "Long technical climb — technical footing while working hard",
+                          "sustained_climb|fell":        "Open fell climbing — variable underfoot, exposed",
+                          "sustained_climb|road":        "Long road climb — steady aerobic effort",
+                          "sustained_climb|trail":       "Long trail climb — key to race strategy",
+                          "mild_climb|trail":            "Runnable climb — maintain rhythm",
+                          "mild_climb|road":             "Easy road rise — target a consistent pace",
+                          "flat|road":                   "Fast runnable section — opportunity to recover time",
+                          "flat|trail":                  "Flat trail — variable underfoot, less consistent pace",
+                          "flat|fell":                   "Flat fell — soft ground, higher energy cost than road",
+                          "mild_descent|trail":          "Runnable descent — controlled momentum",
+                          "mild_descent|road":           "Fast road descent — protect quads",
+                          "sustained_descent|technical_trail": "Technical descent — high quad damage risk, key training target",
+                          "sustained_descent|fell":      "Open fell descent — technical footing, high speed possible",
+                          "sustained_descent|trail":     "Long descent — quad-loading, pace management critical",
+                          "steep_descent|technical_trail": "Very steep technical descent — highest quad damage risk on course",
+                          "steep_descent|fell":          "Very steep fell descent — bracken/rocks, high injury risk",
+                          "steep_descent|road":          "Steep road descent — aggressive braking forces",
+                        };
+                        const noteKey = `${p.section_type}|${p.terrain}`;
+                        const note = noteMap[noteKey] ?? `${p.section_type.replaceAll("_", " ")} on ${p.terrain.replaceAll("_", " ")}`;
+                        return (
+                          <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                            <td style={{ ...tdStyle, fontWeight: 600, color: gradColor }}>{p.section_type.replaceAll("_", " ")}</td>
+                            <td style={tdStyle}>{p.terrain.replaceAll("_", " ")}</td>
+                            <td style={{ ...tdStyle, fontFamily: "monospace" }}>{p.total_km.toFixed(1)} km</td>
+                            <td style={{ ...tdStyle, fontWeight: 600 }}>{p.pct.toFixed(0)}%</td>
+                            <td style={{ ...tdStyle, color: gradColor }}>{p.avg_gradient > 0 ? "+" : ""}{p.avg_gradient.toFixed(1)}%</td>
+                            <td style={{ ...tdStyle, fontWeight: 600, color: effortColor }}>{p.effort_ratio.toFixed(2)}×</td>
+                            <td style={{ ...tdStyle, fontSize: "10px", color: "#555" }}>{note}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
+              )}
             </div>
           )}
 

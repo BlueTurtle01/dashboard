@@ -77,10 +77,13 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     // ── Raw results for year-by-year, gender split, and distribution ──────────
+    // Explicit .range() overrides PostgREST's default 1,000-row cap
     const { data: rawRows } = await supabase
       .from("race_results")
       .select("result_year, result_status, finish_seconds, gender")
-      .eq("race_id", race_id);
+      .eq("race_id", race_id)
+      .order("result_year")
+      .range(0, 99999);
 
     type RawRow = { result_year: number; result_status: string; finish_seconds: number | null; gender: string | null };
     const rows = (rawRows ?? []) as RawRow[];
