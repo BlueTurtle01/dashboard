@@ -451,7 +451,7 @@ function RouteMap({ route, windSections, width = 694, height = 200 }: {
     for (; z >= 7; z--) { if ((osmTileX(maxLon, z) - osmTileX(minLon, z) + 1) * (osmTileY(minLat, z) - osmTileY(maxLat, z) + 1) <= 16) break; }
     const zPow = Math.pow(2, z);
     const mx0 = osmMercX(minLon), mx1 = osmMercX(maxLon), my0 = osmMercY(maxLat), my1 = osmMercY(minLat);
-    const sc = Math.max(width / (mx1 - mx0), height / (my1 - my0));
+    const sc = Math.min(width / (mx1 - mx0), height / (my1 - my0));
     const ox = (width - (mx1 - mx0) * sc) / 2, oy = (height - (my1 - my0) * sc) / 2;
     const tsz = 1 / zPow;
     const tx0 = osmTileX(minLon, z), tx1 = osmTileX(maxLon, z), ty0 = osmTileY(maxLat, z), ty1 = osmTileY(minLat, z);
@@ -468,7 +468,7 @@ function RouteMap({ route, windSections, width = 694, height = 200 }: {
   const minLat = r0lat - dlat * 0.4 - 0.02, maxLat = r1lat + dlat * 0.4 + 0.02;
   const minLon = r0lon - dlon * 0.4 - 0.03, maxLon = r1lon + dlon * 0.4 + 0.03;
   const mx0 = osmMercX(minLon), mx1 = osmMercX(maxLon), my0 = osmMercY(maxLat), my1 = osmMercY(minLat);
-  const sc = Math.max(width / (mx1 - mx0), height / (my1 - my0));
+  const sc = Math.min(width / (mx1 - mx0), height / (my1 - my0));
   const ox = (width - (mx1 - mx0) * sc) / 2, oy = (height - (my1 - my0) * sc) / 2;
   const toX = (lon: number) => ox + (osmMercX(lon) - mx0) * sc;
   const toY = (lat: number) => oy + (osmMercY(lat) - my0) * sc;
@@ -871,6 +871,13 @@ export default function RaceIntelligencePage() {
   const totalDescentM = result?.race.total_descent_m ?? 0;
   const totalFlatEq   = secs.reduce((s, t) => s + t.flat_equivalent_km, 0);
   const effortRatio   = totalKm > 0 ? totalFlatEq / totalKm : 1;
+  const effortRatioLabel = effortRatio < 1.03 ? "essentially flat"
+    : effortRatio < 1.08 ? "gently rolling"
+    : effortRatio < 1.15 ? "moderately hilly"
+    : effortRatio < 1.25 ? "significantly hilly"
+    : effortRatio < 1.40 ? "very hilly"
+    : effortRatio < 1.60 ? "mountainous"
+    : "extreme vertical";
 
   const steepestClimb = useMemo(() =>
     [...secs].filter(s => s.section_type.includes("climb") && s.distance_km >= 1)
@@ -1147,13 +1154,14 @@ export default function RaceIntelligencePage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "28px" }}>
               {[
                 { label: "Flat-equiv.", value: totalKm > 0 ? `${totalFlatEq.toFixed(1)} km` : "—" },
-                { label: "Effort ratio", value: totalKm > 0 ? `${effortRatio.toFixed(2)}×` : "—" },
+                { label: "Effort ratio", value: totalKm > 0 ? `${effortRatio.toFixed(2)}×` : "—", sub: totalKm > 0 ? effortRatioLabel : undefined },
                 { label: "Complexity", value: totalKm > 0 ? complexityLabel : "—", color: totalKm > 0 ? complexityColor : "#aaa" },
                 { label: "Race type", value: fieldStats?.aggregate?.cluster_label ?? (fieldStatsLoading ? "Loading…" : "—") },
-              ].map(({ label, value, color }) => (
+              ].map(({ label, value, color, sub }) => (
                 <div key={label} style={{ background: "#f9f9f9", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "12px 14px" }}>
                   <p style={sectionLabel}>{label}</p>
                   <p style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: color ?? "#333" }}>{value}</p>
+                  {sub && <p style={{ margin: "2px 0 0", fontSize: "10px", color: "#777" }}>{sub}</p>}
                 </div>
               ))}
             </div>
@@ -1190,11 +1198,6 @@ export default function RaceIntelligencePage() {
 
               {result.terrain_sections.length > 0 && (
                 <>
-                  <p style={sectionLabel}>Gradient Strip</p>
-                  <div style={{ marginBottom: "24px", paddingBottom: "14px" }}>
-                    <TerrainStrip sections={result.terrain_sections} totalKm={totalKm} />
-                  </div>
-
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                     {/* Gradient composition */}
                     <div>
@@ -1262,8 +1265,11 @@ export default function RaceIntelligencePage() {
                   Bars <em>below</em> 1.0× represent descents where gravity reduces locomotion cost —
                   but note that steep downhill running imposes high <strong>eccentric quad load</strong> even when the energy figure looks favourable,
                   and is a primary driver of late-race muscle damage and slowing.
-                  The overall effort ratio of <strong>{effortRatio.toFixed(2)}×</strong> is the flat-equivalent distance divided by
-                  the actual course distance — a useful single-number summary of total course difficulty.
+                  The overall effort ratio of <strong>{effortRatio.toFixed(2)}×</strong> means this course demands{" "}
+                  <strong>{((effortRatio - 1) * 100).toFixed(0)}% more energy</strong> than a flat course of the same distance —
+                  {" "}<em>{effortRatioLabel}</em>.
+                  It is calculated as flat-equivalent distance ÷ actual distance, where flat-equivalent distance weights each
+                  section by the Minetti cost function above.
                 </p>
               </div>
               <div style={{ marginBottom: "24px" }}>
