@@ -1045,15 +1045,6 @@ export default function RaceReadinessLatexPage() {
   const [assessmentTests, setAssessmentTests] = useState<AssessmentTest[]>([]);
   const [lastFilename, setLastFilename] = useState("");
   const [latexContent, setLatexContent] = useState<string | null>(null);
-  const [compiling, setCompiling] = useState(false);
-  const [compileError, setCompileError] = useState("");
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const pdfUrlRef = useRef<string | null>(null);
-
-  // Revoke the previous blob URL whenever a new PDF is produced
-  useEffect(() => {
-    return () => { if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current); };
-  }, []);
 
   const fetchAthlete = useCallback(async (key: string) => {
     if (!key.trim()) return;
@@ -1193,41 +1184,33 @@ export default function RaceReadinessLatexPage() {
     URL.revokeObjectURL(url);
     setLastFilename(filename);
 
-    // Store latex for the in-page viewer and clear any previous compiled PDF
     setLatexContent(latex);
-    if (pdfUrlRef.current) { URL.revokeObjectURL(pdfUrlRef.current); pdfUrlRef.current = null; }
-    setPdfUrl(null);
-    setCompileError("");
     setGenerating(false);
   }
 
-  async function handleCompile() {
+  function handleOpenInOverleaf() {
     if (!latexContent) return;
-    setCompiling(true);
-    setCompileError("");
-    if (pdfUrlRef.current) { URL.revokeObjectURL(pdfUrlRef.current); pdfUrlRef.current = null; }
-    setPdfUrl(null);
-
-    try {
-      const res = await fetch("/api/race-readiness-latex/compile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ latex: latexContent }),
-      });
-
-      if (!res.ok) {
-        const json = await res.json() as { error?: string };
-        setCompileError(json.error ?? "Compilation failed.");
-      } else {
-        const pdfBlob = await res.blob();
-        const objectUrl = URL.createObjectURL(pdfBlob);
-        pdfUrlRef.current = objectUrl;
-        setPdfUrl(objectUrl);
-      }
-    } catch {
-      setCompileError("Network error during compilation.");
-    }
-    setCompiling(false);
+    const raceName = races.find(r => r.race_id === selectedRaceId)?.race_name ?? "Race Readiness Report";
+    const projectName = selectedAthleteKey.trim()
+      ? `${raceName} — ${selectedAthleteKey.trim()}`
+      : raceName;
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "https://www.overleaf.com/docs";
+    form.target = "_blank";
+    form.style.display = "none";
+    const nameField = document.createElement("input");
+    nameField.type = "hidden";
+    nameField.name = "snip_name";
+    nameField.value = projectName;
+    form.appendChild(nameField);
+    const snipField = document.createElement("textarea");
+    snipField.name = "snip";
+    snipField.value = latexContent;
+    form.appendChild(snipField);
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
   }
 
   function handleDownloadCurrentLatex() {
@@ -1247,7 +1230,7 @@ export default function RaceReadinessLatexPage() {
   const labelStyle: React.CSSProperties = { fontSize: "12px", fontWeight: 600, color: "#555", marginBottom: "6px" };
   const generateBtn: React.CSSProperties = { padding: "10px 24px", border: "none", borderRadius: "8px", background: "#1e3a1e", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: "14px" };
   const outlineBtn = (disabled: boolean): React.CSSProperties => ({ padding: "10px 20px", border: "1px solid #1e3a1e", borderRadius: "8px", background: disabled ? "#f5f5f5" : "#fff", color: disabled ? "#aaa" : "#1e3a1e", fontWeight: 600, cursor: disabled ? "default" : "pointer", fontSize: "14px" });
-  const compileBtn = (disabled: boolean): React.CSSProperties => ({ padding: "10px 20px", border: "none", borderRadius: "8px", background: disabled ? "#ccc" : "#1565c0", color: "#fff", fontWeight: 700, cursor: disabled ? "default" : "pointer", fontSize: "14px" });
+  const overleafBtn = (disabled: boolean): React.CSSProperties => ({ padding: "10px 20px", border: "none", borderRadius: "8px", background: disabled ? "#ccc" : "#4caf50", color: "#fff", fontWeight: 700, cursor: disabled ? "default" : "pointer", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" });
 
   return (
     <main style={{ minHeight: "100vh", background: "#f9f9f9" }}>
@@ -1272,10 +1255,11 @@ export default function RaceReadinessLatexPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <button type="button" onClick={() => void handleGenerateAndDownload()} disabled={generating} style={generateBtn}>
-              {generating ? "Generating…" : "Generate & Download .tex"}
+              {generating ? "Generating…" : "Generate .tex"}
             </button>
-            <button type="button" onClick={() => void handleCompile()} disabled={!latexContent || compiling || generating} style={compileBtn(!latexContent || compiling || generating)}>
-              {compiling ? "Compiling…" : "Compile to PDF"}
+            <button type="button" onClick={handleOpenInOverleaf} disabled={!latexContent || generating} style={overleafBtn(!latexContent || generating)}>
+              <svg width="16" height="16" viewBox="0 0 64 64" fill="currentColor"><path d="M32 2C15.4 2 2 15.4 2 32s13.4 30 30 30 30-13.4 30-30S48.6 2 32 2zm0 5c13.8 0 25 11.2 25 25S45.8 57 32 57 7 45.8 7 32 18.2 7 32 7zm-8 10v30l22-15z"/></svg>
+              Open in Overleaf
             </button>
             {latexContent && (
               <button type="button" onClick={handleDownloadCurrentLatex} style={outlineBtn(false)}>
@@ -1285,7 +1269,6 @@ export default function RaceReadinessLatexPage() {
           </div>
           {genError && <span style={{ fontSize: "12px", color: "#b00020" }}>{genError}</span>}
           {lastFilename && !generating && <span style={{ fontSize: "11px", color: "#2e7d32" }}>Downloaded: {lastFilename}</span>}
-          {compileError && <span style={{ fontSize: "12px", color: "#b00020", whiteSpace: "pre-wrap" }}>{compileError}</span>}
         </div>
       </div>
 
@@ -1324,12 +1307,11 @@ export default function RaceReadinessLatexPage() {
         <div style={{ padding: "32px", maxWidth: "700px" }}>
           <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1e3a1e", marginBottom: "12px" }}>Race Readiness — LaTeX Export</h2>
           <p style={{ fontSize: "13px", color: "#555", lineHeight: 1.6, marginBottom: "16px" }}>
-            Select a race (and optionally an athlete) then click <strong>Generate &amp; Download .tex</strong> to produce a LaTeX document containing the same sections, tables, and analysis as the Race Readiness report.
-            The source will appear below for review, and <strong>Compile to PDF</strong> will render it inline using <code>pdflatex</code> on the server.
+            Select a race (and optionally an athlete) then click <strong>Generate .tex</strong> to produce a branded LaTeX document.
+            The source will appear in the left panel for review. Click <strong>Open in Overleaf</strong> to compile it to PDF in your browser — no local LaTeX installation needed.
           </p>
           <p style={{ fontSize: "12px", color: "#888", lineHeight: 1.6 }}>
-            Compilation requires a LaTeX distribution (TeX Live or MiKTeX) installed on the server with packages:
-            <code> booktabs, xcolor, longtable, pgfplots, tikz, geometry, parskip, titlesec, hyperref, microtype, tabularx, makecell</code>.
+            Overleaf is a free in-browser LaTeX editor. Required packages — <code>tcolorbox</code>, <code>tabularray</code>, <code>pgfplots</code>, <code>fancyhdr</code>, <code>xstring</code>, <code>enumitem</code> — install automatically on first compile.
           </p>
         </div>
       )}
@@ -1355,52 +1337,35 @@ export default function RaceReadinessLatexPage() {
             </pre>
           </div>
 
-          {/* ── PDF viewer panel ── */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f0f0f0" }}>
+          {/* ── Overleaf / compile panel ── */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f9fafb" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", background: "#fff", borderBottom: "1px solid #e0e0e0", flexShrink: 0 }}>
-              <span style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", flex: 1 }}>Compiled PDF</span>
-              {pdfUrl && (
-                <a
-                  href={pdfUrl}
-                  download="race-readiness.pdf"
-                  style={{ fontSize: "11px", padding: "3px 10px", border: "1px solid #1e3a1e", borderRadius: "5px", background: "#fff", cursor: "pointer", color: "#1e3a1e", textDecoration: "none" }}
-                >
-                  Download PDF
-                </a>
-              )}
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", flex: 1 }}>Compile to PDF</span>
             </div>
-
-            <div style={{ flex: 1, position: "relative" }}>
-              {compiling && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", color: "#888" }}>
-                  <div style={{ width: "32px", height: "32px", border: "3px solid #e0e0e0", borderTop: "3px solid #1565c0", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-                  <span style={{ fontSize: "13px" }}>Compiling with pdflatex…</span>
-                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 32px", gap: "20px" }}>
+              {!latexContent ? (
+                <div style={{ textAlign: "center", color: "#aaa" }}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: "12px" }}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <div style={{ fontSize: "13px" }}>Generate the .tex file first, then open it in Overleaf to compile.</div>
                 </div>
-              )}
-              {!compiling && compileError && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px" }}>
-                  <div style={{ background: "#fff0f0", border: "1px solid #ffcdd2", borderRadius: "8px", padding: "20px 24px", maxWidth: "500px", width: "100%" }}>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#c0392b", marginBottom: "8px" }}>Compilation Error</div>
-                    <pre style={{ fontSize: "11px", color: "#555", whiteSpace: "pre-wrap", margin: 0, lineHeight: 1.5 }}>{compileError}</pre>
-                    <div style={{ marginTop: "12px", fontSize: "11px", color: "#888" }}>
-                      Ensure <code>pdflatex</code> is installed (TeX Live or MiKTeX) and available on the server PATH, with all required packages.
+              ) : (
+                <>
+                  <div style={{ textAlign: "center", maxWidth: "340px" }}>
+                    <div style={{ fontSize: "28px", marginBottom: "8px" }}>🍃</div>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: "#1e3a1e", marginBottom: "8px" }}>Open in Overleaf</div>
+                    <div style={{ fontSize: "13px", color: "#555", lineHeight: 1.6 }}>
+                      Click below to open the generated source in Overleaf — a free in-browser LaTeX editor. Overleaf compiles the PDF for you, no local installation required.
                     </div>
                   </div>
-                </div>
-              )}
-              {!compiling && !pdfUrl && !compileError && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px", color: "#aaa" }}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                  <span style={{ fontSize: "13px" }}>Click <strong style={{ color: "#1565c0" }}>Compile to PDF</strong> to preview here</span>
-                </div>
-              )}
-              {pdfUrl && !compiling && (
-                <iframe
-                  src={pdfUrl}
-                  style={{ width: "100%", height: "100%", border: "none" }}
-                  title="Compiled Race Readiness PDF"
-                />
+                  <button type="button" onClick={handleOpenInOverleaf} style={{ ...overleafBtn(false), padding: "12px 28px", fontSize: "15px" }}>
+                    <svg width="18" height="18" viewBox="0 0 64 64" fill="currentColor"><path d="M32 2C15.4 2 2 15.4 2 32s13.4 30 30 30 30-13.4 30-30S48.6 2 32 2zm0 5c13.8 0 25 11.2 25 25S45.8 57 32 57 7 45.8 7 32 18.2 7 32 7zm-8 10v30l22-15z"/></svg>
+                    Open in Overleaf
+                  </button>
+                  <div style={{ fontSize: "11px", color: "#aaa", textAlign: "center", maxWidth: "300px", lineHeight: 1.6 }}>
+                    A free Overleaf account is required. Packages install automatically on first compile.
+                    Required: <code>tcolorbox</code>, <code>tabularray</code>, <code>pgfplots</code>, <code>fancyhdr</code>, <code>xstring</code>, <code>enumitem</code>.
+                  </div>
+                </>
               )}
             </div>
           </div>
