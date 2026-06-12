@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
 import type { FieldStatsResponse } from "@/app/api/race-intelligence/field-stats/route";
 
-/* ── API types ── */
+/* â”€â”€ API types â”€â”€ */
 interface RaceMeta {
   id: string; name: string; slug: string | null;
   total_distance_km: number; total_ascent_m: number; total_descent_m: number;
@@ -41,7 +41,7 @@ interface RaceOption {
   total_distance_km: number | null; total_ascent_m: number | null;
 }
 
-/* ── Elevation types ── */
+/* â”€â”€ Elevation types â”€â”€ */
 interface ElevationPoint { distanceKm: number; elevationM: number; }
 interface RaceElevProfile {
   points: ElevationPoint[]; totalDistanceKm: number;
@@ -52,7 +52,7 @@ interface RaceSustainedSeg {
   type: "climb" | "descent" | "flat";
 }
 
-/* ── Parsers ── */
+/* â”€â”€ Parsers â”€â”€ */
 function parseElevProfile(value: string | null): RaceElevProfile | null {
   if (!value) return null;
   try {
@@ -85,7 +85,7 @@ function parseSustainedSegs(value: string | null): RaceSustainedSeg[] | null {
   } catch { return null; }
 }
 
-/* ── Helpers ── */
+/* â”€â”€ Helpers â”€â”€ */
 function formatRaceTime(totalMinutes: number): string {
   const h = Math.floor(totalMinutes / 60);
   const m = Math.round(totalMinutes % 60);
@@ -96,270 +96,7 @@ function formatRaceTime(totalMinutes: number): string {
 
 function formatSecs(s: number): string { return formatRaceTime(s / 60); }
 
-/* ── PDF export ── */
-async function exportRaceIntelligencePdf(
-  result: OverviewResponse,
-  fieldStats: FieldStatsResponse,
-  weather: WeatherDayRecord[],
-) {
-  const [{ jsPDF }, autoTableModule] = await Promise.all([
-    import("jspdf"),
-    import("jspdf-autotable"),
-  ]);
-  const autoTable = autoTableModule.default;
-  type PdfDoc = InstanceType<typeof jsPDF> & { lastAutoTable?: { finalY: number } };
-
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" }) as PdfDoc;
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const marginX = 14;
-  const headerY = 10;
-  const contentTop = 28;
-  const footerReserve = 16;
-  const contentW = pageW - marginX * 2;
-  let y = contentTop;
-
-  const raceName = result.race.name;
-
-  const pdfDate = (v: string | null | undefined) => {
-    if (!v) return "-";
-    return new Date(v + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-  };
-  const pdfKm = (v: number | null | undefined, d = 1) => v == null ? "-" : `${v.toFixed(d)} km`;
-  const pdfM  = (v: number | null | undefined) => v == null ? "-" : `${Math.round(v).toLocaleString()} m`;
-  const pdfT  = (s: number | null | undefined) => (!s || s <= 0) ? "-" : formatSecs(s);
-  const pdfPct = (v: number | null | undefined) => v == null ? "-" : `${(v * 100).toFixed(1)}%`;
-
-  const drawHeader = () => {
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, pageW, 24, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(30, 58, 30);
-    doc.text("Tortoise Endurance", marginX, headerY);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    doc.text("Race Intelligence Report", marginX, headerY + 5);
-    doc.text(raceName, pageW - marginX, headerY, { align: "right" });
-    doc.setDrawColor(30, 58, 30);
-    doc.setLineWidth(0.4);
-    doc.line(marginX, 22, pageW - marginX, 22);
-  };
-
-  const ensureSpace = (height: number) => {
-    if (y + height > pageH - footerReserve) { doc.addPage(); drawHeader(); y = contentTop; }
-  };
-
-  const addSection = (title: string) => {
-    ensureSpace(13);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.setTextColor(30, 58, 30);
-    doc.text(title, marginX, y);
-    y += 5;
-    doc.setDrawColor(210, 220, 210);
-    doc.line(marginX, y, pageW - marginX, y);
-    y += 5;
-  };
-
-  const addText = (text: string, size = 9.5, gap = 4) => {
-    if (!text.trim()) return;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(size);
-    doc.setTextColor(55, 55, 55);
-    const lines = doc.splitTextToSize(text, contentW) as string[];
-    for (const line of lines) { ensureSpace(size * 0.55); doc.text(line, marginX, y); y += size * 0.42; }
-    y += gap;
-  };
-
-  const addKeyValues = (rows: [string, string][]) => {
-    autoTable(doc, {
-      startY: y,
-      margin: { left: marginX, right: marginX, top: contentTop, bottom: footerReserve },
-      body: rows,
-      theme: "grid",
-      styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2.2, overflow: "linebreak", valign: "top" },
-      columnStyles: { 0: { fontStyle: "bold", textColor: [30, 58, 30], cellWidth: 48 }, 1: { cellWidth: contentW - 48 } },
-      rowPageBreak: "avoid",
-      didDrawPage: drawHeader,
-    });
-    y = (doc.lastAutoTable?.finalY ?? y) + 7;
-  };
-
-  const addTable = (title: string, head: string[], body: (string | number)[][], columnStyles = {}) => {
-    if (body.length === 0) return;
-    addSection(title);
-    autoTable(doc, {
-      startY: y,
-      margin: { left: marginX, right: marginX, top: contentTop, bottom: footerReserve },
-      head: [head],
-      body,
-      theme: "striped",
-      styles: { font: "helvetica", fontSize: 7.8, cellPadding: 1.8, overflow: "linebreak", valign: "top" },
-      headStyles: { fillColor: [30, 58, 30], textColor: [255, 255, 255], fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [248, 250, 248] },
-      rowPageBreak: "avoid",
-      showHead: "everyPage",
-      columnStyles,
-      didDrawPage: drawHeader,
-    });
-    y = (doc.lastAutoTable?.finalY ?? y) + 8;
-  };
-
-  drawHeader();
-
-  // Cover
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.setTextColor(30, 58, 30);
-  doc.text("Race Intelligence Report", marginX, y);
-  y += 10;
-  doc.setFontSize(16);
-  doc.text(raceName, marginX, y);
-  y += 10;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(120, 120, 120);
-  doc.text(`Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, marginX, y);
-  y += 12;
-
-  const agg = fieldStats.aggregate;
-  addKeyValues([
-    ["Race date",    pdfDate(result.race.race_date)],
-    ["Distance",     pdfKm(result.race.total_distance_km)],
-    ["Ascent",       pdfM(result.race.total_ascent_m)],
-    ["Descent",      pdfM(result.race.total_descent_m)],
-    ["Race type",    agg?.cluster_label ?? "-"],
-    ["Aid stations", String(result.aid_stations?.length ?? 0)],
-    ["Terrain types",String(new Set(result.terrain_sections.map(s => s.terrain)).size)],
-  ]);
-
-  if (agg) {
-    addSection("Historical Field Statistics");
-    addKeyValues([
-      ["Total finishers",   agg.total_finishers.toLocaleString()],
-      ["Total starters",    agg.total_starters.toLocaleString()],
-      ["DNF rate",          pdfPct(agg.dnf_rate)],
-      ["Years of data",     String(agg.years_of_data)],
-      ["Course record",     pdfT(agg.fastest_seconds)],
-      ["Median finish",     pdfT(agg.median_seconds)],
-      ["P25 / P75 window",  `${pdfT(agg.p25_seconds)} – ${pdfT(agg.p75_seconds)}`],
-    ]);
-  }
-
-  addTable(
-    "Terrain Sections",
-    ["Start", "End", "Km", "Type", "Surface", "Gradient", "Ascent", "Descent"],
-    result.terrain_sections.map(s => [
-      s.start_km.toFixed(1), s.end_km.toFixed(1), s.distance_km.toFixed(1),
-      s.section_type.replaceAll("_", " "), s.terrain.replaceAll("_", " "),
-      `${s.avg_gradient_percent.toFixed(1)}%`, Math.round(s.ascent_m), Math.round(s.descent_m),
-    ]),
-    { 3: { cellWidth: 28 }, 4: { cellWidth: 28 } },
-  );
-
-  // Course character breakdown — gradient-surface pairings
-  (() => {
-    const map = new Map<string, { section_type: string; terrain: string; km: number; flatEq: number; gradients: number[] }>();
-    for (const s of result.terrain_sections) {
-      const key = `${s.section_type}|${s.terrain}`;
-      if (!map.has(key)) map.set(key, { section_type: s.section_type, terrain: s.terrain, km: 0, flatEq: 0, gradients: [] });
-      const p = map.get(key)!;
-      p.km += s.distance_km;
-      p.flatEq += s.flat_equivalent_km;
-      p.gradients.push(s.avg_gradient_percent);
-    }
-    const grand = [...map.values()].reduce((s, p) => s + p.km, 0);
-    const rows = [...map.values()]
-      .sort((a, b) => b.km - a.km)
-      .map(p => {
-        const avgGrad = p.gradients.reduce((a, b) => a + b, 0) / Math.max(p.gradients.length, 1);
-        const effort = p.km > 0 ? p.flatEq / p.km : 1;
-        return [
-          p.section_type.replaceAll("_", " "),
-          p.terrain.replaceAll("_", " "),
-          `${p.km.toFixed(1)} km`,
-          `${grand > 0 ? ((p.km / grand) * 100).toFixed(0) : "0"}%`,
-          `${avgGrad > 0 ? "+" : ""}${avgGrad.toFixed(1)}%`,
-          `${effort.toFixed(2)}×`,
-        ];
-      });
-    addTable(
-      "Course Character Breakdown",
-      ["Gradient type", "Surface", "Distance", "% course", "Avg gradient", "Effort"],
-      rows,
-      { 0: { cellWidth: 38 }, 1: { cellWidth: 32 } },
-    );
-  })();
-
-  addTable(
-    "Aid Stations",
-    ["Km", "Name", "Water", "Food", "Medic", "Toilets", "Drop bags"],
-    (result.aid_stations ?? []).sort((a, b) => a.km - b.km).map((s, i, arr) => {
-      const gap = i === 0 ? s.km : s.km - arr[i - 1].km;
-      return [
-        `${s.km.toFixed(1)} (${gap.toFixed(1)} gap)`,
-        s.name ?? `Station ${i + 1}`,
-        s.water    ? "Yes" : "No",
-        s.food     ? "Yes" : "No",
-        s.medic    ? "Yes" : "No",
-        s.toilets  ? "Yes" : "No",
-        s.dropBags ? "Yes" : "No",
-      ];
-    }),
-    { 0: { cellWidth: 30 }, 1: { cellWidth: 45 } },
-  );
-
-  if ((fieldStats.by_year ?? []).length > 0) {
-    addTable(
-      "Year-by-Year Field Results",
-      ["Year", "Finishers", "Starters", "DNF rate", "Median finish"],
-      (fieldStats.by_year ?? []).map(yr => [
-        yr.year, yr.finishers.toLocaleString(), yr.starters.toLocaleString(),
-        `${(yr.dnf_rate * 100).toFixed(1)}%`, pdfT(yr.median_seconds),
-      ]),
-    );
-  }
-
-  if ((fieldStats.by_gender ?? []).length > 1) {
-    addTable(
-      "Gender Breakdown",
-      ["Gender", "Finishers", "Median finish"],
-      (fieldStats.by_gender ?? []).map(g => [g.gender, g.count.toLocaleString(), pdfT(g.median_seconds)]),
-    );
-  }
-
-  if (weather.length > 0) {
-    addSection("Historical Weather");
-    const avgMax = weather.reduce((s, d) => s + (d.temp_max_c ?? 0), 0) / weather.length;
-    const avgMin = weather.reduce((s, d) => s + (d.temp_min_c ?? 0), 0) / weather.length;
-    const avgPrecip = weather.reduce((s, d) => s + (d.precipitation_mm ?? 0), 0) / weather.length;
-    const wetPct = Math.round((weather.filter(d => (d.precipitation_mm ?? 0) > 1).length / weather.length) * 100);
-    addText(`Based on ${weather.length} years of historical data for the race date and location.`);
-    addKeyValues([
-      ["Typical temperature", `${avgMin.toFixed(1)} – ${avgMax.toFixed(1)} °C`],
-      ["Average precipitation", `${avgPrecip.toFixed(1)} mm`],
-      ["Wet day probability", `${wetPct}%`],
-    ]);
-  }
-
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    drawHeader();
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(130, 130, 130);
-    doc.text(`Page ${i} of ${pageCount}`, pageW - marginX, pageH - 8, { align: "right" });
-    doc.text("Race Intelligence Report — course data", marginX, pageH - 8);
-  }
-
-  const safeRaceName = raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "race";
-  doc.save(`${safeRaceName}-intelligence.pdf`);
-}
-
-/* ── OSM helpers ── */
+/* â”€â”€ OSM helpers â”€â”€ */
 function osmMercX(lon: number) { return (lon + 180) / 360; }
 function osmMercY(lat: number) { const s = Math.sin(lat * Math.PI / 180); return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI); }
 function osmTileX(lon: number, z: number) { return Math.floor(osmMercX(lon) * Math.pow(2, z)); }
@@ -373,9 +110,9 @@ function downsample(points: ElevationPoint[], maxPts: number): ElevationPoint[] 
   return Array.from({ length: maxPts }, (_, i) => points[Math.round(i * step)]);
 }
 
-/* ══════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    COMPONENTS
-══════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 function ElevationChart({ profile, notable, aidStations }: { profile: RaceElevProfile; notable: RaceSustainedSeg[]; aidStations?: AidStation[] }) {
   const W = 698, H = 170, padL = 46, padB = 22, padT = 16, padR = 8;
@@ -515,7 +252,7 @@ function RouteMap({ route, windSections, width = 694, height = 200 }: {
         </g>
       )}
       <rect x={width - 158} y={height - 14} width={154} height={12} fill="white" opacity={0.75} />
-      <text x={width - 4} y={height - 4} textAnchor="end" fontSize="7.5" fill="#555">© OpenStreetMap contributors</text>
+      <text x={width - 4} y={height - 4} textAnchor="end" fontSize="7.5" fill="#555">Â© OpenStreetMap contributors</text>
     </svg>
   );
 }
@@ -525,7 +262,7 @@ function TerrainBar({ label, km, pct, color }: { label: string; km: number; pct:
     <div style={{ marginBottom: "8px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "3px" }}>
         <span style={{ color: "#444", fontWeight: 500 }}>{label}</span>
-        <span style={{ color: "#888" }}>{km.toFixed(1)} km · {pct.toFixed(0)}%</span>
+        <span style={{ color: "#888" }}>{km.toFixed(1)} km Â· {pct.toFixed(0)}%</span>
       </div>
       <div style={{ height: "8px", background: "#eee", borderRadius: "4px", overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: "4px" }} />
@@ -535,13 +272,13 @@ function TerrainBar({ label, km, pct, color }: { label: string; km: number; pct:
 }
 
 const GRAD_BANDS = [
-  { label: "≥15% ↑",   min:  15, max:  999, color: "#c0392b", textColor: "#c0392b" },
-  { label: "8–15% ↑",  min:   8, max:   15, color: "#e65100", textColor: "#e65100" },
-  { label: "3–8% ↑",   min:   3, max:    8, color: "#ff9800", textColor: "#bf6e00" },
-  { label: "0–3%",     min:  -3, max:    3, color: "#78909c", textColor: "#546e7a" },
-  { label: "3–8% ↓",   min:  -8, max:   -3, color: "#64b5f6", textColor: "#1565c0" },
-  { label: "8–15% ↓",  min: -15, max:   -8, color: "#1976d2", textColor: "#1565c0" },
-  { label: "≥15% ↓",   min: -999, max: -15, color: "#0d47a1", textColor: "#0d47a1" },
+  { label: "â‰¥15% â†‘",   min:  15, max:  999, color: "#c0392b", textColor: "#c0392b" },
+  { label: "8â€“15% â†‘",  min:   8, max:   15, color: "#e65100", textColor: "#e65100" },
+  { label: "3â€“8% â†‘",   min:   3, max:    8, color: "#ff9800", textColor: "#bf6e00" },
+  { label: "0â€“3%",     min:  -3, max:    3, color: "#78909c", textColor: "#546e7a" },
+  { label: "3â€“8% â†“",   min:  -8, max:   -3, color: "#64b5f6", textColor: "#1565c0" },
+  { label: "8â€“15% â†“",  min: -15, max:   -8, color: "#1976d2", textColor: "#1565c0" },
+  { label: "â‰¥15% â†“",   min: -999, max: -15, color: "#0d47a1", textColor: "#0d47a1" },
 ];
 
 function gradientBandColor(grad: number): string {
@@ -627,7 +364,7 @@ function EffortProfileChart({ sections, totalKm }: { sections: TerrainSection[];
       {yTicks.map((t, i) => (
         <g key={i}>
           <line x1={padL} y1={yS(t)} x2={W - padR} y2={yS(t)} stroke={t === 1.0 ? "#ccc" : "#eee"} strokeWidth={t === 1.0 ? 1.5 : 1} />
-          <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill={t === 1.0 ? "#666" : "#aaa"}>{t.toFixed(1)}×</text>
+          <text x={padL - 5} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill={t === 1.0 ? "#666" : "#aaa"}>{t.toFixed(1)}Ã—</text>
         </g>
       ))}
       <text x={W - padR - 2} y={baseline - 3} textAnchor="end" fontSize="7" fill="#555" opacity="0.7">flat effort</text>
@@ -776,7 +513,7 @@ function RaceSearchCombobox({ races, selectedId, onSelect }: {
         ref={inputRef}
         type="text"
         value={query}
-        placeholder={races.length === 0 ? "Loading races…" : "Search races…"}
+        placeholder={races.length === 0 ? "Loading racesâ€¦" : "Search racesâ€¦"}
         onChange={e => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         style={{ padding: "8px 12px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "14px", color: "#111", background: "#fff", outline: "none", width: "280px" }}
@@ -795,7 +532,7 @@ function RaceSearchCombobox({ races, selectedId, onSelect }: {
               <div style={{ fontSize: "13px", fontWeight: 600, color: "#111" }}>{r.race_name}</div>
               {r.total_distance_km != null && (
                 <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>
-                  {r.total_distance_km.toFixed(1)} km · {Math.round(r.total_ascent_m ?? 0)}m ↑
+                  {r.total_distance_km.toFixed(1)} km Â· {Math.round(r.total_ascent_m ?? 0)}m â†‘
                 </div>
               )}
             </button>
@@ -806,9 +543,9 @@ function RaceSearchCombobox({ races, selectedId, onSelect }: {
   );
 }
 
-/* ══════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    STYLE CONSTANTS
-══════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const a4Page: React.CSSProperties = { width: "794px", minHeight: "1123px", background: "#fff", padding: "40px 48px 52px", boxSizing: "border-box", position: "relative", marginBottom: "24px" };
 const canvas: React.CSSProperties = { background: "#6b6b6b", padding: "32px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" };
 const printHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #1e3a1e", paddingBottom: "12px", marginBottom: "18px" };
@@ -819,16 +556,15 @@ const printBtn: React.CSSProperties = { padding: "10px 20px", border: "1px solid
 const thStyle: React.CSSProperties = { textAlign: "left", padding: "4px 8px", borderBottom: "2px solid #1e3a1e", color: "#1e3a1e", fontWeight: 600, background: "#f9f9f9", fontSize: "10px" };
 const tdStyle: React.CSSProperties = { padding: "4px 8px", borderBottom: "1px solid #eee", fontSize: "11px" };
 
-/* ══════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MAIN PAGE
-══════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 export default function RaceIntelligencePage() {
   const supabase = createClient();
 
   const [races, setRaces]               = useState<RaceOption[]>([]);
   const [selectedRaceId, setSelectedRaceId] = useState("");
   const [generating, setGenerating]     = useState(false);
-  const [pdfExporting, setPdfExporting] = useState(false);
   const [genError, setGenError]         = useState("");
   const [noRaceProfile, setNoRaceProfile] = useState(false);
   const [result, setResult]             = useState<OverviewResponse | null>(null);
@@ -837,7 +573,7 @@ export default function RaceIntelligencePage() {
   const [weather, setWeather]           = useState<WeatherDayRecord[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
 
-  // Derived — elevation + segments
+  // Derived â€” elevation + segments
   const elevProfile   = result ? parseElevProfile(result.elevation_profile) : null;
   const sustainedSegs = result ? parseSustainedSegs(result.sustained_segments) : null;
   const notable       = (sustainedSegs ?? [])
@@ -869,7 +605,8 @@ export default function RaceIntelligencePage() {
   const totalKm       = result?.race.total_distance_km ?? 0;
   const totalAscentM  = result?.race.total_ascent_m  ?? 0;
   const totalDescentM = result?.race.total_descent_m ?? 0;
-  const totalFlatEq   = secs.reduce((s, t) => s + t.flat_equivalent_km, 0);
+  // Floor each section at 1.0Ã— â€” descents don't reduce race difficulty in practice
+  const totalFlatEq   = secs.reduce((s, t) => s + Math.max(t.flat_equivalent_km, t.distance_km), 0);
   const effortRatio   = totalKm > 0 ? totalFlatEq / totalKm : 1;
   const effortRatioLabel = effortRatio < 1.03 ? "essentially flat"
     : effortRatio < 1.08 ? "gently rolling"
@@ -906,7 +643,7 @@ export default function RaceIntelligencePage() {
   const steepDescentKm = secs.filter(s => s.avg_gradient_percent < -8).reduce((a, s) => a + s.distance_km, 0);
   const runnableKm     = secs.filter(s => s.avg_gradient_percent >= -3 && s.avg_gradient_percent < 3).reduce((a, s) => a + s.distance_km, 0);
 
-  // Terrain × gradient pairings — what the course actually asks of you
+  // Terrain Ã— gradient pairings â€” what the course actually asks of you
   const terrainPairings = useMemo(() => {
     const map = new Map<string, {
       section_type: string; terrain: string;
@@ -1000,7 +737,7 @@ export default function RaceIntelligencePage() {
     setFieldStats(null);
     setWeather([]);
 
-    // Step 1: race overview (sequential — feeds downstream)
+    // Step 1: race overview (sequential â€” feeds downstream)
     let effectiveResult: OverviewResponse;
     try {
       const res  = await fetch("/api/race-readiness/overview", {
@@ -1028,7 +765,7 @@ export default function RaceIntelligencePage() {
       return;
     }
 
-    // Step 2: parallel — field stats, weather
+    // Step 2: parallel â€” field stats, weather
     const effectiveDate = effectiveResult.race.race_date;
     const hasWeather = effectiveDate && effectiveResult.race.weather_lat !== null && effectiveResult.race.weather_lon !== null;
 
@@ -1059,18 +796,8 @@ export default function RaceIntelligencePage() {
     setGenerating(false);
   }
 
-  async function handleExportPdf() {
-    if (!result || !fieldStats) return;
-    setPdfExporting(true);
-    setGenError("");
-    try {
-      await exportRaceIntelligencePdf(result, fieldStats, weather);
-    } catch (err) {
-      console.error("[race-intelligence/pdf-export]", err);
-      setGenError("Failed to generate PDF export.");
-    } finally {
-      setPdfExporting(false);
-    }
+  function handleExportPdf() {
+    window.print();
   }
 
   const SURFACE_COLORS: Record<string, string> = {
@@ -1088,13 +815,13 @@ export default function RaceIntelligencePage() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <button type="button" onClick={() => void handleGenerate()} disabled={generating} style={generateBtn}>
-            {generating ? "Loading…" : "Generate Report"}
+            {generating ? "Loadingâ€¦" : "Generate Report"}
           </button>
           {genError && <span style={{ fontSize: "12px", color: "#b00020" }}>{genError}</span>}
         </div>
         {result && (
-          <button type="button" onClick={handleExportPdf} disabled={pdfExporting || !fieldStats} style={{ ...printBtn, opacity: (pdfExporting || !fieldStats) ? 0.65 : 1, cursor: (pdfExporting || !fieldStats) ? "default" : "pointer" }}>
-            {pdfExporting ? "Generating PDF…" : "Export to PDF"}
+          <button type="button" onClick={handleExportPdf} style={printBtn}>
+            Print / Save PDF
           </button>
         )}
       </div>
@@ -1112,7 +839,7 @@ export default function RaceIntelligencePage() {
             }
           `}} />
 
-          {/* ── Page 1: Race Overview ── */}
+          {/* â”€â”€ Page 1: Race Overview â”€â”€ */}
           <div style={a4Page} className="rr-page rr-page-first">
             <div style={printHeader}>
               <div>
@@ -1131,17 +858,17 @@ export default function RaceIntelligencePage() {
 
             {noRaceProfile && (
               <div style={{ background: "#fff8e1", border: "1px solid #ffe082", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px", fontSize: "12px", color: "#795548" }}>
-                No GPX profile found for this race — course charts are unavailable. Field statistics and other data will still appear below.
+                No GPX profile found for this race â€” course charts are unavailable. Field statistics and other data will still appear below.
               </div>
             )}
 
             {/* Key stats */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "24px" }}>
               {[
-                { label: "Distance", value: totalKm > 0 ? `${totalKm.toFixed(1)} km` : "—" },
-                { label: "Ascent", value: totalAscentM > 0 ? `${Math.round(totalAscentM).toLocaleString()} m` : "—" },
-                { label: "Descent", value: totalDescentM > 0 ? `${Math.round(totalDescentM).toLocaleString()} m` : "—" },
-                { label: "Race date", value: raceDateLabel ?? "—" },
+                { label: "Distance", value: totalKm > 0 ? `${totalKm.toFixed(1)} km` : "â€”" },
+                { label: "Ascent", value: totalAscentM > 0 ? `${Math.round(totalAscentM).toLocaleString()} m` : "â€”" },
+                { label: "Descent", value: totalDescentM > 0 ? `${Math.round(totalDescentM).toLocaleString()} m` : "â€”" },
+                { label: "Race date", value: raceDateLabel ?? "â€”" },
               ].map(({ label, value }) => (
                 <div key={label} style={{ background: "#f9f9f9", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "12px 14px" }}>
                   <p style={sectionLabel}>{label}</p>
@@ -1153,10 +880,10 @@ export default function RaceIntelligencePage() {
             {/* Secondary stats */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "28px" }}>
               {[
-                { label: "Flat-equiv.", value: totalKm > 0 ? `${totalFlatEq.toFixed(1)} km` : "—" },
-                { label: "Effort ratio", value: totalKm > 0 ? `${effortRatio.toFixed(2)}×` : "—", sub: totalKm > 0 ? effortRatioLabel : undefined },
-                { label: "Complexity", value: totalKm > 0 ? complexityLabel : "—", color: totalKm > 0 ? complexityColor : "#aaa" },
-                { label: "Race type", value: fieldStats?.aggregate?.cluster_label ?? (fieldStatsLoading ? "Loading…" : "—") },
+                { label: "Flat-equiv.", value: totalKm > 0 ? `${totalFlatEq.toFixed(1)} km` : "â€”" },
+                { label: "Effort ratio", value: totalKm > 0 ? `${effortRatio.toFixed(2)}Ã—` : "â€”", sub: totalKm > 0 ? effortRatioLabel : undefined },
+                { label: "Complexity", value: totalKm > 0 ? complexityLabel : "â€”", color: totalKm > 0 ? complexityColor : "#aaa" },
+                { label: "Race type", value: fieldStats?.aggregate?.cluster_label ?? (fieldStatsLoading ? "Loadingâ€¦" : "â€”") },
               ].map(({ label, value, color, sub }) => (
                 <div key={label} style={{ background: "#f9f9f9", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "12px 14px" }}>
                   <p style={sectionLabel}>{label}</p>
@@ -1170,12 +897,12 @@ export default function RaceIntelligencePage() {
             {result.route.length >= 2 && (
               <>
                 <p style={sectionLabel}>Route</p>
-                <RouteMap route={result.route} windSections={windData} width={694} height={260} />
+                <RouteMap route={result.route} windSections={windData} width={694} height={380} />
               </>
             )}
           </div>
 
-          {/* ── Page 2: Elevation & Terrain ── */}
+          {/* â”€â”€ Page 2: Elevation & Terrain â”€â”€ */}
           {(elevProfile || result.terrain_sections.length > 0) && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -1189,7 +916,7 @@ export default function RaceIntelligencePage() {
                   <div style={{ marginBottom: "20px" }}>
                     <ElevationChart profile={elevProfile} notable={notable} aidStations={result.aid_stations ?? []} />
                     <div style={{ display: "flex", gap: "16px", marginTop: "6px", fontSize: "10px", color: "#888" }}>
-                      <span>● Aid station</span>
+                      <span>â— Aid station</span>
                       {loadingLabel && <span style={{ fontWeight: 600, color: "#555" }}>Ascent loading: {loadingLabel}</span>}
                     </div>
                   </div>
@@ -1229,7 +956,7 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* ── Page 3: Course Demands ── */}
+          {/* â”€â”€ Page 3: Course Demands â”€â”€ */}
           {result.terrain_sections.length > 0 && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -1254,28 +981,30 @@ export default function RaceIntelligencePage() {
               <div style={{ background: "#f8faf8", border: "1px solid #dde8dd", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px", color: "#444", lineHeight: "1.65" }}>
                 <p style={{ margin: "0 0 6px" }}>
                   Each bar shows the <strong>metabolic cost multiplier</strong> for that section relative to flat road running.
-                  The calculation uses the <strong>Minetti grade-adjusted energy cost model</strong> (Minetti et al., 2002, <em>J. Physiol.</em> 543:405–412),
+                  The calculation uses the <strong>Minetti grade-adjusted energy cost model</strong> (Minetti et al., 2002, <em>J. Physiol.</em> 543:405â€“412),
                   which expresses the oxygen cost of locomotion at gradient <em>g</em> as:
                 </p>
                 <p style={{ margin: "0 0 6px", fontFamily: "monospace", fontSize: "10.5px", paddingLeft: "12px" }}>
-                  C(g) = 1 + 4.5g + 19g² − 43.3g³
+                  C(g) = 1 + 4.5g + 19gÂ² âˆ’ 43.3gÂ³
                 </p>
                 <p style={{ margin: 0 }}>
-                  A bar at <strong>1.5×</strong> means that section demands 50% more energy than the same distance on flat ground.
-                  Bars <em>below</em> 1.0× represent descents where gravity reduces locomotion cost —
+                  A bar at <strong>1.5Ã—</strong> means that section demands 50% more energy than the same distance on flat ground.
+                  Bars <em>below</em> 1.0Ã— represent descents where gravity reduces locomotion cost â€”
                   but note that steep downhill running imposes high <strong>eccentric quad load</strong> even when the energy figure looks favourable,
                   and is a primary driver of late-race muscle damage and slowing.
-                  The overall effort ratio of <strong>{effortRatio.toFixed(2)}×</strong> means this course demands{" "}
-                  <strong>{((effortRatio - 1) * 100).toFixed(0)}% more energy</strong> than a flat course of the same distance —
+                  The overall effort ratio of <strong>{effortRatio.toFixed(2)}Ã—</strong> means this course demands{" "}
+                  <strong>{((effortRatio - 1) * 100).toFixed(0)}% more energy</strong> than a flat course of the same distance â€”
                   {" "}<em>{effortRatioLabel}</em>.
-                  It is calculated as flat-equivalent distance ÷ actual distance, where flat-equivalent distance weights each
-                  section by the Minetti cost function above.
+                  Climbing sections are weighted by the Minetti cost function above.
+                  Descent sections are treated as 1.0Ã— (flat-equivalent) rather than as a benefit,
+                  because eccentric quad loading on downhills accumulates significant fatigue
+                  regardless of the lower aerobic cost.
                 </p>
               </div>
               <div style={{ marginBottom: "24px" }}>
                 <EffortProfileChart sections={result.terrain_sections} totalKm={totalKm} />
                 <div style={{ display: "flex", gap: "16px", marginTop: "5px", flexWrap: "wrap" }}>
-                  {[{ color: "#c0392b", label: "≥1.5× very hard" }, { color: "#e65100", label: "1.2–1.5× hard" }, { color: "#78909c", label: "0.9–1.2× moderate" }, { color: "#64b5f6", label: "0.7–0.9× easy descent" }, { color: "#1976d2", label: "<0.7× steep descent" }].map(({ color, label }) => (
+                  {[{ color: "#c0392b", label: "â‰¥1.5Ã— very hard" }, { color: "#e65100", label: "1.2â€“1.5Ã— hard" }, { color: "#78909c", label: "0.9â€“1.2Ã— moderate" }, { color: "#64b5f6", label: "0.7â€“0.9Ã— easy descent" }, { color: "#1976d2", label: "<0.7Ã— steep descent" }].map(({ color, label }) => (
                     <div key={label} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                       <div style={{ width: "10px", height: "10px", background: color, borderRadius: "2px", opacity: 0.85 }} />
                       <span style={{ fontSize: "9px", color: "#666" }}>{label}</span>
@@ -1288,19 +1017,19 @@ export default function RaceIntelligencePage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <DemandCard title="Steepest Climb" accent="#c0392b">
                   {steepestClimb
-                    ? <>{steepestClimb.avg_gradient_percent.toFixed(1)}% avg · {steepestClimb.distance_km.toFixed(1)} km · km {steepestClimb.start_km.toFixed(0)}–{steepestClimb.end_km.toFixed(0)}</>
+                    ? <>{steepestClimb.avg_gradient_percent.toFixed(1)}% avg Â· {steepestClimb.distance_km.toFixed(1)} km Â· km {steepestClimb.start_km.toFixed(0)}â€“{steepestClimb.end_km.toFixed(0)}</>
                     : "No significant climbs"}
                 </DemandCard>
                 <DemandCard title="Steepest Descent" accent="#1565c0">
                   {steepestDescent
-                    ? <>{Math.abs(steepestDescent.avg_gradient_percent).toFixed(1)}% avg · {steepestDescent.distance_km.toFixed(1)} km · km {steepestDescent.start_km.toFixed(0)}–{steepestDescent.end_km.toFixed(0)}</>
+                    ? <>{Math.abs(steepestDescent.avg_gradient_percent).toFixed(1)}% avg Â· {steepestDescent.distance_km.toFixed(1)} km Â· km {steepestDescent.start_km.toFixed(0)}â€“{steepestDescent.end_km.toFixed(0)}</>
                     : "No significant descents"}
                 </DemandCard>
                 <DemandCard title="Pacing Complexity" accent={complexityColor}>
-                  <strong>{complexityLabel}</strong> — effort varies {cvRatio.toFixed(2)} across sections.
-                  {steepClimbKm > 0 && <> {steepClimbKm.toFixed(1)} km of steep climbing (≥8%).</>}
-                  {steepDescentKm > 0 && <> {steepDescentKm.toFixed(1)} km of steep descent (≥8%).</>}
-                  {runnableKm > 0 && <> {runnableKm.toFixed(1)} km runnable (0–3%).</>}
+                  <strong>{complexityLabel}</strong> â€” effort varies {cvRatio.toFixed(2)} across sections.
+                  {steepClimbKm > 0 && <> {steepClimbKm.toFixed(1)} km of steep climbing (â‰¥8%).</>}
+                  {steepDescentKm > 0 && <> {steepDescentKm.toFixed(1)} km of steep descent (â‰¥8%).</>}
+                  {runnableKm > 0 && <> {runnableKm.toFixed(1)} km runnable (0â€“3%).</>}
                 </DemandCard>
                 <DemandCard title="Technical Terrain" accent="#e65100">
                   {technicalPct > 0
@@ -1314,7 +1043,7 @@ export default function RaceIntelligencePage() {
                   <p style={{ ...sectionLabel, marginTop: "28px", marginBottom: "8px" }}>Course Character Breakdown</p>
                   <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#555", lineHeight: "1.5" }}>
                     Every gradient-surface combination on this course, ranked by distance. This shows exactly what type of effort is required
-                    and on what terrain — useful for identifying specific preparation needs (e.g. downhill running on technical trail, sustained climbing on fell).
+                    and on what terrain â€” useful for identifying specific preparation needs (e.g. downhill running on technical trail, sustained climbing on fell).
                   </p>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
@@ -1333,27 +1062,27 @@ export default function RaceIntelligencePage() {
                         const gradColor = p.avg_gradient > 8 ? "#c0392b" : p.avg_gradient > 3 ? "#e65100" : p.avg_gradient < -8 ? "#0d47a1" : p.avg_gradient < -3 ? "#1976d2" : "#546e7a";
                         const effortColor = p.effort_ratio >= 1.5 ? "#c0392b" : p.effort_ratio >= 1.2 ? "#e65100" : p.effort_ratio <= 0.7 ? "#0d47a1" : p.effort_ratio <= 0.9 ? "#1976d2" : "#555";
                         const noteMap: Record<string, string> = {
-                          "steep_climb|technical_trail": "Hard anaerobic climbing — hands may be needed",
-                          "steep_climb|fell":            "Steep fell climbing — expect power hiking",
-                          "steep_climb|road":            "Sustained road climb — manageable gradient but high volume",
-                          "steep_climb|trail":           "Trail climb — rhythmic effort, poles recommended",
-                          "sustained_climb|technical_trail": "Long technical climb — technical footing while working hard",
-                          "sustained_climb|fell":        "Open fell climbing — variable underfoot, exposed",
-                          "sustained_climb|road":        "Long road climb — steady aerobic effort",
-                          "sustained_climb|trail":       "Long trail climb — key to race strategy",
-                          "mild_climb|trail":            "Runnable climb — maintain rhythm",
-                          "mild_climb|road":             "Easy road rise — target a consistent pace",
-                          "flat|road":                   "Fast runnable section — opportunity to recover time",
-                          "flat|trail":                  "Flat trail — variable underfoot, less consistent pace",
-                          "flat|fell":                   "Flat fell — soft ground, higher energy cost than road",
-                          "mild_descent|trail":          "Runnable descent — controlled momentum",
-                          "mild_descent|road":           "Fast road descent — protect quads",
-                          "sustained_descent|technical_trail": "Technical descent — high quad damage risk, key training target",
-                          "sustained_descent|fell":      "Open fell descent — technical footing, high speed possible",
-                          "sustained_descent|trail":     "Long descent — quad-loading, pace management critical",
-                          "steep_descent|technical_trail": "Very steep technical descent — highest quad damage risk on course",
-                          "steep_descent|fell":          "Very steep fell descent — bracken/rocks, high injury risk",
-                          "steep_descent|road":          "Steep road descent — aggressive braking forces",
+                          "steep_climb|technical_trail": "Hard anaerobic climbing â€” hands may be needed",
+                          "steep_climb|fell":            "Steep fell climbing â€” expect power hiking",
+                          "steep_climb|road":            "Sustained road climb â€” manageable gradient but high volume",
+                          "steep_climb|trail":           "Trail climb â€” rhythmic effort, poles recommended",
+                          "sustained_climb|technical_trail": "Long technical climb â€” technical footing while working hard",
+                          "sustained_climb|fell":        "Open fell climbing â€” variable underfoot, exposed",
+                          "sustained_climb|road":        "Long road climb â€” steady aerobic effort",
+                          "sustained_climb|trail":       "Long trail climb â€” key to race strategy",
+                          "mild_climb|trail":            "Runnable climb â€” maintain rhythm",
+                          "mild_climb|road":             "Easy road rise â€” target a consistent pace",
+                          "flat|road":                   "Fast runnable section â€” opportunity to recover time",
+                          "flat|trail":                  "Flat trail â€” variable underfoot, less consistent pace",
+                          "flat|fell":                   "Flat fell â€” soft ground, higher energy cost than road",
+                          "mild_descent|trail":          "Runnable descent â€” controlled momentum",
+                          "mild_descent|road":           "Fast road descent â€” protect quads",
+                          "sustained_descent|technical_trail": "Technical descent â€” high quad damage risk, key training target",
+                          "sustained_descent|fell":      "Open fell descent â€” technical footing, high speed possible",
+                          "sustained_descent|trail":     "Long descent â€” quad-loading, pace management critical",
+                          "steep_descent|technical_trail": "Very steep technical descent â€” highest quad damage risk on course",
+                          "steep_descent|fell":          "Very steep fell descent â€” bracken/rocks, high injury risk",
+                          "steep_descent|road":          "Steep road descent â€” aggressive braking forces",
                         };
                         const noteKey = `${p.section_type}|${p.terrain}`;
                         const note = noteMap[noteKey] ?? `${p.section_type.replaceAll("_", " ")} on ${p.terrain.replaceAll("_", " ")}`;
@@ -1364,7 +1093,7 @@ export default function RaceIntelligencePage() {
                             <td style={{ ...tdStyle, fontFamily: "monospace" }}>{p.total_km.toFixed(1)} km</td>
                             <td style={{ ...tdStyle, fontWeight: 600 }}>{p.pct.toFixed(0)}%</td>
                             <td style={{ ...tdStyle, color: gradColor }}>{p.avg_gradient > 0 ? "+" : ""}{p.avg_gradient.toFixed(1)}%</td>
-                            <td style={{ ...tdStyle, fontWeight: 600, color: effortColor }}>{p.effort_ratio.toFixed(2)}×</td>
+                            <td style={{ ...tdStyle, fontWeight: 600, color: effortColor }}>{p.effort_ratio.toFixed(2)}Ã—</td>
                             <td style={{ ...tdStyle, fontSize: "10px", color: "#555" }}>{note}</td>
                           </tr>
                         );
@@ -1376,7 +1105,7 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* ── Page 4: Aid Stations ── */}
+          {/* â”€â”€ Page 4: Aid Stations â”€â”€ */}
           {(result.aid_stations?.length ?? 0) > 0 && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -1415,7 +1144,7 @@ export default function RaceIntelligencePage() {
                 <tbody>
                   {(result.aid_stations ?? []).sort((a, b) => a.km - b.km).map((s, i, arr) => {
                     const gap = i === 0 ? s.km : s.km - arr[i - 1].km;
-                    const tick = (v: boolean) => <span style={{ color: v ? "#2e7d32" : "#bbb" }}>{v ? "✓" : "–"}</span>;
+                    const tick = (v: boolean) => <span style={{ color: v ? "#2e7d32" : "#bbb" }}>{v ? "âœ“" : "â€“"}</span>;
                     return (
                       <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                         <td style={{ ...tdStyle, fontWeight: 600 }}>{s.km.toFixed(1)}</td>
@@ -1434,7 +1163,7 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* ── Page 5: Historical Field Data ── */}
+          {/* â”€â”€ Page 5: Historical Field Data â”€â”€ */}
           {fieldStats && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -1453,11 +1182,11 @@ export default function RaceIntelligencePage() {
                         { label: "Total finishers", value: fieldStats.aggregate.total_finishers.toLocaleString() },
                         { label: "DNF rate", value: `${(fieldStats.aggregate.dnf_rate * 100).toFixed(1)}%`, color: fieldStats.aggregate.dnf_rate > 0.25 ? "#c0392b" : fieldStats.aggregate.dnf_rate > 0.1 ? "#e65100" : "#2e7d32" },
                         { label: "Years of data", value: String(fieldStats.aggregate.years_of_data) },
-                        { label: "Course record", value: fieldStats.aggregate.fastest_seconds ? formatSecs(fieldStats.aggregate.fastest_seconds) : "—" },
-                        { label: "Median finish", value: fieldStats.aggregate.median_seconds ? formatSecs(fieldStats.aggregate.median_seconds) : "—" },
-                        { label: "P25 (fast quarter)", value: fieldStats.aggregate.p25_seconds ? formatSecs(fieldStats.aggregate.p25_seconds) : "—" },
-                        { label: "P75 (slow quarter)", value: fieldStats.aggregate.p75_seconds ? formatSecs(fieldStats.aggregate.p75_seconds) : "—" },
-                        { label: "Race type", value: fieldStats.aggregate.cluster_label ?? "—" },
+                        { label: "Course record", value: fieldStats.aggregate.fastest_seconds ? formatSecs(fieldStats.aggregate.fastest_seconds) : "â€”" },
+                        { label: "Median finish", value: fieldStats.aggregate.median_seconds ? formatSecs(fieldStats.aggregate.median_seconds) : "â€”" },
+                        { label: "P25 (fast quarter)", value: fieldStats.aggregate.p25_seconds ? formatSecs(fieldStats.aggregate.p25_seconds) : "â€”" },
+                        { label: "P75 (slow quarter)", value: fieldStats.aggregate.p75_seconds ? formatSecs(fieldStats.aggregate.p75_seconds) : "â€”" },
+                        { label: "Race type", value: fieldStats.aggregate.cluster_label ?? "â€”" },
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{ background: "#f9f9f9", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "12px 14px" }}>
                           <p style={sectionLabel}>{label}</p>
@@ -1491,7 +1220,7 @@ export default function RaceIntelligencePage() {
                                 {(yr.dnf_rate * 100).toFixed(1)}%
                               </td>
                               <td style={{ ...tdStyle, fontFamily: "monospace" }}>
-                                {yr.median_seconds ? formatSecs(yr.median_seconds) : "—"}
+                                {yr.median_seconds ? formatSecs(yr.median_seconds) : "â€”"}
                               </td>
                             </tr>
                           ))}
@@ -1520,12 +1249,12 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* ── Page 6: Finish Time Distribution ── */}
+          {/* â”€â”€ Page 6: Finish Time Distribution â”€â”€ */}
           {fieldStats?.has_data && (fieldStats.distribution ?? []).length > 0 && fieldStats.aggregate && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
                 <p style={{ ...sectionLabel, color: "#1e3a1e", margin: 0 }}>Finish Time Distribution</p>
-                <p style={{ margin: 0, fontSize: "11px", color: "#888" }}>{result.race.name} · all years combined</p>
+                <p style={{ margin: 0, fontSize: "11px", color: "#888" }}>{result.race.name} Â· all years combined</p>
               </div>
 
               <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#555" }}>
@@ -1545,7 +1274,7 @@ export default function RaceIntelligencePage() {
                   ].map(({ label, secs, color }) => (
                     <div key={label} style={{ background: "#f9f9f9", border: `1px solid ${color}30`, borderTop: `3px solid ${color}`, borderRadius: "6px", padding: "10px 12px" }}>
                       <p style={{ ...sectionLabel, color }}>{label}</p>
-                      <p style={{ margin: 0, fontSize: "16px", fontWeight: 700, color }}>{secs ? formatSecs(secs) : "—"}</p>
+                      <p style={{ margin: 0, fontSize: "16px", fontWeight: 700, color }}>{secs ? formatSecs(secs) : "â€”"}</p>
                     </div>
                   ))}
                 </div>
@@ -1553,7 +1282,7 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* ── Page 7: Weather Intelligence ── */}
+          {/* â”€â”€ Page 7: Weather Intelligence â”€â”€ */}
           {(weatherLoading || weather.length > 0) && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -1562,7 +1291,7 @@ export default function RaceIntelligencePage() {
               </div>
 
               {weatherLoading ? (
-                <p style={{ color: "#888", fontSize: "13px" }}>Loading historical weather data…</p>
+                <p style={{ color: "#888", fontSize: "13px" }}>Loading historical weather dataâ€¦</p>
               ) : weather.length === 0 ? (
                 <p style={{ color: "#888", fontSize: "13px" }}>No weather history available for this race date and location.</p>
               ) : (
@@ -1573,10 +1302,10 @@ export default function RaceIntelligencePage() {
 
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "28px" }}>
                     {[
-                      { label: "Typical high", value: avgMaxTemp !== null ? `${avgMaxTemp.toFixed(1)} °C` : "—" },
-                      { label: "Typical low", value: avgMinTemp !== null ? `${avgMinTemp.toFixed(1)} °C` : "—" },
-                      { label: "Avg precipitation", value: avgPrecip !== null ? `${avgPrecip.toFixed(1)} mm` : "—" },
-                      { label: "Wet day probability", value: wetPct !== null ? `${wetPct}%` : "—", color: wetPct !== null && wetPct > 50 ? "#c0392b" : wetPct !== null && wetPct > 25 ? "#e65100" : "#2e7d32" },
+                      { label: "Typical high", value: avgMaxTemp !== null ? `${avgMaxTemp.toFixed(1)} Â°C` : "â€”" },
+                      { label: "Typical low", value: avgMinTemp !== null ? `${avgMinTemp.toFixed(1)} Â°C` : "â€”" },
+                      { label: "Avg precipitation", value: avgPrecip !== null ? `${avgPrecip.toFixed(1)} mm` : "â€”" },
+                      { label: "Wet day probability", value: wetPct !== null ? `${wetPct}%` : "â€”", color: wetPct !== null && wetPct > 50 ? "#c0392b" : wetPct !== null && wetPct > 25 ? "#e65100" : "#2e7d32" },
                     ].map(({ label, value, color }) => (
                       <div key={label} style={{ background: "#f9f9f9", border: "1px solid #e0e0e0", borderRadius: "8px", padding: "12px 14px" }}>
                         <p style={sectionLabel}>{label}</p>
@@ -1590,8 +1319,8 @@ export default function RaceIntelligencePage() {
                     <thead>
                       <tr>
                         <th style={thStyle}>Year</th>
-                        <th style={thStyle}>Min °C</th>
-                        <th style={thStyle}>Max °C</th>
+                        <th style={thStyle}>Min Â°C</th>
+                        <th style={thStyle}>Max Â°C</th>
                         <th style={thStyle}>Precipitation (mm)</th>
                         <th style={thStyle}>Conditions</th>
                       </tr>
@@ -1603,9 +1332,9 @@ export default function RaceIntelligencePage() {
                         const condColor = precip > 5 ? "#1565c0" : precip > 1 ? "#1976d2" : (d.temp_max_c ?? 20) > 25 ? "#c62828" : "#2e7d32";
                         return (
                           <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                            <td style={{ ...tdStyle, fontWeight: 600 }}>{(d as { year?: number }).year ?? "—"}</td>
-                            <td style={tdStyle}>{d.temp_min_c?.toFixed(1) ?? "—"}</td>
-                            <td style={tdStyle}>{d.temp_max_c?.toFixed(1) ?? "—"}</td>
+                            <td style={{ ...tdStyle, fontWeight: 600 }}>{(d as { year?: number }).year ?? "â€”"}</td>
+                            <td style={tdStyle}>{d.temp_min_c?.toFixed(1) ?? "â€”"}</td>
+                            <td style={tdStyle}>{d.temp_max_c?.toFixed(1) ?? "â€”"}</td>
                             <td style={tdStyle}>{precip.toFixed(1)}</td>
                             <td style={{ ...tdStyle, color: condColor, fontWeight: 600 }}>{condLabel}</td>
                           </tr>
@@ -1623,7 +1352,7 @@ export default function RaceIntelligencePage() {
       {/* Loading state before any result */}
       {generating && !result && (
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "200px" }}>
-          <p style={{ color: "#888", fontSize: "14px" }}>Generating race intelligence report…</p>
+          <p style={{ color: "#888", fontSize: "14px" }}>Generating race intelligence reportâ€¦</p>
         </div>
       )}
     </main>
