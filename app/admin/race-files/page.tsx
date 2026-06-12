@@ -350,7 +350,20 @@ export default function RaceFilesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ race_id: raceId }),
       });
-      const json = await res.json();
+
+      let json: { success?: boolean; error?: string; total_distance_km?: number; flat_equivalent_km?: number; difficulty_ratio?: number; wind_adjusted_flat_equivalent_km?: number; terrain_source?: string; terrain_segments_count?: number } = {};
+      try {
+        json = await res.json();
+      } catch {
+        // Non-JSON response (e.g. Vercel 504 timeout on large course)
+        setProfileError((prev) => ({
+          ...prev,
+          [raceId]: res.status === 504
+            ? "Request timed out — the terrain analysis may take too long for this course length. Try again; it will use cached terrain data if available."
+            : `Server error (HTTP ${res.status}) — check the server logs.`,
+        }));
+        return;
+      }
 
       if (!res.ok || !json.success) {
         setProfileError((prev) => ({ ...prev, [raceId]: json.error ?? "Generation failed" }));

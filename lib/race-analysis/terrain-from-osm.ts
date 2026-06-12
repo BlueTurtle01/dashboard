@@ -62,7 +62,7 @@ async function tryFetch(url: string, query: string): Promise<OsmWay[]> {
       Accept: "application/json",
       "User-Agent": "CoachDashboard-TerrainAnalysis/1.0 (race training platform)",
     },
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(12_000),
   });
 
   if (!res.ok) {

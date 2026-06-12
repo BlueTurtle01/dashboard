@@ -177,12 +177,15 @@ function buildColMap(headers: string[]): ColMap {
     else if (key === "nation") map.nation = i;
     // Club/team aliases
     else if (key === "team" || key === "club") map.team = i;
-    // Gender aliases: gender (repeat logic), sex
+    // Gender aliases: gender (repeat logic), sex, gender_2 (_2-suffix format)
     else if (key === "gender" && occurrence === 2) map.genderValue = i;
     else if (key === "gender" && occurrence === 1) {
       if (map.genderValue === null) map.genderValue = i;
     }
     else if (key === "sex" && map.genderValue === null) map.genderValue = i;
+    // Some timing exports use _2 suffix for value columns vs rank columns.
+    // gender_2 always overrides whatever gender column was found earlier.
+    else if (key === "gender_2") map.genderValue = i;
     // 2nd Class = age group / category name
     else if ((key === "class" || key === "category" || key === "cat") && occurrence === 2) map.ageGroup = i;
     else if ((key === "class" || key === "category" || key === "cat") && occurrence === 1) {
