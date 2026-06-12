@@ -96,7 +96,267 @@ function formatRaceTime(totalMinutes: number): string {
 
 function formatSecs(s: number): string { return formatRaceTime(s / 60); }
 
-/* â”€â”€ OSM helpers â”€â”€ */
+async function exportRaceIntelligencePdf(
+  result: OverviewResponse,
+  fieldStats: FieldStatsResponse,
+  weather: WeatherDayRecord[],
+) {
+  const [{ jsPDF }, autoTableModule] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+  const autoTable = autoTableModule.default;
+  type PdfDoc = InstanceType<typeof jsPDF> & { lastAutoTable?: { finalY: number } };
+
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" }) as PdfDoc;
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const marginX = 14;
+  const headerY = 10;
+  const contentTop = 28;
+  const footerReserve = 16;
+  const contentW = pageW - marginX * 2;
+  let y = contentTop;
+
+  const raceName = result.race.name;
+
+  const pdfDate = (v: string | null | undefined) => {
+    if (!v) return "-";
+    return new Date(v + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  };
+  const pdfKm  = (v: number | null | undefined, d = 1) => v == null ? "-" : `${v.toFixed(d)} km`;
+  const pdfM   = (v: number | null | undefined) => v == null ? "-" : `${Math.round(v).toLocaleString()} m`;
+  const pdfT   = (s: number | null | undefined) => (!s || s <= 0) ? "-" : formatSecs(s);
+  const pdfPct = (v: number | null | undefined) => v == null ? "-" : `${(v * 100).toFixed(1)}%`;
+
+  const drawHeader = () => {
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageW, 24, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(30, 58, 30);
+    doc.text("Tortoise Endurance", marginX, headerY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Race Intelligence Report", marginX, headerY + 5);
+    doc.text(raceName, pageW - marginX, headerY, { align: "right" });
+    doc.setDrawColor(30, 58, 30);
+    doc.setLineWidth(0.4);
+    doc.line(marginX, 22, pageW - marginX, 22);
+  };
+
+  const ensureSpace = (height: number) => {
+    if (y + height > pageH - footerReserve) { doc.addPage(); drawHeader(); y = contentTop; }
+  };
+
+  const addSection = (title: string) => {
+    ensureSpace(13);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(30, 58, 30);
+    doc.text(title, marginX, y);
+    y += 5;
+    doc.setDrawColor(210, 220, 210);
+    doc.line(marginX, y, pageW - marginX, y);
+    y += 5;
+  };
+
+  const addText = (text: string, size = 9.5, gap = 4) => {
+    if (!text.trim()) return;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(size);
+    doc.setTextColor(55, 55, 55);
+    const lines = doc.splitTextToSize(text, contentW) as string[];
+    for (const line of lines) { ensureSpace(size * 0.55); doc.text(line, marginX, y); y += size * 0.42; }
+    y += gap;
+  };
+
+  const addKeyValues = (rows: [string, string][]) => {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: marginX, right: marginX, top: contentTop, bottom: footerReserve },
+      body: rows,
+      theme: "grid",
+      styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2.2, overflow: "linebreak", valign: "top" },
+      columnStyles: { 0: { fontStyle: "bold", textColor: [30, 58, 30], cellWidth: 48 }, 1: { cellWidth: contentW - 48 } },
+      rowPageBreak: "avoid",
+      didDrawPage: drawHeader,
+    });
+    y = (doc.lastAutoTable?.finalY ?? y) + 7;
+  };
+
+  const addTable = (title: string, head: string[], body: (string | number)[][], columnStyles = {}) => {
+    if (body.length === 0) return;
+    addSection(title);
+    autoTable(doc, {
+      startY: y,
+      margin: { left: marginX, right: marginX, top: contentTop, bottom: footerReserve },
+      head: [head],
+      body,
+      theme: "striped",
+      styles: { font: "helvetica", fontSize: 7.8, cellPadding: 1.8, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: [30, 58, 30], textColor: [255, 255, 255], fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [248, 250, 248] },
+      rowPageBreak: "avoid",
+      showHead: "everyPage",
+      columnStyles,
+      didDrawPage: drawHeader,
+    });
+    y = (doc.lastAutoTable?.finalY ?? y) + 8;
+  };
+
+  drawHeader();
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(30, 58, 30);
+  doc.text("Race Intelligence Report", marginX, y);
+  y += 10;
+  doc.setFontSize(16);
+  doc.text(raceName, marginX, y);
+  y += 10;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(`Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, marginX, y);
+  y += 12;
+
+  const agg = fieldStats.aggregate;
+  addKeyValues([
+    ["Race date",     pdfDate(result.race.race_date)],
+    ["Distance",      pdfKm(result.race.total_distance_km)],
+    ["Ascent",        pdfM(result.race.total_ascent_m)],
+    ["Descent",       pdfM(result.race.total_descent_m)],
+    ["Race type",     agg?.cluster_label ?? "-"],
+    ["Aid stations",  String(result.aid_stations?.length ?? 0)],
+    ["Terrain types", String(new Set(result.terrain_sections.map(s => s.terrain)).size)],
+  ]);
+
+  if (agg) {
+    addSection("Historical Field Statistics");
+    addKeyValues([
+      ["Total finishers",  agg.total_finishers.toLocaleString()],
+      ["Total starters",   agg.total_starters.toLocaleString()],
+      ["DNF rate",         pdfPct(agg.dnf_rate)],
+      ["Years of data",    String(agg.years_of_data)],
+      ["Course record",    pdfT(agg.fastest_seconds)],
+      ["Median finish",    pdfT(agg.median_seconds)],
+      ["P25 / P75 window", `${pdfT(agg.p25_seconds)} – ${pdfT(agg.p75_seconds)}`],
+    ]);
+  }
+
+  addTable(
+    "Terrain Sections",
+    ["Start", "End", "Km", "Type", "Surface", "Gradient", "Ascent", "Descent"],
+    result.terrain_sections.map(s => [
+      s.start_km.toFixed(1), s.end_km.toFixed(1), s.distance_km.toFixed(1),
+      s.section_type.replaceAll("_", " "), s.terrain.replaceAll("_", " "),
+      `${s.avg_gradient_percent.toFixed(1)}%`, Math.round(s.ascent_m), Math.round(s.descent_m),
+    ]),
+    { 3: { cellWidth: 28 }, 4: { cellWidth: 28 } },
+  );
+
+  (() => {
+    const map = new Map<string, { section_type: string; terrain: string; km: number; flatEq: number; gradients: number[] }>();
+    for (const s of result.terrain_sections) {
+      const key = `${s.section_type}|${s.terrain}`;
+      if (!map.has(key)) map.set(key, { section_type: s.section_type, terrain: s.terrain, km: 0, flatEq: 0, gradients: [] });
+      const p = map.get(key)!;
+      p.km += s.distance_km;
+      p.flatEq += s.flat_equivalent_km;
+      p.gradients.push(s.avg_gradient_percent);
+    }
+    const grand = [...map.values()].reduce((s, p) => s + p.km, 0);
+    const rows = [...map.values()]
+      .sort((a, b) => b.km - a.km)
+      .map(p => {
+        const avgGrad = p.gradients.reduce((a, b) => a + b, 0) / Math.max(p.gradients.length, 1);
+        const effort = p.km > 0 ? p.flatEq / p.km : 1;
+        return [
+          p.section_type.replaceAll("_", " "),
+          p.terrain.replaceAll("_", " "),
+          `${p.km.toFixed(1)} km`,
+          `${grand > 0 ? ((p.km / grand) * 100).toFixed(0) : "0"}%`,
+          `${avgGrad > 0 ? "+" : ""}${avgGrad.toFixed(1)}%`,
+          `${effort.toFixed(2)}x`,
+        ];
+      });
+    addTable(
+      "Course Character Breakdown",
+      ["Gradient type", "Surface", "Distance", "% course", "Avg gradient", "Effort"],
+      rows,
+      { 0: { cellWidth: 38 }, 1: { cellWidth: 32 } },
+    );
+  })();
+
+  addTable(
+    "Aid Stations",
+    ["Km", "Name", "Water", "Food", "Medic", "Toilets", "Drop bags"],
+    (result.aid_stations ?? []).sort((a, b) => a.km - b.km).map((s, i, arr) => {
+      const gap = i === 0 ? s.km : s.km - arr[i - 1].km;
+      return [
+        `${s.km.toFixed(1)} (${gap.toFixed(1)} gap)`,
+        s.name ?? `Station ${i + 1}`,
+        s.water    ? "Yes" : "No",
+        s.food     ? "Yes" : "No",
+        s.medic    ? "Yes" : "No",
+        s.toilets  ? "Yes" : "No",
+        s.dropBags ? "Yes" : "No",
+      ];
+    }),
+    { 0: { cellWidth: 30 }, 1: { cellWidth: 45 } },
+  );
+
+  if ((fieldStats.by_year ?? []).length > 0) {
+    addTable(
+      "Year-by-Year Field Results",
+      ["Year", "Finishers", "Starters", "DNF rate", "Median finish"],
+      (fieldStats.by_year ?? []).map(yr => [
+        yr.year, yr.finishers.toLocaleString(), yr.starters.toLocaleString(),
+        `${(yr.dnf_rate * 100).toFixed(1)}%`, pdfT(yr.median_seconds),
+      ]),
+    );
+  }
+
+  if ((fieldStats.by_gender ?? []).length > 1) {
+    addTable(
+      "Gender Breakdown",
+      ["Gender", "Finishers", "Median finish"],
+      (fieldStats.by_gender ?? []).map(g => [g.gender, g.count.toLocaleString(), pdfT(g.median_seconds)]),
+    );
+  }
+
+  if (weather.length > 0) {
+    addSection("Historical Weather");
+    const avgMax = weather.reduce((s, d) => s + (d.temp_max_c ?? 0), 0) / weather.length;
+    const avgMin = weather.reduce((s, d) => s + (d.temp_min_c ?? 0), 0) / weather.length;
+    const avgPrecip = weather.reduce((s, d) => s + (d.precipitation_mm ?? 0), 0) / weather.length;
+    const wetPct = Math.round((weather.filter(d => (d.precipitation_mm ?? 0) > 1).length / weather.length) * 100);
+    addText(`Based on ${weather.length} years of historical data for the race date and location.`);
+    addKeyValues([
+      ["Typical temperature",   `${avgMin.toFixed(1)} – ${avgMax.toFixed(1)} °C`],
+      ["Average precipitation", `${avgPrecip.toFixed(1)} mm`],
+      ["Wet day probability",   `${wetPct}%`],
+    ]);
+  }
+
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    drawHeader();
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(130, 130, 130);
+    doc.text(`Page ${i} of ${pageCount}`, pageW - marginX, pageH - 8, { align: "right" });
+    doc.text("Race Intelligence Report — course data", marginX, pageH - 8);
+  }
+
+  const safeRaceName = raceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "race";
+  doc.save(`${safeRaceName}-intelligence.pdf`);
+}
+
+/* ── OSM helpers ── */
 function osmMercX(lon: number) { return (lon + 180) / 360; }
 function osmMercY(lat: number) { const s = Math.sin(lat * Math.PI / 180); return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI); }
 function osmTileX(lon: number, z: number) { return Math.floor(osmMercX(lon) * Math.pow(2, z)); }
@@ -572,6 +832,7 @@ export default function RaceIntelligencePage() {
   const [fieldStatsLoading, setFieldStatsLoading] = useState(false);
   const [weather, setWeather]           = useState<WeatherDayRecord[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [pdfExporting, setPdfExporting]   = useState(false);
 
   // Derived — elevation + segments
   const elevProfile   = result ? parseElevProfile(result.elevation_profile) : null;
@@ -796,8 +1057,14 @@ export default function RaceIntelligencePage() {
     setGenerating(false);
   }
 
-  function handleExportPdf() {
-    window.print();
+  async function handleExportPdf() {
+    if (!result || !fieldStats) return;
+    setPdfExporting(true);
+    try {
+      await exportRaceIntelligencePdf(result, fieldStats, weather);
+    } finally {
+      setPdfExporting(false);
+    }
   }
 
   const SURFACE_COLORS: Record<string, string> = {
@@ -820,8 +1087,8 @@ export default function RaceIntelligencePage() {
           {genError && <span style={{ fontSize: "12px", color: "#b00020" }}>{genError}</span>}
         </div>
         {result && (
-          <button type="button" onClick={handleExportPdf} style={printBtn}>
-            Print / Save PDF
+          <button type="button" onClick={() => void handleExportPdf()} disabled={pdfExporting} style={{ ...printBtn, opacity: pdfExporting ? 0.65 : 1, cursor: pdfExporting ? "default" : "pointer" }}>
+            {pdfExporting ? "Generating PDF…" : "Export PDF"}
           </button>
         )}
       </div>
@@ -843,7 +1110,7 @@ export default function RaceIntelligencePage() {
             }
           `}} />
 
-          {/* â”€â”€ Page 1: Race Overview â”€â”€ */}
+          {/* â"€â"€ Page 1: Race Overview â"€â"€ */}
           <div style={a4Page} className="rr-page rr-page-first">
             <div style={printHeader}>
               <div>
@@ -906,7 +1173,7 @@ export default function RaceIntelligencePage() {
             )}
           </div>
 
-          {/* â”€â”€ Page 2: Elevation & Terrain â”€â”€ */}
+          {/* â"€â"€ Page 2: Elevation & Terrain â"€â"€ */}
           {(elevProfile || result.terrain_sections.length > 0) && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -960,7 +1227,7 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* â”€â”€ Page 3: Course Demands â”€â”€ */}
+          {/* â"€â"€ Page 3: Course Demands â"€â"€ */}
           {result.terrain_sections.length > 0 && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -1109,7 +1376,7 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* â”€â”€ Page 4: Aid Stations â”€â”€ */}
+          {/* â"€â"€ Page 4: Aid Stations â"€â"€ */}
           {(result.aid_stations?.length ?? 0) > 0 && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -1167,7 +1434,7 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* â”€â”€ Page 5: Historical Field Data â”€â”€ */}
+          {/* â"€â"€ Page 5: Historical Field Data â"€â"€ */}
           {fieldStats && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -1253,7 +1520,7 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* â”€â”€ Page 6: Finish Time Distribution â”€â”€ */}
+          {/* â"€â"€ Page 6: Finish Time Distribution â"€â"€ */}
           {fieldStats?.has_data && (fieldStats.distribution ?? []).length > 0 && fieldStats.aggregate && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
@@ -1286,7 +1553,7 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* â”€â”€ Page 7: Weather Intelligence â”€â”€ */}
+          {/* â"€â"€ Page 7: Weather Intelligence â"€â"€ */}
           {(weatherLoading || weather.length > 0) && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>
