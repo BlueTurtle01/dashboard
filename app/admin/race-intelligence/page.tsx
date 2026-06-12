@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
 import type { FieldStatsResponse } from "@/app/api/race-intelligence/field-stats/route";
-import type { DnfCheckpointResponse } from "@/app/api/race-intelligence/dnf-checkpoints/route";
+import type { DnfCheckpointResponse, DnfCheckpointRow } from "@/app/api/race-intelligence/dnf-checkpoints/route";
 
 /* â”€â”€ API types â”€â”€ */
 interface RaceMeta {
@@ -253,6 +253,128 @@ function RouteMap({ route, windSections, width = 694, height = 200 }: {
           ))}
         </g>
       )}
+      <rect x={width - 158} y={height - 14} width={154} height={12} fill="white" opacity={0.75} />
+      <text x={width - 4} y={height - 4} textAnchor="end" fontSize="7.5" fill="#555">© OpenStreetMap contributors</text>
+    </svg>
+  );
+}
+
+/* ── Gradient route map helpers ── */
+function haversinKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371, toR = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toR, dLon = (lon2 - lon1) * toR;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toR) * Math.cos(lat2 * toR) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function interpolateElev(pts: ElevationPoint[], km: number): number {
+  if (!pts.length) return 0;
+  if (km <= pts[0].distanceKm) return pts[0].elevationM;
+  if (km >= pts[pts.length - 1].distanceKm) return pts[pts.length - 1].elevationM;
+  let lo = 0, hi = pts.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (pts[m].distanceKm <= km) lo = m; else hi = m; }
+  const t = (km - pts[lo].distanceKm) / (pts[hi].distanceKm - pts[lo].distanceKm);
+  return pts[lo].elevationM + t * (pts[hi].elevationM - pts[lo].elevationM);
+}
+
+/* ── Gradient route map ── */
+function GradientRouteMap({ route, elevProfile, width = 694, height = 300 }: {
+  route: { lat: number; lon: number }[];
+  elevProfile: RaceElevProfile;
+  width?: number;
+  height?: number;
+}) {
+  const clipId = useRef(`grm-${Math.random().toString(36).slice(2, 7)}`).current;
+  const [tiles, setTiles] = useState<OsmTile[]>([]);
+
+  useEffect(() => {
+    if (route.length < 2) { setTiles([]); return; }
+    const lats = route.map(p => p.lat), lons = route.map(p => p.lon);
+    const r0lat = Math.min(...lats), r1lat = Math.max(...lats), r0lon = Math.min(...lons), r1lon = Math.max(...lons);
+    const dlat = r1lat - r0lat, dlon = r1lon - r0lon;
+    const minLat = r0lat - dlat * 0.4 - 0.02, maxLat = r1lat + dlat * 0.4 + 0.02;
+    const minLon = r0lon - dlon * 0.4 - 0.03, maxLon = r1lon + dlon * 0.4 + 0.03;
+    let z = 12;
+    for (; z >= 7; z--) { if ((osmTileX(maxLon, z) - osmTileX(minLon, z) + 1) * (osmTileY(minLat, z) - osmTileY(maxLat, z) + 1) <= 16) break; }
+    const zPow = Math.pow(2, z);
+    const mx0 = osmMercX(minLon), mx1 = osmMercX(maxLon), my0 = osmMercY(maxLat), my1 = osmMercY(minLat);
+    const sc = Math.min(width / (mx1 - mx0), height / (my1 - my0));
+    const ox = (width - (mx1 - mx0) * sc) / 2, oy = (height - (my1 - my0) * sc) / 2;
+    const tsz = 1 / zPow;
+    const tx0 = osmTileX(minLon, z), tx1 = osmTileX(maxLon, z), ty0 = osmTileY(maxLat, z), ty1 = osmTileY(minLat, z);
+    const newTiles: OsmTile[] = [];
+    for (let tx = tx0; tx <= tx1; tx++)
+      for (let ty = ty0; ty <= ty1; ty++)
+        newTiles.push({ url: `https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`, x: ox + (tx * tsz - mx0) * sc, y: oy + (ty * tsz - my0) * sc, w: tsz * sc, h: tsz * sc });
+    setTiles(newTiles);
+  }, [route, width, height]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (route.length < 2) return null;
+
+  const lats = route.map(p => p.lat), lons = route.map(p => p.lon);
+  const r0lat = Math.min(...lats), r1lat = Math.max(...lats), r0lon = Math.min(...lons), r1lon = Math.max(...lons);
+  const dlat = r1lat - r0lat, dlon = r1lon - r0lon;
+  const minLat = r0lat - dlat * 0.4 - 0.02, maxLat = r1lat + dlat * 0.4 + 0.02;
+  const minLon = r0lon - dlon * 0.4 - 0.03, maxLon = r1lon + dlon * 0.4 + 0.03;
+  const mx0 = osmMercX(minLon), mx1 = osmMercX(maxLon), my0 = osmMercY(maxLat), my1 = osmMercY(minLat);
+  const sc = Math.min(width / (mx1 - mx0), height / (my1 - my0));
+  const ox = (width - (mx1 - mx0) * sc) / 2, oy = (height - (my1 - my0) * sc) / 2;
+  const toX = (lon: number) => ox + (osmMercX(lon) - mx0) * sc;
+  const toY = (lat: number) => oy + (osmMercY(lat) - my0) * sc;
+
+  // Downsample route for rendering (300 pts is enough for coloring)
+  const step = Math.max(1, Math.floor(route.length / 300));
+  const sampled = route.filter((_, i) => i % step === 0 || i === route.length - 1);
+
+  // Compute cumulative km along sampled route
+  const cumKm: number[] = [0];
+  for (let i = 1; i < sampled.length; i++)
+    cumKm.push(cumKm[i - 1] + haversinKm(sampled[i - 1].lat, sampled[i - 1].lon, sampled[i].lat, sampled[i].lon));
+
+  // Scale cumulative km to match elevation profile's total distance
+  const rawTotal = cumKm[cumKm.length - 1];
+  const distScale = rawTotal > 0 ? elevProfile.totalDistanceKm / rawTotal : 1;
+
+  // Build colored segments
+  type ColorSeg = { x1: number; y1: number; x2: number; y2: number; color: string };
+  const segs: ColorSeg[] = [];
+  for (let i = 1; i < sampled.length; i++) {
+    const km1 = cumKm[i - 1] * distScale, km2 = cumKm[i] * distScale;
+    const e1 = interpolateElev(elevProfile.points, km1);
+    const e2 = interpolateElev(elevProfile.points, km2);
+    const dMeters = (cumKm[i] - cumKm[i - 1]) * 1000;
+    const grad = dMeters > 1 ? ((e2 - e1) / dMeters) * 100 : 0;
+    segs.push({ x1: toX(sampled[i - 1].lon), y1: toY(sampled[i - 1].lat), x2: toX(sampled[i].lon), y2: toY(sampled[i].lat), color: gradientBandColor(grad) });
+  }
+
+  const startPt = route[0], endPt = route[route.length - 1];
+
+  return (
+    <svg width={width} height={height} style={{ display: "block" }}>
+      <defs><clipPath id={clipId}><rect x={0} y={0} width={width} height={height} /></clipPath></defs>
+      <rect x={0} y={0} width={width} height={height} fill="#e8ede8" />
+      <g clipPath={`url(#${clipId})`}>
+        {tiles.map((t, i) => <image key={i} href={t.url} x={t.x.toFixed(1)} y={t.y.toFixed(1)} width={t.w.toFixed(1)} height={t.h.toFixed(1)} preserveAspectRatio="none" />)}
+        {/* White halo for legibility */}
+        {segs.map((s, i) => <line key={`h${i}`} x1={s.x1.toFixed(1)} y1={s.y1.toFixed(1)} x2={s.x2.toFixed(1)} y2={s.y2.toFixed(1)} stroke="white" strokeWidth="5" strokeLinecap="round" />)}
+        {/* Gradient-colored segments */}
+        {segs.map((s, i) => <line key={`s${i}`} x1={s.x1.toFixed(1)} y1={s.y1.toFixed(1)} x2={s.x2.toFixed(1)} y2={s.y2.toFixed(1)} stroke={s.color} strokeWidth="2.5" strokeLinecap="round" />)}
+        <circle cx={toX(startPt.lon)} cy={toY(startPt.lat)} r={6} fill="#2e7d32" stroke="white" strokeWidth="2" />
+        <text x={toX(startPt.lon) + 9} y={toY(startPt.lat) + 4} fontSize="9.5" fontWeight="700" stroke="white" strokeWidth="3" paintOrder="stroke" fill="#2e7d32">Start</text>
+        <circle cx={toX(endPt.lon)} cy={toY(endPt.lat)} r={6} fill="#c62828" stroke="white" strokeWidth="2" />
+        <text x={toX(endPt.lon) + 9} y={toY(endPt.lat) + 4} fontSize="9.5" fontWeight="700" stroke="white" strokeWidth="3" paintOrder="stroke" fill="#c62828">Finish</text>
+      </g>
+      {/* Legend */}
+      <g transform={`translate(${width - 148},${height - 92})`}>
+        <rect x={0} y={0} width={144} height={88} fill="white" opacity={0.92} rx={3} />
+        <text x={7} y={13} fontSize="8" fontWeight="700" fill="#333">Gradient</text>
+        {GRAD_BANDS.map(({ label, color }, i) => (
+          <g key={i} transform={`translate(7,${20 + i * 10})`}>
+            <rect x={0} y={-6} width={12} height={8} rx={1} fill={color} />
+            <text x={16} y={2} fontSize="7.5" fill="#444">{label}</text>
+          </g>
+        ))}
+      </g>
       <rect x={width - 158} y={height - 14} width={154} height={12} fill="white" opacity={0.75} />
       <text x={width - 4} y={height - 4} textAnchor="end" fontSize="7.5" fill="#555">© OpenStreetMap contributors</text>
     </svg>
@@ -927,6 +1049,18 @@ export default function RaceIntelligencePage() {
                       {loadingLabel && <span style={{ fontWeight: 600, color: "#555" }}>Ascent loading: {loadingLabel}</span>}
                     </div>
                   </div>
+
+                  {result.route.length >= 2 && (
+                    <>
+                      <p style={sectionLabel}>Gradient Map</p>
+                      <div style={{ marginBottom: "20px" }}>
+                        <GradientRouteMap route={result.route} elevProfile={elevProfile} width={694} height={300} />
+                        <div style={{ fontSize: "10px", color: "#888", marginTop: "6px" }}>
+                          Route coloured by gradient — red/orange = climbs, blue = descents, grey = flat. Same colour key as the gradient bands in Course Demands.
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -1299,12 +1433,12 @@ export default function RaceIntelligencePage() {
 
               <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#555" }}>
                 Based on {dnfCheckpoints.total_dnf_with_checkpoints} DNF participants with checkpoint data (Male/Female).
-                Each bar shows how many participants did not continue past that checkpoint — the higher the bar,
-                the more the course demanded at that point.
+                Each bar shows how many participants stopped at that checkpoint — the last one reached before abandoning.
+                Checkpoints with no dropout records are shown with zero count.
               </p>
 
               {(() => {
-                const cps = dnfCheckpoints.by_checkpoint;
+                const cps: DnfCheckpointRow[] = dnfCheckpoints.by_checkpoint;
                 const maxCount = Math.max(...cps.map(c => c.dnf_count), 1);
                 const W = 698, H = 200, padL = 38, padR = 12, padT = 16, padB = 36;
                 const chartW = W - padL - padR, chartH = H - padT - padB;
@@ -1326,12 +1460,17 @@ export default function RaceIntelligencePage() {
                       const x = padL + i * gap + gap / 2;
                       const bH = Math.max((cp.dnf_count / maxCount) * chartH, cp.dnf_count > 0 ? 2 : 0);
                       const intensity = cp.dnf_count / maxCount;
-                      const barColor = intensity > 0.6 ? "#c0392b" : intensity > 0.3 ? "#e65100" : "#78909c";
+                      const barColor = intensity > 0.6 ? "#c0392b" : intensity > 0.3 ? "#e65100" : intensity > 0 ? "#78909c" : "#d0d0d0";
                       return (
                         <g key={cp.cp_num}>
-                          <rect x={x - barW / 2} y={yS(cp.dnf_count)} width={barW} height={bH} fill={barColor} opacity={0.8} rx={2} />
-                          <text x={x} y={yS(cp.dnf_count) - 4} textAnchor="middle" fontSize="8" fill={barColor} fontWeight="600">{cp.dnf_count}</text>
+                          {cp.dnf_count > 0 && (
+                            <text x={x} y={yS(cp.dnf_count) - 4} textAnchor="middle" fontSize="8" fill={barColor} fontWeight="600">{cp.dnf_count}</text>
+                          )}
+                          <rect x={x - barW / 2} y={yS(cp.dnf_count)} width={barW} height={Math.max(bH, 2)} fill={barColor} opacity={0.8} rx={2} />
                           <text x={x} y={padT + chartH + 14} textAnchor="middle" fontSize="8.5" fill="#555" fontWeight="600">CP{cp.cp_num}</text>
+                          {cp.distance_km !== null && (
+                            <text x={x} y={padT + chartH + 24} textAnchor="middle" fontSize="7.5" fill="#999">{cp.distance_km.toFixed(0)}km</text>
+                          )}
                         </g>
                       );
                     })}
@@ -1347,18 +1486,20 @@ export default function RaceIntelligencePage() {
                 <thead>
                   <tr>
                     <th style={thStyle}>Checkpoint</th>
+                    <th style={thStyle}>Distance from start</th>
                     <th style={thStyle}>DNF count</th>
                     <th style={thStyle}>% of DNFs with data</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {dnfCheckpoints.by_checkpoint.map((cp, i) => {
+                  {dnfCheckpoints.by_checkpoint.map((cp: DnfCheckpointRow, i) => {
                     const pct = dnfCheckpoints.total_dnf_with_checkpoints > 0
                       ? ((cp.dnf_count / dnfCheckpoints.total_dnf_with_checkpoints) * 100).toFixed(1)
-                      : "—";
+                      : "0.0";
                     return (
                       <tr key={cp.cp_num} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                         <td style={{ ...tdStyle, fontWeight: 600 }}>CP{cp.cp_num}</td>
+                        <td style={tdStyle}>{cp.distance_km !== null ? `${cp.distance_km.toFixed(1)} km` : "—"}</td>
                         <td style={tdStyle}>{cp.dnf_count}</td>
                         <td style={tdStyle}>{pct}%</td>
                       </tr>
