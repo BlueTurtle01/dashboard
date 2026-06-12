@@ -8,7 +8,7 @@ import { DEFAULT_WIND_SETTINGS } from "@/lib/race-analysis/types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type FileType = "gpx" | "wind_analysis" | "course_map" | "elevation_profile" | "other";
+type FileType = "gpx" | "wind_analysis" | "course_map" | "elevation_profile" | "results" | "other";
 
 interface RaceFile {
   id: string;
@@ -43,6 +43,7 @@ const FILE_TYPE_LABELS: Record<FileType, string> = {
   wind_analysis: "Wind Analysis",
   course_map: "Course Map",
   elevation_profile: "Elevation Profile",
+  results: "Race Results",
   other: "Other",
 };
 
@@ -51,6 +52,7 @@ const FILE_TYPE_ACCEPT: Record<FileType, string> = {
   wind_analysis: ".csv,text/csv,application/csv",
   course_map: ".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf",
   elevation_profile: ".png,.jpg,.jpeg,.csv,image/png,image/jpeg,text/csv",
+  results: ".csv,text/csv,application/csv",
   other: "*",
 };
 
@@ -59,6 +61,7 @@ const FILE_TYPE_ORDER: FileType[] = [
   "wind_analysis",
   "course_map",
   "elevation_profile",
+  "results",
   "other",
 ];
 
@@ -79,6 +82,7 @@ function fileTypeColor(type: FileType): { bg: string; text: string } {
     wind_analysis: { bg: "#f0fdf4", text: "#15803d" },
     course_map: { bg: "#fef9c3", text: "#92400e" },
     elevation_profile: { bg: "#fce7f3", text: "#9d174d" },
+    results: { bg: "#f3e8ff", text: "#7e22ce" },
     other: { bg: "#f4f4f5", text: "#52525b" },
   };
   return map[type] ?? map.other;
@@ -117,6 +121,9 @@ export default function RaceFilesPage() {
 
   const [batchReprocessing, setBatchReprocessing] = useState(false);
   const [batchReprocessMsg, setBatchReprocessMsg] = useState<string | null>(null);
+
+  // Results import outcome per race (keyed by raceId)
+  const [resultsImport, setResultsImport] = useState<Record<string, { rowCount?: number; warning?: string; error?: string }>>({});
 
   // Hidden file inputs per (race × fileType)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -244,6 +251,20 @@ export default function RaceFilesPage() {
       }
 
       await loadData();
+
+      // For results CSVs: trigger the import pipeline after the file is stored
+      if (fileType === "results") {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("race_id", raceId);
+        try {
+          const importRes = await fetch("/api/admin/race-files-import", { method: "POST", body: fd });
+          const importJson = await importRes.json() as { rowCount?: number; warning?: string; error?: string };
+          setResultsImport((prev) => ({ ...prev, [raceId]: importJson }));
+        } catch {
+          setResultsImport((prev) => ({ ...prev, [raceId]: { error: "Import request failed" } }));
+        }
+      }
     } catch (err) {
       setUploadError((prev) => ({
         ...prev,
@@ -553,8 +574,8 @@ export default function RaceFilesPage() {
           </div>
           <h1 style={headingStyle}>Race File Manager</h1>
           <p style={subheadingStyle}>
-            Upload and manage GPX courses, wind analysis CSVs, and other files for each race.
-            These files power the automated pacing analysis pipeline.
+            Upload and manage GPX courses, wind analysis CSVs, race results, and other files for each race.
+            Results CSVs are automatically parsed and imported with checkpoint times (Male/Female only).
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "12px", flexWrap: "wrap" }}>
             <button
@@ -746,6 +767,24 @@ export default function RaceFilesPage() {
                         })}
                       </div>
                     )}
+
+                    {/* Results import outcome */}
+                    {resultsImport[race.id] && (() => {
+                      const r = resultsImport[race.id];
+                      const isOk = !r.error && r.rowCount !== undefined;
+                      return (
+                        <div style={{
+                          fontSize: "12px", padding: "8px 12px", borderRadius: "6px", marginBottom: "10px",
+                          background: r.error ? "#fff5f5" : r.warning ? "#fffbeb" : "#f0fdf4",
+                          color: r.error ? "#b91c1c" : r.warning ? "#92400e" : "#15803d",
+                          border: `1px solid ${r.error ? "#fca5a5" : r.warning ? "#fcd34d" : "#86efac"}`,
+                        }}>
+                          {r.error && `⚠ Import error: ${r.error}`}
+                          {r.warning && `ℹ ${r.warning}`}
+                          {isOk && `✓ Imported ${r.rowCount} Male/Female results with checkpoint times`}
+                        </div>
+                      );
+                    })()}
 
                     {/* Upload buttons */}
                     <div style={uploadSectionStyle}>

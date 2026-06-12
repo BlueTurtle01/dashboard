@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
 import type { FieldStatsResponse } from "@/app/api/race-intelligence/field-stats/route";
+import type { DnfCheckpointResponse } from "@/app/api/race-intelligence/dnf-checkpoints/route";
 
 /* â”€â”€ API types â”€â”€ */
 interface RaceMeta {
@@ -571,6 +572,7 @@ export default function RaceIntelligencePage() {
   const [result, setResult]             = useState<OverviewResponse | null>(null);
   const [fieldStats, setFieldStats]     = useState<FieldStatsResponse | null>(null);
   const [fieldStatsLoading, setFieldStatsLoading] = useState(false);
+  const [dnfCheckpoints, setDnfCheckpoints] = useState<DnfCheckpointResponse | null>(null);
   const [weather, setWeather]           = useState<WeatherDayRecord[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
 
@@ -736,6 +738,7 @@ export default function RaceIntelligencePage() {
     setNoRaceProfile(false);
     setResult(null);
     setFieldStats(null);
+    setDnfCheckpoints(null);
     setWeather([]);
 
     // Step 1: race overview (sequential — feeds downstream)
@@ -777,6 +780,10 @@ export default function RaceIntelligencePage() {
       `/api/race-intelligence/field-stats?race_id=${encodeURIComponent(selectedRaceId)}`
     ).then(r => r.ok ? r.json() as Promise<FieldStatsResponse> : null).catch(() => null);
 
+    const dnfCheckpointsPromise: Promise<DnfCheckpointResponse | null> = fetch(
+      `/api/race-intelligence/dnf-checkpoints?race_id=${encodeURIComponent(selectedRaceId)}`
+    ).then(r => r.ok ? r.json() as Promise<DnfCheckpointResponse> : null).catch(() => null);
+
     const weatherPromise: Promise<WeatherDayRecord[]> = hasWeather
       ? (() => {
           const [, monthStr, dayStr] = effectiveDate!.split("-");
@@ -787,10 +794,11 @@ export default function RaceIntelligencePage() {
         })()
       : Promise.resolve([]);
 
-    const [fieldStatsData, weatherData] = await Promise.all([fieldStatsPromise, weatherPromise]);
+    const [fieldStatsData, weatherData, dnfCheckpointsData] = await Promise.all([fieldStatsPromise, weatherPromise, dnfCheckpointsPromise]);
 
     setResult(effectiveResult);
     setFieldStats(fieldStatsData);
+    setDnfCheckpoints(dnfCheckpointsData);
     setWeather(weatherData);
     setFieldStatsLoading(false);
     setWeatherLoading(false);
@@ -1281,7 +1289,87 @@ export default function RaceIntelligencePage() {
             </div>
           )}
 
-          {/* â"€â"€ Page 7: Weather Intelligence â"€â"€ */}
+          {/* ── Page 7: DNF Dropout by Checkpoint ── */}
+          {dnfCheckpoints?.has_data && (
+            <div style={a4Page} className="rr-page">
+              <div style={printHeader}>
+                <p style={{ ...sectionLabel, color: "#1e3a1e", margin: 0 }}>DNF Dropout by Checkpoint</p>
+                <p style={{ margin: 0, fontSize: "11px", color: "#888" }}>{result.race.name}</p>
+              </div>
+
+              <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#555" }}>
+                Based on {dnfCheckpoints.total_dnf_with_checkpoints} DNF participants with checkpoint data (Male/Female).
+                Each bar shows how many participants did not continue past that checkpoint — the higher the bar,
+                the more the course demanded at that point.
+              </p>
+
+              {(() => {
+                const cps = dnfCheckpoints.by_checkpoint;
+                const maxCount = Math.max(...cps.map(c => c.dnf_count), 1);
+                const W = 698, H = 200, padL = 38, padR = 12, padT = 16, padB = 36;
+                const chartW = W - padL - padR, chartH = H - padT - padB;
+                const barW = Math.max(Math.min(chartW / cps.length - 4, 60), 8);
+                const gap = chartW / cps.length;
+                const yS = (n: number) => padT + chartH - (n / maxCount) * chartH;
+                const yTick = maxCount <= 5 ? 1 : maxCount <= 20 ? 5 : 10;
+                const yTicks: number[] = [];
+                for (let t = 0; t <= maxCount + yTick; t += yTick) yTicks.push(t);
+                return (
+                  <svg width={W} height={H} style={{ display: "block", overflow: "visible" }}>
+                    {yTicks.map((t, i) => (
+                      <g key={i}>
+                        <line x1={padL} y1={yS(t)} x2={W - padR} y2={yS(t)} stroke="#eee" strokeWidth="1" />
+                        <text x={padL - 4} y={yS(t) + 3.5} textAnchor="end" fontSize="8" fill="#888">{t}</text>
+                      </g>
+                    ))}
+                    {cps.map((cp, i) => {
+                      const x = padL + i * gap + gap / 2;
+                      const bH = Math.max((cp.dnf_count / maxCount) * chartH, cp.dnf_count > 0 ? 2 : 0);
+                      const intensity = cp.dnf_count / maxCount;
+                      const barColor = intensity > 0.6 ? "#c0392b" : intensity > 0.3 ? "#e65100" : "#78909c";
+                      return (
+                        <g key={cp.cp_num}>
+                          <rect x={x - barW / 2} y={yS(cp.dnf_count)} width={barW} height={bH} fill={barColor} opacity={0.8} rx={2} />
+                          <text x={x} y={yS(cp.dnf_count) - 4} textAnchor="middle" fontSize="8" fill={barColor} fontWeight="600">{cp.dnf_count}</text>
+                          <text x={x} y={padT + chartH + 14} textAnchor="middle" fontSize="8.5" fill="#555" fontWeight="600">CP{cp.cp_num}</text>
+                        </g>
+                      );
+                    })}
+                    <line x1={padL} y1={padT} x2={padL} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
+                    <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#bbb" strokeWidth="1" />
+                    <text x={10} y={padT + chartH / 2} textAnchor="middle" fontSize="7.5" fill="#bbb" transform={`rotate(-90,10,${padT + chartH / 2})`}>DNF count</text>
+                  </svg>
+                );
+              })()}
+
+              {/* Table summary */}
+              <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "20px" }}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Checkpoint</th>
+                    <th style={thStyle}>DNF count</th>
+                    <th style={thStyle}>% of DNFs with data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dnfCheckpoints.by_checkpoint.map((cp, i) => {
+                    const pct = dnfCheckpoints.total_dnf_with_checkpoints > 0
+                      ? ((cp.dnf_count / dnfCheckpoints.total_dnf_with_checkpoints) * 100).toFixed(1)
+                      : "—";
+                    return (
+                      <tr key={cp.cp_num} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                        <td style={{ ...tdStyle, fontWeight: 600 }}>CP{cp.cp_num}</td>
+                        <td style={tdStyle}>{cp.dnf_count}</td>
+                        <td style={tdStyle}>{pct}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── Page 8: Weather Intelligence ── */}
           {(weatherLoading || weather.length > 0) && (
             <div style={a4Page} className="rr-page">
               <div style={printHeader}>

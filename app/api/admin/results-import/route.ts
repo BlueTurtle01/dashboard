@@ -145,6 +145,7 @@ export async function POST(req: NextRequest) {
           gender: r.gender,
           age_group: r.age_group,
           additional_data: r.additional_data,
+          checkpoint_times: r.checkpoint_times,
         }));
 
         const { error: bErr } = await supabase.from("race_results").insert(batch);

@@ -26,6 +26,7 @@ export interface ParsedRow {
   finish_seconds: number | null;
   result_year: number;
   additional_data: Record<string, string>;
+  checkpoint_times: Record<string, number>; // e.g. { cp1: 7392, cp2: 15456 }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -137,6 +138,7 @@ interface ColMap {
   timeSeconds: number | null;        // Pre-computed time in seconds (e.g. race_time_seconds)
   status: number | null;             // Explicit status column (FINISHER/DNF/DNS)
   // "Timed Out" can appear in the Class (2nd) column
+  cpColumns: { index: number; key: string }[]; // CP1 SCARBOROUGH → { index: 13, key: "cp1" }
 }
 
 // Known header keywords used to detect if row 0 is a headers row (no title row present).
@@ -160,6 +162,7 @@ function buildColMap(headers: string[]): ColMap {
     time: null,
     timeSeconds: null,
     status: null,
+    cpColumns: [],
   };
 
   headers.forEach((h, i) => {
@@ -192,6 +195,12 @@ function buildColMap(headers: string[]): ColMap {
     else if ((key === "race_time_seconds" || key === "finish_time_seconds" || key === "gun_time_seconds") && map.timeSeconds === null) map.timeSeconds = i;
     // Explicit status column (e.g. FINISHER / DNF / DNS)
     else if ((key === "status" || key === "result_status") && map.status === null) map.status = i;
+
+    // Checkpoint columns: "CP1 SCARBOROUGH", "CP2 RAVENSCAR", etc.
+    const cpMatch = h.trim().match(/^CP(\d+)/i);
+    if (cpMatch) {
+      map.cpColumns.push({ index: i, key: `cp${cpMatch[1]}` });
+    }
   });
 
   return map;
@@ -285,6 +294,13 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
       if (finish_seconds === null) finish_seconds = parseTime(rawTime);
     }
 
+    // Checkpoint times: parse each CP column that has a value
+    const checkpoint_times: Record<string, number> = {};
+    for (const { index, key } of colMap.cpColumns) {
+      const secs = parseTime(get(index));
+      if (secs !== null) checkpoint_times[key] = secs;
+    }
+
     // Additional data: collect all "extra" columns not in the core set
     const coreIndices = new Set([
       colMap.position,
@@ -295,6 +311,7 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
       colMap.time,
       colMap.timeSeconds,
       colMap.status,
+      ...colMap.cpColumns.map((c) => c.index),
     ].filter((x): x is number => x !== null));
 
     const additional_data: Record<string, string> = {};
@@ -338,6 +355,7 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
       finish_seconds,
       result_year: raceYear,
       additional_data,
+      checkpoint_times,
     });
   }
 
