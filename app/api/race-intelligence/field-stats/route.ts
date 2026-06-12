@@ -86,10 +86,16 @@ export async function GET(req: NextRequest) {
 
     const perc = rpc?.percentiles;
 
+    const derivedTotalStarters  = rpc?.by_year?.reduce((s, y) => s + y.starters,  0) ?? 0;
+    const derivedTotalFinishers = rpc?.by_year?.reduce((s, y) => s + y.finishers, 0) ?? 0;
+    const derivedDnfRate = derivedTotalStarters > 0
+      ? (derivedTotalStarters - derivedTotalFinishers) / derivedTotalStarters
+      : 0;
+
     const aggregate = {
-      total_finishers: mlRow?.total_finishers  ?? rpc?.by_year?.reduce((s, y) => s + y.finishers, 0) ?? 0,
-      total_starters:  mlRow?.total_starters   ?? rpc?.by_year?.reduce((s, y) => s + y.starters,  0) ?? 0,
-      dnf_rate:        mlRow?.dnf_rate         ?? 0,
+      total_finishers: mlRow?.total_finishers  ?? derivedTotalFinishers,
+      total_starters:  mlRow?.total_starters   ?? derivedTotalStarters,
+      dnf_rate:        (mlRow?.dnf_rate && mlRow.dnf_rate > 0) ? mlRow.dnf_rate : derivedDnfRate,
       years_of_data:   mlRow?.years_of_data    ?? (rpc?.by_year?.length ?? 0),
       median_seconds:  mlRow?.field_median_seconds ?? perc?.p50  ?? null,
       p25_seconds:     mlRow?.field_p25_seconds    ?? perc?.p25  ?? null,

@@ -32,7 +32,7 @@ interface OverviewResponse {
   race: RaceMeta;
   route: { lat: number; lon: number }[];
   wind_sections: WindSection[] | null;
-  elevation_profile: string | null;
+  elevation_profile: string | Record<string, unknown> | null;
   sustained_segments: string | null;
   terrain_sections: TerrainSection[];
   aid_stations: AidStation[] | null;
@@ -54,10 +54,10 @@ interface RaceSustainedSeg {
 }
 
 /* â”€â”€ Parsers â”€â”€ */
-function parseElevProfile(value: string | null): RaceElevProfile | null {
+function parseElevProfile(value: string | Record<string, unknown> | null): RaceElevProfile | null {
   if (!value) return null;
   try {
-    const p = JSON.parse(value) as Record<string, unknown>;
+    const p: Record<string, unknown> = typeof value === "string" ? JSON.parse(value) : value;
     if (!Array.isArray(p.points) || typeof p.totalDistanceKm !== "number") return null;
     const points = (p.points as unknown[]).flatMap((pt): ElevationPoint[] => {
       if (!pt || typeof pt !== "object") return [];
@@ -795,11 +795,21 @@ export default function RaceIntelligencePage() {
       }));
   }, [secs]);
 
-  // Aid station largest gap
+  // Aid station largest gap (any support)
   const aidGaps = useMemo(() => {
     const sorted = (result?.aid_stations ?? []).sort((a, b) => a.km - b.km);
     if (sorted.length === 0) return null;
     let maxGap = sorted[0].km;
+    for (let i = 1; i < sorted.length; i++) maxGap = Math.max(maxGap, sorted[i].km - sorted[i - 1].km);
+    const afterLast = totalKm > 0 ? totalKm - sorted[sorted.length - 1].km : 0;
+    return Math.max(maxGap, afterLast);
+  }, [result, totalKm]);
+
+  // Longest gap between stations offering food
+  const foodGap = useMemo(() => {
+    const sorted = (result?.aid_stations ?? []).filter(s => s.food).sort((a, b) => a.km - b.km);
+    if (sorted.length === 0) return null;
+    let maxGap = sorted[0].km; // gap from start to first food station
     for (let i = 1; i < sorted.length; i++) maxGap = Math.max(maxGap, sorted[i].km - sorted[i - 1].km);
     const afterLast = totalKm > 0 ? totalKm - sorted[sorted.length - 1].km : 0;
     return Math.max(maxGap, afterLast);
@@ -1026,7 +1036,7 @@ export default function RaceIntelligencePage() {
             {result.route.length >= 2 && (
               <>
                 <p style={sectionLabel}>Route</p>
-                <RouteMap route={result.route} windSections={windData} width={694} height={380} />
+                <RouteMap route={result.route} width={694} height={380} />
               </>
             )}
           </div>
@@ -1266,6 +1276,14 @@ export default function RaceIntelligencePage() {
                       {aidGaps.toFixed(1)} km
                     </p>
                   </div>
+                  {foodGap !== null && (
+                    <div>
+                      <p style={sectionLabel}>Longest gap with food</p>
+                      <p style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: foodGap > 30 ? "#c0392b" : foodGap > 20 ? "#e65100" : "#1e3a1e" }}>
+                        {foodGap.toFixed(1)} km
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
