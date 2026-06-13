@@ -3701,6 +3701,77 @@ export default function RaceReadinessPage() {
               return                                    { label: "No experience", bg: "#fce4ec", color: "#c0392b" };
             };
 
+            // Terrain difficulty ranking (road=1 easiest → fell=5 hardest, at same gradient)
+            const TERRAIN_RANK: Record<string, number> = {
+              road: 1, pavement: 1, track: 1,
+              trail: 2,
+              gravel: 3, mud: 3, sand: 3,
+              technical_trail: 4,
+              fell: 5, snow: 5,
+            };
+
+            // Returns a sentence for a surface_gap row describing the step-up (or step-down) in difficulty
+            const surfaceGapComment = (row: (typeof gapRows)[0]): string | null => {
+              if (row.status !== "surface_gap" || !row.crossSurface) return null;
+              const reqRank   = TERRAIN_RANK[row.terrain]   ?? 2;
+              const crossRank = TERRAIN_RANK[row.crossSurface] ?? 2;
+              const req   = terrainLabel(row.terrain);
+              const cross = terrainLabel(row.crossSurface);
+              const stype = sectionTypeLabel(row.section_type, row.avg_gradient).toLowerCase();
+
+              if (crossRank < reqRank) {
+                // Athlete has easier terrain — the classic upward step
+                if (row.terrain === "technical_trail" && row.crossSurface === "trail") {
+                  return `Experience on ${cross} ${stype} transfers partially — ${req} at the same gradient is harder, demanding stronger ankle stability and proprioception.`;
+                }
+                if (row.terrain === "technical_trail" && TERRAIN_RANK[row.crossSurface] <= 1) {
+                  return `${cross} ${stype} experience is a starting point, but ${req} is significantly harder — expect rougher, less predictable footing with far greater ankle demand.`;
+                }
+                if (row.terrain === "gravel" && row.crossSurface === "trail") {
+                  return `${cross} ${stype} provides a base, but ${req} places greater lateral ankle load at the same gradient — gravel requires more active foot stabilisation.`;
+                }
+                if (row.terrain === "gravel" && TERRAIN_RANK[row.crossSurface] <= 1) {
+                  return `${cross} ${stype} experience helps aerobically, but ${req} is considerably more demanding underfoot — road mechanics do not transfer to loose surfaces.`;
+                }
+                if (row.terrain === "trail" && TERRAIN_RANK[row.crossSurface] <= 1) {
+                  return `${cross} ${stype} experience is a useful base, but ${req} is more technically demanding at the same gradient — trail requires greater ankle demand and different foot-strike patterns.`;
+                }
+                if (row.terrain === "fell") {
+                  return `${cross} ${stype} does not prepare for ${req} — fell involves open, untracked, and often boggy terrain with unpredictable footing that requires specific adaptation.`;
+                }
+                return `${cross} ${stype} provides some aerobic base, but ${req} is harder at the same gradient — terrain-specific neuromuscular adaptation is needed.`;
+              }
+
+              if (crossRank > reqRank) {
+                // Athlete has harder experience than required — a positive sign
+                return `${cross} ${stype} experience covers the demands of ${req} — the harder surface includes everything the race requires at this gradient.`;
+              }
+
+              // Same rank, different surface (e.g. pavement vs road)
+              return `${cross} and ${req} are broadly equivalent at this gradient — the pattern transfers.`;
+            };
+
+            // Builds a prose paragraph for all surface_gap rows in a section
+            const terrainBreakdown = (rows: typeof gapRows): React.ReactNode => {
+              const gapComments = rows
+                .filter(r => r.status === "surface_gap")
+                .map(r => surfaceGapComment(r))
+                .filter((c): c is string => c !== null);
+              if (gapComments.length === 0) return null;
+              return (
+                <div style={{ marginTop: "8px", marginBottom: "4px", padding: "9px 12px", background: "#fffde7", border: "1px solid #fff176", borderRadius: "6px" }}>
+                  <div style={{ fontSize: "9px", fontWeight: 700, color: "#795500", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>
+                    Surface step-up notes
+                  </div>
+                  {gapComments.map((c, i) => (
+                    <p key={i} style={{ margin: i < gapComments.length - 1 ? "0 0 4px" : "0", fontSize: "10px", color: "#444", lineHeight: 1.55 }}>
+                      {c}
+                    </p>
+                  ))}
+                </div>
+              );
+            };
+
             const sectionSummary = (rows: typeof gapRows) => {
               const gaps    = rows.filter(r => r.status === "none").length;
               const surface = rows.filter(r => r.status === "surface_gap").length;
@@ -3884,6 +3955,7 @@ export default function RaceReadinessPage() {
                         {renderGapRows(climbRows)}
                       </tbody>
                     </table>
+                    {terrainBreakdown(climbRows)}
                   </div>
                 )}
 
@@ -3924,6 +3996,7 @@ export default function RaceReadinessPage() {
                         {renderGapRows(g.rows)}
                       </tbody>
                     </table>
+                    {terrainBreakdown(g.rows)}
                   </div>
                 ))}
 
