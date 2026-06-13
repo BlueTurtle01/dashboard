@@ -1715,8 +1715,13 @@ export default function RaceReadinessPage() {
               },
               {
                 title: "Race Overview",
-                body: "A high-level picture of the course: mapped route, terrain composition, and key course metrics. Use this page to build a shared mental model of the race before reading the deeper analysis.",
+                body: "A high-level picture of the course: mapped route and key course metrics. Use this page to build a shared mental model of the race before reading the deeper analysis.",
                 visible: true,
+              },
+              {
+                title: "Terrain Composition",
+                body: "Surface breakdown and training implications — what underfoot conditions the race delivers and what that means for footwear, ankle conditioning, and race-specific preparation.",
+                visible: surfaceSummary.total > 0,
               },
               {
                 title: "Elevation",
@@ -2664,34 +2669,6 @@ export default function RaceReadinessPage() {
               </div>
             )}
 
-            {surfaceSummary.total > 0 && (() => {
-              const SURFACE_COLOR: Record<string, string> = {
-                road: "#90a4ae", pavement: "#90a4ae", track: "#78909c",
-                gravel: "#a1887f", trail: "#66bb6a", technical_trail: "#388e3c",
-                fell: "#8d6e63", mud: "#6d4c41", sand: "#ffa726", snow: "#80d8ff",
-              };
-              const SURFACE_LABEL: Record<string, string> = {
-                road: "Road", pavement: "Pavement", track: "Track",
-                gravel: "Gravel", trail: "Trail", technical_trail: "Technical Trail",
-                fell: "Fell", mud: "Mud", sand: "Sand", snow: "Snow",
-              };
-              return (
-                <div style={{ marginBottom: "18px" }}>
-                  <p style={sectionLabel}>Terrain Composition</p>
-                  {surfaceSummary.entries.map(([surface, km]) => (
-                    <TerrainBar
-                      key={surface}
-                      label={SURFACE_LABEL[surface] ?? surface.charAt(0).toUpperCase() + surface.slice(1).replace(/_/g, " ")}
-                      km={km}
-                      pct={surfaceSummary.total > 0 ? (km / surfaceSummary.total) * 100 : 0}
-                      color={SURFACE_COLOR[surface] ?? "#90a4ae"}
-                    />
-                  ))}
-                </div>
-              );
-            })()}
-
-
             <div style={{ marginTop: "auto", paddingTop: "12px", borderTop: "1px solid #eee" }}>
               <p style={{ margin: 0, fontSize: "9px", color: "#bbb", lineHeight: "1.5" }}>
                 Course data derived from GPX file. Elevation data from ERA5 reanalysis. Race results from official published results.
@@ -2701,7 +2678,88 @@ export default function RaceReadinessPage() {
           </div>
 
           {/* ═══════════════════════════════════════
-              PAGE 5 — Elevation
+              PAGE 5 — Terrain Composition
+          ═══════════════════════════════════════ */}
+          {surfaceSummary.total > 0 && (() => {
+            const SURFACE_COLOR: Record<string, string> = {
+              road: "#90a4ae", pavement: "#90a4ae", track: "#78909c",
+              gravel: "#a1887f", trail: "#66bb6a", technical_trail: "#388e3c",
+              fell: "#8d6e63", mud: "#6d4c41", sand: "#ffa726", snow: "#80d8ff",
+            };
+            const SURFACE_LABEL: Record<string, string> = {
+              road: "Road", pavement: "Pavement", track: "Track",
+              gravel: "Gravel", trail: "Trail", technical_trail: "Technical Trail",
+              fell: "Fell", mud: "Mud", sand: "Sand", snow: "Snow",
+            };
+
+            // Build conditional terrain comments for the top 2 surfaces
+            const terrainComments: string[] = [];
+            const top2 = surfaceSummary.entries.slice(0, 2);
+            for (const [surface] of top2) {
+              if (surface === "gravel") {
+                terrainComments.push("A significant portion of this course is gravel. Gravel rewards robust ankle stability — athletes with limited off-road conditioning should prioritise lateral ankle strength work in the build-up.");
+              } else if (surface === "technical_trail") {
+                terrainComments.push("Technical trail makes up a notable share of this course. Technical terrain demands strong ankle strength and proprioception — targeted single-leg balance and strength work will pay dividends on race day.");
+              } else if (surface === "trail") {
+                terrainComments.push("Trail forms a major part of the surface. Road shoes are generally not suitable for this type of terrain — trail shoes with appropriate grip and protection are strongly recommended.");
+              } else if (surface === "fell") {
+                terrainComments.push("Fell running terrain features prominently. Fell requires confident off-camber movement and grip — road or lightly-lugged shoes are unlikely to provide adequate traction on wet ground.");
+              } else if (surface === "mud") {
+                terrainComments.push("A meaningful section runs on mud. Check event-specific footwear guidance and allow extra time for this terrain in pacing estimates.");
+              } else if (surface === "sand") {
+                terrainComments.push("A meaningful section runs on sand. Check event-specific footwear guidance and allow extra time for this terrain in pacing estimates.");
+              } else if (surface === "snow") {
+                terrainComments.push("A meaningful section runs on snow. Check event-specific footwear guidance and allow extra time for this terrain in pacing estimates.");
+              }
+            }
+
+            return (
+              <div className="rr-page" style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Terrain Composition</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Terrain Composition</h2>
+                <p style={{ margin: "0 0 20px", fontSize: "12px", color: "#888" }}>
+                  Surface breakdown showing what underfoot conditions the race delivers
+                </p>
+
+                <div style={{ marginBottom: "24px" }}>
+                  {surfaceSummary.entries.map(([surface, km]) => (
+                    <TerrainBar
+                      key={surface}
+                      label={SURFACE_LABEL[surface] ?? surface.charAt(0).toUpperCase() + surface.slice(1).replace(/_/g, " ")}
+                      km={km}
+                      pct={(km / surfaceSummary.total) * 100}
+                      color={SURFACE_COLOR[surface] ?? "#90a4ae"}
+                    />
+                  ))}
+                </div>
+
+                {terrainComments.length > 0 && (
+                  <div style={{ background: "#fafafa", border: "1px solid #e8e8e8", borderRadius: "8px", padding: "16px 20px" }}>
+                    <p style={{ margin: "0 0 10px", fontSize: "11px", fontWeight: 700, color: "#1e3a1e", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Training &amp; Kit Implications
+                    </p>
+                    {terrainComments.map((comment, i) => (
+                      <p key={i} style={{ margin: i < terrainComments.length - 1 ? "0 0 10px" : "0", fontSize: "12px", color: "#444", lineHeight: 1.65 }}>
+                        {comment}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                <PageNumber n={5} />
+              </div>
+            );
+          })()}
+
+          {/* ═══════════════════════════════════════
+              PAGE 6 — Elevation
           ═══════════════════════════════════════ */}
           {(elevProfile || terrainSummary.total > 0) && (
             <div className="rr-page" style={a4Page}>
@@ -2956,12 +3014,12 @@ export default function RaceReadinessPage() {
                 );
               })()}
 
-              <PageNumber n={5} />
+              <PageNumber n={6} />
             </div>
           )}
 
           {/* ═══════════════════════════════════════
-              PAGE 6 — Race Demands Profile
+              PAGE 7 — Race Demands Profile
           ═══════════════════════════════════════ */}
           {secs.length > 0 && (
             <div className="rr-page" style={a4Page}>
@@ -3134,12 +3192,12 @@ export default function RaceReadinessPage() {
                 );
               })()}
 
-              <PageNumber n={6} />
+              <PageNumber n={7} />
             </div>
           )}
 
           {/* ═══════════════════════════════════════
-              PAGE 7 — Race Demands Profile (continued)
+              PAGE 8 — Race Demands Profile (continued)
           ═══════════════════════════════════════ */}
           {secs.length > 0 && (
             <div className="rr-page" style={a4Page}>
@@ -3322,12 +3380,12 @@ export default function RaceReadinessPage() {
                 );
               })()}
 
-              <PageNumber n={7} />
+              <PageNumber n={8} />
             </div>
           )}
 
           {/* ═══════════════════════════════════════
-              PAGE 8 — Athlete Overview
+              PAGE 9 — Athlete Overview
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -3556,13 +3614,13 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={8} />
+                <PageNumber n={9} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 9 — Experience Gaps
+              PAGE 10 — Experience Gaps
           ═══════════════════════════════════════ */}
           {reportAthlete && result.terrain_sections.length > 0 && (() => {
             const p = reportAthlete.profile;
@@ -3829,10 +3887,10 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={9} />
+                <PageNumber n={10} />
               </div>
 
-              {/* PAGE 10 — Experience Gaps (continued) */}
+              {/* PAGE 11 — Experience Gaps (continued) */}
               <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
@@ -3907,14 +3965,14 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={10} />
+                <PageNumber n={11} />
               </div>
               </>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 11 — Demands Built Up
+              PAGE 12 — Demands Built Up
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -4131,13 +4189,13 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={11} />
+                <PageNumber n={12} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 12 — Aid Station Analysis
+              PAGE 13 — Aid Station Analysis
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const stations: AidStation[] = result.aid_stations ?? [];
@@ -4363,13 +4421,13 @@ export default function RaceReadinessPage() {
                   </>
                 )}
 
-                <PageNumber n={12} />
+                <PageNumber n={13} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 12 — Suggested Preparation Races
+              PAGE 14 — Suggested Preparation Races
           ═══════════════════════════════════════ */}
           {(prepRaces && reportAthlete) && (() => {
             const stl = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -4528,13 +4586,13 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={13} />
+                <PageNumber n={14} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 13 — Experience Context
+              PAGE 15 — Experience Context
           ═══════════════════════════════════════ */}
           {(expContextLoading || expContext) && (() => {
             const fmtH = (h: number) => {
@@ -4662,13 +4720,13 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={14} />
+                <PageNumber n={15} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 14 — Self-Reflection
+              PAGE 16 — Self-Reflection
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const firstName = reportAthlete.profile.athlete_key.split(" ")[0];
@@ -4753,13 +4811,13 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <PageNumber n={15} />
+                <PageNumber n={16} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 16 — Physical Self-Assessments
+              PAGE 17 — Physical Self-Assessments
           ═══════════════════════════════════════ */}
           {reportAthlete && assessmentTests.length > 0 && (() => {
             // ── Weakness scores per dimension (0–1) from race terrain gaps ──
@@ -4930,13 +4988,13 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={16} />
+                <PageNumber n={17} />
               </div>
             );
           })()}
 
           {/* ═══════════════════════════════════════
-              PAGE 17 — Suggested Next Steps
+              PAGE 18 — Suggested Next Steps
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -5231,7 +5289,7 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={17} />
+                <PageNumber n={18} />
               </div>
             );
           })()}
@@ -5303,7 +5361,7 @@ export default function RaceReadinessPage() {
                   </table>
                 )}
 
-                <PageNumber n={18} />
+                <PageNumber n={19} />
               </div>
             );
           })()}
