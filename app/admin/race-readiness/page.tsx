@@ -1631,7 +1631,9 @@ export default function RaceReadinessPage() {
       {result && (
         <div style={canvas} className="race-strategy-canvas">
           <style dangerouslySetInnerHTML={{ __html: `
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap');
             @media print {
+              * { font-family: 'Arial Unicode MS', 'Noto Sans', 'Segoe UI', Arial, Helvetica, sans-serif !important; }
               @page { margin: 15mm 20mm; }
               body { margin: 0; }
               .race-strategy-canvas { background: transparent !important; display: block !important; padding: 0 !important; gap: 0 !important; }
@@ -2327,7 +2329,7 @@ export default function RaceReadinessPage() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
                     <div style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "12px 14px", background: "#fafafa", textAlign: "center" }}>
                       <div style={{ fontSize: "9px", color: "#888", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Race requires</div>
-                      <div style={{ fontSize: "26px", fontWeight: 800, color: "#1e3a1e" }}>{goalDist.toFixed(0)}</div>
+                      <div style={{ fontSize: "26px", fontWeight: 800, color: "#1e3a1e" }}>{goalDist != null ? goalDist.toFixed(0) : "—"}</div>
                       <div style={{ fontSize: "11px", color: "#888" }}>km geographic distance</div>
                       {goalFlatEq > 0 && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{goalFlatEq.toFixed(1)} km effort-adjusted</div>}
                     </div>
@@ -3095,6 +3097,9 @@ export default function RaceReadinessPage() {
                   <p style={{ margin: "4px 0 0", fontSize: "9px", color: "#aaa", lineHeight: 1.4 }}>
                     Dashed markers show cumulative ascent at each quarter of distance.
                     {elevProfileMatch?.best_match ? " Red = goal race · Blue dashed = closest matched past race." : " Late-loading courses are especially demanding because hard climbs arrive when the athlete is already fatigued."}
+                    {result.race.total_ascent_m != null && (
+                      <span> Official course ascent: {Math.round(result.race.total_ascent_m).toLocaleString()} m. Chart uses GPX-smoothed values and may differ slightly.</span>
+                    )}
                   </p>
                 </div>
               )}
@@ -3195,7 +3200,7 @@ export default function RaceReadinessPage() {
                 <p style={{ ...sectionLabel, marginBottom: "8px" }}>Pacing Complexity &amp; Late-Race Load</p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginBottom: "10px" }}>
                   {[
-                    { label: "Pacing complexity", value: complexityLabel, color: complexityColor, note: `CV: ${cvRatio.toFixed(2)}` },
+                    { label: "Pacing complexity", value: complexityLabel, color: complexityColor, note: `CV = ${cvRatio.toFixed(2)}` },
                     { label: "Runnable terrain", value: `${runnablePct}%`, color: runnablePct > 50 ? "#2e7d32" : runnablePct > 25 ? "#f57c00" : "#c0392b", note: `${runnableKm.toFixed(0)} km flat sections` },
                     { label: "Avg effort multiplier", value: `${effortRatio.toFixed(2)}×`, color: effortRatio > 1.6 ? "#c0392b" : effortRatio > 1.3 ? "#f57c00" : "#2e7d32", note: "per km vs flat" },
                     { label: "Final-third effort", value: `${finalThirdEffort.toFixed(2)}×`, color: finalThirdEffort > effortRatio * 1.1 ? "#c0392b" : "#1e3a1e", note: finalThirdLen > 0 ? `${finalThirdLen.toFixed(0)} km at ${(finalThirdEffort).toFixed(2)}×` : "" },
@@ -3664,7 +3669,7 @@ export default function RaceReadinessPage() {
             }
 
             if (recentRaces.length < 2) {
-              steps.push({ category: "Race Preparation", title: "Enter a warm-up race", detail: "Limited recent competitive form on record. A build-up race (ideally on similar terrain, 4–10 weeks out) will help calibrate nutrition, race management, and equipment.", priority: "medium" });
+              steps.push({ category: "Race Preparation", title: "Enter a warm-up race", detail: "Limited recent competitive form on record. A build-up race (ideally on similar terrain, 4-10 weeks out) will help calibrate nutrition, race management, and equipment.", priority: "medium" });
             }
 
             if (effortRatio > 1.4) {
@@ -3672,7 +3677,7 @@ export default function RaceReadinessPage() {
             }
 
             if (totalKm > 50) {
-              steps.push({ category: "Race Preparation", title: "Build a fuelling strategy", detail: `For a ${totalKm.toFixed(0)} km race, active fuelling is non-negotiable. Target 60–90 g carbohydrate per hour above 3–4 hours, practised at race pace in your long sessions.`, priority: totalKm > 80 ? "high" : "medium" });
+              steps.push({ category: "Race Preparation", title: "Build a fuelling strategy", detail: `For a ${totalKm.toFixed(0)} km race, active fuelling is non-negotiable. Target 60-90 g carbohydrate per hour above 3-4 hours, practised at race pace in your long sessions.`, priority: totalKm > 80 ? "high" : "medium" });
             }
 
             if (hasTechnical || (hasGravel && gravelGap)) {
@@ -3688,7 +3693,7 @@ export default function RaceReadinessPage() {
                 steps.push({ category: "Race Preparation", title: "Carry nutrition for long unsupported stretches", detail: `The longest gap between aid stations is ${maxAidGap.toFixed(1)} km. ${maxAidGap > 20 ? "Carry water and calories to cover this stretch safely." : "Take a gel or snack at the preceding station."} Practise carrying nutrition at race pace in your long training runs.`, priority: maxAidGap > 20 ? "high" : "medium" });
               }
               if (!sortedStations.some((s: AidStation) => s.food)) {
-                steps.push({ category: "Race Preparation", title: "No food at aid stations — carry all nutrition", detail: "None of the recorded aid stations offer food. Calculate your carbohydrate needs (60–90 g/hr above 3 hours) and test your carrying strategy in training.", priority: "high" });
+                steps.push({ category: "Race Preparation", title: "No food at aid stations — carry all nutrition", detail: "None of the recorded aid stations offer food. Calculate your carbohydrate needs (60-90 g/hr above 3 hours) and test your carrying strategy in training.", priority: "high" });
               }
             }
 
@@ -3976,8 +3981,8 @@ export default function RaceReadinessPage() {
                                 : "—"}
                             </td>
                             <td style={{ padding: "3px 6px", textAlign: "right", color: "#555" }}>
-                              {r.cat_position != null
-                                ? `${r.cat_position}${r.cat_finishers != null && r.cat_finishers > 1 ? `/${r.cat_finishers}` : ""}`
+                              {r.cat_position != null && r.cat_finishers != null && r.cat_finishers > 1
+                                ? `${r.cat_position}/${r.cat_finishers}`
                                 : "—"}
                             </td>
                             <td style={{ padding: "3px 6px", textAlign: "right", whiteSpace: "nowrap" }}>
