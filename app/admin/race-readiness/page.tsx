@@ -1738,12 +1738,12 @@ export default function RaceReadinessPage() {
             </div>
 
             <div style={{ marginTop: "18px", padding: "10px 14px", background: "#fafafa", border: "1px solid #e8e8e8", borderLeft: "3px solid #546e7a", borderRadius: "4px", fontSize: "9px", color: "#666", lineHeight: 1.6 }}>
-              This report is generated from public race profile data and athlete race history. It does not account for training completed outside of race events, injury history, or any information the athlete has not shared in their profile. Use it as a structured starting point for a coaching conversation.
+              This report is generated from public race profile data and athlete race history. It does not account for training completed outside of race events, injury history, or any information the athlete has not shared in their profile. Use it as one structured input in planning race preparation.
             </div>
           </div>
 
           {/* ═══════════════════════════════════════
-              §1 — Executive Readiness Verdict  (p1)
+              1 — Executive Readiness Verdict  (p1)
           ═══════════════════════════════════════ */}
           {result && reportAthlete && expContext && (() => {
             type ReadinessLevel = "strong" | "moderate" | "major_gap" | "unknown";
@@ -2059,7 +2059,7 @@ export default function RaceReadinessPage() {
           })()}
 
           {/* ═══════════════════════════════════════
-              §1b — Readiness Scorecard  (p2)
+              1b — Readiness Scorecard  (p2)
           ═══════════════════════════════════════ */}
           {result && reportAthlete && expContext && (() => {
             type ReadinessLevel = "strong" | "moderate" | "major_gap" | "unknown";
@@ -2268,7 +2268,7 @@ export default function RaceReadinessPage() {
           })()}
 
           {/* ═══════════════════════════════════════
-              §2 — Distance & Time-on-Feet Readiness  (p3)
+              2 — Distance & Time-on-Feet Readiness  (p3)
           ═══════════════════════════════════════ */}
           {result && reportAthlete && expContext && (() => {
             const firstName = reportAthlete.profile.athlete_key.split(" ")[0];
@@ -2318,7 +2318,7 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§2 — Distance &amp; Time-on-Feet Readiness</h2>
+                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>2 — Distance &amp; Time-on-Feet Readiness</h2>
                 <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
                   Race scale vs {firstName}&apos;s demonstrated capacity · Effort-adjusted distance · Time estimate
                 </p>
@@ -2433,7 +2433,7 @@ export default function RaceReadinessPage() {
           })()}
 
           {/* ═══════════════════════════════════════
-              §3 — Vertical Load Readiness  (p4)
+              3 — Vertical Load Readiness  (p4)
           ═══════════════════════════════════════ */}
           {result && reportAthlete && expContext && (() => {
             const firstName = reportAthlete.profile.athlete_key.split(" ")[0];
@@ -2474,7 +2474,7 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§3 — Vertical Load Readiness</h2>
+                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>3 — Vertical Load Readiness</h2>
                 <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
                   Ascent demand · Descent load · Biggest climb comparison · Final-third climbing
                 </p>
@@ -2633,7 +2633,7 @@ export default function RaceReadinessPage() {
           })()}
 
           {/* ═══════════════════════════════════════
-              §4a — Terrain Readiness: Surface & Pairings  (p5)
+              4a — Terrain Readiness: Surface & Pairings  (p5)
           ═══════════════════════════════════════ */}
           {reportAthlete && result.terrain_sections.length > 0 && (() => {
             const firstName = reportAthlete.profile.athlete_key.split(" ")[0];
@@ -2685,7 +2685,7 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§4 — Terrain Readiness</h2>
+                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>4 — Terrain Readiness</h2>
                 <p style={{ margin: "0 0 12px", fontSize: "12px", color: "#888" }}>
                   Proven terrain types vs priority gaps · Surface-level experience matched to race demands
                 </p>
@@ -2806,7 +2806,7 @@ export default function RaceReadinessPage() {
           })()}
 
           {/* ═══════════════════════════════════════
-              §4b — Terrain Gap Analysis (p6)
+              4b — Terrain Gap Analysis (p6)
           ═══════════════════════════════════════ */}
           {reportAthlete && result.terrain_sections.length > 0 && (() => {
             const firstName = reportAthlete.profile.athlete_key.split(" ")[0];
@@ -2938,7 +2938,7 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§4 — Terrain Gap Analysis</h2>
+                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>4 — Terrain Gap Analysis</h2>
                 <p style={{ margin: "0 0 8px", fontSize: "12px", color: "#888" }}>
                   Full gap table: race demands vs {firstName}&apos;s exact and cross-terrain experience
                 </p>
@@ -2983,7 +2983,7 @@ export default function RaceReadinessPage() {
           })()}
 
           {/* ═══════════════════════════════════════
-              §5a — Pacing & Effort: Elevation  (p7)
+              5a — Pacing & Effort: Elevation  (p7)
           ═══════════════════════════════════════ */}
           {(elevProfile || terrainSummary.total > 0) && (
             <div className="rr-page" style={a4Page}>
@@ -2995,7 +2995,7 @@ export default function RaceReadinessPage() {
                 </div>
               </div>
 
-              <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§5 — Pacing &amp; Effort Management</h2>
+              <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>5 — Pacing &amp; Effort Management</h2>
               <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#555", lineHeight: 1.5 }}>
                 {(() => {
                   const goalDist   = result.race.total_distance_km;
@@ -3143,7 +3143,7 @@ export default function RaceReadinessPage() {
           )}
 
           {/* ═══════════════════════════════════════
-              §5b — Pacing & Effort: Analysis  (p8)
+              5b — Pacing & Effort: Analysis  (p8)
           ═══════════════════════════════════════ */}
           {secs.length > 0 && (
             <div className="rr-page" style={a4Page}>
@@ -3155,7 +3155,7 @@ export default function RaceReadinessPage() {
                 </div>
               </div>
 
-              <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§5 — Pacing &amp; Effort (continued)</h2>
+              <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>5 — Pacing &amp; Effort (continued)</h2>
               <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#555", lineHeight: 1.5 }}>
                 Gradient distribution · Effort multiplier · Pacing complexity · Technical terrain timing
               </p>
@@ -3273,7 +3273,7 @@ export default function RaceReadinessPage() {
           )}
 
           {/* ═══════════════════════════════════════
-              §6 — Aid Station & Logistics  (p9)
+              6 — Aid Station & Logistics  (p9)
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const stations: AidStation[] = result.aid_stations ?? [];
@@ -3317,7 +3317,7 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§6 — Aid Station &amp; Logistics</h2>
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>6 — Aid Station &amp; Logistics</h2>
                 <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
                   Gap analysis and logistics preparation for {result.race.name}
                 </p>
@@ -3426,7 +3426,7 @@ export default function RaceReadinessPage() {
 
 
           {/* ═══════════════════════════════════════
-              §7 — Physical Readiness Checks  (p10)
+              7 — Physical Readiness Checks  (p10)
           ═══════════════════════════════════════ */}
           {reportAthlete && assessmentTests.length > 0 && (() => {
             const athleteMap: Record<string, number> = {};
@@ -3552,7 +3552,7 @@ export default function RaceReadinessPage() {
                 <div>
                   <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", marginBottom: "3px" }}>Record your results</div>
                   <div style={{ fontSize: "10px", color: "#555", lineHeight: 1.5, marginBottom: "4px" }}>
-                    Log your assessment results in your athlete dashboard to track improvements over time and share them with your coach.
+                    Log your assessment results in your athlete dashboard to track improvements over time.
                   </div>
                   <div style={{ fontSize: "8.5px", color: "#aaa" }}>tortoiseendurance.com/dashboard</div>
                 </div>
@@ -3575,7 +3575,7 @@ export default function RaceReadinessPage() {
                     </div>
                   </div>
 
-                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§7 — Physical Self-Assessments</h2>
+                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>7 — Physical Self-Assessments</h2>
                   <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
                     Tests to identify strength gaps, imbalances, and flexibility limitations that may not be visible in race data.
                   </p>
@@ -3612,7 +3612,7 @@ export default function RaceReadinessPage() {
                     </div>
                   </div>
 
-                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§7 — Physical Self-Assessments (continued)</h2>
+                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>7 — Physical Self-Assessments (continued)</h2>
                   <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
                     Additional tests covering areas not highlighted by your specific gap profile.
                   </p>
@@ -3624,7 +3624,7 @@ export default function RaceReadinessPage() {
                       </div>
                       {priorityItems.length > 0 && (
                         <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>
-                          These tests cover areas not highlighted by your specific gap profile but may reveal underlying physical limitations worth addressing with your coach.
+                          These tests cover areas not highlighted by your specific gap profile but may reveal underlying physical limitations worth monitoring.
                         </p>
                       )}
                       <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -3641,13 +3641,74 @@ export default function RaceReadinessPage() {
 
                   <PageNumber n={11} />
                 </div>
+
+                {/* ── Page 12: Assessment results recording table ─────── */}
+                <div className="rr-page" style={a4Page}>
+                  <div style={printHeader}>
+                    <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{reportAthlete.profile.athlete_key}</div>
+                      <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Assessment Results</div>
+                    </div>
+                  </div>
+
+                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>7 — Assessment Results</h2>
+                  <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
+                    Use this page to record your results. Where a test measures each side separately, a row is provided for each.
+                  </p>
+
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+                    <thead>
+                      <tr style={{ background: "#1e3a1e" }}>
+                        <th style={{ textAlign: "left", padding: "7px 10px", fontSize: "9px", fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.06em", width: "44%" }}>Assessment</th>
+                        <th style={{ textAlign: "center", padding: "7px 6px", fontSize: "9px", fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.06em", width: "7%" }}>Side</th>
+                        <th style={{ textAlign: "left", padding: "7px 10px", fontSize: "9px", fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: "0.06em" }}>Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scored.flatMap(({ test }, idx) => {
+                        const hasSides = test.what_to_record
+                          ? /left|right|each side|each leg|each foot|each arm|both sides/i.test(test.what_to_record)
+                          : false;
+                        const bg = idx % 2 === 0 ? "#fff" : "#f7f9f7";
+                        const nameTd = (span: number) => (
+                          <td rowSpan={span} style={{ padding: "9px 10px", borderBottom: "1px solid #ddd", verticalAlign: "top", background: bg }}>
+                            <div style={{ fontSize: "10px", fontWeight: 700, color: "#1e3a1e", lineHeight: 1.4 }}>{test.name}</div>
+                            {test.what_to_record && (
+                              <div style={{ fontSize: "8.5px", color: "#777", marginTop: "2px", lineHeight: 1.3 }}>{test.what_to_record}</div>
+                            )}
+                          </td>
+                        );
+                        const sideTd = (label: string) => (
+                          <td style={{ padding: "9px 6px", borderBottom: "1px solid #ddd", verticalAlign: "middle", textAlign: "center", fontSize: "9px", fontWeight: 700, color: "#555", background: bg }}>
+                            {label}
+                          </td>
+                        );
+                        const mkResultTd = () => (
+                          <td style={{ padding: "9px 10px", borderBottom: "1px solid #ddd", verticalAlign: "bottom", background: bg }}>
+                            <div style={{ borderBottom: "1px solid #bbb", height: "20px" }} />
+                          </td>
+                        );
+                        if (hasSides) {
+                          return [
+                            <tr key={`${test.id}-L`}>{nameTd(2)}{sideTd("L")}{mkResultTd()}</tr>,
+                            <tr key={`${test.id}-R`}>{sideTd("R")}{mkResultTd()}</tr>,
+                          ];
+                        }
+                        return [<tr key={test.id}>{nameTd(1)}{sideTd("")}{mkResultTd()}</tr>];
+                      })}
+                    </tbody>
+                  </table>
+
+                  <PageNumber n={12} />
+                </div>
               </>
             );
           })()}
 
 
           {/* ═══════════════════════════════════════
-              §8 — Suggested Preparation Priorities  (p11)
+              8 — Suggested Preparation Priorities  (p11)
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -3770,7 +3831,7 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§8 — Suggested Preparation Priorities</h2>
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>8 — Suggested Preparation Priorities</h2>
                 <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
                   Specific preparation actions derived from gap analysis and course demands
                 </p>
@@ -3807,18 +3868,18 @@ export default function RaceReadinessPage() {
 
                 <div style={{ paddingTop: "8px", borderTop: "1px solid #eee" }}>
                   <p style={{ fontSize: "8.5px", color: "#bbb", margin: 0, lineHeight: 1.5 }}>
-                    These recommendations are generated from race profile data and athlete history. They are a starting point for coach and athlete discussion, not a complete training plan. Priorities are ordered from highest to lowest urgency based on the gap analysis.
+                    These recommendations are generated from race profile data and athlete history. They are not a complete training plan — priorities are ordered from highest to lowest urgency based on the gap analysis.
                   </p>
                 </div>
 
-                <PageNumber n={12} />
+                <PageNumber n={13} />
               </div>
             );
           })()}
 
 
           {/* ═══════════════════════════════════════
-              §9 — Suggested Preparation Races  (p12)
+              9 — Suggested Preparation Races  (p12)
           ═══════════════════════════════════════ */}
           {(prepRaces && reportAthlete) && (() => {
             const stl = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -3837,7 +3898,7 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§9 — Suggested Preparation Races</h2>
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>9 — Suggested Preparation Races</h2>
                 <p style={{ margin: "0 0 18px", fontSize: "12px", color: "#888" }}>
                   Races within {prepRaces?.radius_miles ?? radiusMiles} miles of {reportAthlete?.profile.athlete_key.split(" ")[0]}&apos;s race base
                   that best address identified experience gaps for {result.race.name}
@@ -3945,7 +4006,7 @@ export default function RaceReadinessPage() {
                   <strong style={{ color: "#666" }}>Data limitations:</strong> This report is based on publicly available race results and course data.
                   {" "}It does not account for training completed outside of race events — an athlete may be significantly better prepared than their race history alone suggests.
                   {" "}Injury history is not assessed; a history of injury at this distance, terrain type, or training load may affect the likelihood of completing the goal race in ways this report cannot identify.
-                  {" "}Use this report as a structured starting point for a coaching conversation, not as a definitive assessment of an individual&apos;s readiness.
+                  {" "}Use this report as a structured input for planning, not as a definitive assessment of an individual&apos;s readiness.
                 </div>
 
                 {result.race.slug && (() => {
@@ -3969,7 +4030,7 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={13} />
+                <PageNumber n={14} />
               </div>
             );
           })()}
@@ -4050,7 +4111,7 @@ export default function RaceReadinessPage() {
                   </table>
                 )}
 
-                <PageNumber n={14} />
+                <PageNumber n={15} />
               </div>
             );
           })()}
