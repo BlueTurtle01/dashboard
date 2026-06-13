@@ -3710,7 +3710,7 @@ export default function RaceReadinessPage() {
               fell: 5, snow: 5,
             };
 
-            // Returns a sentence for a surface_gap row describing the step-up (or step-down) in difficulty
+            // Returns a personalised sentence for a surface_gap row, addressed directly to the athlete
             const surfaceGapComment = (row: (typeof gapRows)[0]): string | null => {
               if (row.status !== "surface_gap" || !row.crossSurface) return null;
               const reqRank   = TERRAIN_RANK[row.terrain]   ?? 2;
@@ -3718,37 +3718,40 @@ export default function RaceReadinessPage() {
               const req   = terrainLabel(row.terrain);
               const cross = terrainLabel(row.crossSurface);
               const stype = sectionTypeLabel(row.section_type, row.avg_gradient).toLowerCase();
+              const crossKmStr = `${row.crossKm.toFixed(1)} km`;
+              const raceKmStr  = `${row.km.toFixed(1)} km`;
+              const volume = row.km >= 10 ? "a very large portion" : row.km >= 5 ? "a significant portion" : "a meaningful section";
 
               if (crossRank < reqRank) {
                 // Athlete has easier terrain — the classic upward step
                 if (row.terrain === "technical_trail" && row.crossSurface === "trail") {
-                  return `Experience on ${cross} ${stype} transfers partially — ${req} at the same gradient is harder, demanding stronger ankle stability and proprioception.`;
+                  return `You have ${crossKmStr} of ${cross.toLowerCase()} ${stype} experience, and that does carry over — the gradient load is real. But don't underestimate the ${raceKmStr} of ${req.toLowerCase()} here. Technical trail is rougher, looser, and more unpredictable underfoot; the ankle stability and proprioception it demands are a step above what trail prepares you for.`;
                 }
                 if (row.terrain === "technical_trail" && TERRAIN_RANK[row.crossSurface] <= 1) {
-                  return `${cross} ${stype} experience is a starting point, but ${req} is significantly harder — expect rougher, less predictable footing with far greater ankle demand.`;
+                  return `You have ${crossKmStr} of ${cross.toLowerCase()} ${stype} in your history, which gives you the aerobic base — but the ${raceKmStr} of ${req.toLowerCase()} on this race is ${volume} you haven't experienced before. Technical trail is a significant step up from road: the footing is rocky, uneven, and demands a level of ankle strength and technical confidence that road running simply doesn't build.`;
                 }
                 if (row.terrain === "gravel" && row.crossSurface === "trail") {
-                  return `${cross} ${stype} provides a base, but ${req} places greater lateral ankle load at the same gradient — gravel requires more active foot stabilisation.`;
+                  return `You have ${crossKmStr} of ${cross.toLowerCase()} ${stype} logged, which is a reasonable base for this. That said, the ${raceKmStr} of ${req.toLowerCase()} ${stype} here is worth your attention — gravel at the same gradient places more lateral load on the ankles than trail, and the loose, shifting surface demands more active foot stabilisation than you may be used to.`;
                 }
                 if (row.terrain === "gravel" && TERRAIN_RANK[row.crossSurface] <= 1) {
-                  return `${cross} ${stype} experience helps aerobically, but ${req} is considerably more demanding underfoot — road mechanics do not transfer to loose surfaces.`;
+                  return `Your ${crossKmStr} of ${cross.toLowerCase()} ${stype} history is a good aerobic foundation, but the ${raceKmStr} of ${req.toLowerCase()} on this race is ${volume} you haven't experienced in that context. Road and gravel feel very different to the foot — gravel shifts, compresses unevenly, and challenges ankle stability in a way road running doesn't prepare you for.`;
                 }
                 if (row.terrain === "trail" && TERRAIN_RANK[row.crossSurface] <= 1) {
-                  return `${cross} ${stype} experience is a useful base, but ${req} is more technically demanding at the same gradient — trail requires greater ankle demand and different foot-strike patterns.`;
+                  return `You have ${crossKmStr} of ${cross.toLowerCase()} ${stype} in your history, and the aerobic fitness transfers — but the ${raceKmStr} of ${req.toLowerCase()} ${stype} on this course is ${volume} that hasn't appeared in your race history. Trail at this gradient is more technical than road: the footing varies constantly, and it places noticeably more demand on your ankles and calves.`;
                 }
                 if (row.terrain === "fell") {
-                  return `${cross} ${stype} does not prepare for ${req} — fell involves open, untracked, and often boggy terrain with unpredictable footing that requires specific adaptation.`;
+                  return `You have ${crossKmStr} of ${cross.toLowerCase()} ${stype} experience, but fell is a genuinely different proposition — open, untracked, and often boggy. The ${raceKmStr} of ${req.toLowerCase()} ${stype} here is ${volume} that requires its own specific adaptation. Don't assume other off-road experience will fully prepare you for the footing demands fell running creates.`;
                 }
-                return `${cross} ${stype} provides some aerobic base, but ${req} is harder at the same gradient — terrain-specific neuromuscular adaptation is needed.`;
+                return `You have ${crossKmStr} of ${cross.toLowerCase()} ${stype} experience, which provides an aerobic base, but the ${raceKmStr} of ${req.toLowerCase()} ${stype} on this race is harder terrain at the same gradient. That's ${volume} you haven't experienced in race conditions — the terrain-specific neuromuscular demand is meaningfully different.`;
               }
 
               if (crossRank > reqRank) {
-                // Athlete has harder experience than required — a positive sign
-                return `${cross} ${stype} experience covers the demands of ${req} — the harder surface includes everything the race requires at this gradient.`;
+                // Athlete has harder experience than required — reassuring
+                return `You have ${crossKmStr} of ${cross.toLowerCase()} ${stype} in your history — that's harder terrain than the ${raceKmStr} of ${req.toLowerCase()} this race requires at this gradient. Your experience more than covers what's being asked of you here.`;
               }
 
-              // Same rank, different surface (e.g. pavement vs road)
-              return `${cross} and ${req} are broadly equivalent at this gradient — the pattern transfers.`;
+              // Same difficulty rank, different named surface (e.g. pavement vs road)
+              return `You have ${crossKmStr} of ${cross.toLowerCase()} ${stype} experience — broadly equivalent to the ${raceKmStr} of ${req.toLowerCase()} ${stype} on this race. The pattern transfers well.`;
             };
 
             // Builds a prose paragraph for all surface_gap rows in a section
