@@ -1735,7 +1735,7 @@ export default function RaceReadinessPage() {
               },
               {
                 title: "Race Demands Profile (continued)",
-                body: "Demand summary cards quantify the four key physical challenges — climbing volume, descending load, final third demands, and effort variability. Late-race pattern data shows how athletes typically manage late-race fatigue on this course.",
+                body: "In-depth breakdown of the four key physical challenges: climbing volume and distribution, descending load and eccentric demand, final third character, and effort variability. Late-race pattern data shows how athletes typically manage late-race fatigue on this course.",
                 visible: true,
               },
               {
@@ -1744,13 +1744,13 @@ export default function RaceReadinessPage() {
                 visible: !!reportAthlete,
               },
               {
-                title: "Experience Gaps",
-                body: "Every terrain type on the goal course is listed — climb trail, descent road, flat fell, and so on — alongside how many kilometres of that terrain the athlete has covered in previous races. Red and amber rows identify where targeted build-up would have the most impact.",
+                title: "Demands Built Up",
+                body: "The athlete's peak single-race load versus what this race demands. Bar charts compare the highest distance, ascent, and flat-equivalent effort the athlete has recorded against the goal race targets — the fastest way to spot which dimensions are under-prepared.",
                 visible: !!reportAthlete,
               },
               {
-                title: "Demands Built Up",
-                body: "The athlete's peak single-race load versus what this race demands. Bar charts compare the highest distance, ascent, and flat-equivalent effort the athlete has recorded against the goal race targets — the fastest way to spot which dimensions are under-prepared.",
+                title: "Experience Gaps",
+                body: "Every terrain type on the goal course is listed — climb trail, descent road, flat fell, and so on — alongside how many kilometres of that terrain the athlete has covered in previous races. Red and amber rows identify where targeted build-up would have the most impact.",
                 visible: !!reportAthlete,
               },
               {
@@ -3219,99 +3219,104 @@ export default function RaceReadinessPage() {
                 Read each card as a direct statement about what this race will test, and whether you are ready for it.
               </p>
 
-              {/* ── Demand summary (4 cards) ── */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
-                <DemandCard title="Climbing Demand" accent="#c0392b">
-                  {totalAscentM > 0 && terrainSummary.climbing > 0 && totalKm > 0 ? (
-                    <>
-                      Total ascent: <strong>{Math.round(totalAscentM).toLocaleString()} m</strong> across{" "}
-                      <strong>{terrainSummary.climbing.toFixed(1)} km</strong> of climbing terrain
-                      ({Math.round((terrainSummary.climbing / totalKm) * 100)}% of the course).
-                      {halfwayAscentPct !== null && Number.isFinite(halfwayAscentPct) ? (
-                        halfwayAscentPct > 55
-                          ? ` The climbing is front-loaded — ${halfwayAscentPct}% of all ascent is done before halfway. Starting conservatively on climbs protects performance in the second half.`
-                          : halfwayAscentPct < 45
-                          ? ` The climbing is back-loaded — only ${halfwayAscentPct}% of ascent arrives before halfway, meaning hard climbs continue when the athlete is already fatigued.`
-                          : " Climbing is spread broadly across both halves, requiring repeatable climbing output rather than a single strong effort."
-                      ) : null}
-                      {steepestClimb ? (
-                        <> The steepest sustained section averages <strong>{steepestClimb.avg_gradient_percent.toFixed(1)}%</strong> gradient
-                        {" "}(km {steepestClimb.start_km.toFixed(1)}–{steepestClimb.end_km.toFixed(1)}).</>
-                      ) : null}
-                    </>
-                  ) : (
-                    <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate this section reliably.</span>
-                  )}
-                </DemandCard>
+              {/* ── Demand summary (prose sections) ── */}
+              <div style={{ marginBottom: "14px" }}>
 
-                <DemandCard title="Descending Demand" accent="#1565c0">
-                  {totalDescentM > 0 && terrainSummary.descending > 0 && totalKm > 0 ? (
-                    <>
-                      The race includes{" "}
-                      <strong>{Math.round(totalDescentM).toLocaleString()} m</strong> of descent across{" "}
-                      <strong>{terrainSummary.descending.toFixed(1)} km</strong> of descending terrain
-                      {" "}({Math.round((terrainSummary.descending / totalKm) * 100)}% of course).
-                      {steepestDescent ? (
-                        <> Steepest descent: <strong>{Math.abs(steepestDescent.avg_gradient_percent).toFixed(1)}%</strong> average gradient
-                        {" "}(km {steepestDescent.start_km.toFixed(1)}–{steepestDescent.end_km.toFixed(1)}).</>
-                      ) : null}
-                      {" "}
-                      {totalDescentM > 2000
-                        ? "This volume creates substantial eccentric load on the quads and calves. Even aerobically fit athletes can be stopped by leg damage if downhill durability has not been specifically trained."
-                        : totalDescentM > 1000
-                        ? "This creates moderate eccentric loading. Downhill technique and quad strength are important contributors to a controlled finish."
-                        : "Descending load is limited relative to the climbing volume."}
-                    </>
-                  ) : (
-                    <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate this section reliably.</span>
-                  )}
-                </DemandCard>
+                <div style={{ marginBottom: "16px" }}>
+                  <h3 style={{ margin: "0 0 5px", fontSize: "13px", fontWeight: 700, color: "#c0392b" }}>Climbing Demand</h3>
+                  <p style={{ margin: 0, fontSize: "11.5px", color: "#333", lineHeight: 1.65 }}>
+                    {totalAscentM > 0 && terrainSummary.climbing > 0 && totalKm > 0 ? (
+                      <>
+                        The course demands <strong>{Math.round(totalAscentM).toLocaleString()} m</strong> of total ascent across{" "}
+                        <strong>{terrainSummary.climbing.toFixed(1)} km</strong> of climbing terrain — {Math.round((terrainSummary.climbing / totalKm) * 100)}% of the course is spent going uphill.
+                        {halfwayAscentPct !== null && Number.isFinite(halfwayAscentPct) ? (
+                          halfwayAscentPct > 55
+                            ? ` The climbing is front-loaded: ${halfwayAscentPct}% of all ascent arrives before the halfway point, which rewards starting conservatively to protect the second half.`
+                            : halfwayAscentPct < 45
+                            ? ` The climbing is back-loaded: only ${halfwayAscentPct}% of ascent arrives before halfway, meaning the hardest climbing comes when the athlete is already fatigued — late-race climbing strength is a key preparation priority.`
+                            : " Climbing is spread broadly across both halves, requiring consistent uphill output rather than a single concentrated effort."
+                        ) : null}
+                        {steepestClimb ? (
+                          <> The steepest sustained section averages <strong>{steepestClimb.avg_gradient_percent.toFixed(1)}%</strong> gradient between km {steepestClimb.start_km.toFixed(1)} and {steepestClimb.end_km.toFixed(1)}.</>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate climbing demand.</span>
+                    )}
+                  </p>
+                </div>
 
-                <DemandCard title="Final Third Demands" accent="#e65100">
-                  {finalThirdLen > 0 && totalKm > 0 && effortRatio > 0 && Number.isFinite(effortRatio) && Number.isFinite(finalThirdEffort) ? (
-                    <>
-                      The final third spans km {finalThirdStart.toFixed(1)}–{totalKm.toFixed(1)}:{" "}
-                      <strong>{finalThirdLen.toFixed(1)} km</strong> with <strong>{Math.round(finalThirdAscent).toLocaleString()} m</strong> of remaining ascent.
-                      {" "}Effort multiplier is{" "}
-                      <strong style={{ color: finalThirdEffort > effortRatio * 1.1 ? "#c0392b" : finalThirdEffort < effortRatio * 0.9 ? "#2e7d32" : "#555" }}>
-                        {finalThirdEffort.toFixed(2)}×
-                      </strong>{" "}
-                      ({finalThirdEffort > effortRatio * 1.1
-                        ? "harder than average — fatigue management is critical"
-                        : finalThirdEffort < effortRatio * 0.9
-                        ? "easier than average — opportunity to push if reserves allow"
-                        : "similar to overall average — consistent effort required to the finish"}).
-                      {late && (
-                        <> Results data shows athletes typically slow by <strong>{late.avg_fade_pct.toFixed(1)}%</strong> in the final section, with <strong>{late.controlled_pct.toFixed(0)}%</strong> maintaining a controlled finish.</>
-                      )}
-                    </>
-                  ) : (
-                    <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate this section reliably.</span>
-                  )}
-                </DemandCard>
+                <div style={{ marginBottom: "16px" }}>
+                  <h3 style={{ margin: "0 0 5px", fontSize: "13px", fontWeight: 700, color: "#1565c0" }}>Descending Demand</h3>
+                  <p style={{ margin: 0, fontSize: "11.5px", color: "#333", lineHeight: 1.65 }}>
+                    {totalDescentM > 0 && terrainSummary.descending > 0 && totalKm > 0 ? (
+                      <>
+                        The race includes <strong>{Math.round(totalDescentM).toLocaleString()} m</strong> of descent across{" "}
+                        <strong>{terrainSummary.descending.toFixed(1)} km</strong> of descending terrain — {Math.round((terrainSummary.descending / totalKm) * 100)}% of the course.
+                        {steepestDescent ? (
+                          <> The steepest descent section averages <strong>{Math.abs(steepestDescent.avg_gradient_percent).toFixed(1)}%</strong> gradient between km {steepestDescent.start_km.toFixed(1)} and {steepestDescent.end_km.toFixed(1)}.</>
+                        ) : null}
+                        {" "}
+                        {totalDescentM > 2000
+                          ? "This is a substantial descending load. The eccentric demand on the quads and calves is severe — even well-trained aerobic athletes can be stopped by leg damage if downhill durability hasn't been specifically built. Descending training and quad strength work are non-negotiable preparation priorities."
+                          : totalDescentM > 1000
+                          ? "This is a moderate descending load. Downhill technique and quad strength will meaningfully influence the final stages — athletes who have trained descending specifically will recover faster between climbs."
+                          : "The descending load is manageable relative to the total course, but leg damage from even moderate descent accumulates — don't neglect the downhills in preparation."}
+                      </>
+                    ) : (
+                      <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate descending demand.</span>
+                    )}
+                  </p>
+                </div>
 
-                <DemandCard title="Effort Variability" accent={complexityColor}>
-                  {secs.length > 0 && totalKm > 0 ? (
-                    <>
-                      <strong style={{ color: complexityColor }}>{complexityLabel} effort variability.</strong>
-                      {" "}
-                      {cvRatio > 0.45
-                        ? "The energy cost changes sharply from section to section. Managing intensity by effort feel, heart rate, or breathing rate is essential — the course does not allow a single consistent output level."
-                        : cvRatio > 0.25
-                        ? "Effort varies noticeably between sections. Adapting output section-by-section is important; a single constant output will either over-stress on the climbs or under-utilise on the flats."
-                        : "Effort is relatively consistent across sections. A steady, measured approach is appropriate for most of this course."
-                      }
-                      {totalFlatEq > 0 && Number.isFinite(effortRatio) ? (
-                        <>
-                          {" "}Estimated flat-effort equivalent: <strong>{totalFlatEq.toFixed(1)} km</strong> ({effortRatio.toFixed(2)}× the actual {totalKm.toFixed(1)} km) —
-                          a comparative load metric, not a literal distance prediction.
-                        </>
-                      ) : null}
-                    </>
-                  ) : (
-                    <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate this section reliably.</span>
-                  )}
-                </DemandCard>
+                <div style={{ marginBottom: "16px" }}>
+                  <h3 style={{ margin: "0 0 5px", fontSize: "13px", fontWeight: 700, color: "#e65100" }}>Final Third</h3>
+                  <p style={{ margin: 0, fontSize: "11.5px", color: "#333", lineHeight: 1.65 }}>
+                    {finalThirdLen > 0 && totalKm > 0 && effortRatio > 0 && Number.isFinite(effortRatio) && Number.isFinite(finalThirdEffort) ? (
+                      <>
+                        The final third runs km {finalThirdStart.toFixed(1)}–{totalKm.toFixed(1)}: <strong>{finalThirdLen.toFixed(1)} km</strong> with{" "}
+                        <strong>{Math.round(finalThirdAscent).toLocaleString()} m</strong> of remaining ascent still to come.
+                        The effort multiplier for this section is{" "}
+                        <strong style={{ color: finalThirdEffort > effortRatio * 1.1 ? "#c0392b" : finalThirdEffort < effortRatio * 0.9 ? "#2e7d32" : "#555" }}>
+                          {finalThirdEffort.toFixed(2)}×
+                        </strong>
+                        {finalThirdEffort > effortRatio * 1.1
+                          ? " — harder than the course average. This is where the race is won and lost: fatigue management from the start directly determines how much the athlete has left here."
+                          : finalThirdEffort < effortRatio * 0.9
+                          ? " — easier than the course average, offering an opportunity to push if reserves allow."
+                          : " — consistent with the course average, requiring a steady effort to the line."}
+                        {late && (
+                          <> Historical results show athletes typically slow by <strong>{late.avg_fade_pct.toFixed(1)}%</strong> in the final section, with <strong>{late.controlled_pct.toFixed(0)}%</strong> maintaining a controlled finish.</>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate final third demands.</span>
+                    )}
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: "4px" }}>
+                  <h3 style={{ margin: "0 0 5px", fontSize: "13px", fontWeight: 700, color: complexityColor }}>Effort Variability</h3>
+                  <p style={{ margin: 0, fontSize: "11.5px", color: "#333", lineHeight: 1.65 }}>
+                    {secs.length > 0 && totalKm > 0 ? (
+                      <>
+                        This course has <strong style={{ color: complexityColor }}>{complexityLabel.toLowerCase()} effort variability</strong>.{" "}
+                        {cvRatio > 0.45
+                          ? "The energy cost changes sharply between sections — this is not a course that can be paced at a constant output level. Athletes need to manage intensity by effort feel, heart rate, or breathing rate, and must be comfortable shifting gears frequently across the race."
+                          : cvRatio > 0.25
+                          ? "Effort varies noticeably between sections. A single constant output will over-stress on the climbs and under-utilise on the flats — section-by-section output management is important."
+                          : "Effort is relatively consistent across sections, making a steady, measured approach appropriate for most of the course."
+                        }
+                        {totalFlatEq > 0 && Number.isFinite(effortRatio) ? (
+                          <> The estimated flat-effort equivalent is <strong>{totalFlatEq.toFixed(1)} km</strong> ({effortRatio.toFixed(2)}× the actual {totalKm.toFixed(1)} km) — a comparative load metric that accounts for the combined effect of gradient and terrain.</>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span style={{ color: "#999", fontStyle: "italic" }}>Insufficient validated course data to calculate effort variability.</span>
+                    )}
+                  </p>
+                </div>
+
               </div>
 
               {/* ── Late race pattern data (if available) ── */}
@@ -3618,9 +3623,232 @@ export default function RaceReadinessPage() {
               </div>
             );
           })()}
+          {/* ═══════════════════════════════════════
+              PAGE 10 — Demands Built Up
+          ═══════════════════════════════════════ */}
+          {reportAthlete && (() => {
+            const p = reportAthlete.profile;
+            const allRaces = filteredAthleteRaces;
+
+            const finishedRaces = allRaces.filter(r => r.result_status === "FINISHED" && r.finish_seconds);
+
+            const targetDist   = (result.race.total_distance_km ?? 0) > 0 ? result.race.total_distance_km : null;
+            const targetAscent = (result.race.total_ascent_m    ?? 0) > 0 ? result.race.total_ascent_m    : null;
+
+            const maxDist   = finishedRaces.reduce((m, r) => Math.max(m, r.total_distance_km ?? 0), 0) || null;
+            const maxAscent = finishedRaces.reduce((m, r) => Math.max(m, r.total_ascent_m    ?? 0), 0) || null;
+            const maxFlatEq = finishedRaces.reduce((m, r) => Math.max(m, r.flat_equivalent_km ?? 0), 0) || null;
+            const maxTime   = finishedRaces.reduce((m, r) => Math.max(m, r.finish_seconds     ?? 0), 0) || null;
+
+            const normDist   = Math.max(maxDist ?? 0, targetDist ?? 0)   || 1;
+            const normAscent = Math.max(maxAscent ?? 0, targetAscent ?? 0) || 1;
+
+            const tableRaces = [...finishedRaces].sort((a, b) => b.result_year - a.result_year).slice(0, 10);
+
+            const pairings = (reportAthlete.terrain_pairings ?? []).slice(0, 10);
+            const maxPairingKm = pairings.reduce((m, p) => Math.max(m, p.total_km), 0) || 1;
+
+            const sectionTypeLabel = (s: string, avgGrad?: number) => {
+              if (avgGrad !== undefined) {
+                if (s === "steep_climb"   && avgGrad >= 12) return "Very Steep Climb";
+                if (s === "steep_descent" && avgGrad <= -12) return "Very Steep Descent";
+              }
+              return s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            };
+            const terrainLabel = (t: string) =>
+              t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+            const pairingColor = (s: string) =>
+              s.includes("climb") ? "#c0392b" : s.includes("descent") ? "#1565c0" : "#2e7d32";
+
+            const fmtTime = (secs: number) => {
+              const h = Math.floor(secs / 3600);
+              const m = Math.floor((secs % 3600) / 60);
+              return h > 0 ? `${h}h ${m}m` : `${m}m`;
+            };
+
+            type DCard = { label: string; achieved: number | null; target: number | null; fmtFn: (n: number) => string; color: string };
+            const cards: DCard[] = [
+              { label: "Distance",     achieved: maxDist,   target: targetDist,   fmtFn: n => `${n.toFixed(0)} km`,      color: "#1565c0" },
+              { label: "Ascent",       achieved: maxAscent, target: targetAscent, fmtFn: n => `${Math.round(n)}m`,       color: "#c0392b" },
+              ...(maxFlatEq ? [{ label: "Flat Equiv.", achieved: maxFlatEq, target: null, fmtFn: (n: number) => `${n.toFixed(1)} km`, color: "#e65100" }] : []),
+              { label: "Time on Feet", achieved: maxTime,   target: null,         fmtFn: fmtTime,                        color: "#6a1b9a" },
+            ];
+
+            return (
+              <div className="rr-page" style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{p.athlete_key}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Demands Built Up</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Demands Built Up</h2>
+                <p style={{ margin: "0 0 20px", fontSize: "12px", color: "#888" }}>
+                  What this athlete has already experienced — compared to the demands of {result.race.name}
+                </p>
+
+                {/* Honest distance/ascent framing */}
+                {(() => {
+                  const distGap   = targetDist   !== null && maxDist   !== null ? (maxDist   >= targetDist   ? "met" : "gap") : null;
+                  const ascentGap = targetAscent !== null && maxAscent !== null ? (maxAscent >= targetAscent ? "met" : "gap") : null;
+                  let framingText = "";
+                  if (distGap === "gap" && ascentGap === "gap") {
+                    framingText = `Neither the distance (${targetDist?.toFixed(0)} km) nor the ascent (${Math.round(targetAscent ?? 0).toLocaleString()}m) of ${result.race.name} has been matched in a single race finish. Both are unvalidated at this scale — a meaningful consideration for race day.`;
+                  } else if (distGap === "gap") {
+                    framingText = `The ascent of ${result.race.name} has been matched in prior racing, but the full distance (${targetDist?.toFixed(0)} km) has not been completed in a single race. Distance tolerance is the primary unconfirmed demand.`;
+                  } else if (ascentGap === "gap") {
+                    framingText = `The distance of ${result.race.name} has been covered in prior racing, but the full ascent (${Math.round(targetAscent ?? 0).toLocaleString()}m) has not been matched in a single race. Vertical load is the primary unconfirmed demand.`;
+                  } else if (distGap === "met" && ascentGap === "met") {
+                    framingText = `Both the distance and ascent of ${result.race.name} have been matched or exceeded in prior race finishes — a meaningful baseline. Recency and terrain specificity of those races determine how well this transfers.`;
+                  } else {
+                    framingText = `The chart shows the athlete's maximum achieved values compared to the demands of ${result.race.name}.`;
+                  }
+                  return (
+                    <p style={{ margin: "0 0 16px", fontSize: "11px", color: "#444", lineHeight: 1.55 }}>
+                      {framingText}
+                    </p>
+                  );
+                })()}
+
+                {/* Demand comparison cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "24px" }}>
+                  {cards.map((card, i) => {
+                    const pct = card.target && card.achieved ? Math.round((card.achieved / card.target) * 100) : null;
+                    const barColor = pct === null ? card.color : pct >= 100 ? "#2e7d32" : pct >= 70 ? "#f57c00" : "#c0392b";
+                    return (
+                      <div key={i} style={{ border: `2px solid ${barColor}30`, borderRadius: "8px", padding: "14px 16px", background: `${barColor}06` }}>
+                        <div style={{ fontSize: "9px", fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>{card.label}</div>
+                        <div style={{ fontSize: "22px", fontWeight: 700, color: "#1e3a1e" }}>
+                          {card.achieved ? card.fmtFn(card.achieved) : "—"}
+                        </div>
+                        {card.target && (
+                          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>Target: {card.fmtFn(card.target)}</div>
+                        )}
+                        {pct !== null && (
+                          <>
+                            <div style={{ height: "6px", background: "#eee", borderRadius: "3px", marginTop: "8px", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: barColor, borderRadius: "3px" }} />
+                            </div>
+                            <div style={{ fontSize: "10px", color: barColor, fontWeight: 600, marginTop: "4px" }}>
+                              {pct >= 100 ? "✓ Demand met" : `${pct}% of target demand`}
+                            </div>
+                          </>
+                        )}
+                        {pct === null && card.achieved && !card.target && (
+                          <div style={{ fontSize: "10px", color: "#aaa", marginTop: "8px" }}>longest effort on record</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Terrain / elevation pairings */}
+                {pairings.length > 0 && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <p style={sectionLabel}>Top 10 Elevation · Terrain Pairings — kilometres built across all finishes</p>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, width: "180px" }}>Gradient Type</th>
+                          <th style={{ ...thStyle, width: "130px" }}>Surface</th>
+                          <th style={{ ...thStyle, width: "55px" }}>km</th>
+                          <th style={{ ...thStyle, width: "50px" }}>Races</th>
+                          <th style={thStyle}>Experience</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pairings.map((pair, i) => {
+                          const barPct = (pair.total_km / maxPairingKm) * 100;
+                          const col = pairingColor(pair.section_type);
+                          return (
+                            <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                              <td style={{ ...tdStyle, fontWeight: 600, color: col }}>
+                                {sectionTypeLabel(pair.section_type, pair.avg_gradient)}
+                                <div style={{ fontSize: "8.5px", color: "#999", fontWeight: 400, marginTop: "1px" }}>
+                                  avg {pair.avg_gradient > 0 ? "+" : ""}{pair.avg_gradient.toFixed(1)}%
+                                </div>
+                              </td>
+                              <td style={{ ...tdStyle, color: "#555" }}>{terrainLabel(pair.terrain)}</td>
+                              <td style={{ ...tdStyle, fontWeight: 700 }}>{pair.total_km.toFixed(1)}</td>
+                              <td style={{ ...tdStyle, color: "#888" }}>{pair.race_count}</td>
+                              <td style={tdStyle}>
+                                <div style={{ height: "10px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${barPct}%`, background: col, borderRadius: "3px", opacity: 0.75 }} />
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {tableRaces.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: "#aaa", fontSize: "14px" }}>
+                    No finished race data found for this athlete.
+                  </div>
+                )}
+
+                {tableRaces.length > 0 && (
+                  <div style={{ marginTop: "16px" }}>
+                    <p style={sectionLabel}>Finished Race History — Demands vs Target</p>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>Race</th>
+                          <th style={thStyle}>Yr</th>
+                          <th style={thStyle}>Time</th>
+                          <th style={{ ...thStyle, width: "170px" }}>Distance</th>
+                          <th style={{ ...thStyle, width: "170px" }}>Ascent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableRaces.map((r, i) => {
+                          const dPct    = r.total_distance_km ? Math.min(100, (r.total_distance_km / normDist)   * 100) : 0;
+                          const aPct    = r.total_ascent_m    ? Math.min(100, (r.total_ascent_m    / normAscent) * 100) : 0;
+                          const tgtDPct = targetDist   ? Math.min(100, (targetDist   / normDist)   * 100) : null;
+                          const tgtAPct = targetAscent ? Math.min(100, (targetAscent / normAscent) * 100) : null;
+                          return (
+                            <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa", breakInside: "avoid", pageBreakInside: "avoid" }}>
+                              <td style={tdStyle}>{r.race_name}</td>
+                              <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{r.result_year}</td>
+                              <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{r.finish_seconds ? fmtTime(r.finish_seconds) : "—"}</td>
+                              <td style={tdStyle}>
+                                <div style={{ position: "relative", height: "12px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
+                                  <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${dPct}%`, background: "#1565c0", borderRadius: "3px", opacity: 0.75 }} />
+                                  {tgtDPct !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: `calc(${tgtDPct}% - 1px)`, width: "2px", background: "#c0392b" }} />}
+                                </div>
+                                <div style={{ fontSize: "8px", color: "#888", marginTop: "1px" }}>{r.total_distance_km ? `${r.total_distance_km.toFixed(0)} km` : "—"}</div>
+                              </td>
+                              <td style={tdStyle}>
+                                <div style={{ position: "relative", height: "12px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
+                                  <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${aPct}%`, background: "#c0392b", borderRadius: "3px", opacity: 0.75 }} />
+                                  {tgtAPct !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: `calc(${tgtAPct}% - 1px)`, width: "2px", background: "#1e3a1e" }} />}
+                                </div>
+                                <div style={{ fontSize: "8px", color: "#888", marginTop: "1px" }}>{r.total_ascent_m ? `${Math.round(r.total_ascent_m)}m` : "—"}</div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {(targetDist || targetAscent) && (
+                      <div style={{ marginTop: "8px", fontSize: "8.5px", color: "#999" }}>Red line on each bar = target race demand</div>
+                    )}
+                  </div>
+                )}
+
+                <PageNumber n={10} />
+              </div>
+            );
+          })()}
+
 
           {/* ═══════════════════════════════════════
-              PAGE 10 — Experience Gaps
+              PAGE 11 — Experience Gaps
           ═══════════════════════════════════════ */}
           {reportAthlete && result.terrain_sections.length > 0 && (() => {
             const p = reportAthlete.profile;
@@ -3962,10 +4190,10 @@ export default function RaceReadinessPage() {
                   </div>
                 )}
 
-                <PageNumber n={10} />
+                <PageNumber n={11} />
               </div>
 
-              {/* PAGE 11 — Experience Gaps (continued) */}
+              {/* PAGE 12 — Experience Gaps (continued) */}
               <div className="rr-page" style={a4Page}>
                 <div style={printHeader}>
                   <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
@@ -4041,232 +4269,9 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={11} />
-              </div>
-              </>
-            );
-          })()}
-
-          {/* ═══════════════════════════════════════
-              PAGE 12 — Demands Built Up
-          ═══════════════════════════════════════ */}
-          {reportAthlete && (() => {
-            const p = reportAthlete.profile;
-            const allRaces = filteredAthleteRaces;
-
-            const finishedRaces = allRaces.filter(r => r.result_status === "FINISHED" && r.finish_seconds);
-
-            const targetDist   = (result.race.total_distance_km ?? 0) > 0 ? result.race.total_distance_km : null;
-            const targetAscent = (result.race.total_ascent_m    ?? 0) > 0 ? result.race.total_ascent_m    : null;
-
-            const maxDist   = finishedRaces.reduce((m, r) => Math.max(m, r.total_distance_km ?? 0), 0) || null;
-            const maxAscent = finishedRaces.reduce((m, r) => Math.max(m, r.total_ascent_m    ?? 0), 0) || null;
-            const maxFlatEq = finishedRaces.reduce((m, r) => Math.max(m, r.flat_equivalent_km ?? 0), 0) || null;
-            const maxTime   = finishedRaces.reduce((m, r) => Math.max(m, r.finish_seconds     ?? 0), 0) || null;
-
-            const normDist   = Math.max(maxDist ?? 0, targetDist ?? 0)   || 1;
-            const normAscent = Math.max(maxAscent ?? 0, targetAscent ?? 0) || 1;
-
-            const tableRaces = [...finishedRaces].sort((a, b) => b.result_year - a.result_year).slice(0, 10);
-
-            const pairings = (reportAthlete.terrain_pairings ?? []).slice(0, 10);
-            const maxPairingKm = pairings.reduce((m, p) => Math.max(m, p.total_km), 0) || 1;
-
-            const sectionTypeLabel = (s: string, avgGrad?: number) => {
-              if (avgGrad !== undefined) {
-                if (s === "steep_climb"   && avgGrad >= 12) return "Very Steep Climb";
-                if (s === "steep_descent" && avgGrad <= -12) return "Very Steep Descent";
-              }
-              return s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-            };
-            const terrainLabel = (t: string) =>
-              t.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-            const pairingColor = (s: string) =>
-              s.includes("climb") ? "#c0392b" : s.includes("descent") ? "#1565c0" : "#2e7d32";
-
-            const fmtTime = (secs: number) => {
-              const h = Math.floor(secs / 3600);
-              const m = Math.floor((secs % 3600) / 60);
-              return h > 0 ? `${h}h ${m}m` : `${m}m`;
-            };
-
-            type DCard = { label: string; achieved: number | null; target: number | null; fmtFn: (n: number) => string; color: string };
-            const cards: DCard[] = [
-              { label: "Distance",     achieved: maxDist,   target: targetDist,   fmtFn: n => `${n.toFixed(0)} km`,      color: "#1565c0" },
-              { label: "Ascent",       achieved: maxAscent, target: targetAscent, fmtFn: n => `${Math.round(n)}m`,       color: "#c0392b" },
-              ...(maxFlatEq ? [{ label: "Flat Equiv.", achieved: maxFlatEq, target: null, fmtFn: (n: number) => `${n.toFixed(1)} km`, color: "#e65100" }] : []),
-              { label: "Time on Feet", achieved: maxTime,   target: null,         fmtFn: fmtTime,                        color: "#6a1b9a" },
-            ];
-
-            return (
-              <div className="rr-page" style={a4Page}>
-                <div style={printHeader}>
-                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{p.athlete_key}</div>
-                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Demands Built Up</div>
-                  </div>
-                </div>
-
-                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>Demands Built Up</h2>
-                <p style={{ margin: "0 0 20px", fontSize: "12px", color: "#888" }}>
-                  What this athlete has already experienced — compared to the demands of {result.race.name}
-                </p>
-
-                {/* Honest distance/ascent framing */}
-                {(() => {
-                  const distGap   = targetDist   !== null && maxDist   !== null ? (maxDist   >= targetDist   ? "met" : "gap") : null;
-                  const ascentGap = targetAscent !== null && maxAscent !== null ? (maxAscent >= targetAscent ? "met" : "gap") : null;
-                  let framingText = "";
-                  if (distGap === "gap" && ascentGap === "gap") {
-                    framingText = `Neither the distance (${targetDist?.toFixed(0)} km) nor the ascent (${Math.round(targetAscent ?? 0).toLocaleString()}m) of ${result.race.name} has been matched in a single race finish. Both are unvalidated at this scale — a meaningful consideration for race day.`;
-                  } else if (distGap === "gap") {
-                    framingText = `The ascent of ${result.race.name} has been matched in prior racing, but the full distance (${targetDist?.toFixed(0)} km) has not been completed in a single race. Distance tolerance is the primary unconfirmed demand.`;
-                  } else if (ascentGap === "gap") {
-                    framingText = `The distance of ${result.race.name} has been covered in prior racing, but the full ascent (${Math.round(targetAscent ?? 0).toLocaleString()}m) has not been matched in a single race. Vertical load is the primary unconfirmed demand.`;
-                  } else if (distGap === "met" && ascentGap === "met") {
-                    framingText = `Both the distance and ascent of ${result.race.name} have been matched or exceeded in prior race finishes — a meaningful baseline. Recency and terrain specificity of those races determine how well this transfers.`;
-                  } else {
-                    framingText = `The chart shows the athlete's maximum achieved values compared to the demands of ${result.race.name}.`;
-                  }
-                  return (
-                    <p style={{ margin: "0 0 16px", fontSize: "11px", color: "#444", lineHeight: 1.55 }}>
-                      {framingText}
-                    </p>
-                  );
-                })()}
-
-                {/* Demand comparison cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "24px" }}>
-                  {cards.map((card, i) => {
-                    const pct = card.target && card.achieved ? Math.round((card.achieved / card.target) * 100) : null;
-                    const barColor = pct === null ? card.color : pct >= 100 ? "#2e7d32" : pct >= 70 ? "#f57c00" : "#c0392b";
-                    return (
-                      <div key={i} style={{ border: `2px solid ${barColor}30`, borderRadius: "8px", padding: "14px 16px", background: `${barColor}06` }}>
-                        <div style={{ fontSize: "9px", fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>{card.label}</div>
-                        <div style={{ fontSize: "22px", fontWeight: 700, color: "#1e3a1e" }}>
-                          {card.achieved ? card.fmtFn(card.achieved) : "—"}
-                        </div>
-                        {card.target && (
-                          <div style={{ fontSize: "11px", color: "#888", marginTop: "2px" }}>Target: {card.fmtFn(card.target)}</div>
-                        )}
-                        {pct !== null && (
-                          <>
-                            <div style={{ height: "6px", background: "#eee", borderRadius: "3px", marginTop: "8px", overflow: "hidden" }}>
-                              <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: barColor, borderRadius: "3px" }} />
-                            </div>
-                            <div style={{ fontSize: "10px", color: barColor, fontWeight: 600, marginTop: "4px" }}>
-                              {pct >= 100 ? "✓ Demand met" : `${pct}% of target demand`}
-                            </div>
-                          </>
-                        )}
-                        {pct === null && card.achieved && !card.target && (
-                          <div style={{ fontSize: "10px", color: "#aaa", marginTop: "8px" }}>longest effort on record</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Terrain / elevation pairings */}
-                {pairings.length > 0 && (
-                  <div style={{ marginBottom: "20px" }}>
-                    <p style={sectionLabel}>Top 10 Elevation · Terrain Pairings — kilometres built across all finishes</p>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr>
-                          <th style={{ ...thStyle, width: "180px" }}>Gradient Type</th>
-                          <th style={{ ...thStyle, width: "130px" }}>Surface</th>
-                          <th style={{ ...thStyle, width: "55px" }}>km</th>
-                          <th style={{ ...thStyle, width: "50px" }}>Races</th>
-                          <th style={thStyle}>Experience</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pairings.map((pair, i) => {
-                          const barPct = (pair.total_km / maxPairingKm) * 100;
-                          const col = pairingColor(pair.section_type);
-                          return (
-                            <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                              <td style={{ ...tdStyle, fontWeight: 600, color: col }}>
-                                {sectionTypeLabel(pair.section_type, pair.avg_gradient)}
-                                <div style={{ fontSize: "8.5px", color: "#999", fontWeight: 400, marginTop: "1px" }}>
-                                  avg {pair.avg_gradient > 0 ? "+" : ""}{pair.avg_gradient.toFixed(1)}%
-                                </div>
-                              </td>
-                              <td style={{ ...tdStyle, color: "#555" }}>{terrainLabel(pair.terrain)}</td>
-                              <td style={{ ...tdStyle, fontWeight: 700 }}>{pair.total_km.toFixed(1)}</td>
-                              <td style={{ ...tdStyle, color: "#888" }}>{pair.race_count}</td>
-                              <td style={tdStyle}>
-                                <div style={{ height: "10px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${barPct}%`, background: col, borderRadius: "3px", opacity: 0.75 }} />
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {tableRaces.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "40px 0", color: "#aaa", fontSize: "14px" }}>
-                    No finished race data found for this athlete.
-                  </div>
-                )}
-
-                {tableRaces.length > 0 && (
-                  <div style={{ marginTop: "16px" }}>
-                    <p style={sectionLabel}>Finished Race History — Demands vs Target</p>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr>
-                          <th style={thStyle}>Race</th>
-                          <th style={thStyle}>Yr</th>
-                          <th style={thStyle}>Time</th>
-                          <th style={{ ...thStyle, width: "170px" }}>Distance</th>
-                          <th style={{ ...thStyle, width: "170px" }}>Ascent</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tableRaces.map((r, i) => {
-                          const dPct    = r.total_distance_km ? Math.min(100, (r.total_distance_km / normDist)   * 100) : 0;
-                          const aPct    = r.total_ascent_m    ? Math.min(100, (r.total_ascent_m    / normAscent) * 100) : 0;
-                          const tgtDPct = targetDist   ? Math.min(100, (targetDist   / normDist)   * 100) : null;
-                          const tgtAPct = targetAscent ? Math.min(100, (targetAscent / normAscent) * 100) : null;
-                          return (
-                            <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa", breakInside: "avoid", pageBreakInside: "avoid" }}>
-                              <td style={tdStyle}>{r.race_name}</td>
-                              <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{r.result_year}</td>
-                              <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{r.finish_seconds ? fmtTime(r.finish_seconds) : "—"}</td>
-                              <td style={tdStyle}>
-                                <div style={{ position: "relative", height: "12px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
-                                  <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${dPct}%`, background: "#1565c0", borderRadius: "3px", opacity: 0.75 }} />
-                                  {tgtDPct !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: `calc(${tgtDPct}% - 1px)`, width: "2px", background: "#c0392b" }} />}
-                                </div>
-                                <div style={{ fontSize: "8px", color: "#888", marginTop: "1px" }}>{r.total_distance_km ? `${r.total_distance_km.toFixed(0)} km` : "—"}</div>
-                              </td>
-                              <td style={tdStyle}>
-                                <div style={{ position: "relative", height: "12px", background: "#f0f0f0", borderRadius: "3px", overflow: "hidden" }}>
-                                  <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${aPct}%`, background: "#c0392b", borderRadius: "3px", opacity: 0.75 }} />
-                                  {tgtAPct !== null && <div style={{ position: "absolute", top: 0, bottom: 0, left: `calc(${tgtAPct}% - 1px)`, width: "2px", background: "#1e3a1e" }} />}
-                                </div>
-                                <div style={{ fontSize: "8px", color: "#888", marginTop: "1px" }}>{r.total_ascent_m ? `${Math.round(r.total_ascent_m)}m` : "—"}</div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {(targetDist || targetAscent) && (
-                      <div style={{ marginTop: "8px", fontSize: "8.5px", color: "#999" }}>Red line on each bar = target race demand</div>
-                    )}
-                  </div>
-                )}
-
                 <PageNumber n={12} />
               </div>
+              </>
             );
           })()}
 
