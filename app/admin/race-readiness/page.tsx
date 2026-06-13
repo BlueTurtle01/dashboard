@@ -3544,51 +3544,104 @@ export default function RaceReadinessPage() {
               );
             };
 
-            return (
-              <div className="rr-page" style={a4Page}>
-                <div style={printHeader}>
-                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{reportAthlete.profile.athlete_key}</div>
-                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Physical Self-Assessments</div>
+            const dashboardUrl = "https://www.tortoiseendurance.com/dashboard";
+            const dashboardQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(dashboardUrl)}`;
+
+            const recordingCta = (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "#f0f4f0", border: "1px solid #c8d8c8", borderLeft: "4px solid #1e3a1e", borderRadius: "6px", marginTop: "16px", breakInside: "avoid", pageBreakInside: "avoid" }}>
+                <div>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: "#1e3a1e", marginBottom: "3px" }}>Record your results</div>
+                  <div style={{ fontSize: "10px", color: "#555", lineHeight: 1.5, marginBottom: "4px" }}>
+                    Log your assessment results in your athlete dashboard to track improvements over time and share them with your coach.
                   </div>
+                  <div style={{ fontSize: "8.5px", color: "#aaa" }}>tortoiseendurance.com/dashboard</div>
+                </div>
+                <div style={{ textAlign: "center", marginLeft: "16px", flexShrink: 0 }}>
+                  <img src={dashboardQrSrc} alt="QR — athlete dashboard" width={80} height={80} style={{ display: "block", borderRadius: "3px" }} />
+                  <div style={{ fontSize: "7.5px", color: "#aaa", marginTop: "2px" }}>Scan to open</div>
+                </div>
+              </div>
+            );
+
+            return (
+              <>
+                {/* ── Page 10: Priority assessments ─────────────────────── */}
+                <div className="rr-page" style={a4Page}>
+                  <div style={printHeader}>
+                    <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{reportAthlete.profile.athlete_key}</div>
+                      <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Physical Self-Assessments</div>
+                    </div>
+                  </div>
+
+                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§7 — Physical Self-Assessments</h2>
+                  <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
+                    Tests to identify strength gaps, imbalances, and flexibility limitations that may not be visible in race data.
+                  </p>
+
+                  {priorityItems.length > 0 ? (
+                    <div>
+                      <div style={{ fontSize: "10px", fontWeight: 700, color: "#b45309", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "2px solid #f59e0b", paddingBottom: "4px", marginBottom: "6px" }}>
+                        Priority assessments
+                      </div>
+                      <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>{gapSentence}</p>
+                      <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {priorityItems.map(s => renderCard(s, true))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "14px", background: "#fafafa", border: "1px solid #e8e8e8", borderRadius: "6px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>
+                      No priority assessments identified based on the current gap profile. All tests are listed on the next page.
+                    </div>
+                  )}
+
+                  {/* Only show recording CTA here when there are no optional items (single-page mode) */}
+                  {optionalItems.length === 0 && recordingCta}
+
+                  <PageNumber n={10} />
                 </div>
 
-                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§7 — Physical Self-Assessments</h2>
-                <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
-                  Tests to identify strength gaps, imbalances, and flexibility limitations that may not be visible in race data.
-                </p>
-
-                {priorityItems.length > 0 && (
-                  <div style={{ marginBottom: "20px" }}>
-                    <div style={{ fontSize: "10px", fontWeight: 700, color: "#b45309", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "2px solid #f59e0b", paddingBottom: "4px", marginBottom: "6px" }}>
-                      Priority assessments
-                    </div>
-                    <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>{gapSentence}</p>
-                    <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      {priorityItems.map(s => renderCard(s, true))}
+                {/* ── Page 11: Optional assessments + recording CTA ─────── */}
+                <div className="rr-page" style={a4Page}>
+                  <div style={printHeader}>
+                    <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{reportAthlete.profile.athlete_key}</div>
+                      <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Physical Self-Assessments</div>
                     </div>
                   </div>
-                )}
 
-                {optionalItems.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: "10px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "2px solid #ddd", paddingBottom: "4px", marginBottom: "6px" }}>
-                      {priorityItems.length > 0 ? "For a fuller picture" : "All assessments"}
-                    </div>
-                    {priorityItems.length > 0 && (
-                      <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>
-                        These tests cover areas not highlighted by your specific gap profile but may reveal underlying physical limitations worth addressing with your coach.
-                      </p>
-                    )}
-                    <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      {optionalItems.map(s => renderCard(s, false))}
-                    </div>
-                  </div>
-                )}
+                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>§7 — Physical Self-Assessments (continued)</h2>
+                  <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
+                    Additional tests covering areas not highlighted by your specific gap profile.
+                  </p>
 
-                <PageNumber n={10} />
-              </div>
+                  {optionalItems.length > 0 ? (
+                    <div style={{ marginBottom: "6px" }}>
+                      <div style={{ fontSize: "10px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "2px solid #ddd", paddingBottom: "4px", marginBottom: "6px" }}>
+                        {priorityItems.length > 0 ? "For a fuller picture" : "All assessments"}
+                      </div>
+                      {priorityItems.length > 0 && (
+                        <p style={{ margin: "0 0 10px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>
+                          These tests cover areas not highlighted by your specific gap profile but may reveal underlying physical limitations worth addressing with your coach.
+                        </p>
+                      )}
+                      <div className="rr-card-stack" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {optionalItems.map(s => renderCard(s, false))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "14px", background: "#fafafa", border: "1px solid #e8e8e8", borderRadius: "6px", fontSize: "10.5px", color: "#666", lineHeight: 1.5, marginBottom: "6px" }}>
+                      No additional assessments beyond those shown on the previous page.
+                    </div>
+                  )}
+
+                  {recordingCta}
+
+                  <PageNumber n={11} />
+                </div>
+              </>
             );
           })()}
 
@@ -3758,7 +3811,7 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={11} />
+                <PageNumber n={12} />
               </div>
             );
           })()}
@@ -3916,14 +3969,14 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={12} />
+                <PageNumber n={13} />
               </div>
             );
           })()}
 
 
           {/* ═══════════════════════════════════════
-              APPENDIX A — Complete Race History  (p13)
+              APPENDIX A — Complete Race History  (p14)
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const allRaces = [...filteredAthleteRaces].sort(
@@ -3997,7 +4050,7 @@ export default function RaceReadinessPage() {
                   </table>
                 )}
 
-                <PageNumber n={13} />
+                <PageNumber n={14} />
               </div>
             );
           })()}
