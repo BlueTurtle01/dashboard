@@ -1844,6 +1844,24 @@ export default function RaceReadinessPage() {
               trailCoveredKm / trailDemandKm >= 0.8 ? "strong" :
               trailCoveredKm / trailDemandKm >= 0.5 ? "moderate" : "major_gap";
 
+            const techRows      = summaryGapRows.filter(r => r.terrain === "technical_trail");
+            const techDemandKm  = techRows.reduce((s, r) => s + r.km, 0);
+            const techCoveredKm = techRows.reduce((s, r) => s + r.exactKm, 0);
+            const technicalStatus: ReadinessLevel =
+              techDemandKm === 0 ? "unknown" :
+              techCoveredKm / techDemandKm >= 0.7 ? "strong" :
+              techCoveredKm / techDemandKm >= 0.4 ? "moderate" : "major_gap";
+
+            const aidStnsV = result.aid_stations ?? [];
+            const aidSortedV = [...aidStnsV].sort((a, b) => a.km - b.km);
+            const aidStopsV  = [0, ...aidSortedV.map(s => s.km), goalDist];
+            const aidGapsV   = aidStopsV.slice(1).map((km, i) => km - aidStopsV[i]);
+            const aidMaxGapV = aidGapsV.length > 1 ? Math.max(...aidGapsV) : 0;
+            const aidStatus: ReadinessLevel =
+              aidStnsV.length === 0 ? "unknown" :
+              aidMaxGapV <= 15 ? "strong" :
+              aidMaxGapV <= 25 ? "moderate" : "major_gap";
+
             const statusList = [distStatus, ascentStatus, descentStatus, terrainStatus]
               .filter((s): s is "strong" | "moderate" | "major_gap" => s !== "unknown");
             const majorCount = statusList.filter(s => s === "major_gap").length;
@@ -1954,11 +1972,11 @@ export default function RaceReadinessPage() {
 
             const panelCard = (accent: string, bg: string): React.CSSProperties => ({
               background: bg, border: `1px solid ${accent}40`,
-              borderLeft: `4px solid ${accent}`, borderRadius: "6px", padding: "12px 14px",
+              borderLeft: `4px solid ${accent}`, borderRadius: "6px", padding: "14px 16px",
             });
             const panelHead2: React.CSSProperties = {
               fontSize: "10px", fontWeight: 700, textTransform: "uppercase",
-              letterSpacing: "0.07em", marginBottom: "5px",
+              letterSpacing: "0.07em", marginBottom: "6px",
             };
 
             // Top 3 priorities for mini-table
@@ -1973,6 +1991,10 @@ export default function RaceReadinessPage() {
               priorityItems.push({ dim: "Race distance", status: distStatus, action: distStatus === "major_gap" ? "Progressive long-run block to ≥70% of race distance" : "One more long race or linked training day" });
             if (flatStatus === "major_gap" || flatStatus === "moderate")
               priorityItems.push({ dim: "Effort load (flat-equiv.)", status: flatStatus, action: "Build total effort-adjusted training load" });
+            if (technicalStatus === "major_gap" || technicalStatus === "moderate")
+              priorityItems.push({ dim: "Technical terrain", status: technicalStatus, action: technicalStatus === "major_gap" ? "Specific technical trail exposure required before race day" : "Increase technical trail running in training" });
+            if (aidStatus === "major_gap" || aidStatus === "moderate")
+              priorityItems.push({ dim: "Aid station gaps", status: aidStatus, action: aidStatus === "major_gap" ? "Practice carrying fluids and nutrition for 25+ km unsupported" : "Plan nutrition and hydration for gaps up to 25 km" });
             const top3 = priorityItems.slice(0, 3);
 
             return (
@@ -1993,9 +2015,9 @@ export default function RaceReadinessPage() {
                 <div style={{
                   background: "#f5f5f5", border: "1px solid #e0e0e0",
                   borderLeft: "4px solid #546e7a", borderRadius: "6px",
-                  padding: "8px 14px", marginBottom: "10px",
+                  padding: "10px 16px", marginBottom: "14px",
                 }}>
-                  <div style={{ fontSize: "9.5px", color: "#555", lineHeight: 1.55 }}>
+                  <div style={{ fontSize: "9.5px", color: "#555", lineHeight: 1.6 }}>
                     <strong style={{ color: "#546e7a", textTransform: "uppercase", fontSize: "9px", letterSpacing: "0.05em" }}>What &ldquo;race ready&rdquo; means here: </strong>
                     You have the physical foundation to complete this race safely without being overwhelmed by its specific demands. It does not mean you will win or that preparation is complete.
                     Where gaps exist, this report identifies them specifically.
@@ -2005,7 +2027,7 @@ export default function RaceReadinessPage() {
                 <div style={{
                   background: `${verdictColor}0c`, border: `1px solid ${verdictColor}35`,
                   borderLeft: `6px solid ${verdictColor}`, borderRadius: "6px",
-                  padding: "10px 16px", marginBottom: "10px",
+                  padding: "12px 16px", marginBottom: "14px",
                 }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "5px" }}>
                     <div style={{ fontSize: "10px", fontWeight: 700, color: verdictColor, textTransform: "uppercase", letterSpacing: "0.07em" }}>Overall Verdict</div>
@@ -2015,7 +2037,7 @@ export default function RaceReadinessPage() {
                 </div>
 
                 <p style={{ ...sectionLabel, marginBottom: "7px" }}>Strengths &amp; Limiters</p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
                   <div style={panelCard("#2e7d32", "#f9fffe")}>
                     <div style={{ ...panelHead2, color: "#2e7d32" }}>Biggest Strength</div>
                     <div style={{ fontSize: "10.5px", color: "#333", lineHeight: 1.5 }}>{strengthText}</div>
@@ -2027,7 +2049,7 @@ export default function RaceReadinessPage() {
                 </div>
 
                 <p style={{ ...sectionLabel, marginBottom: "7px" }}>Race-Day Risk Factors</p>
-                <div style={{ ...panelCard("#e65100", "#fffaf5"), marginBottom: "10px" }}>
+                <div style={{ ...panelCard("#e65100", "#fffaf5"), marginBottom: "14px" }}>
                   <div style={{ ...panelHead2, color: "#e65100" }}>Main Race-Day Risks</div>
                   <ul style={{ margin: 0, paddingLeft: "16px" }}>
                     {risks.map((r, i) => (
@@ -2039,7 +2061,7 @@ export default function RaceReadinessPage() {
                 {top3.length > 0 && (
                   <>
                     <p style={{ ...sectionLabel, marginBottom: "7px" }}>Top Preparation Priorities</p>
-                    <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "10px" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px" }}>
                       <thead>
                         <tr style={{ background: "#f9f9f9" }}>
                           <th style={thStyle}>Priority area</th>
@@ -2064,7 +2086,6 @@ export default function RaceReadinessPage() {
                   </>
                 )}
 
-                <p style={{ ...sectionLabel, marginBottom: "7px" }}>Recommended Next Step</p>
                 <div style={{ ...panelCard("#1565c0", "#f0f4ff"), marginBottom: "8px" }}>
                   <div style={{ ...panelHead2, color: "#1565c0" }}>Recommended Next Step</div>
                   <div style={{ fontSize: "10.5px", color: "#333", lineHeight: 1.5 }}>{nextStepText}</div>
