@@ -1511,7 +1511,7 @@ export default function RaceReadinessPage() {
 
   // Full pacing complexity index for goal race (uses flat_equivalent_km + start_km)
   const goalPacingComplexity = secs.length >= 3
-    ? calculatePacingComplexityIndex(secs, totalKm)
+    ? calculatePacingComplexityIndex(secs, totalKm, totalFlatEq)
     : null;
 
   // Gradient distribution stats for PAGE 3 narrative
@@ -3438,6 +3438,7 @@ export default function RaceReadinessPage() {
               { label: "Recovery scarcity",      key: "recovery_scarcity",      meaning: "Limited easy terrain between hard efforts" },
               { label: "Final-third complexity", key: "final_third_complexity", meaning: "Late-race sections remain demanding" },
               { label: "Non-road hard overlap",  key: "terrain_overlap",        meaning: "Hard sections occur on non-road or fell/trail terrain" },
+              { label: "Sustained effort burden", key: "sustained_effort",       meaning: "Total race energy cost — how long pacing decisions must be held under fatigue" },
             ];
 
             let interpretationText = "";

@@ -280,7 +280,7 @@ export async function GET(req: NextRequest) {
     let pacing_complexity_index: number | null = null;
     let pacing_complexity_components: PacingComplexityComponents | null = null;
     if (rp && rp.sections.length >= 3) {
-      const pci = calculatePacingComplexityIndex(rp.sections, rp.total_distance_km);
+      const pci = calculatePacingComplexityIndex(rp.sections, rp.total_distance_km, rp.flat_equivalent_km);
       if (pci.has_sufficient_data) {
         pacing_complexity_index = pci.score;
         pacing_complexity_components = pci.components;

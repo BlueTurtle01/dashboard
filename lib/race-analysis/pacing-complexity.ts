@@ -14,6 +14,7 @@ export interface PacingComplexityComponents {
   recovery_scarcity: number;
   final_third_complexity: number;
   terrain_overlap: number;
+  sustained_effort: number;
 }
 
 export interface PacingComplexityResult {
@@ -86,6 +87,7 @@ const TERRAIN_COMPLEXITY_MODIFIER: Record<string, number> = {
 export function calculatePacingComplexityIndex(
   sections: SectionForComplexity[],
   totalDistanceKm?: number,
+  flatEquivalentKm?: number,
 ): PacingComplexityResult {
   const validSecs = sections.filter(s => s.distance_km > 0);
 
@@ -99,6 +101,7 @@ export function calculatePacingComplexityIndex(
         recovery_scarcity: 0,
         final_third_complexity: 0,
         terrain_overlap: 0,
+        sustained_effort: 0,
       },
       has_sufficient_data: false,
     };
@@ -107,7 +110,7 @@ export function calculatePacingComplexityIndex(
   const totalKm =
     totalDistanceKm ?? validSecs.reduce((s, x) => s + x.distance_km, 0);
 
-  // ── 1. Effort variability (35%) ────────────────────────────────────────────
+  // ── 1. Effort variability (30%) ────────────────────────────────────────────
   const effortRatios = validSecs.map(s => effortRatioFor(s));
   const mean = effortRatios.reduce((a, b) => a + b, 0) / effortRatios.length;
   const variance =
@@ -117,7 +120,7 @@ export function calculatePacingComplexityIndex(
   const cv = mean > 0 ? std / mean : 0;
   const effortVariabilityScore = normalise(cv, 0.10, 0.60);
 
-  // ── 2. Steep-transition frequency (25%) ────────────────────────────────────
+  // ── 2. Steep-transition frequency (20%) ────────────────────────────────────
   const bands: GradientBand[] = validSecs.map(s =>
     classifyGradientBand(s.avg_gradient_percent),
   );
@@ -184,7 +187,7 @@ export function calculatePacingComplexityIndex(
       (normalise(ftCv, 0.10, 0.60) + normalise(ftTransPer10, 1, 8)) / 2;
   }
 
-  // ── 5. Technical terrain overlap (10%) ─────────────────────────────────────
+  // ── 5. Technical terrain overlap (5%) ──────────────────────────────────────
   const hardSecs = validSecs.filter(s => isHardSection(s));
   const hardKmTotal = hardSecs.reduce((s, x) => s + x.distance_km, 0);
   const techHardKm = hardSecs
@@ -195,13 +198,21 @@ export function calculatePacingComplexityIndex(
   const techOverlapRatio = hardKmTotal > 0 ? techHardKm / hardKmTotal : 0;
   const terrainOverlapScore = normalise(techOverlapRatio, 0.0, 1.0);
 
+  // ── 6. Sustained effort burden (15%) ───────────────────────────────────────
+  // flat_equivalent_km captures both distance and route difficulty in one number.
+  // Anchors: 10 km flat-equiv (short easy race) → 120 km (full mountain 100km).
+  const sectionFlatEquiv = validSecs.reduce((s, x) => s + (x.flat_equivalent_km ?? 0), 0);
+  const totalFlatEquiv = flatEquivalentKm ?? (sectionFlatEquiv > 0 ? sectionFlatEquiv : totalKm);
+  const sustainedScore = normalise(totalFlatEquiv, 10, 120);
+
   // ── Composite score ────────────────────────────────────────────────────────
   const rawScore =
-    effortVariabilityScore * 0.35 +
-    steepTransitionsScore  * 0.25 +
+    effortVariabilityScore * 0.30 +
+    steepTransitionsScore  * 0.20 +
     recoveryScarcityScore  * 0.20 +
     finalThirdScore        * 0.10 +
-    terrainOverlapScore    * 0.10;
+    terrainOverlapScore    * 0.05 +
+    sustainedScore         * 0.15;
 
   const score = Math.min(100, Math.max(0, Math.round(rawScore)));
   const rating = ratePacingComplexity(score);
@@ -215,6 +226,7 @@ export function calculatePacingComplexityIndex(
       recovery_scarcity:       Math.round(recoveryScarcityScore),
       final_third_complexity:  Math.round(finalThirdScore),
       terrain_overlap:         Math.round(terrainOverlapScore),
+      sustained_effort:        Math.round(sustainedScore),
     },
     has_sufficient_data: true,
   };
