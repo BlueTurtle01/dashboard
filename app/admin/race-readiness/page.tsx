@@ -3433,12 +3433,12 @@ export default function RaceReadinessPage() {
             const mainReason = mainReasonMap[dominantKey] ?? "Multiple compounding factors";
 
             const componentRows: { label: string; key: keyof typeof goalPci.components; meaning: string }[] = [
-              { label: "Effort variability",     key: "effort_variability",     meaning: "Energy cost changes substantially between sections" },
-              { label: "Steep transitions",      key: "steep_transitions",      meaning: "Frequent shifts between climb, descent, and recovery" },
-              { label: "Recovery scarcity",      key: "recovery_scarcity",      meaning: "Limited easy terrain between hard efforts" },
-              { label: "Final-third complexity", key: "final_third_complexity", meaning: "Late-race sections remain demanding" },
-              { label: "Non-road hard overlap",  key: "terrain_overlap",        meaning: "Hard sections occur on non-road or fell/trail terrain" },
-              { label: "Sustained effort burden", key: "sustained_effort",       meaning: "Total race energy cost — how long pacing decisions must be held under fatigue" },
+              { label: "Effort variability",     key: "effort_variability",     meaning: "How much the energy cost per kilometre swings across the course. High variability means the effort needed changes sharply and often — a fixed heart-rate target will break down." },
+              { label: "Steep transitions",      key: "steep_transitions",      meaning: "How often the course switches between materially different gradient bands. Frequent transitions between steep climbs, descents, and flat sections leave little time to settle into a rhythm." },
+              { label: "Recovery scarcity",      key: "recovery_scarcity",      meaning: "How little flat or easy terrain is available between hard efforts. Combines the ratio of recovery to hard ground and the length of the longest continuous hard stretch." },
+              { label: "Final-third complexity", key: "final_third_complexity", meaning: "Whether the course remains pacing-demanding in its last third — when fatigue is highest and where misjudged effort is hardest to recover from." },
+              { label: "Non-road hard overlap",  key: "terrain_overlap",        meaning: "How much of the hard terrain falls on trail, fell, or mountain surfaces. These require active foot placement even on steep descents, adding to the cognitive and physical load." },
+              { label: "Sustained effort burden", key: "sustained_effort",      meaning: "How long the total pacing challenge has to be held. A short race with identical terrain per kilometre is easier to manage than a long one — fatigue compresses your decision-making window." },
             ];
 
             let interpretationText = "";
