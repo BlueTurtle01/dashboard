@@ -1711,30 +1711,51 @@ export default function RaceReadinessPage() {
               {reportAthlete ? reportAthlete.profile.athlete_key : "Athlete"}{result ? ` · ${result.race.name}` : ""}
             </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
-              {[
-                { n: "1",  title: "Executive Readiness Verdict",         sub: "Overall verdict · Biggest strength · Primary limiter · Recommended next step" },
-                { n: "2",  title: "Readiness Scorecard",                  sub: "Seven dimensions rated: Distance · Ascent · Descent · Terrain · Technical · Aid · Overall" },
-                { n: "3",  title: "Distance & Time-on-Feet Readiness",    sub: "Race scale vs athlete bests · Effort-adjusted distance · Time-on-feet estimate" },
-                { n: "4",  title: "Vertical Load Readiness",              sub: "Ascent demand · Descent demand · Biggest climb comparison · Final-third load" },
-                { n: "5",  title: "Terrain Readiness",                    sub: "Proven terrain types · Priority terrain gaps · Surface step-up notes" },
-                { n: "6",  title: "Terrain Gap Analysis",                 sub: "Race demands vs athlete experience · Exact and cross-terrain coverage" },
-                { n: "7",  title: "Pacing & Effort Management",           sub: "Elevation profile · Climbing load distribution · Effort multipliers · Gradient analysis" },
-                { n: "8",  title: "Pacing & Effort (continued)",          sub: "Gradient distribution · Effort profile · Pacing complexity · Technical terrain" },
-                { n: "9",  title: "Aid Station & Logistics",              sub: "Gap analysis · Station table · Athlete experience vs race demands · Risk flags" },
-                { n: "10", title: "Physical Readiness Checks",            sub: "Self-reflection questions · Gap-matched assessment tests" },
-                { n: "11", title: "Suggested Preparation Priorities",     sub: "Specific actions by priority tier: Training · Strength · Terrain · Race prep · Equipment" },
-                { n: "12", title: "Suggested Preparation Races",          sub: "Nearby races that address identified experience gaps · Gap fill scores" },
-                { n: "A",  title: "Appendix: Complete Race History",      sub: "All recorded race results with distance, ascent, time, and position" },
-              ].map(({ n, title, sub }) => (
-                <div key={n} style={{ display: "flex", gap: "12px", padding: "7px 0", borderBottom: "1px solid #f0f0f0" }}>
-                  <div style={{ width: "28px", height: "28px", background: n === "A" ? "#888" : "#1e3a1e", color: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700, flexShrink: 0 }}>{n}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "11px", fontWeight: 700, color: "#1e3a1e", lineHeight: 1.3 }}>{title}</div>
-                    <div style={{ fontSize: "9px", color: "#999", marginTop: "2px", lineHeight: 1.4 }}>{sub}</div>
-                  </div>
-                </div>
-              ))}
+            <div style={{ borderLeft: "3px solid #e8e8e8", paddingLeft: "12px", marginBottom: "20px" }}>
+              <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#555", fontStyle: "italic" }}>
+                This report works through the race one theme at a time — distance, then vertical load, then terrain, then pacing, then logistics. Each section covers a theme fully before moving on. Read it in order the first time. On revisits, go straight to whichever theme your preparation is currently focused on.
+              </p>
+            </div>
+
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "5px" }}>Opening summary</div>
+            <p style={{ margin: "0 0 0 0", fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
+              We open with two summary pages before diving into the themes. The <strong style={{ color: "#1e3a1e" }}>Executive Readiness Verdict</strong> gives the headline answer: ready or not, and why. It names the biggest strength, the primary risk, and the most important thing to focus on before race day. The <strong style={{ color: "#1e3a1e" }}>Readiness Scorecard</strong> then scores the athlete across seven dimensions — distance, ascent, descent, terrain, technical ground, aid logistics, and overall confidence — giving a structured overview before the detail begins.
+            </p>
+
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 1 — Distance</div>
+            <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
+              <strong style={{ color: "#1e3a1e" }}>Distance &amp; Time-on-Feet Readiness</strong> covers the raw scale of the race. It compares the athlete&#39;s longest race against the target, calculates the effort-adjusted distance (which accounts for climbing cost and is often much larger than the geographic distance), and estimates the finish window. The key question here is not just whether the athlete has run far enough — it is whether they have spent long enough on their feet under fatigue.
+            </p>
+
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 2 — Vertical load</div>
+            <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
+              <strong style={{ color: "#1e3a1e" }}>Vertical Load Readiness</strong> covers what is most often the decisive gap in mountain races: cumulative ascent. It compares the total ascent the race demands against the athlete&#39;s career best, examines the descent load separately (steep downhill is a different physiological challenge from climbing), and compares the biggest single climb on the course against the biggest the athlete has tackled in a race. If this section is red, it is the primary preparation priority.
+            </p>
+
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 3 — Terrain</div>
+            <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
+              The terrain section runs across two pages. <strong style={{ color: "#1e3a1e" }}>Terrain Readiness</strong> gives a headline view: the surface types the race requires and how much experience the athlete has on each. <strong style={{ color: "#1e3a1e" }}>Terrain Gap Analysis</strong> goes deeper, listing every specific terrain type — steep climb on technical trail, sustained descent on gravel, and so on — alongside the exact and cross-terrain kilometres the athlete has accumulated. Gaps here tend to manifest as race-day surprise: sections that feel harder than expected because the body has never adapted to that specific combination of gradient and surface.
+            </p>
+
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 4 — Pacing</div>
+            <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
+              <strong style={{ color: "#1e3a1e" }}>Pacing &amp; Effort Management</strong> and its continuation cover how effort is distributed across the course. The elevation profile shows where the major climbs fall. The gradient distribution reveals how much of the course is genuinely steep. The effort multiplier chart shows, kilometre by kilometre, how much energy each section costs relative to flat running. These pages answer the question most athletes ask too late: where should I hold back, and where is it safe to push?
+            </p>
+
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 5 — Aid &amp; logistics</div>
+            <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
+              <strong style={{ color: "#1e3a1e" }}>Aid Station &amp; Logistics</strong> maps the support points and the gaps between them. The longest gap, average gap, and drop bag availability are flagged explicitly. This section surfaces the logistical risks that have nothing to do with fitness — running out of food or water on a long unsupported stretch, or arriving at an aid station without a plan.
+            </p>
+
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 6 — Physical readiness</div>
+            <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
+              <strong style={{ color: "#1e3a1e" }}>Physical Readiness Checks</strong> is the section that race data alone cannot generate. It contains self-reflection questions — things only the athlete knows — and a set of targeted physical assessment tests derived from the specific gaps this report identifies. These tests are designed to surface the strength imbalances, flexibility limitations, and asymmetries that accumulate quietly and show up loudly in long mountain races.
+            </p>
+
+            <div style={{ borderTop: "1px solid #f0f0f0", marginTop: "16px", paddingTop: "14px" }}>
+              <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
+                The final pages turn the analysis into action. <strong style={{ color: "#1e3a1e" }}>Suggested Preparation Priorities</strong> lists specific preparation steps ordered by urgency, across training, strength, terrain exposure, race prep, and equipment. <strong style={{ color: "#1e3a1e" }}>Suggested Preparation Races</strong> identifies nearby events ranked by how effectively each one would close the athlete&#39;s specific experience gaps — with the precise terrain types and distances each race would address.
+              </p>
             </div>
 
             <div style={{ marginTop: "18px", padding: "10px 14px", background: "#fafafa", border: "1px solid #e8e8e8", borderLeft: "3px solid #546e7a", borderRadius: "4px", fontSize: "9px", color: "#666", lineHeight: 1.6 }}>
