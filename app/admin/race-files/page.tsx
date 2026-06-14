@@ -122,6 +122,12 @@ export default function RaceFilesPage() {
   const [batchReprocessing, setBatchReprocessing] = useState(false);
   const [batchReprocessMsg, setBatchReprocessMsg] = useState<string | null>(null);
 
+  // Create race modal
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: "", slug: "", location: "", country: "", distance_km: "" });
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
   // Results import outcome per race (keyed by raceId)
   const [resultsImport, setResultsImport] = useState<Record<string, { rowCount?: number; warning?: string; error?: string }>>({});
 
@@ -520,6 +526,36 @@ export default function RaceFilesPage() {
     background: "#fff5f5",
   };
 
+  function nameToSlug(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+
+  async function handleCreateRace() {
+    if (!createForm.name.trim() || !createForm.slug.trim()) {
+      setCreateError("Name and slug are required.");
+      return;
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const { error } = await supabase.from("races").insert({
+        name: createForm.name.trim(),
+        slug: createForm.slug.trim(),
+        location: createForm.location.trim() || null,
+        country: createForm.country.trim() || null,
+        distance_km: createForm.distance_km ? Number(createForm.distance_km) : null,
+      });
+      if (error) throw new Error(error.message);
+      setCreateModalOpen(false);
+      setCreateForm({ name: "", slug: "", location: "", country: "", distance_km: "" });
+      await loadData();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create race");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function handleBackfillCoords() {
     setBackfilling(true);
     setBackfillMsg(null);
@@ -591,6 +627,17 @@ export default function RaceFilesPage() {
             Results CSVs are automatically parsed and imported with checkpoint times (Male/Female only).
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "12px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setCreateForm({ name: "", slug: "", location: "", country: "", distance_km: "" });
+                setCreateError(null);
+                setCreateModalOpen(true);
+              }}
+              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 600, borderRadius: "7px", border: "1px solid #4f46e5", background: "#4f46e5", color: "#fff", cursor: "pointer" }}
+            >
+              + New Race
+            </button>
             <button
               type="button"
               onClick={() => void handleBackfillCoords()}
@@ -947,6 +994,125 @@ export default function RaceFilesPage() {
           </div>
         )}
       </div>
+
+      {/* ── Create Race Modal ────────────────────────────────────────────────── */}
+      {createModalOpen && (
+        <>
+          <div
+            onClick={() => setCreateModalOpen(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 50 }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "#fff", borderRadius: "12px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+            padding: "28px", width: "min(480px, 95vw)",
+            zIndex: 51,
+          }}>
+            <h2 style={{ margin: "0 0 4px 0", fontSize: "18px", fontWeight: 700, color: "#111" }}>
+              New Race
+            </h2>
+            <p style={{ margin: "0 0 20px 0", fontSize: "13px", color: "#6b7280" }}>
+              Create a new race entry. You can upload files and generate profiles after.
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>
+                  Race Name <span style={{ color: "#b91c1c" }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Marathon des Sables"
+                  value={createForm.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setCreateForm((f) => ({
+                      ...f,
+                      name,
+                      slug: f.slug === nameToSlug(f.name) ? nameToSlug(name) : f.slug,
+                    }));
+                  }}
+                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "13px", boxSizing: "border-box" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>
+                  Slug <span style={{ color: "#b91c1c" }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. marathon-des-sables"
+                  value={createForm.slug}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, slug: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "13px", boxSizing: "border-box", fontFamily: "monospace" }}
+                />
+                <span style={{ fontSize: "11px", color: "#9ca3af" }}>URL-safe identifier, auto-filled from name</span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Location</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Sahara Desert"
+                    value={createForm.location}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, location: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "13px", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Country</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Morocco"
+                    value={createForm.country}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, country: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "13px", boxSizing: "border-box" }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "4px" }}>Distance (km)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  placeholder="e.g. 250"
+                  value={createForm.distance_km}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, distance_km: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "13px", boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            {createError && (
+              <div style={{ marginTop: "14px", fontSize: "13px", color: "#b91c1c", padding: "8px 12px", background: "#fff5f5", border: "1px solid #fca5a5", borderRadius: "6px" }}>
+                {createError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
+              <button
+                onClick={() => setCreateModalOpen(false)}
+                style={{ padding: "9px 18px", borderRadius: "7px", border: "1px solid #d1d5db", background: "#fff", fontSize: "13px", fontWeight: 500, cursor: "pointer", color: "#374151" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleCreateRace()}
+                disabled={creating}
+                style={{ padding: "9px 18px", borderRadius: "7px", border: "none", background: creating ? "#818cf8" : "#4f46e5", fontSize: "13px", fontWeight: 600, cursor: creating ? "not-allowed" : "pointer", color: "#fff" }}
+              >
+                {creating ? "Creating…" : "Create Race"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Wind Analysis Settings Modal ─────────────────────────────────────── */}
       {windModalRaceId && (() => {
