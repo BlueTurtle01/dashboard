@@ -3208,15 +3208,10 @@ export default function RaceReadinessPage() {
                   </p>
                   <CumulativeAscentChart
                     profile={elevProfile}
-                    comparison={
-                      elevProfileMatch?.best_match && elevProfileMatch.match_curve
-                        ? { curve: elevProfileMatch.match_curve, totalAscentM: elevProfileMatch.best_match.total_ascent_m, label: `${elevProfileMatch.best_match.race_name} (${elevProfileMatch.best_match.year})` }
-                        : null
-                    }
+                    comparison={null}
                   />
                   <p style={{ margin: "4px 0 0", fontSize: "9px", color: "#aaa", lineHeight: 1.4 }}>
-                    Dashed markers show cumulative ascent at each quarter of distance.
-                    {elevProfileMatch?.best_match ? " Red = goal race · Blue dashed = closest matched past race." : " Late-loading courses are especially demanding because hard climbs arrive when the athlete is already fatigued."}
+                    Dashed markers show cumulative ascent at each quarter of distance. Late-loading courses are especially demanding because hard climbs arrive when the athlete is already fatigued.
                     {result.race.total_ascent_m != null && (
                       <span> Official course ascent: {Math.round(result.race.total_ascent_m).toLocaleString()} m. Chart uses GPX-smoothed values and may differ slightly.</span>
                     )}
@@ -3224,39 +3219,6 @@ export default function RaceReadinessPage() {
                 </div>
               )}
 
-              {elevProfileMatch && (() => {
-                const em = elevProfileMatch;
-                const m  = em.best_match;
-                if (!m) return null;
-                const similarity = m.similarity_pct;
-                const accentColor = similarity >= 75 ? "#2e7d32" : "#e65100";
-                const headline = similarity >= 75
-                  ? `Profile match — ${m.race_name} (${m.year})`
-                  : `Closest profile — ${m.race_name} (${m.year})`;
-                const body = similarity >= 75
-                  ? `The elevation profile of this course closely resembles ${m.race_name}, which you completed. Both are similarly loaded (${m.halfway_pct}% of ascent at halfway). Your experience on that race gives a meaningful reference for how this course will feel.`
-                  : `${m.race_name} is the closest match in your history (${similarity}% similarity). Use it as a rough guide — the distribution of climbing is broadly similar but not a direct replica.`;
-                return (
-                  <div style={{ background: "#fafafa", border: "1px solid #e0e0e0", borderLeft: `4px solid ${accentColor}`, borderRadius: "6px", padding: "10px 14px" }}>
-                    <div style={{ fontSize: "9px", fontWeight: 700, color: accentColor, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px" }}>Elevation Profile Reference</div>
-                    <div style={{ fontSize: "10.5px", fontWeight: 600, color: "#1e1e1e", marginBottom: "3px" }}>{headline}</div>
-                    <div style={{ fontSize: "10px", color: "#444", lineHeight: 1.5 }}>{body}</div>
-                    <div style={{ display: "flex", gap: "14px", marginTop: "6px", flexWrap: "wrap" }}>
-                      {[
-                        { label: "Similarity", value: `${m.similarity_pct}%` },
-                        { label: "Past race km", value: `${m.race_km.toFixed(0)} km` },
-                        { label: "Past race ascent", value: `${m.total_ascent_m.toLocaleString()} m` },
-                        { label: "Halfway ascent", value: `${m.halfway_pct}%` },
-                      ].map(({ label, value }) => (
-                        <div key={label} style={{ fontSize: "9.5px" }}>
-                          <div style={{ color: "#aaa", marginBottom: "1px" }}>{label}</div>
-                          <div style={{ fontWeight: 600, color: "#333" }}>{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
 
               <PageNumber n={8} />
             </div>
