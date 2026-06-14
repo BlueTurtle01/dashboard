@@ -4,6 +4,10 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
+import {
+  calculatePacingComplexityIndex,
+  type PacingComplexityComponents,
+} from "@/lib/race-analysis/pacing-complexity";
 
 /* ── API types ── */
 interface RaceMeta {
@@ -110,6 +114,8 @@ interface AthleteRace {
   total_finishers: number | null;
   cat_position: number | null;
   cat_finishers: number | null;
+  pacing_complexity_index: number | null;
+  pacing_complexity_components: PacingComplexityComponents | null;
 }
 interface TerrainPairing {
   section_type: string;
@@ -1503,6 +1509,11 @@ export default function RaceReadinessPage() {
   const complexityLabel = cvRatio > 0.45 ? "High" : cvRatio > 0.25 ? "Moderate" : "Low";
   const complexityColor = cvRatio > 0.45 ? "#c0392b" : cvRatio > 0.25 ? "#e65100" : "#2e7d32";
 
+  // Full pacing complexity index for goal race (uses flat_equivalent_km + start_km)
+  const goalPacingComplexity = secs.length >= 3
+    ? calculatePacingComplexityIndex(secs, totalKm)
+    : null;
+
   // Gradient distribution stats for PAGE 3 narrative
   const runnableKm    = secs.filter(s => s.avg_gradient_percent >= -3 && s.avg_gradient_percent < 3).reduce((a, s) => a + s.distance_km, 0);
   const steepClimbKm  = secs.filter(s => s.avg_gradient_percent >= 8).reduce((a, s) => a + s.distance_km, 0);
@@ -1745,7 +1756,7 @@ export default function RaceReadinessPage() {
 
             <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 4 — Pacing</div>
             <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
-              <strong style={{ color: "#1e3a1e" }}>Pacing &amp; Effort Management</strong>{" "}shows how effort is distributed across the course: where the major climbs fall, how much of the course is genuinely steep, and what each kilometre costs relative to flat running. These pages answer the question most people ask too late — where to hold back, and where it is safe to push.
+              <strong style={{ color: "#1e3a1e" }}>Pacing &amp; Effort Management</strong>{" "}shows how effort is distributed across the course: where the major climbs fall, how much of the course is genuinely steep, and what each kilometre costs relative to flat running. These pages answer the question most people ask too late — where to hold back, and where it is safe to push. A third page then compares this course&apos;s{" "}<strong style={{ color: "#1e3a1e" }}>Pacing Complexity Index</strong>{" "}— scored 0–100 using effort variability, gradient transitions, and recovery availability — against the athlete&apos;s previous races, to show whether the pacing challenge is new territory or familiar ground.
             </p>
 
             <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 5 — Aid &amp; logistics</div>
@@ -3377,9 +3388,223 @@ export default function RaceReadinessPage() {
                 );
               })()}
 
+              <p style={{ margin: "14px 0 0", fontSize: "10px", color: "#888", lineHeight: 1.5, borderTop: "1px solid #f0f0f0", paddingTop: "10px" }}>
+                The next page compares this course&apos;s pacing complexity against the athlete&apos;s previous races, using effort variability, gradient transitions, recovery scarcity, late-race complexity, and terrain overlap.
+              </p>
+
               <PageNumber n={9} />
             </div>
           )}
+
+          {/* ═══════════════════════════════════════
+              5c — Pacing Complexity Comparison  (p9)
+          ═══════════════════════════════════════ */}
+          {secs.length > 0 && goalPacingComplexity?.has_sufficient_data && (() => {
+            const goalPci = goalPacingComplexity;
+            const pciColor = (score: number) =>
+              score >= 76 ? "#c0392b" : score >= 51 ? "#e65100" : score >= 26 ? "#f57c00" : "#2e7d32";
+            const goalColor = pciColor(goalPci.score);
+
+            const prevWithData = filteredAthleteRaces
+              .filter(r => r.result_status === "FINISHED" && r.pacing_complexity_index !== null)
+              .sort((a, b) => (b.pacing_complexity_index ?? 0) - (a.pacing_complexity_index ?? 0));
+            const prevWithoutData = filteredAthleteRaces
+              .filter(r => r.result_status === "FINISHED" && r.pacing_complexity_index === null);
+
+            const prevMax = prevWithData.length > 0 ? (prevWithData[0].pacing_complexity_index ?? 0) : null;
+            const prevRaceAtMax = prevWithData[0]?.race_name ?? null;
+            const delta = prevMax !== null ? goalPci.score - prevMax : null;
+            const closestMatch = prevWithData.length > 0
+              ? [...prevWithData].sort((a, b) =>
+                  Math.abs((a.pacing_complexity_index ?? 0) - goalPci.score) -
+                  Math.abs((b.pacing_complexity_index ?? 0) - goalPci.score)
+                )[0]
+              : null;
+
+            const dominantKey = (Object.entries(goalPci.components) as [string, number][])
+              .sort(([, a], [, b]) => b - a)[0][0];
+            const mainReasonMap: Record<string, string> = {
+              effort_variability:     "High variability in section effort cost",
+              steep_transitions:      "Frequent steep climb/descent transitions",
+              recovery_scarcity:      "Limited flat recovery between hard efforts",
+              final_third_complexity: "Complex and demanding final third",
+              terrain_overlap:        "Hard sections on non-road or fell terrain",
+            };
+            const mainReason = mainReasonMap[dominantKey] ?? "Multiple compounding factors";
+
+            const componentRows: { label: string; key: keyof typeof goalPci.components; meaning: string }[] = [
+              { label: "Effort variability",     key: "effort_variability",     meaning: "Energy cost changes substantially between sections" },
+              { label: "Steep transitions",      key: "steep_transitions",      meaning: "Frequent shifts between climb, descent, and recovery" },
+              { label: "Recovery scarcity",      key: "recovery_scarcity",      meaning: "Limited easy terrain between hard efforts" },
+              { label: "Final-third complexity", key: "final_third_complexity", meaning: "Late-race sections remain demanding" },
+              { label: "Non-road hard overlap",  key: "terrain_overlap",        meaning: "Hard sections occur on non-road or fell/trail terrain" },
+            ];
+
+            let interpretationText = "";
+            const firstName = reportAthlete?.profile.athlete_key.split(" ")[0] ?? "The athlete";
+            if (prevWithData.length === 0) {
+              interpretationText = `We can calculate pacing complexity for ${result?.race.name ?? "this race"}, but there is not enough route data in ${firstName}'s race history to compare it reliably against previous events. The score of ${goalPci.score}/100 (${goalPci.rating}) reflects effort variability, gradient transitions, recovery scarcity, and terrain overlap across this specific course.`;
+            } else if (delta !== null && delta > 5) {
+              interpretationText = `${result?.race.name ?? "This race"} is the most pacing-complex race in ${firstName}'s available history. The difficulty is not just the total distance or ascent — it is the repeated need to change effort. A fixed pace target is unlikely to work. Preparation should include long runs where steep climbs, technical descents, and short recovery sections are practised in sequence.`;
+            } else if (delta !== null && Math.abs(delta) <= 5) {
+              interpretationText = `This race is similar in pacing complexity to ${firstName}'s hardest previous race${prevRaceAtMax ? ` (${prevRaceAtMax})` : ""}. The demands are familiar in pattern, but still need respecting because the total distance and vertical load may be higher. The pacing challenge is not new territory, but execution under greater fatigue is.`;
+            } else {
+              interpretationText = `${firstName} has already completed a race with similar or greater pacing complexity${prevRaceAtMax ? ` (${prevRaceAtMax})` : ""}. The key question is whether ${firstName} can handle this complexity at the goal race's distance and vertical load. The pattern of effort adjustment should feel manageable, but volume and vertical demand may still stretch capacity.`;
+            }
+
+            const tableRows = [
+              { name: result?.race.name ?? "Goal race", score: goalPci.score, rating: goalPci.rating, isGoal: true },
+              ...prevWithData.slice(0, 5).map(r => ({
+                name: `${r.race_name}${r.result_year ? ` (${r.result_year})` : ""}`,
+                score: r.pacing_complexity_index ?? 0,
+                rating: r.pacing_complexity_index !== null
+                  ? (r.pacing_complexity_index >= 76 ? "Very High" : r.pacing_complexity_index >= 51 ? "High" : r.pacing_complexity_index >= 26 ? "Moderate" : "Low")
+                  : "—",
+                isGoal: false,
+              })),
+            ];
+
+            return (
+              <div className="rr-page" style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result?.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Pacing Complexity Comparison</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>5c — Pacing Complexity Comparison</h2>
+                <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#555", lineHeight: 1.5 }}>
+                  How difficult this course is to manage compared with your previous races
+                </p>
+
+                {/* Summary cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginBottom: "14px" }}>
+                  {[
+                    {
+                      label: "Goal race complexity",
+                      value: `${goalPci.score} / 100`,
+                      sub: goalPci.rating,
+                      color: goalColor,
+                    },
+                    {
+                      label: "Previous race max",
+                      value: prevMax !== null ? `${prevMax} / 100` : "—",
+                      sub: prevRaceAtMax ?? "No data",
+                      color: prevMax !== null ? pciColor(prevMax) : "#aaa",
+                    },
+                    {
+                      label: "vs previous max",
+                      value: delta !== null
+                        ? `${delta >= 0 ? "+" : ""}${delta} pts`
+                        : "No comparison",
+                      sub: delta !== null
+                        ? delta > 5 ? "New high" : delta < -5 ? "Below previous high" : "Similar level"
+                        : "Insufficient route data",
+                      color: delta !== null ? (delta > 5 ? "#c0392b" : delta < -5 ? "#2e7d32" : "#f57c00") : "#aaa",
+                    },
+                    {
+                      label: "Main complexity driver",
+                      value: mainReason,
+                      sub: `Highest sub-score: ${goalPci.components[dominantKey as keyof typeof goalPci.components]}`,
+                      color: goalColor,
+                      small: true,
+                    },
+                  ].map(({ label, value, sub, color, small }) => (
+                    <div key={label} style={{ border: "1px solid #e0e0e0", borderRadius: "6px", padding: "8px 10px", background: "#fafafa", textAlign: "center" }}>
+                      <div style={{ fontSize: "8px", color: "#888", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "3px" }}>{label}</div>
+                      <div style={{ fontSize: small ? "10px" : "15px", fontWeight: 800, color, lineHeight: 1.2 }}>{value}</div>
+                      {sub && <div style={{ fontSize: "8px", color: "#bbb", marginTop: "2px" }}>{sub}</div>}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Comparison table */}
+                <div style={{ marginBottom: "14px" }}>
+                  <p style={{ ...sectionLabel, marginBottom: "6px" }}>Pacing Complexity — Goal Race vs Previous Races</p>
+                  {prevWithData.length === 0 ? (
+                    <div style={{ padding: "10px 14px", background: "#fafafa", border: "1px solid #e8e8e8", borderRadius: "5px", fontSize: "10px", color: "#888" }}>
+                      No previous races with route section data are available for comparison.
+                    </div>
+                  ) : (
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+                      <thead>
+                        <tr style={{ background: "#f5f5f5" }}>
+                          <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 700, color: "#555", borderBottom: "1px solid #e0e0e0" }}>Race</th>
+                          <th style={{ padding: "5px 8px", textAlign: "center", fontWeight: 700, color: "#555", borderBottom: "1px solid #e0e0e0", width: "80px" }}>Score</th>
+                          <th style={{ padding: "5px 8px", textAlign: "center", fontWeight: 700, color: "#555", borderBottom: "1px solid #e0e0e0", width: "70px" }}>Rating</th>
+                          <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 700, color: "#555", borderBottom: "1px solid #e0e0e0" }}>Complexity bar</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableRows.map((row, i) => (
+                          <tr key={i} style={{ borderLeft: row.isGoal ? `3px solid ${goalColor}` : "3px solid transparent", background: row.isGoal ? "#f0f7f0" : i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                            <td style={{ padding: "5px 8px", color: row.isGoal ? "#1e3a1e" : "#333", fontWeight: row.isGoal ? 700 : 400, borderBottom: "1px solid #f0f0f0" }}>{row.name}</td>
+                            <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: 700, color: pciColor(row.score), borderBottom: "1px solid #f0f0f0" }}>{row.score}</td>
+                            <td style={{ padding: "5px 8px", textAlign: "center", color: pciColor(row.score), borderBottom: "1px solid #f0f0f0", fontSize: "9px", fontWeight: 600 }}>{row.rating}</td>
+                            <td style={{ padding: "5px 8px", borderBottom: "1px solid #f0f0f0" }}>
+                              <div style={{ background: "#eee", borderRadius: "3px", height: "8px", width: "100%", overflow: "hidden" }}>
+                                <div style={{ background: pciColor(row.score), height: "100%", width: `${row.score}%`, borderRadius: "3px", transition: "width 0.3s" }} />
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {/* Component breakdown */}
+                <div style={{ marginBottom: "14px" }}>
+                  <p style={{ ...sectionLabel, marginBottom: "6px" }}>Goal Race — Component Breakdown</p>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+                    <thead>
+                      <tr style={{ background: "#f5f5f5" }}>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 700, color: "#555", borderBottom: "1px solid #e0e0e0" }}>Component</th>
+                        <th style={{ padding: "5px 8px", textAlign: "center", fontWeight: 700, color: "#555", borderBottom: "1px solid #e0e0e0", width: "50px" }}>Score</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 700, color: "#555", borderBottom: "1px solid #e0e0e0" }}>What it means</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {componentRows.map((row, i) => {
+                        const s = goalPci.components[row.key];
+                        return (
+                          <tr key={row.key} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                            <td style={{ padding: "5px 8px", color: "#333", borderBottom: "1px solid #f0f0f0", fontWeight: row.key === dominantKey ? 700 : 400 }}>{row.label}{row.key === dominantKey ? " ★" : ""}</td>
+                            <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: 700, color: pciColor(s), borderBottom: "1px solid #f0f0f0" }}>{s}</td>
+                            <td style={{ padding: "5px 8px", color: "#555", borderBottom: "1px solid #f0f0f0" }}>{row.meaning}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <p style={{ margin: "4px 0 0", fontSize: "8px", color: "#aaa" }}>★ Highest-scoring component — the dominant source of pacing complexity on this course.</p>
+                </div>
+
+                {/* Interpretation box */}
+                <div style={{ padding: "10px 14px", background: "#f8f8f8", border: "1px solid #e8e8e8", borderLeft: `4px solid ${goalColor}`, borderRadius: "5px", fontSize: "10px", color: "#333", lineHeight: 1.6, marginBottom: "10px" }}>
+                  <div style={{ fontSize: "9px", fontWeight: 700, color: goalColor, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>What this means for preparation</div>
+                  {interpretationText}
+                  {closestMatch && closestMatch.race_name !== prevRaceAtMax && (
+                    <div style={{ marginTop: "6px", fontSize: "9px", color: "#888" }}>
+                      Closest complexity match in race history: <strong>{closestMatch.race_name}</strong> ({closestMatch.pacing_complexity_index}/100).
+                    </div>
+                  )}
+                </div>
+
+                {/* Data note */}
+                {prevWithoutData.length > 0 && (
+                  <div style={{ padding: "7px 12px", background: "#fafafa", border: "1px solid #e8e8e8", borderRadius: "4px", fontSize: "9px", color: "#999", lineHeight: 1.5 }}>
+                    Pacing complexity comparison is only shown for races where route profile data is available.
+                    {" "}{prevWithoutData.length} previous race{prevWithoutData.length !== 1 ? "s" : ""} {prevWithoutData.length !== 1 ? "are" : "is"} excluded from this comparison (no route section data recorded).
+                  </div>
+                )}
+
+                <PageNumber n={10} />
+              </div>
+            );
+          })()}
 
           {/* ═══════════════════════════════════════
               6 — Aid Station & Logistics  (p9)
@@ -3528,7 +3753,7 @@ export default function RaceReadinessPage() {
                   </>
                 )}
 
-                <PageNumber n={10} />
+                <PageNumber n={11} />
               </div>
             );
           })()}
@@ -3708,7 +3933,7 @@ export default function RaceReadinessPage() {
                   {/* Only show recording CTA here when there are no optional items (single-page mode) */}
                   {optionalItems.length === 0 && recordingCta}
 
-                  <PageNumber n={11} />
+                  <PageNumber n={12} />
                 </div>
 
                 {/* ── Page 11: Optional assessments + recording CTA ─────── */}
@@ -3748,7 +3973,7 @@ export default function RaceReadinessPage() {
 
                   {recordingCta}
 
-                  <PageNumber n={12} />
+                  <PageNumber n={13} />
                 </div>
 
                 {/* ── Page 12: Assessment results recording table ─────── */}
@@ -3809,7 +4034,7 @@ export default function RaceReadinessPage() {
                     </tbody>
                   </table>
 
-                  <PageNumber n={13} />
+                  <PageNumber n={14} />
                 </div>
               </>
             );
@@ -3981,7 +4206,7 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={14} />
+                <PageNumber n={15} />
               </div>
             );
           })()}
@@ -4139,7 +4364,7 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={15} />
+                <PageNumber n={16} />
               </div>
             );
           })()}
@@ -4220,7 +4445,7 @@ export default function RaceReadinessPage() {
                   </table>
                 )}
 
-                <PageNumber n={16} />
+                <PageNumber n={17} />
               </div>
             );
           })()}

@@ -11,6 +11,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserRoles } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
+import {
+  calculatePacingComplexityIndex,
+  type PacingComplexityComponents,
+} from "@/lib/race-analysis/pacing-complexity";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +64,8 @@ export interface AthleteRaceDetail {
   total_finishers: number | null;
   cat_position: number | null;
   cat_finishers: number | null;
+  pacing_complexity_index: number | null;
+  pacing_complexity_components: PacingComplexityComponents | null;
 }
 
 function normaliseSectionType(t: string): string {
@@ -271,22 +277,34 @@ export async function GET(req: NextRequest) {
     const catKey = `${r.race_id as string}|${r.result_year as number}|${r.age_group as string}`;
     const cat = catMap[catKey] ?? null;
 
+    let pacing_complexity_index: number | null = null;
+    let pacing_complexity_components: PacingComplexityComponents | null = null;
+    if (rp && rp.sections.length >= 3) {
+      const pci = calculatePacingComplexityIndex(rp.sections, rp.total_distance_km);
+      if (pci.has_sufficient_data) {
+        pacing_complexity_index = pci.score;
+        pacing_complexity_components = pci.components;
+      }
+    }
+
     return {
-      race_id:            r.race_id as string,
-      race_name:          raceName ?? "Unknown race",
-      result_year:        r.result_year as number,
-      result_status:      r.result_status as string,
-      finish_seconds:     r.finish_seconds as number | null,
-      position:           r.position as number | null,
-      age_group:          r.age_group as string | null,
-      gender:             r.gender as string | null,
-      club:               extractClub(ad),
-      total_distance_km:  rp?.total_distance_km ?? null,
-      total_ascent_m:     rp?.total_ascent_m ?? null,
-      flat_equivalent_km: rp?.flat_equivalent_km ?? null,
-      total_finishers:    finisherCounts[`${r.race_id as string}|${r.result_year as number}`] ?? null,
-      cat_position:       cat?.cat_position ?? null,
-      cat_finishers:      cat?.cat_finishers ?? null,
+      race_id:                     r.race_id as string,
+      race_name:                   raceName ?? "Unknown race",
+      result_year:                 r.result_year as number,
+      result_status:               r.result_status as string,
+      finish_seconds:              r.finish_seconds as number | null,
+      position:                    r.position as number | null,
+      age_group:                   r.age_group as string | null,
+      gender:                      r.gender as string | null,
+      club:                        extractClub(ad),
+      total_distance_km:           rp?.total_distance_km ?? null,
+      total_ascent_m:              rp?.total_ascent_m ?? null,
+      flat_equivalent_km:          rp?.flat_equivalent_km ?? null,
+      total_finishers:             finisherCounts[`${r.race_id as string}|${r.result_year as number}`] ?? null,
+      cat_position:                cat?.cat_position ?? null,
+      cat_finishers:               cat?.cat_finishers ?? null,
+      pacing_complexity_index,
+      pacing_complexity_components,
     };
   });
 
