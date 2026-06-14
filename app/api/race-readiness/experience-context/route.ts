@@ -24,6 +24,7 @@ interface Sec {
   terrain: string;
   distance_km: number;
   ascent_m: number;
+  descent_m: number;
   start_km: number;
   end_km: number;
 }
@@ -56,6 +57,12 @@ export interface ExpContextBiggestClimb {
   ratio: number | null;
 }
 
+export interface ExpContextBiggestDescent {
+  goal: { km: number; descent_m: number; avg_grad: number; start_km: number; end_km: number };
+  athlete_best: { km: number; descent_m: number; race_name: string; year: number } | null;
+  ratio: number | null;
+}
+
 export interface ExpContextOpeningMatch {
   goal_opening_km: number;
   goal_dominant_type: string;
@@ -70,6 +77,7 @@ export interface ExperienceContextResult {
   scale: ExpContextScale | null;
   time_estimate: ExpContextTimeEstimate | null;
   biggest_climb: ExpContextBiggestClimb | null;
+  biggest_descent: ExpContextBiggestDescent | null;
   opening_match: ExpContextOpeningMatch | null;
 }
 
@@ -92,6 +100,7 @@ function parseSections(json: unknown): Sec[] {
       terrain:      r.terrain,
       distance_km:  r.distance_km,
       ascent_m:     r.ascent_m,
+      descent_m:    typeof r.descent_m === "number" ? r.descent_m : 0,
       start_km:     typeof r.start_distance_km === "number" ? r.start_distance_km : 0,
       end_km:       typeof r.end_distance_km   === "number" ? r.end_distance_km   : 0,
     });
@@ -127,6 +136,37 @@ function biggestClimb(sections: Sec[]): { km: number; ascent_m: number; avg_grad
   return {
     ...best,
     avg_grad: best.km > 0 ? Math.round((best.ascent_m / (best.km * 1000)) * 100 * 10) / 10 : 0,
+  };
+}
+
+/** Merge consecutive descent sections into sustained segments, return the biggest by descent_m. */
+function biggestDescent(sections: Sec[]): { km: number; descent_m: number; avg_grad: number; start_km: number; end_km: number } | null {
+  if (sections.length === 0) return null;
+
+  type Seg = { km: number; descent_m: number; start_km: number; end_km: number };
+  const segments: Seg[] = [];
+  let cur: Seg | null = null;
+
+  for (const s of sections) {
+    if (s.section_type.includes("descent")) {
+      if (cur) {
+        cur.km        += s.distance_km;
+        cur.descent_m += s.descent_m;
+        cur.end_km     = s.end_km;
+      } else {
+        cur = { km: s.distance_km, descent_m: s.descent_m, start_km: s.start_km, end_km: s.end_km };
+      }
+    } else {
+      if (cur) { segments.push(cur); cur = null; }
+    }
+  }
+  if (cur) segments.push(cur);
+  if (segments.length === 0) return null;
+
+  const best = segments.reduce((a, b) => b.descent_m > a.descent_m ? b : a);
+  return {
+    ...best,
+    avg_grad: best.km > 0 ? Math.round((best.descent_m / (best.km * 1000)) * 100 * 10) / 10 : 0,
   };
 }
 
@@ -329,7 +369,29 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── 8. Opening profile match ─────────────────────────────────────────────
+  // ── 8. Biggest descent ───────────────────────────────────────────────────
+  let biggest_descent: ExpContextBiggestDescent | null = null;
+  if (goalSections.length > 0) {
+    const goalDesc = biggestDescent(goalSections);
+    if (goalDesc) {
+      let athleteBestDesc: { km: number; descent_m: number; race_name: string; year: number } | null = null;
+      for (const ar of athRaces) {
+        const d = biggestDescent(ar.sections);
+        if (d && (!athleteBestDesc || d.descent_m > athleteBestDesc.descent_m)) {
+          athleteBestDesc = { km: Math.round(d.km * 10) / 10, descent_m: Math.round(d.descent_m), race_name: ar.race_name, year: ar.year };
+        }
+      }
+      biggest_descent = {
+        goal: { km: Math.round(goalDesc.km * 10) / 10, descent_m: Math.round(goalDesc.descent_m), avg_grad: goalDesc.avg_grad, start_km: Math.round(goalDesc.start_km * 10) / 10, end_km: Math.round(goalDesc.end_km * 10) / 10 },
+        athlete_best: athleteBestDesc,
+        ratio: athleteBestDesc && athleteBestDesc.descent_m > 0
+          ? Math.round((goalDesc.descent_m / athleteBestDesc.descent_m) * 10) / 10
+          : null,
+      };
+    }
+  }
+
+  // ── 9. Opening profile match ─────────────────────────────────────────────
   let opening_match: ExpContextOpeningMatch | null = null;
   const goalOpening = characteriseOpening(goalSections, goalDistKm);
   if (goalOpening) {
@@ -352,5 +414,5 @@ export async function GET(req: NextRequest) {
     };
   }
 
-  return NextResponse.json({ scale, time_estimate, biggest_climb, opening_match } satisfies ExperienceContextResult);
+  return NextResponse.json({ scale, time_estimate, biggest_climb, biggest_descent, opening_match } satisfies ExperienceContextResult);
 }
