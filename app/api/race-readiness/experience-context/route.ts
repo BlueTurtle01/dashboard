@@ -241,7 +241,7 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   if (!targetProf) {
-    return NextResponse.json({ scale: null, time_estimate: null, biggest_climb: null, opening_match: null } satisfies ExperienceContextResult);
+    return NextResponse.json({ scale: null, time_estimate: null, biggest_climb: null, biggest_descent: null, opening_match: null } satisfies ExperienceContextResult);
   }
 
   const goalDistKm     = targetProf.total_distance_km    as number ?? 0;
@@ -303,7 +303,7 @@ export async function GET(req: NextRequest) {
     })
     .filter((x): x is AthRaceInfo => x !== null);
 
-  const empty: ExperienceContextResult = { scale: null, time_estimate: null, biggest_climb: null, opening_match: null };
+  const empty: ExperienceContextResult = { scale: null, time_estimate: null, biggest_climb: null, biggest_descent: null, opening_match: null };
   if (athRaces.length === 0) return NextResponse.json(empty);
 
   // ── 5. Scale insight ─────────────────────────────────────────────────────
