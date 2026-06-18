@@ -353,7 +353,7 @@ export default function AllRaceDataCoveragePage() {
                 {displayed.length === 0 && (
                   <tr>
                     <td colSpan={visibleColumns.length} style={{ padding: "24px", textAlign: "center", color: "#888", fontSize: "13px" }}>
-                      {activeFilters.size > 0 ? "No races match the active filters." : "No races match your search."}
+                      {FILTER_DEFS.some(f => columnFilters[f.key] !== "all") ? "No races match the active filters." : "No races match your search."}
                     </td>
                   </tr>
                 )}
