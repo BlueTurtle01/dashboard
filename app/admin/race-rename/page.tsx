@@ -8,6 +8,7 @@ interface Race {
   slug: string;
   race_year: number | null;
   is_published: boolean;
+  is_archived: boolean;
   result_count: number;
 }
 
@@ -18,6 +19,7 @@ export default function RaceRenamePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
 
   // Per-row editing state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,6 +38,9 @@ export default function RaceRenamePage() {
   const [pendingDelete, setPendingDelete] = useState<Race | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Archive state
+  const [archivingId, setArchivingId] = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -56,9 +61,13 @@ export default function RaceRenamePage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return races;
-    return races.filter((r) => r.name.toLowerCase().includes(q));
-  }, [races, search]);
+    return races.filter((r) => {
+      if (!showArchived && r.is_archived) return false;
+      if (showArchived && !r.is_archived) return false;
+      if (q) return r.name.toLowerCase().includes(q);
+      return true;
+    });
+  }, [races, search, showArchived]);
 
   function startEdit(race: Race) {
     setEditingId(race.id);
@@ -75,7 +84,6 @@ export default function RaceRenamePage() {
     setPendingMerge(null);
   }
 
-  // Check whether the typed name matches an existing race before committing
   function checkForMerge(sourceId: string, newName: string): string | null {
     const lower = newName.trim().toLowerCase();
     const match = races.find(
@@ -99,7 +107,6 @@ export default function RaceRenamePage() {
       setSaveState("done");
       setPendingMerge(null);
       setEditingId(null);
-      // Reload the list to reflect changes
       await load();
     } catch (e) {
       setSaveState("error");
@@ -123,6 +130,18 @@ export default function RaceRenamePage() {
     }
   }
 
+  async function doArchive(race: Race) {
+    setArchivingId(race.id);
+    try {
+      const res = await fetch(`/api/admin/races/${race.id}/archive`, { method: "PATCH" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Archive failed");
+      await load();
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
   function handleSaveClick(sourceId: string) {
     const newName = editValue.trim();
     if (!newName) return;
@@ -142,13 +161,24 @@ export default function RaceRenamePage() {
         results will be merged into that race and the duplicate removed.
       </p>
 
-      <input
-        type="text"
-        placeholder="Search races…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full border border-zinc-300 rounded-lg px-4 py-2 text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <div className="flex items-center gap-4 mb-6">
+        <input
+          type="text"
+          placeholder="Search races…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 border border-zinc-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <label className="flex items-center gap-2 text-sm text-zinc-600 cursor-pointer select-none whitespace-nowrap">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+            className="rounded border-zinc-300 accent-blue-600"
+          />
+          Show archived
+        </label>
+      </div>
 
       {loading && <p className="text-sm text-zinc-400">Loading…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -162,7 +192,7 @@ export default function RaceRenamePage() {
                 <th className="px-4 py-3 text-left font-medium w-16">Year</th>
                 <th className="px-4 py-3 text-left font-medium w-20">Results</th>
                 <th className="px-4 py-3 text-left font-medium w-24">Status</th>
-                <th className="px-4 py-3 w-32" />
+                <th className="px-4 py-3 w-40" />
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
@@ -175,8 +205,9 @@ export default function RaceRenamePage() {
               )}
               {filtered.map((race) => {
                 const isEditing = editingId === race.id;
+                const isArchiving = archivingId === race.id;
                 return (
-                  <tr key={race.id} className="hover:bg-zinc-50">
+                  <tr key={race.id} className={`hover:bg-zinc-50 ${race.is_archived ? "opacity-60" : ""}`}>
                     <td className="px-4 py-3">
                       {isEditing ? (
                         <div className="flex flex-col gap-1">
@@ -233,11 +264,24 @@ export default function RaceRenamePage() {
                         </div>
                       ) : (
                         <div className="flex gap-3 justify-end">
+                          {!race.is_archived && (
+                            <button
+                              onClick={() => startEdit(race)}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Rename
+                            </button>
+                          )}
                           <button
-                            onClick={() => startEdit(race)}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            onClick={() => doArchive(race)}
+                            disabled={isArchiving}
+                            className="text-xs text-zinc-500 hover:text-zinc-800 font-medium disabled:opacity-40"
                           >
-                            Rename
+                            {isArchiving
+                              ? "…"
+                              : race.is_archived
+                              ? "Unarchive"
+                              : "Archive"}
                           </button>
                           <button
                             onClick={() => { setPendingDelete(race); setDeleteError(null); }}
