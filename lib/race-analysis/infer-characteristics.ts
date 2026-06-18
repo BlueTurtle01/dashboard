@@ -1,7 +1,7 @@
 /**
  * Server-side race characteristics inference.
  *
- * Computes is_uk, hilliness, distance_band, climate, crowd_size, and
+ * Computes country, hilliness, distance_band, climate, crowd_size, and
  * terrain_breakdown from derived data (GPX profile, OSM terrain, weather API,
  * entrant counts).  Only fills null fields — never overwrites manual values.
  */
@@ -34,9 +34,11 @@ export interface TerrainBreakdown {
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
-function inferIsUk(lat: number, lon: number): boolean {
-  return lat >= UK_LAT_MIN && lat <= UK_LAT_MAX &&
-         lon >= UK_LON_MIN && lon <= UK_LON_MAX;
+function inferCountryFromCoords(lat: number, lon: number): string | null {
+  if (lat >= UK_LAT_MIN && lat <= UK_LAT_MAX && lon >= UK_LON_MIN && lon <= UK_LON_MAX) {
+    return "United Kingdom";
+  }
+  return null;
 }
 
 function inferHilliness(totalAscentM: number, totalDistanceKm: number): 1 | 2 | 3 | 4 {
@@ -121,20 +123,26 @@ export async function inferAndSaveCharacteristics(
   raceDate: Date | null,
   terrainSegments: TerrainSegment[] | null,
   entrantCount: number | null,
+  /** Country from races.country — used as-is; coords used as fallback for UK detection. */
+  raceCountry: string | null = null,
 ): Promise<void> {
   // Fetch existing row so we can skip already-set fields
   const { data: existing } = await supabase
     .from("race_characteristics")
-    .select("race_id, is_uk, hilliness, distance_band, climate, crowd_size, terrain, terrain_breakdown")
+    .select("race_id, country, hilliness, distance_band, climate, crowd_size, terrain, terrain_breakdown")
     .eq("race_id", raceId)
     .maybeSingle();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updates: Record<string, any> = { race_id: raceId };
 
-  // is_uk — from start coords
-  if (existing?.is_uk == null && coords) {
-    updates.is_uk = inferIsUk(coords.lat, coords.lon);
+  // country — prefer races.country, fall back to UK bbox check from start coords
+  if (existing?.country == null) {
+    const inferred = raceCountry?.trim()
+      || (coords ? inferCountryFromCoords(coords.lat, coords.lon) : null);
+    if (inferred) {
+      updates.country = inferred;
+    }
   }
 
   // hilliness — from profile

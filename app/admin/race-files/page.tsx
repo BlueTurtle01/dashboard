@@ -45,7 +45,7 @@ interface RaceWithFiles extends Race {
 type TerrainOpt = "road" | "coastal" | "trail" | "mountain";
 
 interface CharFormState {
-  is_uk: boolean;
+  country: string;
   terrain: TerrainOpt | "";
   hilliness: 1 | 2 | 3 | 4 | "";
   crowd_size: 1 | 2 | 3 | "";
@@ -113,12 +113,11 @@ function inferCharForm(
   profileDistanceKm: number | null,
   entrantCount: number | null,
 ): CharFormState {
-  const country = (race.country ?? "").toLowerCase().trim();
-  let is_uk = ["uk", "united kingdom", "england", "scotland", "wales", "northern ireland"].includes(country);
-  if (!is_uk && !country && race.race_latitude != null && race.race_longitude != null) {
+  let country = (race.country ?? "").trim();
+  if (!country && race.race_latitude != null && race.race_longitude != null) {
     const lat = Number(race.race_latitude);
     const lon = Number(race.race_longitude);
-    is_uk = lat >= 49.9 && lat <= 61.0 && lon >= -8.2 && lon <= 2.0;
+    if (lat >= 49.9 && lat <= 61.0 && lon >= -8.2 && lon <= 2.0) country = "United Kingdom";
   }
 
   const tt = (race.terrain_type ?? "").toLowerCase();
@@ -155,7 +154,7 @@ function inferCharForm(
     else crowd_size = 3;
   }
 
-  return { is_uk, terrain, distance_band, hilliness, climate, crowd_size };
+  return { country, terrain, distance_band, hilliness, climate, crowd_size };
 }
 
 function CharPicker<T extends string | number>({
@@ -270,7 +269,7 @@ export default function RaceFilesPage() {
           .order("name", { ascending: true }),
         supabase.from("race_files").select("*").order("created_at", { ascending: true }),
         supabase.from("races_meta").select("race_id").eq("meta_key", "terrain_segments"),
-        supabase.from("race_characteristics").select("race_id, is_uk, terrain, hilliness, crowd_size, climate, distance_band"),
+        supabase.from("race_characteristics").select("race_id, country, terrain, hilliness, crowd_size, climate, distance_band"),
         supabase.from("race_profiles").select("race_id, total_ascent_m, total_distance_km"),
         supabase.rpc("get_latest_year_entrant_counts"),
         supabase.from("races_meta").select("race_id, meta_value").eq("meta_key", "race_date"),
@@ -287,7 +286,7 @@ export default function RaceFilesPage() {
         filesByRace.get(f.race_id)!.push(f);
       }
 
-      type CharRow = { race_id: string; is_uk: boolean; terrain: string; hilliness: number; crowd_size: number; climate: number; distance_band: number };
+      type CharRow = { race_id: string; country: string | null; terrain: string; hilliness: number; crowd_size: number; climate: number; distance_band: number };
       const charsByRaceId = new Map<string, CharRow>((charsData ?? []).map((c: CharRow) => [c.race_id, c]));
       type ProfileRow = { race_id: string; total_ascent_m: number; total_distance_km: number };
       const profileByRaceId = new Map<string, ProfileRow>((profilesData ?? []).map((p: ProfileRow) => [p.race_id, p]));
@@ -315,7 +314,7 @@ export default function RaceFilesPage() {
         if (existing) {
           newHasRow.add(r.id);
           newForms[r.id] = {
-            is_uk: existing.is_uk,
+            country: existing.country ?? "",
             terrain: existing.terrain as TerrainOpt,
             hilliness: existing.hilliness as CharFormState["hilliness"],
             crowd_size: existing.crowd_size as CharFormState["crowd_size"],
@@ -812,7 +811,8 @@ export default function RaceFilesPage() {
     setCharSaving((prev) => ({ ...prev, [raceId]: true }));
     setCharSaveStatus((prev) => ({ ...prev, [raceId]: "idle" }));
     // Only include fields that have a value — partial saves are fine
-    const payload: Record<string, unknown> = { race_id: raceId, is_uk: form.is_uk };
+    const payload: Record<string, unknown> = { race_id: raceId };
+    if (form.country      !== "") payload.country      = form.country;
     if (form.terrain      !== "") payload.terrain      = form.terrain;
     if (form.hilliness    !== "") payload.hilliness    = form.hilliness;
     if (form.crowd_size   !== "") payload.crowd_size   = form.crowd_size;
@@ -1274,7 +1274,7 @@ export default function RaceFilesPage() {
                     {(() => {
                       const form = charForms[race.id];
                       if (!form) return null;
-                      const missing = (["terrain", "hilliness", "crowd_size", "climate", "distance_band"] as const).filter((k) => form[k] === "");
+                      const missing = (["country", "terrain", "hilliness", "crowd_size", "climate", "distance_band"] as const).filter((k) => form[k] === "");
                       const isComplete = missing.length === 0;
                       const setField = <K extends keyof CharFormState>(key: K, val: CharFormState[K]) => {
                         setCharForms((prev) => ({ ...prev, [race.id]: { ...prev[race.id], [key]: val } }));
@@ -1300,20 +1300,16 @@ export default function RaceFilesPage() {
                           </div>
 
                           <div style={{ display: "grid", gap: "12px" }}>
-                            {/* Location */}
+                            {/* Country */}
                             <div>
-                              <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>Location</div>
-                              <div style={{ display: "flex", gap: "6px" }}>
-                                {([true, false] as const).map((v) => {
-                                  const active = form.is_uk === v;
-                                  return (
-                                    <button key={String(v)} type="button" onClick={() => setField("is_uk", v)}
-                                      style={{ padding: "5px 12px", borderRadius: "6px", border: `1px solid ${active ? "#4f46e5" : "#d1d5db"}`, background: active ? "#eef2ff" : "#fff", color: active ? "#4338ca" : "#374151", fontSize: "13px", fontWeight: active ? 600 : 400, cursor: "pointer" }}>
-                                      {v ? "UK race" : "International"}
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                              <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>Country</div>
+                              <input
+                                type="text"
+                                placeholder="e.g. United Kingdom, France, USA…"
+                                value={form.country}
+                                onChange={(e) => setField("country", e.target.value)}
+                                style={{ width: "100%", padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13px", boxSizing: "border-box" }}
+                              />
                             </div>
 
                             {/* Terrain */}
@@ -1401,7 +1397,7 @@ export default function RaceFilesPage() {
                             {charSaveStatus[race.id] === "error" && <span style={{ fontSize: "12px", color: "#b91c1c" }}>Save failed — check console</span>}
                             {!isComplete && missing.length > 0 && (
                               <span style={{ fontSize: "12px", color: "#9ca3af" }}>
-                                Missing: {missing.map((k) => ({ terrain: "Terrain", hilliness: "Hilliness", crowd_size: "Crowd", climate: "Climate", distance_band: "Distance" }[k])).join(", ")}
+                                Missing: {missing.map((k) => ({ country: "Country", terrain: "Terrain", hilliness: "Hilliness", crowd_size: "Crowd", climate: "Climate", distance_band: "Distance" }[k])).join(", ")}
                                 {missing.includes("climate") ? " (needs race date)" : ""}
                               </span>
                             )}

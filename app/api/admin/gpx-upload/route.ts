@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     // ── Verify race exists ────────────────────────────────────────────────────
     const { data: race } = await supabase
       .from("races")
-      .select("id, name, terrain_type, race_latitude, race_longitude")
+      .select("id, name, terrain_type, race_latitude, race_longitude, country")
       .eq("id", race_id)
       .maybeSingle();
     if (!race) return NextResponse.json({ error: "Race not found" }, { status: 404 });
@@ -246,6 +246,7 @@ export async function POST(req: NextRequest) {
       raceDate,
       terrainSegments,
       entrantCount,
+      race.country ?? null,
     );
 
     return NextResponse.json({

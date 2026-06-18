@@ -17,19 +17,19 @@ interface RaceRow {
   char_crowd_size: string | null;
   char_climate: string | null;
   char_distance_band: string | null;
-  char_is_uk: boolean | null;
+  char_country: string | null;
 }
 
 type SortCol =
   | "race_name" | "has_gpx" | "has_profile" | "has_strategy" | "has_date" | "has_results"
   | "char_terrain" | "char_hilliness" | "char_crowd_size"
-  | "char_climate" | "char_distance_band" | "char_is_uk";
+  | "char_climate" | "char_distance_band" | "char_country";
 
 type SortDir = "asc" | "desc";
 
 type FilterKey =
   | "gpx" | "profile" | "strategy" | "date" | "results"
-  | "terrain" | "hilliness" | "crowd_size" | "climate" | "distance_band" | "is_uk";
+  | "terrain" | "hilliness" | "crowd_size" | "climate" | "distance_band" | "country";
 
 type FilterVal = "all" | "yes" | "no";
 
@@ -44,7 +44,7 @@ const FILTER_DEFS: { key: FilterKey; label: string; field: keyof RaceRow }[] = [
   { key: "crowd_size",    label: "Crowd",       field: "char_crowd_size" },
   { key: "climate",       label: "Climate",     field: "char_climate" },
   { key: "distance_band", label: "Distance",    field: "char_distance_band" },
-  { key: "is_uk",         label: "UK",          field: "char_is_uk" },
+  { key: "country",       label: "Country",      field: "char_country" },
 ];
 
 function isMissing(row: RaceRow, field: keyof RaceRow): boolean {
@@ -65,7 +65,7 @@ const ALL_COLUMNS: ColDef[] = [
   { key: "char_crowd_size",    label: "Crowd",      center: true },
   { key: "char_climate",       label: "Climate",    center: true },
   { key: "char_distance_band", label: "Distance",   center: true },
-  { key: "char_is_uk",         label: "UK",         center: true },
+  { key: "char_country",        label: "Country",    center: true },
 ];
 
 const DEFAULT_VISIBLE = new Set<SortCol>(ALL_COLUMNS.map(c => c.key));
@@ -102,7 +102,7 @@ export default function AllRaceDataCoveragePage() {
         supabase.from("race_files").select("race_id").in("race_id", raceIds).eq("file_type", "gpx"),
         supabase.from("race_profiles").select("race_id").in("race_id", raceIds),
         supabase.from("races_meta").select("race_id").in("race_id", raceIds).eq("meta_key", "race_pace_strategy"),
-        supabase.from("race_characteristics").select("race_id, terrain, hilliness, crowd_size, climate, distance_band, is_uk").in("race_id", raceIds),
+        supabase.from("race_characteristics").select("race_id, terrain, hilliness, crowd_size, climate, distance_band, country").in("race_id", raceIds),
         supabase.from("races_meta").select("race_id").in("race_id", raceIds).eq("meta_key", "race_date"),
         supabase.from("race_files").select("race_id").in("race_id", raceIds).eq("file_type", "results"),
       ]);
@@ -129,7 +129,7 @@ export default function AllRaceDataCoveragePage() {
           char_crowd_size:    ch?.crowd_size ?? null,
           char_climate:       ch?.climate ?? null,
           char_distance_band: ch?.distance_band ?? null,
-          char_is_uk:         ch?.is_uk ?? null,
+          char_country:       ch?.country ?? null,
         };
       }));
     } catch (e) {
@@ -203,7 +203,7 @@ export default function AllRaceDataCoveragePage() {
   const missingCount = rows.filter(r =>
     !r.has_gpx || !r.has_profile || !r.has_strategy || !r.has_date || !r.has_results ||
     !r.char_terrain || !r.char_hilliness || !r.char_crowd_size ||
-    !r.char_climate || !r.char_distance_band || r.char_is_uk === null
+    !r.char_climate || !r.char_distance_band || !r.char_country
   ).length;
 
   const visibleColumns = ALL_COLUMNS.filter(c => visibleCols.has(c.key));
@@ -360,7 +360,7 @@ export default function AllRaceDataCoveragePage() {
                 {displayed.map((row, i) => {
                   const allOk = row.has_gpx && row.has_profile && row.has_strategy && row.has_date && row.has_results &&
                     !!row.char_terrain && !!row.char_hilliness && !!row.char_crowd_size &&
-                    !!row.char_climate && !!row.char_distance_band && row.char_is_uk !== null;
+                    !!row.char_climate && !!row.char_distance_band && !!row.char_country;
                   return (
                     <tr
                       key={row.race_id}
@@ -401,8 +401,12 @@ export default function AllRaceDataCoveragePage() {
                       {visibleCols.has("char_distance_band") && (
                         <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>{tickVal(row.char_distance_band)}</td>
                       )}
-                      {visibleCols.has("char_is_uk") && (
-                        <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>{tickVal(row.char_is_uk)}</td>
+                      {visibleCols.has("char_country") && (
+                        <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "12px" }}>
+                          {row.char_country
+                            ? <span style={{ color: "#2e7d32", fontWeight: 500 }}>{row.char_country}</span>
+                            : <span style={{ color: "#c0392b", fontWeight: 700 }}>✗</span>}
+                        </td>
                       )}
                     </tr>
                   );

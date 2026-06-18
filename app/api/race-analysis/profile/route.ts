@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     // ── Get race info ─────────────────────────────────────────────────────────
     const { data: race, error: raceErr } = await supabase
       .from("races")
-      .select("id, name, terrain_type, race_latitude, race_longitude")
+      .select("id, name, terrain_type, race_latitude, race_longitude, country")
       .eq("id", race_id)
       .maybeSingle();
 
@@ -211,6 +211,7 @@ export async function POST(req: NextRequest) {
       raceDate,
       terrainSegments,
       entrantCount,
+      race.country ?? null,
     );
 
     // ── Respond ───────────────────────────────────────────────────────────────
