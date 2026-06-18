@@ -222,6 +222,8 @@ export default function RaceFilesPage() {
 
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
+  const [backfillingCountry, setBackfillingCountry] = useState(false);
+  const [backfillCountryMsg, setBackfillCountryMsg] = useState<string | null>(null);
 
   // Create race modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -742,6 +744,26 @@ export default function RaceFilesPage() {
     setBackfilling(false);
   }
 
+  async function handleBackfillCountry() {
+    setBackfillingCountry(true);
+    setBackfillCountryMsg(null);
+    try {
+      const res  = await fetch("/api/admin/backfill-country", { method: "POST" });
+      const json = await res.json() as { updated?: number; skipped?: number; no_data?: number; error?: string };
+      if (!res.ok || json.error) {
+        setBackfillCountryMsg(`Error: ${json.error ?? "Unknown error"}`);
+      } else {
+        setBackfillCountryMsg(
+          `Done — ${json.updated} set, ${json.skipped} already had country${json.no_data ? `, ${json.no_data} could not be inferred` : ""}.`
+        );
+      }
+      await loadData();
+    } catch {
+      setBackfillCountryMsg("Network error running backfill.");
+    }
+    setBackfillingCountry(false);
+  }
+
   async function handleProcessRace(raceId: string) {
     const setStep = (step: string, error?: string, done?: boolean) =>
       setProcessRace((prev) => ({ ...prev, [raceId]: { step, error, done } }));
@@ -891,6 +913,19 @@ export default function RaceFilesPage() {
             {backfillMsg && (
               <span style={{ fontSize: "12px", color: backfillMsg.startsWith("Error") ? "#b91c1c" : "#166534" }}>
                 {backfillMsg}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleBackfillCountry()}
+              disabled={backfillingCountry}
+              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 500, borderRadius: "7px", border: "1px solid #d1d5db", background: backfillingCountry ? "#f3f4f6" : "#fff", color: "#374151", cursor: backfillingCountry ? "default" : "pointer" }}
+            >
+              {backfillingCountry ? "⏳ Backfilling…" : "🌍 Backfill Countries"}
+            </button>
+            {backfillCountryMsg && (
+              <span style={{ fontSize: "12px", color: backfillCountryMsg.startsWith("Error") ? "#b91c1c" : "#166534" }}>
+                {backfillCountryMsg}
               </span>
             )}
             <button
