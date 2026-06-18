@@ -25,6 +25,7 @@ import { formatWindCsv } from "@/lib/race-analysis/csv";
 import { DEFAULT_WIND_SETTINGS } from "@/lib/race-analysis/types";
 import type { WindAnalysisSettings } from "@/lib/race-analysis/types";
 
+
 // Allow up to 60 s for this route (multiple parallel Open-Meteo calls)
 export const maxDuration = 60;
 
@@ -50,20 +51,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "race_id is required" }, { status: 400 });
     }
 
-    const settings: WindAnalysisSettings = {
-      ...DEFAULT_WIND_SETTINGS,
-      ...partialSettings,
-    };
-
-    // ── Fetch GPX file record ─────────────────────────────────────────────────
+    // ── Fetch race + GPX file record ──────────────────────────────────────────
     const supabase = await createClient();
 
-    const { data: gpxFile, error: gpxErr } = await supabase
-      .from("race_files")
-      .select("id, public_url, file_name")
-      .eq("race_id", race_id)
-      .eq("file_type", "gpx")
-      .maybeSingle();
+    const [{ data: race }, { data: gpxFile, error: gpxErr }] = await Promise.all([
+      supabase.from("races").select("race_end_date").eq("id", race_id).maybeSingle(),
+      supabase.from("race_files").select("id, public_url, file_name").eq("race_id", race_id).eq("file_type", "gpx").maybeSingle(),
+    ]);
 
     if (gpxErr) {
       return NextResponse.json(
@@ -92,6 +86,25 @@ export async function POST(req: NextRequest) {
     }
 
     const gpxText = await gpxRes.text();
+
+    // ── Resolve race date from stored race_end_date ───────────────────────────
+    const raceEndDate = race?.race_end_date ? new Date(race.race_end_date) : null;
+
+    // Merge settings: explicit caller settings override, then stored race date, then defaults
+    const settings: WindAnalysisSettings = {
+      ...DEFAULT_WIND_SETTINGS,
+      start_hour: 6,
+      end_hour: 22,
+      ...(raceEndDate && !partialSettings?.race_month
+        ? { race_month: raceEndDate.getMonth() + 1, race_day: raceEndDate.getDate() }
+        : {}),
+      ...partialSettings,
+    };
+
+    // If no date available (no race_end_date + no explicit settings), skip gracefully
+    if (!raceEndDate && !partialSettings?.race_month) {
+      return NextResponse.json({ skipped: true, reason: "no_date" });
+    }
 
     // ── Parse + section ───────────────────────────────────────────────────────
     let points;
@@ -198,6 +211,7 @@ export async function POST(req: NextRequest) {
       gpx_points: points.length,
       insufficient_data_sections: insufficientCount,
       settings_used: settings,
+      race_date_used: raceEndDate?.toISOString().slice(0, 10) ?? null,
     });
   } catch (err) {
     console.error("[wind-analysis]", err);

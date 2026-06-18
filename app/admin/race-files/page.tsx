@@ -87,15 +87,6 @@ const BUCKET = "race-files";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function computePercentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = (p / 100) * (sorted.length - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-}
-
 function formatBytes(bytes: number | null): string {
   if (!bytes) return "";
   if (bytes < 1024) return `${bytes} B`;
@@ -120,11 +111,16 @@ function fileTypeColor(type: FileType): { bg: string; text: string } {
 function inferCharForm(
   race: Omit<Race, "has_terrain_segments" | "files">,
   ascentM: number | null,
+  profileDistanceKm: number | null,
   entrantCount: number | null,
-  crowdBins: { p33: number; p67: number } | null,
 ): CharFormState {
   const country = (race.country ?? "").toLowerCase().trim();
-  const is_uk = ["uk", "united kingdom", "england", "scotland", "wales", "northern ireland"].includes(country);
+  let is_uk = ["uk", "united kingdom", "england", "scotland", "wales", "northern ireland"].includes(country);
+  if (!is_uk && !country && race.race_latitude != null && race.race_longitude != null) {
+    const lat = Number(race.race_latitude);
+    const lon = Number(race.race_longitude);
+    is_uk = lat >= 49.9 && lat <= 61.0 && lon >= -8.2 && lon <= 2.0;
+  }
 
   const tt = (race.terrain_type ?? "").toLowerCase();
   let terrain: TerrainOpt | "" = "";
@@ -133,7 +129,7 @@ function inferCharForm(
   else if (tt.includes("mountain") || tt.includes("alpine") || tt.includes("fell")) terrain = "mountain";
   else if (tt.includes("trail") || tt.includes("desert") || tt.includes("sand")) terrain = "trail";
 
-  const d = race.distance_km;
+  const d = race.distance_km ?? profileDistanceKm;
   let distance_band: CharFormState["distance_band"] = "";
   if (d != null) {
     if (d <= 42.2) distance_band = 1;
@@ -154,9 +150,9 @@ function inferCharForm(
   const climate: CharFormState["climate"] = race.is_desert_race ? 4 : "";
 
   let crowd_size: CharFormState["crowd_size"] = "";
-  if (entrantCount !== null && crowdBins !== null) {
-    if (entrantCount <= crowdBins.p33) crowd_size = 1;
-    else if (entrantCount <= crowdBins.p67) crowd_size = 2;
+  if (entrantCount !== null) {
+    if (entrantCount < 400)  crowd_size = 1;
+    else if (entrantCount <= 2000) crowd_size = 2;
     else crowd_size = 3;
   }
 
@@ -229,9 +225,6 @@ export default function RaceFilesPage() {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
 
-  const [batchReprocessing, setBatchReprocessing] = useState(false);
-  const [batchReprocessMsg, setBatchReprocessMsg] = useState<string | null>(null);
-
   // Create race modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", slug: "", location: "", country: "", distance_km: "" });
@@ -242,14 +235,14 @@ export default function RaceFilesPage() {
   const [resultsImport, setResultsImport] = useState<Record<string, { rowCount?: number; warning?: string; error?: string }>>({});
 
   // Race Matcher characteristics
+  const [profileDistances, setProfileDistances] = useState<Record<string, number>>({});
   const [charForms, setCharForms] = useState<Record<string, CharFormState>>({});
   const [charSaving, setCharSaving] = useState<Record<string, boolean>>({});
   const [charSaveStatus, setCharSaveStatus] = useState<Record<string, "idle" | "saved" | "error">>({});
   const [charHasRow, setCharHasRow] = useState<Set<string>>(new Set());
-  const [bulkClimate, setBulkClimate] = useState<{ running: boolean; done: number; total: number; skipped: number } | null>(null);
-  const [bulkSave, setBulkSave] = useState<{ running: boolean; done: number; total: number; failed: number } | null>(null);
   const [entrantCounts, setEntrantCounts] = useState<Record<string, { year: number; count: number }>>({});
-  const [crowdBins, setCrowdBins] = useState<{ p33: number; p67: number } | null>(null);
+  const [processRace, setProcessRace] = useState<Record<string, { step: string; error?: string; done?: boolean }>>({});
+  const [processAll, setProcessAll] = useState<{ running: boolean; done: number; total: number; failed: number } | null>(null);
 
   // Hidden file inputs per (race × fileType)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -275,7 +268,7 @@ export default function RaceFilesPage() {
         supabase.from("race_files").select("*").order("created_at", { ascending: true }),
         supabase.from("races_meta").select("race_id").eq("meta_key", "terrain_segments"),
         supabase.from("race_characteristics").select("race_id, is_uk, terrain, hilliness, crowd_size, climate, distance_band"),
-        supabase.from("race_profiles").select("race_id, total_ascent_m"),
+        supabase.from("race_profiles").select("race_id, total_ascent_m, total_distance_km"),
         supabase.rpc("get_latest_year_entrant_counts"),
       ]);
 
@@ -292,19 +285,16 @@ export default function RaceFilesPage() {
 
       type CharRow = { race_id: string; is_uk: boolean; terrain: string; hilliness: number; crowd_size: number; climate: number; distance_band: number };
       const charsByRaceId = new Map<string, CharRow>((charsData ?? []).map((c: CharRow) => [c.race_id, c]));
-      const ascentByRaceId = new Map<string, number>((profilesData ?? []).map((p: { race_id: string; total_ascent_m: number }) => [p.race_id, p.total_ascent_m]));
+      type ProfileRow = { race_id: string; total_ascent_m: number; total_distance_km: number };
+      const profileByRaceId = new Map<string, ProfileRow>((profilesData ?? []).map((p: ProfileRow) => [p.race_id, p]));
+      setProfileDistances(Object.fromEntries((profilesData ?? []).map((p: ProfileRow) => [p.race_id, p.total_distance_km])));
 
       type EntrantRow = { race_id: string; latest_year: number; entrant_count: number };
       const typedEntrants = (entrantData ?? []) as EntrantRow[];
       const entrantByRaceId = new Map<string, { year: number; count: number }>(
         typedEntrants.map(e => [e.race_id, { year: e.latest_year, count: Number(e.entrant_count) }]),
       );
-      const sortedCounts = typedEntrants.map(e => Number(e.entrant_count)).sort((a, b) => a - b);
-      const bins = sortedCounts.length > 0
-        ? { p33: computePercentile(sortedCounts, 33), p67: computePercentile(sortedCounts, 67) }
-        : null;
       setEntrantCounts(Object.fromEntries(entrantByRaceId));
-      setCrowdBins(bins);
 
       type RaceRow = Omit<Race, "has_terrain_segments" | "files">;
       const typedRaces = racesData as RaceRow[];
@@ -324,11 +314,12 @@ export default function RaceFilesPage() {
             distance_band: existing.distance_band as CharFormState["distance_band"],
           };
         } else {
+          const prof = profileByRaceId.get(r.id) ?? null;
           newForms[r.id] = inferCharForm(
             r,
-            ascentByRaceId.get(r.id) ?? null,
+            prof?.total_ascent_m ?? null,
+            prof?.total_distance_km ?? null,
             entrantByRaceId.get(r.id)?.count ?? null,
-            bins,
           );
         }
       }
@@ -743,29 +734,67 @@ export default function RaceFilesPage() {
     setBackfilling(false);
   }
 
-  async function handleBatchReprocess() {
-    const eligible = races.filter((r) => r.files.some((f) => f.file_type === "gpx"));
-    if (eligible.length === 0) {
-      setBatchReprocessMsg("No races with a GPX file to reprocess.");
+  async function handleProcessRace(raceId: string) {
+    const setStep = (step: string, error?: string, done?: boolean) =>
+      setProcessRace((prev) => ({ ...prev, [raceId]: { step, error, done } }));
+
+    setStep("Analysing wind…");
+    try {
+      const windRes = await fetch("/api/race-analysis/wind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race_id: raceId }),
+      });
+      const windJson = await windRes.json() as { success?: boolean; skipped?: boolean; error?: string };
+      if (!windRes.ok && !windJson.skipped) throw new Error(windJson.error ?? "Wind failed");
+    } catch (err) {
+      setStep("Wind failed — continuing", err instanceof Error ? err.message : undefined);
+    }
+
+    setStep("Building profile…");
+    try {
+      const profRes = await fetch("/api/race-analysis/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race_id: raceId }),
+      });
+      const profJson = await profRes.json() as { success?: boolean; error?: string };
+      if (!profRes.ok || !profJson.success) throw new Error(profJson.error ?? "Profile failed");
+    } catch (err) {
+      setStep("Profile failed", err instanceof Error ? err.message : undefined, true);
       return;
     }
-    setBatchReprocessing(true);
-    setBatchReprocessMsg(null);
+
+    setStep("Generating strategy…");
+    try {
+      const stratRes = await fetch("/api/race-strategy/auto-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race_id: raceId }),
+      });
+      const stratJson = await stratRes.json() as { success?: boolean; error?: string };
+      if (!stratRes.ok || !stratJson.success) throw new Error(stratJson.error ?? "Strategy failed");
+    } catch {
+      // Strategy failure is non-critical
+    }
+
+    setStep("Done", undefined, true);
+    await loadData();
+  }
+
+  async function handleProcessAll() {
+    const eligible = races.filter((r) => r.files.some((f) => f.file_type === "gpx"));
+    if (eligible.length === 0) return;
+    setProcessAll({ running: true, done: 0, total: eligible.length, failed: 0 });
     let done = 0, failed = 0;
     for (const race of eligible) {
       try {
-        const res = await fetch("/api/race-analysis/profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ race_id: race.id }),
-        });
-        const json = await res.json() as { success?: boolean; error?: string };
-        if (!res.ok || !json.success) { failed++; } else { done++; }
+        await handleProcessRace(race.id);
+        done++;
       } catch { failed++; }
-      setBatchReprocessMsg(`Processing… ${done + failed} / ${eligible.length}`);
+      setProcessAll({ running: true, done: done + failed, total: eligible.length, failed });
     }
-    setBatchReprocessing(false);
-    setBatchReprocessMsg(`Done — ${done} reprocessed, ${failed} failed.`);
+    setProcessAll({ running: false, done, total: eligible.length, failed });
   }
 
   async function handleSaveCharacteristics(raceId: string) {
@@ -786,110 +815,6 @@ export default function RaceFilesPage() {
     }
   }
 
-  async function handleBulkSaveCharacteristics() {
-    const complete = races.filter(r => {
-      const f = charForms[r.id];
-      return f && f.terrain !== "" && f.hilliness !== "" && f.crowd_size !== "" && f.climate !== "" && f.distance_band !== "";
-    });
-    setBulkSave({ running: true, done: 0, total: complete.length, failed: 0 });
-
-    let done = 0, failed = 0;
-    for (const race of complete) {
-      const form = charForms[race.id];
-      const { error } = await supabase.from("race_characteristics").upsert(
-        { race_id: race.id, is_uk: form.is_uk, terrain: form.terrain, hilliness: form.hilliness, crowd_size: form.crowd_size, climate: form.climate, distance_band: form.distance_band },
-        { onConflict: "race_id" },
-      );
-      if (error) {
-        failed++;
-      } else {
-        setCharSaveStatus(prev => ({ ...prev, [race.id]: "saved" }));
-        setCharHasRow(prev => new Set([...prev, race.id]));
-      }
-      setBulkSave({ running: true, done: ++done, total: complete.length, failed });
-    }
-    setBulkSave(prev => prev ? { ...prev, running: false } : null);
-  }
-
-  function handleReInfer(race: RaceWithFiles) {
-    setCharForms((prev) => ({
-      ...prev,
-      [race.id]: inferCharForm(race, null, entrantCounts[race.id]?.count ?? null, crowdBins),
-    }));
-    setCharSaveStatus((prev) => ({ ...prev, [race.id]: "idle" }));
-  }
-
-  async function handleBulkInferClimate() {
-    const targets = races.filter(r => (charForms[r.id]?.climate ?? "") === "");
-    setBulkClimate({ running: true, done: 0, total: targets.length, skipped: 0 });
-
-    let done = 0, skipped = 0;
-
-    for (const race of targets) {
-      let lat: number | null = race.race_latitude ? Number(race.race_latitude) : null;
-      let lon: number | null = race.race_longitude ? Number(race.race_longitude) : null;
-      let month = 0, day = 0;
-
-      const gpxFile = race.files.find(f => f.file_type === "gpx");
-      if (gpxFile) {
-        try {
-          const gpxRes = await fetch(gpxFile.public_url);
-          if (gpxRes.ok) {
-            const xml = await gpxRes.text();
-            const doc = new DOMParser().parseFromString(xml, "application/xml");
-            const pt = doc.querySelector("trkpt, rtept, wpt");
-            if (pt) {
-              if (!lat || !lon) {
-                lat = parseFloat(pt.getAttribute("lat") ?? "");
-                lon = parseFloat(pt.getAttribute("lon") ?? "");
-              }
-              const timeEl = pt.querySelector("time") ?? doc.querySelector("metadata > time");
-              if (timeEl?.textContent) {
-                const d = new Date(timeEl.textContent);
-                if (!isNaN(d.getTime())) { month = d.getUTCMonth() + 1; day = d.getUTCDate(); }
-              }
-            }
-          }
-        } catch { /* skip */ }
-      }
-
-      if (!lat || !lon || isNaN(lat) || isNaN(lon) || !month || !day) {
-        skipped++;
-        setBulkClimate({ running: true, done: ++done, total: targets.length, skipped });
-        continue;
-      }
-
-      try {
-        const res = await fetch("/api/race-analysis/weather-history", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat, lon, month, day, years: 10 }),
-        });
-        const json = await res.json() as { data?: { temp_max_c: number | null }[]; error?: string };
-        if (!res.ok || !json.data) throw new Error();
-
-        const temps = json.data.map(r => r.temp_max_c).filter((t): t is number => t !== null);
-        if (temps.length === 0) throw new Error();
-
-        const sorted = [...temps].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-        const climate: 1 | 2 | 3 | 4 = median < 10 ? 1 : median < 18 ? 2 : median < 26 ? 3 : 4;
-
-        setCharForms(prev => ({ ...prev, [race.id]: { ...prev[race.id], climate } }));
-
-        if (charHasRow.has(race.id)) {
-          await supabase.from("race_characteristics").update({ climate }).eq("race_id", race.id);
-        }
-      } catch {
-        skipped++;
-      }
-
-      setBulkClimate({ running: true, done: ++done, total: targets.length, skipped });
-    }
-
-    setBulkClimate(prev => prev ? { ...prev, running: false } : null);
-  }
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -944,41 +869,17 @@ export default function RaceFilesPage() {
             )}
             <button
               type="button"
-              onClick={() => void handleBatchReprocess()}
-              disabled={batchReprocessing}
-              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 500, borderRadius: "7px", border: "1px solid #86efac", background: batchReprocessing ? "#f0fdf4" : "#dcfce7", color: "#15803d", cursor: batchReprocessing ? "default" : "pointer" }}
+              onClick={() => void handleProcessAll()}
+              disabled={processAll?.running ?? false}
+              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 600, borderRadius: "7px", border: "1px solid #86efac", background: processAll?.running ? "#f0fdf4" : "#dcfce7", color: "#15803d", cursor: processAll?.running ? "default" : "pointer" }}
             >
-              {batchReprocessing ? "⏳ Reprocessing…" : "♻ Batch Reprocess All Profiles"}
+              {processAll?.running
+                ? `⏳ Processing… ${processAll.done}/${processAll.total}`
+                : "⚡ Process All Races"}
             </button>
-            {batchReprocessMsg && (
-              <span style={{ fontSize: "12px", color: batchReprocessMsg.startsWith("Done") ? "#166534" : "#374151" }}>
-                {batchReprocessMsg}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => void handleBulkInferClimate()}
-              disabled={bulkClimate?.running ?? false}
-              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 500, borderRadius: "7px", border: "1px solid #bae6fd", background: bulkClimate?.running ? "#f0f9ff" : "#e0f2fe", color: "#0369a1", cursor: bulkClimate?.running ? "default" : "pointer" }}
-            >
-              {bulkClimate?.running ? `⛅ Inferring climate… ${bulkClimate.done}/${bulkClimate.total}` : "⛅ Infer Climate for All Races"}
-            </button>
-            {bulkClimate && !bulkClimate.running && (
-              <span style={{ fontSize: "12px", color: "#166534" }}>
-                ✓ Climate inferred — {bulkClimate.total - bulkClimate.skipped} updated, {bulkClimate.skipped} skipped (no GPX date/coords)
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => void handleBulkSaveCharacteristics()}
-              disabled={bulkSave?.running ?? false}
-              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 500, borderRadius: "7px", border: "1px solid #a5b4fc", background: bulkSave?.running ? "#f5f3ff" : "#ede9fe", color: "#4338ca", cursor: bulkSave?.running ? "default" : "pointer" }}
-            >
-              {bulkSave?.running ? `💾 Saving… ${bulkSave.done}/${bulkSave.total}` : "💾 Save All Complete Matchers"}
-            </button>
-            {bulkSave && !bulkSave.running && (
-              <span style={{ fontSize: "12px", color: bulkSave.failed > 0 ? "#b91c1c" : "#166534" }}>
-                ✓ {bulkSave.total - bulkSave.failed} saved{bulkSave.failed > 0 ? `, ${bulkSave.failed} failed` : ""}
+            {processAll && !processAll.running && (
+              <span style={{ fontSize: "12px", color: processAll.failed > 0 ? "#b91c1c" : "#166534" }}>
+                ✓ {processAll.done} processed{processAll.failed > 0 ? `, ${processAll.failed} failed` : ""}
               </span>
             )}
           </div>
@@ -996,8 +897,8 @@ export default function RaceFilesPage() {
                 ⚠ {missing.length} race{missing.length !== 1 ? "s" : ""} with a GPX file but no terrain analysis yet
               </div>
               <div style={{ fontSize: "12px", color: "#78350f", marginBottom: "6px" }}>
-                Click "Generate Race Profile" on each race, or use "Batch Reprocess All Profiles" above.
-                The OSM terrain analysis runs automatically during profile generation.
+                Click "⚡ Process Race" on each race, or use "⚡ Process All Races" above.
+                OSM terrain analysis, characteristics, and pace strategy are all computed automatically.
               </div>
               <div style={{ fontSize: "12px", color: "#92400e" }}>
                 {missing.map((r) => r.name).join(" · ")}
@@ -1218,14 +1119,51 @@ export default function RaceFilesPage() {
                       </div>
                     </div>
 
-                    {/* Generate Wind Analysis */}
+                    {/* Process Race — primary action */}
                     {filesByType.has("gpx") && (
                       <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e4e4e7" }}>
                         <div style={{ fontSize: "12px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "10px" }}>
-                          Auto-generate
+                          Auto-process
                         </div>
 
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        {/* Primary: Process Race (chains everything) */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "10px" }}>
+                          {(() => {
+                            const pr = processRace[race.id];
+                            const isRunning = pr && !pr.done;
+                            return (
+                              <>
+                                <button
+                                  disabled={!!isRunning}
+                                  onClick={() => void handleProcessRace(race.id)}
+                                  style={{
+                                    display: "inline-flex", alignItems: "center", gap: "6px",
+                                    padding: "8px 16px", borderRadius: "7px",
+                                    border: "1px solid #86efac",
+                                    background: isRunning ? "#f0fdf4" : "#dcfce7",
+                                    color: "#15803d", fontSize: "13px", fontWeight: 700,
+                                    cursor: isRunning ? "not-allowed" : "pointer",
+                                    opacity: isRunning ? 0.8 : 1,
+                                  }}
+                                >
+                                  {isRunning ? `⏳ ${pr.step}` : "⚡ Process Race"}
+                                </button>
+                                {pr?.done && !pr.error && (
+                                  <span style={{ fontSize: "12px", color: "#15803d" }}>✓ Done</span>
+                                )}
+                                {pr?.error && (
+                                  <span style={{ fontSize: "12px", color: "#b91c1c" }}>{pr.error}</span>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <p style={{ fontSize: "12px", color: "#9ca3af", margin: "0 0 10px 0" }}>
+                          Runs wind analysis, OSM terrain, profile, characteristics, and pace strategy in one step.
+                        </p>
+
+                        {/* Secondary: manual wind + profile buttons */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                           <button
                             disabled={!!windGenerating[race.id]}
                             onClick={() => {
@@ -1235,70 +1173,41 @@ export default function RaceFilesPage() {
                               setWindModalRaceId(race.id);
                             }}
                             style={{
-                              display: "inline-flex", alignItems: "center", gap: "6px",
-                              padding: "7px 14px", borderRadius: "7px",
-                              border: "1px solid #a5b4fc",
+                              display: "inline-flex", alignItems: "center", gap: "5px",
+                              padding: "5px 11px", borderRadius: "6px",
+                              border: "1px solid #c7d2fe",
                               background: windGenerating[race.id] ? "#f5f3ff" : "#eef2ff",
-                              color: "#4338ca", fontSize: "13px", fontWeight: 600,
+                              color: "#4338ca", fontSize: "12px", fontWeight: 500,
                               cursor: windGenerating[race.id] ? "not-allowed" : "pointer",
-                              opacity: windGenerating[race.id] ? 0.7 : 1,
                             }}
                           >
-                            {windGenerating[race.id] ? "⏳ Generating…" : "⚡ Generate Wind Analysis"}
+                            {windGenerating[race.id] ? "⏳ Wind…" : "⚡ Wind (manual date)"}
                           </button>
-
-                          {windError[race.id] && (
-                            <span style={{ fontSize: "12px", color: "#b91c1c" }}>
-                              {windError[race.id]}
-                            </span>
-                          )}
-                          {windSuccess[race.id] && (
-                            <span style={{ fontSize: "12px", color: "#15803d" }}>
-                              ✓ {windSuccess[race.id]}
-                            </span>
-                          )}
-                        </div>
-                        <p style={{ fontSize: "12px", color: "#9ca3af", margin: "6px 0 0 0" }}>
-                          Fetches ERA5 historical wind from Open-Meteo and saves a wind_analysis CSV automatically.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Generate Race Profile */}
-                    {filesByType.has("gpx") && (
-                      <div style={{ marginTop: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                           <button
                             disabled={!!profileGenerating[race.id]}
                             onClick={() => handleGenerateProfile(race.id)}
                             style={{
-                              display: "inline-flex", alignItems: "center", gap: "6px",
-                              padding: "7px 14px", borderRadius: "7px",
-                              border: "1px solid #86efac",
-                              background: profileGenerating[race.id] ? "#f0fdf4" : "#dcfce7",
-                              color: "#15803d", fontSize: "13px", fontWeight: 600,
+                              display: "inline-flex", alignItems: "center", gap: "5px",
+                              padding: "5px 11px", borderRadius: "6px",
+                              border: "1px solid #bbf7d0",
+                              background: profileGenerating[race.id] ? "#f0fdf4" : "#f0fdf4",
+                              color: "#166534", fontSize: "12px", fontWeight: 500,
                               cursor: profileGenerating[race.id] ? "not-allowed" : "pointer",
-                              opacity: profileGenerating[race.id] ? 0.7 : 1,
                             }}
                           >
-                            {profileGenerating[race.id] ? "⏳ Generating…" : "📊 Generate Race Profile"}
+                            {profileGenerating[race.id] ? "⏳ Profile…" : "📊 Profile only"}
                           </button>
-
-                          {profileError[race.id] && (
-                            <span style={{ fontSize: "12px", color: "#b91c1c" }}>
-                              {profileError[race.id]}
+                          {(windError[race.id] || windSuccess[race.id]) && (
+                            <span style={{ fontSize: "11px", color: windError[race.id] ? "#b91c1c" : "#15803d" }}>
+                              {windError[race.id] || windSuccess[race.id]}
                             </span>
                           )}
-                          {profileSuccess[race.id] && (
-                            <span style={{ fontSize: "12px", color: "#15803d" }}>
-                              ✓ {profileSuccess[race.id]}
+                          {(profileError[race.id] || profileSuccess[race.id]) && (
+                            <span style={{ fontSize: "11px", color: profileError[race.id] ? "#b91c1c" : "#15803d" }}>
+                              {profileError[race.id] || profileSuccess[race.id]}
                             </span>
                           )}
                         </div>
-                        <p style={{ fontSize: "12px", color: "#9ca3af", margin: "6px 0 0 0" }}>
-                          Runs OSM terrain analysis then computes flat-equivalent difficulty score (+ wind if available).
-                          Required before using the Race Comparison tool.
-                        </p>
                       </div>
                     )}
 
@@ -1325,13 +1234,9 @@ export default function RaceFilesPage() {
                             }}>
                               {charHasRow.has(race.id) ? "✓ In Matcher" : "Not in Matcher"}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleReInfer(race)}
-                              style={{ marginLeft: "auto", padding: "3px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#f9fafb", fontSize: "12px", color: "#374151", cursor: "pointer" }}
-                            >
-                              ↺ Re-infer from race data
-                            </button>
+                            <span style={{ marginLeft: "auto", fontSize: "11px", color: "#9ca3af" }}>
+                              Auto-populated by ⚡ Process Race
+                            </span>
                           </div>
 
                           <div style={{ display: "grid", gap: "12px" }}>

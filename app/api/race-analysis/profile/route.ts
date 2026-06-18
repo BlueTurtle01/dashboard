@@ -21,6 +21,7 @@ import {
   buildTerrainLookup,
   type TerrainSegment,
 } from "@/lib/race-analysis/terrain-from-osm";
+import { inferAndSaveCharacteristics } from "@/lib/race-analysis/infer-characteristics";
 
 export const maxDuration = 60;
 
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
     // ── Get race info ─────────────────────────────────────────────────────────
     const { data: race, error: raceErr } = await supabase
       .from("races")
-      .select("id, name, terrain_type")
+      .select("id, name, terrain_type, race_latitude, race_longitude, race_end_date")
       .eq("id", race_id)
       .maybeSingle();
 
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest) {
       );
     }
     const gpxText = await gpxRes.text();
+    const raceDate = race.race_end_date ? new Date(race.race_end_date) : null;
 
     let windCsvText: string | null = null;
     if (windFile) {
@@ -182,6 +184,26 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // ── Infer and save race characteristics ───────────────────────────────────
+    const startCoords = gpxPoints.length > 0
+      ? { lat: gpxPoints[0].lat, lon: gpxPoints[0].lon }
+      : (race.race_latitude != null ? { lat: race.race_latitude as number, lon: race.race_longitude as number } : null);
+
+    const { data: entrantRows } = await adminClient.rpc("get_latest_year_entrant_counts");
+    type EntrantRow = { race_id: string; entrant_count: number; latest_year: number };
+    const entrantCount = (entrantRows as EntrantRow[] | null)
+      ?.find((r) => r.race_id === race_id)?.entrant_count ?? null;
+
+    await inferAndSaveCharacteristics(
+      adminClient,
+      race_id,
+      startCoords,
+      { totalDistanceKm: profile.total_distance_km, totalAscentM: profile.total_ascent_m },
+      raceDate,
+      terrainSegments,
+      entrantCount,
+    );
 
     // ── Respond ───────────────────────────────────────────────────────────────
     return NextResponse.json({

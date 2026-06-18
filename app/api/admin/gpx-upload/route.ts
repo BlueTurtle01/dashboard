@@ -25,6 +25,7 @@ import {
   buildTerrainLookup,
   type TerrainSegment,
 } from "@/lib/race-analysis/terrain-from-osm";
+import { inferAndSaveCharacteristics } from "@/lib/race-analysis/infer-characteristics";
 import type { GpxPoint } from "@/lib/race-analysis/types";
 
 export const maxDuration = 60;
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
     // ── Verify race exists ────────────────────────────────────────────────────
     const { data: race } = await supabase
       .from("races")
-      .select("id, name, terrain_type, race_latitude, race_longitude")
+      .select("id, name, terrain_type, race_latitude, race_longitude, race_end_date")
       .eq("id", race_id)
       .maybeSingle();
     if (!race) return NextResponse.json({ error: "Race not found" }, { status: 404 });
@@ -142,8 +143,9 @@ export async function POST(req: NextRequest) {
     if (fileErr || !fileRow) return NextResponse.json({ error: fileErr?.message ?? "Failed to save file record" }, { status: 500 });
 
     // ── Parse GPX ─────────────────────────────────────────────────────────────
+    const gpxText = await file.text();
     let gpxPoints: GpxPoint[];
-    try { gpxPoints = parseGpxPoints(await file.text()); }
+    try { gpxPoints = parseGpxPoints(gpxText); }
     catch (e) { return NextResponse.json({ error: `GPX parse error: ${e instanceof Error ? e.message : e}` }, { status: 422 }); }
 
     // ── Backfill race coordinates from GPX start point (if not already set) ──
@@ -214,6 +216,29 @@ export async function POST(req: NextRequest) {
         { race_id, meta_key: "sustained_segments", meta_value: JSON.stringify(sustainedSegments) },
       ],
       { onConflict: "race_id,meta_key" }
+    );
+
+    // ── Infer and save race characteristics ───────────────────────────────────
+    const startCoords = gpxPoints.length > 0
+      ? { lat: gpxPoints[0].lat, lon: gpxPoints[0].lon }
+      : (race.race_latitude != null ? { lat: race.race_latitude, lon: race.race_longitude! } : null);
+
+    const raceDate = race.race_end_date ? new Date(race.race_end_date) : null;
+
+    // Fetch latest entrant count for crowd_size inference
+    const { data: entrantRows } = await adminClient.rpc("get_latest_year_entrant_counts");
+    type EntrantRow = { race_id: string; entrant_count: number; latest_year: number };
+    const entrantCount = (entrantRows as EntrantRow[] | null)
+      ?.find((r) => r.race_id === race_id)?.entrant_count ?? null;
+
+    await inferAndSaveCharacteristics(
+      adminClient,
+      race_id,
+      startCoords,
+      { totalDistanceKm: profile.total_distance_km, totalAscentM: profile.total_ascent_m },
+      raceDate,
+      terrainSegments,
+      entrantCount,
     );
 
     return NextResponse.json({
