@@ -84,6 +84,15 @@ const BUCKET = "race-files";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function computePercentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = (p / 100) * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
 function formatBytes(bytes: number | null): string {
   if (!bytes) return "";
   if (bytes < 1024) return `${bytes} B`;
@@ -105,7 +114,12 @@ function fileTypeColor(type: FileType): { bg: string; text: string } {
 
 // ─── Race Matcher helpers ─────────────────────────────────────────────────────
 
-function inferCharForm(race: Omit<Race, "has_terrain_segments" | "files">, ascentM: number | null): CharFormState {
+function inferCharForm(
+  race: Omit<Race, "has_terrain_segments" | "files">,
+  ascentM: number | null,
+  entrantCount: number | null,
+  crowdBins: { p33: number; p67: number } | null,
+): CharFormState {
   const country = (race.country ?? "").toLowerCase().trim();
   const is_uk = ["uk", "united kingdom", "england", "scotland", "wales", "northern ireland"].includes(country);
 
@@ -136,7 +150,14 @@ function inferCharForm(race: Omit<Race, "has_terrain_segments" | "files">, ascen
 
   const climate: CharFormState["climate"] = race.is_desert_race ? 4 : "";
 
-  return { is_uk, terrain, distance_band, hilliness, climate, crowd_size: "" };
+  let crowd_size: CharFormState["crowd_size"] = "";
+  if (entrantCount !== null && crowdBins !== null) {
+    if (entrantCount <= crowdBins.p33) crowd_size = 1;
+    else if (entrantCount <= crowdBins.p67) crowd_size = 2;
+    else crowd_size = 3;
+  }
+
+  return { is_uk, terrain, distance_band, hilliness, climate, crowd_size };
 }
 
 function CharPicker<T extends string | number>({
@@ -222,6 +243,8 @@ export default function RaceFilesPage() {
   const [charSaving, setCharSaving] = useState<Record<string, boolean>>({});
   const [charSaveStatus, setCharSaveStatus] = useState<Record<string, "idle" | "saved" | "error">>({});
   const [charHasRow, setCharHasRow] = useState<Set<string>>(new Set());
+  const [entrantCounts, setEntrantCounts] = useState<Record<string, { year: number; count: number }>>({});
+  const [crowdBins, setCrowdBins] = useState<{ p33: number; p67: number } | null>(null);
 
   // Hidden file inputs per (race × fileType)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -238,6 +261,7 @@ export default function RaceFilesPage() {
         { data: terrainMeta },
         { data: charsData },
         { data: profilesData },
+        { data: entrantData },
       ] = await Promise.all([
         supabase
           .from("races")
@@ -247,6 +271,7 @@ export default function RaceFilesPage() {
         supabase.from("races_meta").select("race_id").eq("meta_key", "terrain_segments"),
         supabase.from("race_characteristics").select("race_id, is_uk, terrain, hilliness, crowd_size, climate, distance_band"),
         supabase.from("race_profiles").select("race_id, total_ascent_m"),
+        supabase.rpc("get_latest_year_entrant_counts"),
       ]);
 
       if (racesErr || !racesData) throw new Error(racesErr?.message ?? "Failed to load races");
@@ -263,6 +288,18 @@ export default function RaceFilesPage() {
       type CharRow = { race_id: string; is_uk: boolean; terrain: string; hilliness: number; crowd_size: number; climate: number; distance_band: number };
       const charsByRaceId = new Map<string, CharRow>((charsData ?? []).map((c: CharRow) => [c.race_id, c]));
       const ascentByRaceId = new Map<string, number>((profilesData ?? []).map((p: { race_id: string; total_ascent_m: number }) => [p.race_id, p.total_ascent_m]));
+
+      type EntrantRow = { race_id: string; latest_year: number; entrant_count: number };
+      const typedEntrants = (entrantData ?? []) as EntrantRow[];
+      const entrantByRaceId = new Map<string, { year: number; count: number }>(
+        typedEntrants.map(e => [e.race_id, { year: e.latest_year, count: Number(e.entrant_count) }]),
+      );
+      const sortedCounts = typedEntrants.map(e => Number(e.entrant_count)).sort((a, b) => a - b);
+      const bins = sortedCounts.length > 0
+        ? { p33: computePercentile(sortedCounts, 33), p67: computePercentile(sortedCounts, 67) }
+        : null;
+      setEntrantCounts(Object.fromEntries(entrantByRaceId));
+      setCrowdBins(bins);
 
       type RaceRow = Omit<Race, "has_terrain_segments" | "files">;
       const typedRaces = racesData as RaceRow[];
@@ -282,7 +319,12 @@ export default function RaceFilesPage() {
             distance_band: existing.distance_band as CharFormState["distance_band"],
           };
         } else {
-          newForms[r.id] = inferCharForm(r, ascentByRaceId.get(r.id) ?? null);
+          newForms[r.id] = inferCharForm(
+            r,
+            ascentByRaceId.get(r.id) ?? null,
+            entrantByRaceId.get(r.id)?.count ?? null,
+            bins,
+          );
         }
       }
       setCharForms(newForms);
@@ -1210,6 +1252,14 @@ export default function RaceFilesPage() {
                                 value={form.crowd_size}
                                 onChange={(v) => setField("crowd_size", v as CharFormState["crowd_size"])}
                               />
+                              {entrantCounts[race.id] && (
+                                <div style={{ marginTop: "5px", fontSize: "11px", color: "#6b7280" }}>
+                                  {entrantCounts[race.id].count.toLocaleString()} entrants in {entrantCounts[race.id].year}
+                                  {!charHasRow.has(race.id) && form.crowd_size !== "" && (
+                                    <span style={{ marginLeft: "6px", color: "#9ca3af" }}>· auto-inferred</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
 
                             {/* Climate */}
