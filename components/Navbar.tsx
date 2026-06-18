@@ -437,7 +437,6 @@ export default async function Navbar() {
                   label="Tools"
                   items={[
                     { href: "/admin/tools", label: "Tools Hub" },
-                    { href: "/admin/race-readiness-latex", label: "Race Readiness (LaTeX)" },
                     { href: "/admin/race-intelligence", label: "Race Intelligence" },
                   ]}
                 />
