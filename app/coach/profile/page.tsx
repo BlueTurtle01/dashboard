@@ -61,25 +61,12 @@ type CoachProfile = {
   tags?: string[];
 };
 
-type EventRow = {
-  id: string;
-  name: string;
-  event_type: string | null;
-  location: string | null;
-  event_date: string | null;
-};
-
 type RaceRow = {
   id: string;
   name: string;
   distance_km: number | null;
   terrain_type: string | null;
   climate_type: string | null;
-};
-
-type CoachCompletedEventRow = {
-  event_id: string;
-  events: EventRow | EventRow[] | null;
 };
 
 type CoachCompletedRaceRow = {
@@ -105,10 +92,6 @@ export default function CoachProfilePage() {
   const [maxClients, setMaxClients] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [allEvents, setAllEvents] = useState<EventRow[]>([]);
-  const [selectedEvents, setSelectedEvents] = useState<EventRow[]>([]);
-
   const [raceSearchTerm, setRaceSearchTerm] = useState("");
   const [allRaces, setAllRaces] = useState<RaceRow[]>([]);
   const [selectedRaces, setSelectedRaces] = useState<RaceRow[]>([]);
@@ -131,21 +114,12 @@ export default function CoachProfilePage() {
 
       setUserId(user.id);
 
-      const [profileResult, eventsResult, selectedEventsResult, racesResult, selectedRacesResult] = await Promise.all([
+      const [profileResult, racesResult, selectedRacesResult] = await Promise.all([
         supabase
           .from("coach_profiles")
           .select("*")
           .eq("user_id", user.id)
           .maybeSingle(),
-        supabase
-          .from("events")
-          .select("id, name, event_type, location, event_date")
-          .eq("is_active", true)
-          .order("name"),
-        supabase
-          .from("coach_completed_events")
-          .select("event_id, events(id, name, event_type, location, event_date)")
-          .eq("coach_user_id", user.id),
         supabase
           .from("races")
           .select("id, name, distance_km, terrain_type, climate_type")
@@ -159,18 +133,6 @@ export default function CoachProfilePage() {
 
       if (profileResult.error) {
         setErrorMessage("Could not load profile.");
-        setLoading(false);
-        return;
-      }
-
-      if (eventsResult.error) {
-        setErrorMessage("Could not load events.");
-        setLoading(false);
-        return;
-      }
-
-      if (selectedEventsResult.error) {
-        setErrorMessage("Could not load completed events.");
         setLoading(false);
         return;
       }
@@ -197,18 +159,6 @@ export default function CoachProfilePage() {
         setSelectedTags(profile.tags || []);
       }
 
-      setAllEvents((eventsResult.data || []) as EventRow[]);
-
-      const mappedSelectedEvents: EventRow[] = ((selectedEventsResult.data ||
-        []) as CoachCompletedEventRow[])
-        .map((row) => {
-          const relatedEvent = Array.isArray(row.events) ? row.events[0] : row.events;
-          return relatedEvent || null;
-        })
-        .filter((event): event is EventRow => Boolean(event));
-
-      setSelectedEvents(mappedSelectedEvents);
-
       setAllRaces((racesResult.data || []) as RaceRow[]);
 
       const mappedSelectedRaces: RaceRow[] = ((selectedRacesResult.data ||
@@ -225,29 +175,6 @@ export default function CoachProfilePage() {
 
     loadProfile();
   }, [router, supabase]);
-
-  const filteredEvents = useMemo(() => {
-    const selectedIds = new Set(selectedEvents.map((event) => event.id));
-    const query = searchTerm.trim().toLowerCase();
-
-    return allEvents
-      .filter((event) => !selectedIds.has(event.id))
-      .filter((event) => {
-        if (!query) return true;
-
-        const haystack = [
-          event.name,
-          event.event_type || "",
-          event.location || "",
-          event.event_date || "",
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return haystack.includes(query);
-      })
-      .slice(0, 12);
-  }, [allEvents, searchTerm, selectedEvents]);
 
   const filteredRaces = useMemo(() => {
     const selectedIds = new Set(selectedRaces.map((race) => race.id));
@@ -283,20 +210,6 @@ export default function CoachProfilePage() {
     });
     return grouped;
   }, []);
-
-  function addEvent(event: EventRow) {
-    setSelectedEvents((current) => {
-      if (current.some((item) => item.id === event.id)) {
-        return current;
-      }
-      return [...current, event];
-    });
-    setSearchTerm("");
-  }
-
-  function removeEvent(eventId: string) {
-    setSelectedEvents((current) => current.filter((event) => event.id !== eventId));
-  }
 
   function addRace(race: RaceRow) {
     setSelectedRaces((current) => {
@@ -344,34 +257,6 @@ export default function CoachProfilePage() {
       setErrorMessage(`Could not save profile: ${profileResult.error.message}`);
       setSaving(false);
       return;
-    }
-
-    const deleteResult = await supabase
-      .from("coach_completed_events")
-      .delete()
-      .eq("coach_user_id", userId);
-
-    if (deleteResult.error) {
-      setErrorMessage(`Could not update completed events: ${deleteResult.error.message}`);
-      setSaving(false);
-      return;
-    }
-
-    if (selectedEvents.length > 0) {
-      const insertPayload = selectedEvents.map((selectedEvent) => ({
-        coach_user_id: userId,
-        event_id: selectedEvent.id,
-      }));
-
-      const insertResult = await supabase
-        .from("coach_completed_events")
-        .insert(insertPayload);
-
-      if (insertResult.error) {
-        setErrorMessage(`Could not save completed events: ${insertResult.error.message}`);
-        setSaving(false);
-        return;
-      }
     }
 
     const deleteRacesResult = await supabase
@@ -489,45 +374,6 @@ export default function CoachProfilePage() {
                 style={textareaStyle}
               />
 
-              <label htmlFor="event-search" style={labelStyle}>
-                Major events completed
-              </label>
-              <input
-                id="event-search"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search events by name, type, location..."
-                style={inputStyle}
-              />
-
-              {filteredEvents.length > 0 ? (
-                <div style={searchResultsStyle}>
-                  {filteredEvents.map((eventItem) => (
-                    <button
-                      key={eventItem.id}
-                      type="button"
-                      onClick={() => addEvent(eventItem)}
-                      style={searchResultItemStyle}
-                    >
-                      <div style={{ fontWeight: 600 }}>{eventItem.name}</div>
-                      <div style={metaTextStyle}>
-                        {[
-                          eventItem.event_type,
-                          eventItem.location,
-                          formatEventDate(eventItem.event_date),
-                        ]
-                          .filter(Boolean)
-                          .join(" • ")}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p style={helperTextStyle}>
-                  {searchTerm.trim() ? "No matching events found." : "Start typing to search events."}
-                </p>
-              )}
-
               <label htmlFor="race-search" style={labelStyle}>
                 Races you've completed
               </label>
@@ -602,40 +448,6 @@ export default function CoachProfilePage() {
                 )}
               </div>
 
-              <div style={selectedSectionStyle}>
-                <div style={{ fontWeight: 600, marginBottom: "10px" }}>Selected events</div>
-
-                {selectedEvents.length === 0 ? (
-                  <p style={helperTextStyle}>No events selected yet.</p>
-                ) : (
-                  <div style={chipContainerStyle}>
-                    {selectedEvents.map((eventItem) => (
-                      <div key={eventItem.id} style={chipStyle}>
-                        <div>
-                          <div style={{ fontWeight: 600 }}>{eventItem.name}</div>
-                          <div style={chipMetaStyle}>
-                            {[
-                              eventItem.event_type,
-                              eventItem.location,
-                              formatEventDate(eventItem.event_date),
-                            ]
-                              .filter(Boolean)
-                              .join(" • ")}
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => removeEvent(eventItem.id)}
-                          style={removeButtonStyle}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </>
           )}
 
@@ -723,19 +535,6 @@ export default function CoachProfilePage() {
       </div>
     </main>
   );
-}
-
-function formatEventDate(value: string | null) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 const containerStyle: React.CSSProperties = {

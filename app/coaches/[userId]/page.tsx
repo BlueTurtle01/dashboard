@@ -16,31 +16,25 @@ type AthleteProfile = {
   tags?: string[];
 };
 
-type EventRow = {
+type RaceRow = {
   id: string;
   name: string;
-  event_type: string | null;
-  location: string | null;
-  event_date: string | null;
   terrain_type: string | null;
   climate_type: string | null;
   distance_km: number | null;
-  elevation_gain_m: number | null;
-  race_conditions: Record<string, any> | null;
+  location: string | null;
 };
 
 type CoachExperience = {
   terrains: string[];
   climates: string[];
   maxDistance: number | null;
-  maxElevation: number | null;
-  eventTypes: string[];
   raceCount: number;
 };
 
-type CoachCompletedEventRow = {
-  event_id: string;
-  events: EventRow | EventRow[] | null;
+type CoachCompletedRaceRow = {
+  race_id: string;
+  races: RaceRow | RaceRow[] | null;
 };
 
 export default async function CoachProfilePage({
@@ -133,25 +127,23 @@ export default async function CoachProfilePage({
     }
   }
 
-  const { data: eventsData } = await supabase
-    .from("coach_completed_events")
-    .select(
-      "event_id, events(id, name, event_type, location, event_date, terrain_type, climate_type, distance_km, elevation_gain_m, race_conditions)"
-    )
+  const { data: racesData } = await supabase
+    .from("coach_completed_races")
+    .select("race_id, races(id, name, terrain_type, climate_type, distance_km, location)")
     .eq("coach_user_id", userId);
 
-  let completedEvents: EventRow[] = [];
+  let completedRaces: RaceRow[] = [];
   let experience: CoachExperience | null = null;
 
-  if (eventsData) {
-    completedEvents = (eventsData as CoachCompletedEventRow[])
+  if (racesData) {
+    completedRaces = (racesData as CoachCompletedRaceRow[])
       .map((row) => {
-        const relatedEvent = Array.isArray(row.events) ? row.events[0] : row.events;
-        return relatedEvent || null;
+        const relatedRace = Array.isArray(row.races) ? row.races[0] : row.races;
+        return relatedRace || null;
       })
-      .filter((event): event is EventRow => Boolean(event));
+      .filter((race): race is RaceRow => Boolean(race));
 
-    experience = inferExperience(completedEvents);
+    experience = inferExperience(completedRaces);
   }
 
   return (
@@ -263,30 +255,10 @@ export default async function CoachProfilePage({
                   </div>
                 )}
 
-                {experience.eventTypes.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide mb-2">Event Types</p>
-                    <div className="flex flex-wrap gap-2">
-                      {experience.eventTypes.map((type) => (
-                        <span key={type} className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-900">
-                          {type}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {experience.maxDistance !== null && (
                   <div>
                     <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide mb-2">Max Distance</p>
                     <p className="text-sm text-zinc-900 font-semibold">{experience.maxDistance.toFixed(0)} km</p>
-                  </div>
-                )}
-
-                {experience.maxElevation !== null && (
-                  <div>
-                    <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wide mb-2">Max Elevation Gain</p>
-                    <p className="text-sm text-zinc-900 font-semibold">{experience.maxElevation.toLocaleString()} m</p>
                   </div>
                 )}
 
@@ -300,20 +272,20 @@ export default async function CoachProfilePage({
 
           <div>
             <h3 className="mb-4 text-sm font-semibold text-zinc-700 uppercase tracking-wide">
-              Major Events Completed
+              Races Completed
             </h3>
-            {completedEvents.length === 0 ? (
-              <p className="text-sm text-zinc-500">No major events listed.</p>
+            {completedRaces.length === 0 ? (
+              <p className="text-sm text-zinc-500">No races listed.</p>
             ) : (
               <div className="space-y-3">
-                {completedEvents.map((event) => (
+                {completedRaces.map((race) => (
                   <div
-                    key={event.id}
+                    key={race.id}
                     className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 hover:bg-zinc-100 transition-colors"
                   >
-                    <div className="font-semibold text-zinc-900">{event.name}</div>
+                    <div className="font-semibold text-zinc-900">{race.name}</div>
                     <div className="mt-1 text-sm text-zinc-600">
-                      {[event.event_type, event.location, event.event_date ? formatEventDate(event.event_date) : null]
+                      {[race.distance_km ? `${race.distance_km}km` : null, race.terrain_type, race.location]
                         .filter(Boolean)
                         .join(" • ")}
                     </div>
@@ -328,38 +300,25 @@ export default async function CoachProfilePage({
   );
 }
 
-function inferExperience(events: EventRow[]): CoachExperience {
+function inferExperience(races: RaceRow[]): CoachExperience {
   const terrains = new Set<string>();
   const climates = new Set<string>();
-  const eventTypes = new Set<string>();
   let maxDistance = 0;
-  let maxElevation = 0;
 
-  events.forEach((event) => {
-    if (event.terrain_type) terrains.add(formatLabel(event.terrain_type));
-    if (event.climate_type) climates.add(formatLabel(event.climate_type));
-    if (event.event_type) eventTypes.add(event.event_type);
-    if (event.distance_km && event.distance_km > maxDistance) maxDistance = event.distance_km;
-    if (event.elevation_gain_m && event.elevation_gain_m > maxElevation) maxElevation = event.elevation_gain_m;
+  races.forEach((race) => {
+    if (race.terrain_type) terrains.add(formatLabel(race.terrain_type));
+    if (race.climate_type) climates.add(formatLabel(race.climate_type));
+    if (race.distance_km && race.distance_km > maxDistance) maxDistance = race.distance_km;
   });
 
   return {
     terrains: Array.from(terrains),
     climates: Array.from(climates),
-    eventTypes: Array.from(eventTypes),
     maxDistance: maxDistance > 0 ? maxDistance : null,
-    maxElevation: maxElevation > 0 ? maxElevation : null,
-    raceCount: events.length,
+    raceCount: races.length,
   };
 }
 
 function formatLabel(text: string): string {
   return text.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-}
-
-function formatEventDate(value: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }

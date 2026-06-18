@@ -765,7 +765,7 @@ function TemplatesPageContent() {
 
       if (selectedEventId) {
         const { data: eventData, error: eventError } = await supabase
-          .from("events")
+          .from("races")
           .select("id, name, climate_type, terrain_type, race_conditions")
           .eq("id", selectedEventId)
           .maybeSingle();

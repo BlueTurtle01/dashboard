@@ -247,6 +247,7 @@ export default function RaceFilesPage() {
   const [charSaveStatus, setCharSaveStatus] = useState<Record<string, "idle" | "saved" | "error">>({});
   const [charHasRow, setCharHasRow] = useState<Set<string>>(new Set());
   const [bulkClimate, setBulkClimate] = useState<{ running: boolean; done: number; total: number; skipped: number } | null>(null);
+  const [bulkSave, setBulkSave] = useState<{ running: boolean; done: number; total: number; failed: number } | null>(null);
   const [entrantCounts, setEntrantCounts] = useState<Record<string, { year: number; count: number }>>({});
   const [crowdBins, setCrowdBins] = useState<{ p33: number; p67: number } | null>(null);
 
@@ -785,6 +786,31 @@ export default function RaceFilesPage() {
     }
   }
 
+  async function handleBulkSaveCharacteristics() {
+    const complete = races.filter(r => {
+      const f = charForms[r.id];
+      return f && f.terrain !== "" && f.hilliness !== "" && f.crowd_size !== "" && f.climate !== "" && f.distance_band !== "";
+    });
+    setBulkSave({ running: true, done: 0, total: complete.length, failed: 0 });
+
+    let done = 0, failed = 0;
+    for (const race of complete) {
+      const form = charForms[race.id];
+      const { error } = await supabase.from("race_characteristics").upsert(
+        { race_id: race.id, is_uk: form.is_uk, terrain: form.terrain, hilliness: form.hilliness, crowd_size: form.crowd_size, climate: form.climate, distance_band: form.distance_band },
+        { onConflict: "race_id" },
+      );
+      if (error) {
+        failed++;
+      } else {
+        setCharSaveStatus(prev => ({ ...prev, [race.id]: "saved" }));
+        setCharHasRow(prev => new Set([...prev, race.id]));
+      }
+      setBulkSave({ running: true, done: ++done, total: complete.length, failed });
+    }
+    setBulkSave(prev => prev ? { ...prev, running: false } : null);
+  }
+
   function handleReInfer(race: RaceWithFiles) {
     setCharForms((prev) => ({
       ...prev,
@@ -940,6 +966,19 @@ export default function RaceFilesPage() {
             {bulkClimate && !bulkClimate.running && (
               <span style={{ fontSize: "12px", color: "#166534" }}>
                 ✓ Climate inferred — {bulkClimate.total - bulkClimate.skipped} updated, {bulkClimate.skipped} skipped (no GPX date/coords)
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleBulkSaveCharacteristics()}
+              disabled={bulkSave?.running ?? false}
+              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 500, borderRadius: "7px", border: "1px solid #a5b4fc", background: bulkSave?.running ? "#f5f3ff" : "#ede9fe", color: "#4338ca", cursor: bulkSave?.running ? "default" : "pointer" }}
+            >
+              {bulkSave?.running ? `💾 Saving… ${bulkSave.done}/${bulkSave.total}` : "💾 Save All Complete Matchers"}
+            </button>
+            {bulkSave && !bulkSave.running && (
+              <span style={{ fontSize: "12px", color: bulkSave.failed > 0 ? "#b91c1c" : "#166534" }}>
+                ✓ {bulkSave.total - bulkSave.failed} saved{bulkSave.failed > 0 ? `, ${bulkSave.failed} failed` : ""}
               </span>
             )}
           </div>

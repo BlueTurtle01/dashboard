@@ -1316,7 +1316,7 @@ export default function ViewProgramTemplatePage() {
 
         if (typedAthlete?.selected_event_id) {
           const { data: eventData, error: eventError } = await supabase
-            .from("events")
+            .from("races")
             .select("id, name, climate_type, terrain_type, race_conditions")
             .eq("id", typedAthlete.selected_event_id)
             .maybeSingle();
@@ -1596,13 +1596,13 @@ export default function ViewProgramTemplatePage() {
         throw new Error(`athlete_profiles query failed: ${athleteError.message}`);
       }
 
-      // Fetch race conditions and event date from the selected event
+      // Fetch race conditions and event date from the selected race
       let raceConditions = null;
       let eventData = null;
       if (athleteProfileRow?.selected_event_id) {
         const eventResult = await supabase
-          .from("events")
-          .select("race_conditions, event_date")
+          .from("races")
+          .select("race_conditions, race_end_date")
           .eq("id", athleteProfileRow.selected_event_id)
           .maybeSingle();
         eventData = eventResult.data;
@@ -1628,8 +1628,8 @@ export default function ViewProgramTemplatePage() {
 
       // Extract goal race date from events row
       let goalRaceDate: Date | null = null;
-      if (eventData?.event_date) {
-        const parsed = new Date(eventData.event_date);
+      if (eventData?.race_end_date) {
+        const parsed = new Date(eventData.race_end_date);
         if (!isNaN(parsed.getTime())) {
           goalRaceDate = parsed;
         }
