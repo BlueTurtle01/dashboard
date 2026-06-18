@@ -169,12 +169,6 @@ const GROUPS: ToolGroup[] = [
         badge: "Active",
       },
       {
-        href: "/admin/events",
-        title: "Events",
-        description: "Manage training events and race calendar entries.",
-        badge: "Active",
-      },
-      {
         href: "/admin/countries",
         title: "Countries",
         description: "Edit country reference data used across the platform.",

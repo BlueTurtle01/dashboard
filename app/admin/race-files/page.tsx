@@ -34,6 +34,9 @@ interface Race {
   distance_km: number | null;
   is_desert_race: boolean;
   has_terrain_segments: boolean;
+  race_latitude: number | null;
+  race_longitude: number | null;
+  race_end_date: string | null;
 }
 
 interface RaceWithFiles extends Race {
@@ -243,6 +246,7 @@ export default function RaceFilesPage() {
   const [charSaving, setCharSaving] = useState<Record<string, boolean>>({});
   const [charSaveStatus, setCharSaveStatus] = useState<Record<string, "idle" | "saved" | "error">>({});
   const [charHasRow, setCharHasRow] = useState<Set<string>>(new Set());
+  const [bulkClimate, setBulkClimate] = useState<{ running: boolean; done: number; total: number; skipped: number } | null>(null);
   const [entrantCounts, setEntrantCounts] = useState<Record<string, { year: number; count: number }>>({});
   const [crowdBins, setCrowdBins] = useState<{ p33: number; p67: number } | null>(null);
 
@@ -265,7 +269,7 @@ export default function RaceFilesPage() {
       ] = await Promise.all([
         supabase
           .from("races")
-          .select("id, name, slug, location, country, terrain_type, distance_km, is_desert_race")
+          .select("id, name, slug, location, country, terrain_type, distance_km, is_desert_race, race_latitude, race_longitude, race_end_date")
           .order("name", { ascending: true }),
         supabase.from("race_files").select("*").order("created_at", { ascending: true }),
         supabase.from("races_meta").select("race_id").eq("meta_key", "terrain_segments"),
@@ -789,6 +793,78 @@ export default function RaceFilesPage() {
     setCharSaveStatus((prev) => ({ ...prev, [race.id]: "idle" }));
   }
 
+  async function handleBulkInferClimate() {
+    const targets = races.filter(r => (charForms[r.id]?.climate ?? "") === "");
+    setBulkClimate({ running: true, done: 0, total: targets.length, skipped: 0 });
+
+    let done = 0, skipped = 0;
+
+    for (const race of targets) {
+      let lat: number | null = race.race_latitude ? Number(race.race_latitude) : null;
+      let lon: number | null = race.race_longitude ? Number(race.race_longitude) : null;
+      let month = 0, day = 0;
+
+      const gpxFile = race.files.find(f => f.file_type === "gpx");
+      if (gpxFile) {
+        try {
+          const gpxRes = await fetch(gpxFile.public_url);
+          if (gpxRes.ok) {
+            const xml = await gpxRes.text();
+            const doc = new DOMParser().parseFromString(xml, "application/xml");
+            const pt = doc.querySelector("trkpt, rtept, wpt");
+            if (pt) {
+              if (!lat || !lon) {
+                lat = parseFloat(pt.getAttribute("lat") ?? "");
+                lon = parseFloat(pt.getAttribute("lon") ?? "");
+              }
+              const timeEl = pt.querySelector("time") ?? doc.querySelector("metadata > time");
+              if (timeEl?.textContent) {
+                const d = new Date(timeEl.textContent);
+                if (!isNaN(d.getTime())) { month = d.getUTCMonth() + 1; day = d.getUTCDate(); }
+              }
+            }
+          }
+        } catch { /* skip */ }
+      }
+
+      if (!lat || !lon || isNaN(lat) || isNaN(lon) || !month || !day) {
+        skipped++;
+        setBulkClimate({ running: true, done: ++done, total: targets.length, skipped });
+        continue;
+      }
+
+      try {
+        const res = await fetch("/api/race-analysis/weather-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat, lon, month, day, years: 10 }),
+        });
+        const json = await res.json() as { data?: { temp_max_c: number | null }[]; error?: string };
+        if (!res.ok || !json.data) throw new Error();
+
+        const temps = json.data.map(r => r.temp_max_c).filter((t): t is number => t !== null);
+        if (temps.length === 0) throw new Error();
+
+        const sorted = [...temps].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+        const climate: 1 | 2 | 3 | 4 = median < 10 ? 1 : median < 18 ? 2 : median < 26 ? 3 : 4;
+
+        setCharForms(prev => ({ ...prev, [race.id]: { ...prev[race.id], climate } }));
+
+        if (charHasRow.has(race.id)) {
+          await supabase.from("race_characteristics").update({ climate }).eq("race_id", race.id);
+        }
+      } catch {
+        skipped++;
+      }
+
+      setBulkClimate({ running: true, done: ++done, total: targets.length, skipped });
+    }
+
+    setBulkClimate(prev => prev ? { ...prev, running: false } : null);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -851,6 +927,19 @@ export default function RaceFilesPage() {
             {batchReprocessMsg && (
               <span style={{ fontSize: "12px", color: batchReprocessMsg.startsWith("Done") ? "#166534" : "#374151" }}>
                 {batchReprocessMsg}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleBulkInferClimate()}
+              disabled={bulkClimate?.running ?? false}
+              style={{ padding: "7px 14px", fontSize: "13px", fontWeight: 500, borderRadius: "7px", border: "1px solid #bae6fd", background: bulkClimate?.running ? "#f0f9ff" : "#e0f2fe", color: "#0369a1", cursor: bulkClimate?.running ? "default" : "pointer" }}
+            >
+              {bulkClimate?.running ? `⛅ Inferring climate… ${bulkClimate.done}/${bulkClimate.total}` : "⛅ Infer Climate for All Races"}
+            </button>
+            {bulkClimate && !bulkClimate.running && (
+              <span style={{ fontSize: "12px", color: "#166534" }}>
+                ✓ Climate inferred — {bulkClimate.total - bulkClimate.skipped} updated, {bulkClimate.skipped} skipped (no GPX date/coords)
               </span>
             )}
           </div>

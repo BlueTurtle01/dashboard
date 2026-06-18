@@ -415,7 +415,6 @@ export default async function Navbar() {
                   label="Destinations"
                   items={[
                     { href: "/admin/countries", label: "Countries" },
-                    { href: "/admin/events", label: "Events" },
                   ]}
                 />
               )}
