@@ -31,6 +31,8 @@ type FilterKey =
   | "gpx" | "profile" | "strategy" | "date" | "results"
   | "terrain" | "hilliness" | "crowd_size" | "climate" | "distance_band" | "is_uk";
 
+type FilterVal = "all" | "yes" | "no";
+
 const FILTER_DEFS: { key: FilterKey; label: string; field: keyof RaceRow }[] = [
   { key: "gpx",           label: "GPX",        field: "has_gpx" },
   { key: "profile",       label: "Profile",     field: "has_profile" },
@@ -77,7 +79,8 @@ export default function AllRaceDataCoveragePage() {
   const [search, setSearch]         = useState("");
   const [sortCol, setSortCol]       = useState<SortCol>("race_name");
   const [sortDir, setSortDir]       = useState<SortDir>("asc");
-  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(new Set());
+  const defaultFilters = Object.fromEntries(FILTER_DEFS.map(f => [f.key, "all" as FilterVal])) as Record<FilterKey, FilterVal>;
+  const [columnFilters, setColumnFilters] = useState<Record<FilterKey, FilterVal>>(defaultFilters);
   const [visibleCols, setVisibleCols] = useState<Set<SortCol>>(DEFAULT_VISIBLE);
 
   useEffect(() => { void loadAll(); }, []);
@@ -141,12 +144,12 @@ export default function AllRaceDataCoveragePage() {
     else { setSortCol(col); setSortDir("asc"); }
   }
 
-  function toggleFilter(key: FilterKey) {
-    setActiveFilters(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
+  function setFilter(key: FilterKey, val: FilterVal) {
+    setColumnFilters(prev => ({ ...prev, [key]: val }));
+  }
+
+  function clearFilters() {
+    setColumnFilters(defaultFilters);
   }
 
   function toggleCol(key: SortCol) {
@@ -174,9 +177,14 @@ export default function AllRaceDataCoveragePage() {
       const q = search.trim().toLowerCase();
       result = result.filter(r => r.race_name.toLowerCase().includes(q));
     }
-    if (activeFilters.size > 0) {
+    if (FILTER_DEFS.some(f => columnFilters[f.key] !== "all")) {
       result = result.filter(row =>
-        FILTER_DEFS.some(f => activeFilters.has(f.key) && isMissing(row, f.field))
+        FILTER_DEFS.every(f => {
+          const fv = columnFilters[f.key];
+          if (fv === "all") return true;
+          const missing = isMissing(row, f.field);
+          return fv === "no" ? missing : !missing;
+        })
       );
     }
     result = [...result].sort((a, b) => {
@@ -190,7 +198,7 @@ export default function AllRaceDataCoveragePage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return result;
-  }, [rows, search, activeFilters, sortCol, sortDir]);
+  }, [rows, search, columnFilters, sortCol, sortDir]);
 
   const missingCount = rows.filter(r =>
     !r.has_gpx || !r.has_profile || !r.has_strategy || !r.has_date || !r.has_results ||
@@ -213,13 +221,6 @@ export default function AllRaceDataCoveragePage() {
     if (sortCol !== col) return <span style={{ color: "#ccc", marginLeft: "4px" }}>↕</span>;
     return <span style={{ color: "#1e3a1e", marginLeft: "4px" }}>{sortDir === "asc" ? "↑" : "↓"}</span>;
   }
-
-  const pillStyle = (active: boolean): React.CSSProperties => ({
-    padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600,
-    cursor: "pointer", border: active ? "1px solid #c0392b" : "1px solid #ddd",
-    background: active ? "#fdecea" : "#f7f7f7",
-    color: active ? "#c0392b" : "#555",
-  });
 
   const colPillStyle = (visible: boolean, fixed: boolean): React.CSSProperties => ({
     padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600,
@@ -261,26 +262,43 @@ export default function AllRaceDataCoveragePage() {
         )}
       </div>
 
-      {/* Show-missing filters */}
+      {/* Column filters */}
       {!loading && rows.length > 0 && (
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "14px" }}>
-          <span style={{ fontSize: "12px", color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            Show missing:
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end", marginBottom: "14px" }}>
+          <span style={{ fontSize: "12px", color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", paddingBottom: "6px" }}>
+            Filter:
           </span>
           {FILTER_DEFS.map(f => {
-            const active = activeFilters.has(f.key);
-            const missingN = rows.filter(r => isMissing(r, f.field)).length;
+            const val = columnFilters[f.key];
+            const active = val !== "all";
             return (
-              <button key={f.key} onClick={() => toggleFilter(f.key)} style={pillStyle(active)}>
-                {f.label}{" "}
-                <span style={{ fontWeight: 400, opacity: 0.7 }}>({missingN})</span>
-              </button>
+              <div key={f.key} style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                <label style={{ fontSize: "10px", fontWeight: 600, color: active ? "#1565c0" : "#888", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  {f.label}
+                </label>
+                <select
+                  value={val}
+                  onChange={e => setFilter(f.key, e.target.value as FilterVal)}
+                  style={{
+                    padding: "5px 8px", borderRadius: "6px", fontSize: "12px",
+                    border: active ? "1px solid #1565c0" : "1px solid #ddd",
+                    background: active ? "#e3f2fd" : "#fff",
+                    color: active ? "#1565c0" : "#555",
+                    cursor: "pointer", fontWeight: active ? 600 : 400,
+                    outline: "none",
+                  }}
+                >
+                  <option value="all">All</option>
+                  <option value="yes">✓ Yes</option>
+                  <option value="no">✗ No</option>
+                </select>
+              </div>
             );
           })}
-          {activeFilters.size > 0 && (
-            <button onClick={() => setActiveFilters(new Set())}
-              style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: "1px solid #aaa", background: "#fff", color: "#555" }}>
-              Clear filters
+          {FILTER_DEFS.some(f => columnFilters[f.key] !== "all") && (
+            <button onClick={clearFilters}
+              style={{ alignSelf: "flex-end", padding: "5px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: "1px solid #aaa", background: "#fff", color: "#555" }}>
+              Clear
             </button>
           )}
         </div>
