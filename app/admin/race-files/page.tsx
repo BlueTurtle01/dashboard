@@ -29,11 +29,26 @@ interface Race {
   name: string;
   slug: string;
   location: string | null;
+  country: string | null;
+  terrain_type: string | null;
+  distance_km: number | null;
+  is_desert_race: boolean;
   has_terrain_segments: boolean;
 }
 
 interface RaceWithFiles extends Race {
   files: RaceFile[];
+}
+
+type TerrainOpt = "road" | "coastal" | "trail" | "mountain";
+
+interface CharFormState {
+  is_uk: boolean;
+  terrain: TerrainOpt | "";
+  hilliness: 1 | 2 | 3 | 4 | "";
+  crowd_size: 1 | 2 | 3 | "";
+  climate: 1 | 2 | 3 | 4 | "";
+  distance_band: 1 | 2 | 3 | 4 | "";
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -88,6 +103,77 @@ function fileTypeColor(type: FileType): { bg: string; text: string } {
   return map[type] ?? map.other;
 }
 
+// ─── Race Matcher helpers ─────────────────────────────────────────────────────
+
+function inferCharForm(race: Omit<Race, "has_terrain_segments" | "files">, ascentM: number | null): CharFormState {
+  const country = (race.country ?? "").toLowerCase().trim();
+  const is_uk = ["uk", "united kingdom", "england", "scotland", "wales", "northern ireland"].includes(country);
+
+  const tt = (race.terrain_type ?? "").toLowerCase();
+  let terrain: TerrainOpt | "" = "";
+  if (tt.includes("road")) terrain = "road";
+  else if (tt.includes("coast")) terrain = "coastal";
+  else if (tt.includes("mountain") || tt.includes("alpine") || tt.includes("fell")) terrain = "mountain";
+  else if (tt.includes("trail") || tt.includes("desert") || tt.includes("sand")) terrain = "trail";
+
+  const d = race.distance_km;
+  let distance_band: CharFormState["distance_band"] = "";
+  if (d != null) {
+    if (d <= 42.2) distance_band = 1;
+    else if (d <= 70) distance_band = 2;
+    else if (d <= 120) distance_band = 3;
+    else distance_band = 4;
+  }
+
+  let hilliness: CharFormState["hilliness"] = "";
+  if (ascentM != null && d != null && d > 0) {
+    const mPerKm = ascentM / d;
+    if (mPerKm < 5) hilliness = 1;
+    else if (mPerKm < 10) hilliness = 2;
+    else if (mPerKm < 20) hilliness = 3;
+    else hilliness = 4;
+  }
+
+  const climate: CharFormState["climate"] = race.is_desert_race ? 4 : "";
+
+  return { is_uk, terrain, distance_band, hilliness, climate, crowd_size: "" };
+}
+
+function CharPicker<T extends string | number>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { v: T; label: string }[];
+  value: T | "";
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+      {options.map((o) => {
+        const active = value === o.v;
+        return (
+          <button
+            key={String(o.v)}
+            type="button"
+            onClick={() => onChange(o.v)}
+            style={{
+              padding: "5px 12px", borderRadius: "6px",
+              border: `1px solid ${active ? "#4f46e5" : "#d1d5db"}`,
+              background: active ? "#eef2ff" : "#fff",
+              color: active ? "#4338ca" : "#374151",
+              fontSize: "13px", fontWeight: active ? 600 : 400,
+              cursor: "pointer",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function RaceFilesPage() {
@@ -131,6 +217,12 @@ export default function RaceFilesPage() {
   // Results import outcome per race (keyed by raceId)
   const [resultsImport, setResultsImport] = useState<Record<string, { rowCount?: number; warning?: string; error?: string }>>({});
 
+  // Race Matcher characteristics
+  const [charForms, setCharForms] = useState<Record<string, CharFormState>>({});
+  const [charSaving, setCharSaving] = useState<Record<string, boolean>>({});
+  const [charSaveStatus, setCharSaveStatus] = useState<Record<string, "idle" | "saved" | "error">>({});
+  const [charHasRow, setCharHasRow] = useState<Set<string>>(new Set());
+
   // Hidden file inputs per (race × fileType)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -140,24 +232,25 @@ export default function RaceFilesPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data: racesData, error: racesErr } = await supabase
-        .from("races")
-        .select("id, name, slug, location")
-        .order("name", { ascending: true });
+      const [
+        { data: racesData, error: racesErr },
+        { data: filesData, error: filesErr },
+        { data: terrainMeta },
+        { data: charsData },
+        { data: profilesData },
+      ] = await Promise.all([
+        supabase
+          .from("races")
+          .select("id, name, slug, location, country, terrain_type, distance_km, is_desert_race")
+          .order("name", { ascending: true }),
+        supabase.from("race_files").select("*").order("created_at", { ascending: true }),
+        supabase.from("races_meta").select("race_id").eq("meta_key", "terrain_segments"),
+        supabase.from("race_characteristics").select("race_id, is_uk, terrain, hilliness, crowd_size, climate, distance_band"),
+        supabase.from("race_profiles").select("race_id, total_ascent_m"),
+      ]);
 
       if (racesErr || !racesData) throw new Error(racesErr?.message ?? "Failed to load races");
-
-      const { data: filesData, error: filesErr } = await supabase
-        .from("race_files")
-        .select("*")
-        .order("created_at", { ascending: true });
-
       if (filesErr) throw new Error(filesErr.message);
-
-      const { data: terrainMeta } = await supabase
-        .from("races_meta")
-        .select("race_id")
-        .eq("meta_key", "terrain_segments");
 
       const racesWithTerrain = new Set((terrainMeta ?? []).map((m: { race_id: string }) => m.race_id));
 
@@ -167,8 +260,36 @@ export default function RaceFilesPage() {
         filesByRace.get(f.race_id)!.push(f);
       }
 
+      type CharRow = { race_id: string; is_uk: boolean; terrain: string; hilliness: number; crowd_size: number; climate: number; distance_band: number };
+      const charsByRaceId = new Map<string, CharRow>((charsData ?? []).map((c: CharRow) => [c.race_id, c]));
+      const ascentByRaceId = new Map<string, number>((profilesData ?? []).map((p: { race_id: string; total_ascent_m: number }) => [p.race_id, p.total_ascent_m]));
+
+      type RaceRow = Omit<Race, "has_terrain_segments" | "files">;
+      const typedRaces = racesData as RaceRow[];
+
+      const newForms: Record<string, CharFormState> = {};
+      const newHasRow = new Set<string>();
+      for (const r of typedRaces) {
+        const existing = charsByRaceId.get(r.id);
+        if (existing) {
+          newHasRow.add(r.id);
+          newForms[r.id] = {
+            is_uk: existing.is_uk,
+            terrain: existing.terrain as TerrainOpt,
+            hilliness: existing.hilliness as CharFormState["hilliness"],
+            crowd_size: existing.crowd_size as CharFormState["crowd_size"],
+            climate: existing.climate as CharFormState["climate"],
+            distance_band: existing.distance_band as CharFormState["distance_band"],
+          };
+        } else {
+          newForms[r.id] = inferCharForm(r, ascentByRaceId.get(r.id) ?? null);
+        }
+      }
+      setCharForms(newForms);
+      setCharHasRow(newHasRow);
+
       setRaces(
-        (racesData as Omit<Race, "has_terrain_segments" | "files">[]).map((r) => ({
+        typedRaces.map((r) => ({
           ...r,
           has_terrain_segments: racesWithTerrain.has(r.id),
           files: filesByRace.get(r.id) ?? [],
@@ -600,6 +721,29 @@ export default function RaceFilesPage() {
     setBatchReprocessMsg(`Done — ${done} reprocessed, ${failed} failed.`);
   }
 
+  async function handleSaveCharacteristics(raceId: string) {
+    const form = charForms[raceId];
+    if (!form || form.terrain === "" || form.hilliness === "" || form.crowd_size === "" || form.climate === "" || form.distance_band === "") return;
+    setCharSaving((prev) => ({ ...prev, [raceId]: true }));
+    setCharSaveStatus((prev) => ({ ...prev, [raceId]: "idle" }));
+    const { error } = await supabase.from("race_characteristics").upsert(
+      { race_id: raceId, is_uk: form.is_uk, terrain: form.terrain, hilliness: form.hilliness, crowd_size: form.crowd_size, climate: form.climate, distance_band: form.distance_band },
+      { onConflict: "race_id" },
+    );
+    setCharSaving((prev) => ({ ...prev, [raceId]: false }));
+    if (error) {
+      setCharSaveStatus((prev) => ({ ...prev, [raceId]: "error" }));
+    } else {
+      setCharSaveStatus((prev) => ({ ...prev, [raceId]: "saved" }));
+      setCharHasRow((prev) => new Set([...prev, raceId]));
+    }
+  }
+
+  function handleReInfer(race: RaceWithFiles) {
+    setCharForms((prev) => ({ ...prev, [race.id]: inferCharForm(race, null) }));
+    setCharSaveStatus((prev) => ({ ...prev, [race.id]: "idle" }));
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -743,6 +887,11 @@ export default function RaceFilesPage() {
                     {race.has_terrain_segments && (
                       <span style={{ padding: "3px 10px", borderRadius: "20px", background: "#f0fdf4", color: "#15803d", fontSize: "11px", fontWeight: 600 }}>
                         ✓ OSM terrain
+                      </span>
+                    )}
+                    {charHasRow.has(race.id) && (
+                      <span style={{ padding: "3px 10px", borderRadius: "20px", background: "#f0f9ff", color: "#0369a1", border: "1px solid #bae6fd", fontSize: "11px", fontWeight: 600 }}>
+                        ✓ In Matcher
                       </span>
                     )}
                     <span style={{
@@ -979,6 +1128,136 @@ export default function RaceFilesPage() {
                         </p>
                       </div>
                     )}
+
+                    {/* ── Race Matcher Characteristics ── */}
+                    {(() => {
+                      const form = charForms[race.id];
+                      if (!form) return null;
+                      const isComplete = form.terrain !== "" && form.hilliness !== "" && form.crowd_size !== "" && form.climate !== "" && form.distance_band !== "";
+                      const setField = <K extends keyof CharFormState>(key: K, val: CharFormState[K]) => {
+                        setCharForms((prev) => ({ ...prev, [race.id]: { ...prev[race.id], [key]: val } }));
+                        setCharSaveStatus((prev) => ({ ...prev, [race.id]: "idle" }));
+                      };
+                      return (
+                        <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e4e4e7" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+                            <div style={{ fontSize: "12px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                              Race Matcher
+                            </div>
+                            <span style={{
+                              padding: "2px 8px", borderRadius: "20px", fontSize: "11px", fontWeight: 600,
+                              background: charHasRow.has(race.id) ? "#f0f9ff" : "#f4f4f5",
+                              color: charHasRow.has(race.id) ? "#0369a1" : "#6b7280",
+                              border: charHasRow.has(race.id) ? "1px solid #bae6fd" : "1px solid #e4e4e7",
+                            }}>
+                              {charHasRow.has(race.id) ? "✓ In Matcher" : "Not in Matcher"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleReInfer(race)}
+                              style={{ marginLeft: "auto", padding: "3px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#f9fafb", fontSize: "12px", color: "#374151", cursor: "pointer" }}
+                            >
+                              ↺ Re-infer from race data
+                            </button>
+                          </div>
+
+                          <div style={{ display: "grid", gap: "12px" }}>
+                            {/* Location */}
+                            <div>
+                              <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>Location</div>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                {([true, false] as const).map((v) => {
+                                  const active = form.is_uk === v;
+                                  return (
+                                    <button key={String(v)} type="button" onClick={() => setField("is_uk", v)}
+                                      style={{ padding: "5px 12px", borderRadius: "6px", border: `1px solid ${active ? "#4f46e5" : "#d1d5db"}`, background: active ? "#eef2ff" : "#fff", color: active ? "#4338ca" : "#374151", fontSize: "13px", fontWeight: active ? 600 : 400, cursor: "pointer" }}>
+                                      {v ? "UK race" : "International"}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Terrain */}
+                            <div>
+                              <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>Terrain</div>
+                              <CharPicker<TerrainOpt>
+                                options={[{ v: "road", label: "Road" }, { v: "trail", label: "Trail" }, { v: "coastal", label: "Coastal" }, { v: "mountain", label: "Mountain" }]}
+                                value={form.terrain}
+                                onChange={(v) => setField("terrain", v)}
+                              />
+                            </div>
+
+                            {/* Hilliness */}
+                            <div>
+                              <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>
+                                Hilliness <span style={{ fontWeight: 400, textTransform: "none" }}>(1 = flat · 4 = very hilly)</span>
+                              </div>
+                              <CharPicker<number>
+                                options={[{ v: 1, label: "1 – Flat" }, { v: 2, label: "2 – Undulating" }, { v: 3, label: "3 – Hilly" }, { v: 4, label: "4 – Very hilly" }]}
+                                value={form.hilliness}
+                                onChange={(v) => setField("hilliness", v as CharFormState["hilliness"])}
+                              />
+                            </div>
+
+                            {/* Crowd size */}
+                            <div>
+                              <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>
+                                Crowd size <span style={{ fontWeight: 400, textTransform: "none" }}>(1 = quiet · 3 = big event)</span>
+                              </div>
+                              <CharPicker<number>
+                                options={[{ v: 1, label: "1 – Quiet & remote" }, { v: 2, label: "2 – Mid-sized" }, { v: 3, label: "3 – Big event" }]}
+                                value={form.crowd_size}
+                                onChange={(v) => setField("crowd_size", v as CharFormState["crowd_size"])}
+                              />
+                            </div>
+
+                            {/* Climate */}
+                            <div>
+                              <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>
+                                Climate <span style={{ fontWeight: 400, textTransform: "none" }}>(1 = cold · 4 = hot)</span>
+                              </div>
+                              <CharPicker<number>
+                                options={[{ v: 1, label: "1 – Cold" }, { v: 2, label: "2 – Mild" }, { v: 3, label: "3 – Warm" }, { v: 4, label: "4 – Hot" }]}
+                                value={form.climate}
+                                onChange={(v) => setField("climate", v as CharFormState["climate"])}
+                              />
+                            </div>
+
+                            {/* Distance band */}
+                            <div>
+                              <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>Distance band</div>
+                              <CharPicker<number>
+                                options={[{ v: 1, label: "≤ Marathon" }, { v: 2, label: "50K" }, { v: 3, label: "100K" }, { v: 4, label: "100M+" }]}
+                                value={form.distance_band}
+                                onChange={(v) => setField("distance_band", v as CharFormState["distance_band"])}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "14px" }}>
+                            <button
+                              type="button"
+                              disabled={!isComplete || !!charSaving[race.id]}
+                              onClick={() => void handleSaveCharacteristics(race.id)}
+                              style={{
+                                padding: "7px 16px", borderRadius: "7px", border: "none",
+                                background: isComplete ? "#4f46e5" : "#e5e7eb",
+                                color: isComplete ? "#fff" : "#9ca3af",
+                                fontSize: "13px", fontWeight: 600,
+                                cursor: isComplete && !charSaving[race.id] ? "pointer" : "not-allowed",
+                                opacity: charSaving[race.id] ? 0.7 : 1,
+                              }}
+                            >
+                              {charSaving[race.id] ? "Saving…" : "Save to Matcher"}
+                            </button>
+                            {charSaveStatus[race.id] === "saved" && <span style={{ fontSize: "12px", color: "#15803d" }}>✓ Saved</span>}
+                            {charSaveStatus[race.id] === "error" && <span style={{ fontSize: "12px", color: "#b91c1c" }}>Save failed — check console</span>}
+                            {!isComplete && <span style={{ fontSize: "12px", color: "#9ca3af" }}>Fill all fields to save</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

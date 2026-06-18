@@ -40,6 +40,12 @@ const GROUPS: ToolGroup[] = [
         badge: "Active",
       },
       {
+        href: "/admin/data-coverage-all",
+        title: "Data Coverage — All Races",
+        description: "See GPX, profile, and pace strategy status across every race, without searching by athlete.",
+        badge: "Active",
+      },
+      {
         href: "/admin/race-strategy",
         title: "Race Strategy",
         description: "Build and store pace strategy sections for Plan Insights on the public race page.",

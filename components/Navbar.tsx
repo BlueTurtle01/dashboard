@@ -437,21 +437,8 @@ export default async function Navbar() {
                   label="Tools"
                   items={[
                     { href: "/admin/tools", label: "Tools Hub" },
-                    { href: "/admin/race-strategy", label: "Race Strategy" },
-                    { href: "/admin/race-files", label: "Race Files" },
-                    { href: "/admin/race-comparison", label: "Race Comparison" },
-                    { href: "/admin/races", label: "Race Tags" },
-                    { href: "/admin/athlete-network", label: "Data Analysis" },
-                    { href: "/admin/tools/athlete-similarity", label: "Athlete Similarity" },
-                    { href: "/admin/results-import", label: "Import Results" },
-                    { href: "/admin/raw-races", label: "Raw Races" },
-                    { href: "/admin/race-rename", label: "Race Rename" },
-                    { href: "/admin/race-pacing", label: "Race Pacing" },
-                    { href: "/admin/race-readiness", label: "Race Readiness" },
                     { href: "/admin/race-readiness-latex", label: "Race Readiness (LaTeX)" },
                     { href: "/admin/race-intelligence", label: "Race Intelligence" },
-                    { href: "/admin/athlete-demands", label: "Athlete Demands" },
-                    { href: "/admin/preparation-races", label: "Preparation Races" },
                   ]}
                 />
               )}
