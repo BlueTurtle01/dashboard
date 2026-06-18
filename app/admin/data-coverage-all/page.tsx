@@ -11,6 +11,7 @@ interface RaceRow {
   has_profile: boolean;
   has_strategy: boolean;
   has_date: boolean;
+  has_results: boolean;
   char_terrain: string | null;
   char_hilliness: string | null;
   char_crowd_size: string | null;
@@ -20,14 +21,14 @@ interface RaceRow {
 }
 
 type SortCol =
-  | "race_name" | "has_gpx" | "has_profile" | "has_strategy" | "has_date"
+  | "race_name" | "has_gpx" | "has_profile" | "has_strategy" | "has_date" | "has_results"
   | "char_terrain" | "char_hilliness" | "char_crowd_size"
   | "char_climate" | "char_distance_band" | "char_is_uk";
 
 type SortDir = "asc" | "desc";
 
 type FilterKey =
-  | "gpx" | "profile" | "strategy" | "date"
+  | "gpx" | "profile" | "strategy" | "date" | "results"
   | "terrain" | "hilliness" | "crowd_size" | "climate" | "distance_band" | "is_uk";
 
 const FILTER_DEFS: { key: FilterKey; label: string; field: keyof RaceRow }[] = [
@@ -35,6 +36,7 @@ const FILTER_DEFS: { key: FilterKey; label: string; field: keyof RaceRow }[] = [
   { key: "profile",       label: "Profile",     field: "has_profile" },
   { key: "strategy",      label: "Strategy",    field: "has_strategy" },
   { key: "date",          label: "Race Date",   field: "has_date" },
+  { key: "results",       label: "Results",     field: "has_results" },
   { key: "terrain",       label: "Terrain",     field: "char_terrain" },
   { key: "hilliness",     label: "Hilliness",   field: "char_hilliness" },
   { key: "crowd_size",    label: "Crowd",       field: "char_crowd_size" },
@@ -55,6 +57,7 @@ const ALL_COLUMNS: ColDef[] = [
   { key: "has_profile",        label: "Profile",    center: true },
   { key: "has_strategy",       label: "Strategy",   center: true },
   { key: "has_date",           label: "Race Date",  center: true },
+  { key: "has_results",        label: "Results",    center: true },
   { key: "char_terrain",       label: "Terrain",    center: true },
   { key: "char_hilliness",     label: "Hilliness",  center: true },
   { key: "char_crowd_size",    label: "Crowd",      center: true },
@@ -92,12 +95,13 @@ export default function AllRaceDataCoveragePage() {
 
       const raceIds = racesData.map(r => r.id as string);
 
-      const [{ data: gpxRows }, { data: profileRows }, { data: metaRows }, { data: charRows }, { data: raceDateRows }] = await Promise.all([
+      const [{ data: gpxRows }, { data: profileRows }, { data: metaRows }, { data: charRows }, { data: raceDateRows }, { data: resultsRows }] = await Promise.all([
         supabase.from("race_files").select("race_id").in("race_id", raceIds).eq("file_type", "gpx"),
         supabase.from("race_profiles").select("race_id").in("race_id", raceIds),
         supabase.from("races_meta").select("race_id").in("race_id", raceIds).eq("meta_key", "race_pace_strategy"),
         supabase.from("race_characteristics").select("race_id, terrain, hilliness, crowd_size, climate, distance_band, is_uk").in("race_id", raceIds),
         supabase.from("races_meta").select("race_id").in("race_id", raceIds).eq("meta_key", "race_date"),
+        supabase.from("race_files").select("race_id").in("race_id", raceIds).eq("file_type", "results"),
       ]);
 
       const gpxSet      = new Set((gpxRows     ?? []).map(r => r.race_id as string));
@@ -105,17 +109,18 @@ export default function AllRaceDataCoveragePage() {
       const strategySet = new Set((metaRows    ?? []).map(r => r.race_id as string));
       const charMap     = new Map((charRows    ?? []).map(r => [r.race_id as string, r]));
       const raceDateSet = new Set((raceDateRows ?? []).map(r => r.race_id as string));
+      const resultsSet  = new Set((resultsRows  ?? []).map(r => r.race_id as string));
 
       setRows(racesData.map(r => {
         const ch = charMap.get(r.id as string) ?? null;
-        const hasDate = raceDateSet.has(r.id as string);
         return {
           race_id:            r.id as string,
           race_name:          r.name as string,
           has_gpx:            gpxSet.has(r.id as string),
           has_profile:        profileSet.has(r.id as string),
           has_strategy:       strategySet.has(r.id as string),
-          has_date:           hasDate,
+          has_date:           raceDateSet.has(r.id as string),
+          has_results:        resultsSet.has(r.id as string),
           char_terrain:       ch?.terrain ?? null,
           char_hilliness:     ch?.hilliness ?? null,
           char_crowd_size:    ch?.crowd_size ?? null,
@@ -159,6 +164,7 @@ export default function AllRaceDataCoveragePage() {
     if (col === "has_profile")  return row.has_profile;
     if (col === "has_strategy") return row.has_strategy;
     if (col === "has_date")     return row.has_date;
+    if (col === "has_results")  return row.has_results;
     return row[col] as string | null;
   };
 
@@ -187,7 +193,7 @@ export default function AllRaceDataCoveragePage() {
   }, [rows, search, activeFilters, sortCol, sortDir]);
 
   const missingCount = rows.filter(r =>
-    !r.has_gpx || !r.has_profile || !r.has_strategy || !r.has_date ||
+    !r.has_gpx || !r.has_profile || !r.has_strategy || !r.has_date || !r.has_results ||
     !r.char_terrain || !r.char_hilliness || !r.char_crowd_size ||
     !r.char_climate || !r.char_distance_band || r.char_is_uk === null
   ).length;
@@ -334,7 +340,7 @@ export default function AllRaceDataCoveragePage() {
                   </tr>
                 )}
                 {displayed.map((row, i) => {
-                  const allOk = row.has_gpx && row.has_profile && row.has_strategy && row.has_date &&
+                  const allOk = row.has_gpx && row.has_profile && row.has_strategy && row.has_date && row.has_results &&
                     !!row.char_terrain && !!row.char_hilliness && !!row.char_crowd_size &&
                     !!row.char_climate && !!row.char_distance_band && row.char_is_uk !== null;
                   return (
@@ -358,6 +364,9 @@ export default function AllRaceDataCoveragePage() {
                       )}
                       {visibleCols.has("has_date") && (
                         <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>{tick(row.has_date)}</td>
+                      )}
+                      {visibleCols.has("has_results") && (
+                        <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>{tick(row.has_results)}</td>
                       )}
                       {visibleCols.has("char_terrain") && (
                         <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>{tickVal(row.char_terrain)}</td>
