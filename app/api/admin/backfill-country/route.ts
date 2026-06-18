@@ -52,10 +52,16 @@ export async function POST() {
     (existing ?? []).map(r => [r.race_id as string, r.country as string | null])
   );
 
-  const upserts: { race_id: string; country: string }[] = [];
-  let skipped = 0, no_data = 0;
+  let updated = 0, skipped = 0, no_data = 0;
 
   for (const race of (races ?? [])) {
+    const hasRow = existingCountry.has(race.id as string);
+    if (!hasRow) {
+      // No characteristics row yet — skip; country will be set when Process Race runs
+      no_data++;
+      continue;
+    }
+
     const current = existingCountry.get(race.id as string);
     if (current) { skipped++; continue; } // country already set — don't overwrite
 
@@ -65,18 +71,20 @@ export async function POST() {
       race.race_longitude as number | null,
     );
 
-    if (!inferred) { no_data++; continue; } // no races.country and coords not in known bbox
+    if (!inferred) { no_data++; continue; }
 
-    upserts.push({ race_id: race.id as string, country: inferred });
-  }
-
-  if (upserts.length > 0) {
-    const { error: upsertErr } = await adminClient
+    const { error: updateErr } = await adminClient
       .from("race_characteristics")
-      .upsert(upserts, { onConflict: "race_id" });
+      .update({ country: inferred })
+      .eq("race_id", race.id as string)
+      .is("country", null);
 
-    if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 });
+    if (updateErr) {
+      console.error(`[backfill-country] Failed for ${race.id}:`, updateErr.message);
+    } else {
+      updated++;
+    }
   }
 
-  return NextResponse.json({ updated: upserts.length, skipped, no_data });
+  return NextResponse.json({ updated, skipped, no_data });
 }
