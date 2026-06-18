@@ -782,7 +782,10 @@ export default function RaceFilesPage() {
   }
 
   function handleReInfer(race: RaceWithFiles) {
-    setCharForms((prev) => ({ ...prev, [race.id]: inferCharForm(race, null) }));
+    setCharForms((prev) => ({
+      ...prev,
+      [race.id]: inferCharForm(race, null, entrantCounts[race.id]?.count ?? null, crowdBins),
+    }));
     setCharSaveStatus((prev) => ({ ...prev, [race.id]: "idle" }));
   }
 
