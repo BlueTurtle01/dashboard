@@ -10,6 +10,7 @@ interface RaceRow {
   has_gpx: boolean;
   has_profile: boolean;
   has_strategy: boolean;
+  has_characteristics: boolean;
 }
 
 type GenState = "idle" | "loading" | "done" | "error";
@@ -41,22 +42,25 @@ export default function AllRaceDataCoveragePage() {
 
       const raceIds = racesData.map(r => r.id as string);
 
-      const [{ data: gpxRows }, { data: profileRows }, { data: metaRows }] = await Promise.all([
+      const [{ data: gpxRows }, { data: profileRows }, { data: metaRows }, { data: charRows }] = await Promise.all([
         supabase.from("race_files").select("race_id").in("race_id", raceIds).eq("file_type", "gpx"),
         supabase.from("race_profiles").select("race_id").in("race_id", raceIds),
         supabase.from("races_meta").select("race_id").in("race_id", raceIds).eq("meta_key", "race_pace_strategy"),
+        supabase.from("race_characteristics").select("race_id").in("race_id", raceIds),
       ]);
 
-      const gpxSet      = new Set((gpxRows ?? []).map(r => r.race_id as string));
-      const profileSet  = new Set((profileRows ?? []).map(r => r.race_id as string));
-      const strategySet = new Set((metaRows ?? []).map(r => r.race_id as string));
+      const gpxSet             = new Set((gpxRows ?? []).map(r => r.race_id as string));
+      const profileSet         = new Set((profileRows ?? []).map(r => r.race_id as string));
+      const strategySet        = new Set((metaRows ?? []).map(r => r.race_id as string));
+      const characteristicsSet = new Set((charRows ?? []).map(r => r.race_id as string));
 
       setRows(racesData.map(r => ({
-        race_id:      r.id as string,
-        race_name:    r.name as string,
-        has_gpx:      gpxSet.has(r.id as string),
-        has_profile:  profileSet.has(r.id as string),
-        has_strategy: strategySet.has(r.id as string),
+        race_id:             r.id as string,
+        race_name:           r.name as string,
+        has_gpx:             gpxSet.has(r.id as string),
+        has_profile:         profileSet.has(r.id as string),
+        has_strategy:        strategySet.has(r.id as string),
+        has_characteristics: characteristicsSet.has(r.id as string),
       })));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load data.");
@@ -89,10 +93,10 @@ export default function AllRaceDataCoveragePage() {
     : rows;
 
   const displayed = hideComplete
-    ? filtered.filter(r => !r.has_gpx || !r.has_profile || !r.has_strategy)
+    ? filtered.filter(r => !r.has_gpx || !r.has_profile || !r.has_strategy || !r.has_characteristics)
     : filtered;
 
-  const missingCount = filtered.filter(r => !r.has_gpx || !r.has_profile || !r.has_strategy).length;
+  const missingCount = filtered.filter(r => !r.has_gpx || !r.has_profile || !r.has_strategy || !r.has_characteristics).length;
   const canAutoGen   = displayed.filter(r => r.has_profile && !r.has_strategy && genStates[r.race_id] !== "loading").length;
 
   async function generateAll() {
@@ -166,6 +170,7 @@ export default function AllRaceDataCoveragePage() {
           <span><strong>GPX</strong> — route file uploaded</span>
           <span><strong>Profile</strong> — terrain sections computed from GPX</span>
           <span><strong>Strategy</strong> — pace strategy saved (Plan Insights)</span>
+          <span><strong>Characteristics</strong> — row exists in race_characteristics</span>
         </div>
       )}
 
@@ -182,7 +187,7 @@ export default function AllRaceDataCoveragePage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#f9f9f9" }}>
-                  {["Race", "GPX", "Profile", "Strategy", "Actions"].map((h, i) => (
+                  {["Race", "GPX", "Profile", "Strategy", "Characteristics", "Actions"].map((h, i) => (
                     <th key={i} style={{
                       textAlign: i === 0 ? "left" : "center",
                       padding: "10px 14px", fontSize: "11px", fontWeight: 600, color: "#888",
@@ -196,13 +201,13 @@ export default function AllRaceDataCoveragePage() {
               <tbody>
                 {displayed.length === 0 && (
                   <tr>
-                    <td colSpan={5} style={{ padding: "24px", textAlign: "center", color: "#888", fontSize: "13px" }}>
+                    <td colSpan={6} style={{ padding: "24px", textAlign: "center", color: "#888", fontSize: "13px" }}>
                       {hideComplete ? "All matching races are fully complete." : "No races match your filter."}
                     </td>
                   </tr>
                 )}
                 {displayed.map((row, i) => {
-                  const allOk = row.has_gpx && row.has_profile && row.has_strategy;
+                  const allOk = row.has_gpx && row.has_profile && row.has_strategy && row.has_characteristics;
                   const gs    = genStates[row.race_id] ?? "idle";
                   const ge    = genErrors[row.race_id];
                   return (
@@ -218,6 +223,7 @@ export default function AllRaceDataCoveragePage() {
                       <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>
                         {gs === "done" ? <span style={{ color: "#2e7d32", fontWeight: 700 }}>✓</span> : tick(row.has_strategy)}
                       </td>
+                      <td style={{ padding: "10px 14px", textAlign: "center", fontSize: "16px" }}>{tick(row.has_characteristics)}</td>
                       <td style={{ padding: "10px 14px", textAlign: "center" }}>
                         <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
                           {row.has_profile && !row.has_strategy && gs !== "done" && (
