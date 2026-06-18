@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     // ── Get race info ─────────────────────────────────────────────────────────
     const { data: race, error: raceErr } = await supabase
       .from("races")
-      .select("id, name, terrain_type, race_latitude, race_longitude, race_end_date")
+      .select("id, name, terrain_type, race_latitude, race_longitude")
       .eq("id", race_id)
       .maybeSingle();
 
@@ -82,7 +82,15 @@ export async function POST(req: NextRequest) {
       );
     }
     const gpxText = await gpxRes.text();
-    const raceDate = race.race_end_date ? new Date(race.race_end_date) : null;
+
+    // Fetch race date from races_meta (canonical per-year date, not a fixed column)
+    const { data: raceDateMeta } = await supabase
+      .from("races_meta")
+      .select("meta_value")
+      .eq("race_id", race_id)
+      .eq("meta_key", "race_date")
+      .maybeSingle();
+    const raceDate = raceDateMeta?.meta_value ? new Date(raceDateMeta.meta_value) : null;
 
     let windCsvText: string | null = null;
     if (windFile) {

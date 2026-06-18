@@ -36,7 +36,6 @@ interface Race {
   has_terrain_segments: boolean;
   race_latitude: number | null;
   race_longitude: number | null;
-  race_end_date: string | null;
 }
 
 interface RaceWithFiles extends Race {
@@ -243,6 +242,9 @@ export default function RaceFilesPage() {
   const [entrantCounts, setEntrantCounts] = useState<Record<string, { year: number; count: number }>>({});
   const [processRace, setProcessRace] = useState<Record<string, { step: string; error?: string; done?: boolean }>>({});
   const [processAll, setProcessAll] = useState<{ running: boolean; done: number; total: number; failed: number } | null>(null);
+  const [raceDates, setRaceDates] = useState<Record<string, string>>({});
+  const [raceDateEdits, setRaceDateEdits] = useState<Record<string, string>>({});
+  const [raceDateSaving, setRaceDateSaving] = useState<Record<string, boolean>>({});
 
   // Hidden file inputs per (race × fileType)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -260,16 +262,18 @@ export default function RaceFilesPage() {
         { data: charsData },
         { data: profilesData },
         { data: entrantData },
+        { data: raceDateRows },
       ] = await Promise.all([
         supabase
           .from("races")
-          .select("id, name, slug, location, country, terrain_type, distance_km, is_desert_race, race_latitude, race_longitude, race_end_date")
+          .select("id, name, slug, location, country, terrain_type, distance_km, is_desert_race, race_latitude, race_longitude")
           .order("name", { ascending: true }),
         supabase.from("race_files").select("*").order("created_at", { ascending: true }),
         supabase.from("races_meta").select("race_id").eq("meta_key", "terrain_segments"),
         supabase.from("race_characteristics").select("race_id, is_uk, terrain, hilliness, crowd_size, climate, distance_band"),
         supabase.from("race_profiles").select("race_id, total_ascent_m, total_distance_km"),
         supabase.rpc("get_latest_year_entrant_counts"),
+        supabase.from("races_meta").select("race_id, meta_value").eq("meta_key", "race_date"),
       ]);
 
       if (racesErr || !racesData) throw new Error(racesErr?.message ?? "Failed to load races");
@@ -295,6 +299,11 @@ export default function RaceFilesPage() {
         typedEntrants.map(e => [e.race_id, { year: e.latest_year, count: Number(e.entrant_count) }]),
       );
       setEntrantCounts(Object.fromEntries(entrantByRaceId));
+
+      type RaceDateRow = { race_id: string; meta_value: string };
+      const newRaceDates: Record<string, string> = {};
+      for (const d of (raceDateRows ?? []) as RaceDateRow[]) newRaceDates[d.race_id] = d.meta_value;
+      setRaceDates(newRaceDates);
 
       type RaceRow = Omit<Race, "has_terrain_segments" | "files">;
       const typedRaces = racesData as RaceRow[];
@@ -799,13 +808,17 @@ export default function RaceFilesPage() {
 
   async function handleSaveCharacteristics(raceId: string) {
     const form = charForms[raceId];
-    if (!form || form.terrain === "" || form.hilliness === "" || form.crowd_size === "" || form.climate === "" || form.distance_band === "") return;
+    if (!form) return;
     setCharSaving((prev) => ({ ...prev, [raceId]: true }));
     setCharSaveStatus((prev) => ({ ...prev, [raceId]: "idle" }));
-    const { error } = await supabase.from("race_characteristics").upsert(
-      { race_id: raceId, is_uk: form.is_uk, terrain: form.terrain, hilliness: form.hilliness, crowd_size: form.crowd_size, climate: form.climate, distance_band: form.distance_band },
-      { onConflict: "race_id" },
-    );
+    // Only include fields that have a value — partial saves are fine
+    const payload: Record<string, unknown> = { race_id: raceId, is_uk: form.is_uk };
+    if (form.terrain      !== "") payload.terrain      = form.terrain;
+    if (form.hilliness    !== "") payload.hilliness    = form.hilliness;
+    if (form.crowd_size   !== "") payload.crowd_size   = form.crowd_size;
+    if (form.climate      !== "") payload.climate      = form.climate;
+    if (form.distance_band !== "") payload.distance_band = form.distance_band;
+    const { error } = await supabase.from("race_characteristics").upsert(payload, { onConflict: "race_id" });
     setCharSaving((prev) => ({ ...prev, [raceId]: false }));
     if (error) {
       setCharSaveStatus((prev) => ({ ...prev, [raceId]: "error" }));
@@ -815,6 +828,19 @@ export default function RaceFilesPage() {
     }
   }
 
+
+  async function handleSaveRaceDate(raceId: string) {
+    const val = raceDateEdits[raceId]?.trim();
+    if (!val) return;
+    setRaceDateSaving(prev => ({ ...prev, [raceId]: true }));
+    await supabase.from("races_meta").upsert(
+      { race_id: raceId, meta_key: "race_date", meta_value: val },
+      { onConflict: "race_id,meta_key" }
+    );
+    setRaceDateSaving(prev => ({ ...prev, [raceId]: false }));
+    setRaceDateEdits(prev => ({ ...prev, [raceId]: "" }));
+    await loadData();
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -987,6 +1013,39 @@ export default function RaceFilesPage() {
                 {/* Expanded card body */}
                 {isExpanded && (
                   <div style={cardBodyStyle}>
+                    {/* Race date */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e4e4e7" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                        Race Date
+                      </span>
+                      {raceDates[race.id] ? (
+                        <span style={{ fontSize: "13px", color: "#374151", fontWeight: 500 }}>
+                          {raceDates[race.id]}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: "12px", color: "#f59e0b", fontWeight: 500 }}>⚠ No date set — climate &amp; wind inference will be skipped</span>
+                      )}
+                      <input
+                        type="date"
+                        value={raceDateEdits[race.id] ?? raceDates[race.id] ?? ""}
+                        onChange={e => setRaceDateEdits(prev => ({ ...prev, [race.id]: e.target.value }))}
+                        style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13px", marginLeft: "auto" }}
+                      />
+                      <button
+                        disabled={!raceDateEdits[race.id] || raceDateSaving[race.id]}
+                        onClick={() => void handleSaveRaceDate(race.id)}
+                        style={{
+                          padding: "4px 12px", borderRadius: "6px", border: "none",
+                          background: raceDateEdits[race.id] ? "#4f46e5" : "#e5e7eb",
+                          color: raceDateEdits[race.id] ? "#fff" : "#9ca3af",
+                          fontSize: "12px", fontWeight: 600,
+                          cursor: raceDateEdits[race.id] && !raceDateSaving[race.id] ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {raceDateSaving[race.id] ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+
                     {/* Existing files */}
                     {race.files.length === 0 ? (
                       <p style={{ fontSize: "14px", color: "#9ca3af", margin: "0 0 16px 0" }}>
@@ -1215,7 +1274,8 @@ export default function RaceFilesPage() {
                     {(() => {
                       const form = charForms[race.id];
                       if (!form) return null;
-                      const isComplete = form.terrain !== "" && form.hilliness !== "" && form.crowd_size !== "" && form.climate !== "" && form.distance_band !== "";
+                      const missing = (["terrain", "hilliness", "crowd_size", "climate", "distance_band"] as const).filter((k) => form[k] === "");
+                      const isComplete = missing.length === 0;
                       const setField = <K extends keyof CharFormState>(key: K, val: CharFormState[K]) => {
                         setCharForms((prev) => ({ ...prev, [race.id]: { ...prev[race.id], [key]: val } }));
                         setCharSaveStatus((prev) => ({ ...prev, [race.id]: "idle" }));
@@ -1321,17 +1381,17 @@ export default function RaceFilesPage() {
                             </div>
                           </div>
 
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "14px", flexWrap: "wrap" }}>
                             <button
                               type="button"
-                              disabled={!isComplete || !!charSaving[race.id]}
+                              disabled={!!charSaving[race.id]}
                               onClick={() => void handleSaveCharacteristics(race.id)}
                               style={{
                                 padding: "7px 16px", borderRadius: "7px", border: "none",
-                                background: isComplete ? "#4f46e5" : "#e5e7eb",
-                                color: isComplete ? "#fff" : "#9ca3af",
+                                background: "#4f46e5",
+                                color: "#fff",
                                 fontSize: "13px", fontWeight: 600,
-                                cursor: isComplete && !charSaving[race.id] ? "pointer" : "not-allowed",
+                                cursor: charSaving[race.id] ? "not-allowed" : "pointer",
                                 opacity: charSaving[race.id] ? 0.7 : 1,
                               }}
                             >
@@ -1339,7 +1399,12 @@ export default function RaceFilesPage() {
                             </button>
                             {charSaveStatus[race.id] === "saved" && <span style={{ fontSize: "12px", color: "#15803d" }}>✓ Saved</span>}
                             {charSaveStatus[race.id] === "error" && <span style={{ fontSize: "12px", color: "#b91c1c" }}>Save failed — check console</span>}
-                            {!isComplete && <span style={{ fontSize: "12px", color: "#9ca3af" }}>Fill all fields to save</span>}
+                            {!isComplete && missing.length > 0 && (
+                              <span style={{ fontSize: "12px", color: "#9ca3af" }}>
+                                Missing: {missing.map((k) => ({ terrain: "Terrain", hilliness: "Hilliness", crowd_size: "Crowd", climate: "Climate", distance_band: "Distance" }[k])).join(", ")}
+                                {missing.includes("climate") ? " (needs race date)" : ""}
+                              </span>
+                            )}
                           </div>
                         </div>
                       );

@@ -117,7 +117,7 @@ export async function inferAndSaveCharacteristics(
   raceId: string,
   coords: { lat: number; lon: number } | null,
   profile: { totalDistanceKm: number; totalAscentM: number } | null,
-  /** Actual race date from races.race_end_date — NOT from GPX (GPX timestamps are unreliable). */
+  /** Actual race date from races_meta.race_date — NOT from GPX (GPX timestamps are unreliable). */
   raceDate: Date | null,
   terrainSegments: TerrainSegment[] | null,
   entrantCount: number | null,

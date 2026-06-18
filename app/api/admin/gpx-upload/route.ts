@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     // ── Verify race exists ────────────────────────────────────────────────────
     const { data: race } = await supabase
       .from("races")
-      .select("id, name, terrain_type, race_latitude, race_longitude, race_end_date")
+      .select("id, name, terrain_type, race_latitude, race_longitude")
       .eq("id", race_id)
       .maybeSingle();
     if (!race) return NextResponse.json({ error: "Race not found" }, { status: 404 });
@@ -223,7 +223,14 @@ export async function POST(req: NextRequest) {
       ? { lat: gpxPoints[0].lat, lon: gpxPoints[0].lon }
       : (race.race_latitude != null ? { lat: race.race_latitude, lon: race.race_longitude! } : null);
 
-    const raceDate = race.race_end_date ? new Date(race.race_end_date) : null;
+    // Fetch race date from races_meta (canonical per-year date)
+    const { data: raceDateMeta } = await supabase
+      .from("races_meta")
+      .select("meta_value")
+      .eq("race_id", race_id)
+      .eq("meta_key", "race_date")
+      .maybeSingle();
+    const raceDate = raceDateMeta?.meta_value ? new Date(raceDateMeta.meta_value) : null;
 
     // Fetch latest entrant count for crowd_size inference
     const { data: entrantRows } = await adminClient.rpc("get_latest_year_entrant_counts");
