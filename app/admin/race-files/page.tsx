@@ -53,6 +53,91 @@ interface CharFormState {
   distance_band: 1 | 2 | 3 | 4 | "";
 }
 
+// ─── Countries ───────────────────────────────────────────────────────────────
+
+const COUNTRIES = [
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Argentina", "Armenia",
+  "Australia", "Austria", "Azerbaijan", "Bahrain", "Bangladesh", "Belarus", "Belgium",
+  "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Bulgaria", "Cambodia",
+  "Cameroon", "Canada", "Chile", "China", "Colombia", "Costa Rica", "Croatia",
+  "Czech Republic", "Denmark", "Ecuador", "Egypt", "Estonia", "Ethiopia", "Finland",
+  "France", "Georgia", "Germany", "Ghana", "Greece", "Guatemala", "Hong Kong",
+  "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel",
+  "Italy", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kuwait", "Kyrgyzstan",
+  "Latvia", "Lebanon", "Lithuania", "Luxembourg", "Malaysia", "Mali", "Mexico",
+  "Moldova", "Mongolia", "Montenegro", "Morocco", "Namibia", "Nepal", "Netherlands",
+  "New Zealand", "Nigeria", "North Macedonia", "Norway", "Oman", "Pakistan", "Panama",
+  "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia",
+  "Saudi Arabia", "Senegal", "Serbia", "Singapore", "Slovakia", "Slovenia",
+  "South Africa", "South Korea", "Spain", "Sri Lanka", "Sweden", "Switzerland",
+  "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Tunisia", "Turkey", "Turkmenistan",
+  "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States",
+  "Uruguay", "Uzbekistan", "Venezuela", "Vietnam", "Zambia", "Zimbabwe",
+];
+
+// ─── CountryCombobox ──────────────────────────────────────────────────────────
+
+function CountryCombobox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [search, setSearch] = useState(value);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setSearch(value); }, [value]);
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        // If the typed text doesn't exactly match a country, revert to the saved value
+        setSearch(value);
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [value]);
+
+  const filtered = search.trim()
+    ? COUNTRIES.filter(c => c.toLowerCase().includes(search.toLowerCase())).slice(0, 10)
+    : COUNTRIES.slice(0, 10);
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <input
+        type="text"
+        value={search}
+        onChange={e => { setSearch(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="Search country…"
+        style={{ width: "100%", padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13px", boxSizing: "border-box" }}
+      />
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 2px)", left: 0, right: 0, zIndex: 200,
+          background: "#fff", border: "1px solid #d1d5db", borderRadius: "6px",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.12)", maxHeight: "220px", overflowY: "auto",
+        }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: "10px 12px", fontSize: "12px", color: "#9ca3af" }}>No matches</div>
+          ) : filtered.map(c => (
+            <div
+              key={c}
+              onMouseDown={e => { e.preventDefault(); onChange(c); setSearch(c); setOpen(false); }}
+              style={{
+                padding: "8px 12px", fontSize: "13px", cursor: "pointer",
+                background: c === value ? "#eef2ff" : "#fff",
+                color: c === value ? "#4338ca" : "#374151",
+                fontWeight: c === value ? 600 : 400,
+              }}
+            >
+              {c}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const FILE_TYPE_LABELS: Record<FileType, string> = {
@@ -1338,12 +1423,9 @@ export default function RaceFilesPage() {
                             {/* Country */}
                             <div>
                               <div style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", marginBottom: "6px" }}>Country</div>
-                              <input
-                                type="text"
-                                placeholder="e.g. United Kingdom, France, USA…"
+                              <CountryCombobox
                                 value={form.country}
-                                onChange={(e) => setField("country", e.target.value)}
-                                style={{ width: "100%", padding: "6px 10px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "13px", boxSizing: "border-box" }}
+                                onChange={(v) => setField("country", v)}
                               />
                             </div>
 
