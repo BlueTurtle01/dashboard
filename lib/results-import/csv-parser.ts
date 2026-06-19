@@ -142,7 +142,7 @@ interface ColMap {
 }
 
 // Known header keywords used to detect if row 0 is a headers row (no title row present).
-const HEADER_KEYWORDS = new Set(["name", "full_name", "overall", "pos", "position", "bib", "gender", "sex", "class", "category", "time", "chip", "gun", "race_time", "overall_time", "status"]);
+const HEADER_KEYWORDS = new Set(["name", "full_name", "overall", "pos", "position", "rank", "bib", "gender", "sex", "class", "category", "cat", "age_category", "age_cat", "age_group", "time", "chip", "gun", "race_time", "overall_time", "status", "nationality", "country"]);
 
 function looksLikeHeaderRow(row: string[]): boolean {
   return row.some((cell) => HEADER_KEYWORDS.has(cell.toLowerCase().trim()));
@@ -170,11 +170,11 @@ function buildColMap(headers: string[]): ColMap {
     const occurrence = (seen[key] ?? 0) + 1;
     seen[key] = occurrence;
 
-    // Position aliases: overall (1st), pos, position
-    if ((key === "overall" || key === "pos" || key === "position") && occurrence === 1) map.position = i;
+    // Position aliases: overall (1st), pos, position, rank
+    if ((key === "overall" || key === "pos" || key === "position" || key === "rank") && occurrence === 1) map.position = i;
     else if (key === "name" || key === "full_name" || key === "full name") map.name = i;
     else if (key === "bib") map.bib = i;
-    else if (key === "nation") map.nation = i;
+    else if (key === "nation" || key === "nationality" || key === "country") map.nation = i;
     // Club/team aliases
     else if (key === "team" || key === "club") map.team = i;
     // Gender aliases: gender (repeat logic), sex, gender_2 (_2-suffix format)
@@ -187,8 +187,8 @@ function buildColMap(headers: string[]): ColMap {
     // gender_2 always overrides whatever gender column was found earlier.
     else if (key === "gender_2") map.genderValue = i;
     // 2nd Class = age group / category name
-    else if ((key === "class" || key === "category" || key === "cat") && occurrence === 2) map.ageGroup = i;
-    else if ((key === "class" || key === "category" || key === "cat") && occurrence === 1) {
+    else if ((key === "class" || key === "category" || key === "cat" || key === "age_category" || key === "age_cat" || key === "age_group" || key === "agegroup") && occurrence === 2) map.ageGroup = i;
+    else if ((key === "class" || key === "category" || key === "cat" || key === "age_category" || key === "age_cat" || key === "age_group" || key === "agegroup") && occurrence === 1) {
       if (map.ageGroup === null) map.ageGroup = i;
     }
     else if (key === "last location" || key === "last_point") map.lastLocation = i;
@@ -333,7 +333,7 @@ export function parseCsvFile(filename: string, rawText: string): ParsedImport {
     // Collect any remaining header columns not already captured
     headers.forEach((h, idx) => {
       if (coreIndices.has(idx)) return;
-      if (["nation", "team", "club", "last location", "last_point", "sex"].includes(h.toLowerCase().trim())) return;
+      if (["nation", "nationality", "country", "team", "club", "last location", "last_point", "sex"].includes(h.toLowerCase().trim())) return;
       const v = cells[idx]?.trim();
       if (v) additional_data[h] = v;
     });

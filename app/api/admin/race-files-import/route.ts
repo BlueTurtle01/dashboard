@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
 
   const file = formData.get("file") as File | null;
   const race_id = formData.get("race_id") as string | null;
+  const yearOverrideRaw = formData.get("year_override") as string | null;
+  const yearOverride = yearOverrideRaw ? parseInt(yearOverrideRaw, 10) : null;
 
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
   if (!race_id) return NextResponse.json({ error: "race_id required" }, { status: 400 });
@@ -62,6 +64,9 @@ export async function POST(req: NextRequest) {
         rowCount: 0,
       });
     }
+
+    // Apply year override if provided (e.g. user selected a specific year in the UI)
+    const resultYear = yearOverride && !isNaN(yearOverride) ? yearOverride : parsed.raceYear;
 
     // Filter to Male/Female only — excludes relay teams, sweeps, ungendered entries
     const rows = parsed.rows.filter(
@@ -106,7 +111,7 @@ export async function POST(req: NextRequest) {
         race_id,
         import_id: importRecord.id,
         full_name: r.full_name,
-        result_year: r.result_year,
+        result_year: resultYear,
         result_status: r.result_status,
         finish_seconds: r.finish_seconds,
         position: r.position,
@@ -134,7 +139,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       raceName: parsed.raceName,
-      raceYear: parsed.raceYear,
+      raceYear: resultYear,
       rowCount: insertedCount,
       importId: importRecord.id,
       parseErrors: parsed.parseErrors,

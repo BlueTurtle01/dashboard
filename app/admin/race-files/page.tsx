@@ -317,7 +317,16 @@ export default function RaceFilesPage() {
   const [creating, setCreating] = useState(false);
 
   // Results import outcome per race (keyed by raceId)
-  const [resultsImport, setResultsImport] = useState<Record<string, { rowCount?: number; warning?: string; error?: string }>>({});
+  const [resultsImport, setResultsImport] = useState<Record<string, { rowCount?: number; raceYear?: number; warning?: string; error?: string }>>({});
+
+  // Stored result years per race, loaded from DB
+  const [resultYears, setResultYears] = useState<Record<string, { year: number; count: number }[]>>({});
+
+  // Year picker per race for results upload (overrides CSV-derived year)
+  const [resultsYearInput, setResultsYearInput] = useState<Record<string, string>>({});
+
+  // Tracks which race/year is being deleted
+  const [deletingResults, setDeletingResults] = useState<Record<string, boolean>>({});
 
   // Race Matcher characteristics
   const [profileDistances, setProfileDistances] = useState<Record<string, number>>({});
@@ -349,6 +358,7 @@ export default function RaceFilesPage() {
         { data: profilesData },
         { data: entrantData },
         { data: raceDateRows },
+        { data: resultYearRows },
       ] = await Promise.all([
         supabase
           .from("races")
@@ -360,6 +370,7 @@ export default function RaceFilesPage() {
         supabase.from("race_profiles").select("race_id, total_ascent_m, total_distance_km"),
         supabase.rpc("get_latest_year_entrant_counts"),
         supabase.from("race_dates").select("race_id, start_date").order("start_date", { ascending: false }),
+        supabase.rpc("get_race_result_years"),
       ]);
 
       if (racesErr || !racesData) throw new Error(racesErr?.message ?? "Failed to load races");
@@ -392,6 +403,14 @@ export default function RaceFilesPage() {
         if (!newRaceDates[d.race_id]) newRaceDates[d.race_id] = d.start_date; // ordered DESC so first is most recent
       }
       setRaceDates(newRaceDates);
+
+      type ResultYearRow = { race_id: string; result_year: number; row_count: number };
+      const newResultYears: Record<string, { year: number; count: number }[]> = {};
+      for (const r of (resultYearRows ?? []) as ResultYearRow[]) {
+        if (!newResultYears[r.race_id]) newResultYears[r.race_id] = [];
+        newResultYears[r.race_id].push({ year: r.result_year, count: Number(r.row_count) });
+      }
+      setResultYears(newResultYears);
 
       type RaceRow = Omit<Race, "has_terrain_segments" | "files">;
       const typedRaces = racesData as RaceRow[];
@@ -519,10 +538,13 @@ export default function RaceFilesPage() {
         const fd = new FormData();
         fd.append("file", file);
         fd.append("race_id", raceId);
+        const yearOverride = resultsYearInput[raceId]?.trim();
+        if (yearOverride) fd.append("year_override", yearOverride);
         try {
           const importRes = await fetch("/api/admin/race-files-import", { method: "POST", body: fd });
-          const importJson = await importRes.json() as { rowCount?: number; warning?: string; error?: string };
+          const importJson = await importRes.json() as { rowCount?: number; raceYear?: number; warning?: string; error?: string };
           setResultsImport((prev) => ({ ...prev, [raceId]: importJson }));
+          await loadData();
         } catch {
           setResultsImport((prev) => ({ ...prev, [raceId]: { error: "Import request failed" } }));
         }
@@ -560,6 +582,43 @@ export default function RaceFilesPage() {
       alert(err instanceof Error ? err.message : "Delete failed");
     } finally {
       setDeleting((prev) => ({ ...prev, [file.id]: false }));
+    }
+  }
+
+  // ── Delete results for a specific year ───────────────────────────────────
+
+  async function handleDeleteResults(raceId: string, year: number) {
+    if (!confirm(`Delete all ${year} results for this race? This also removes the import record so you can re-import the same file. This cannot be undone.`)) return;
+
+    const key = `${raceId}_${year}`;
+    setDeletingResults((prev) => ({ ...prev, [key]: true }));
+    try {
+      // Collect the import IDs linked to this year's rows before deleting
+      const { data: linkedImports } = await supabase
+        .from("race_results")
+        .select("import_id")
+        .eq("race_id", raceId)
+        .eq("result_year", year)
+        .not("import_id", "is", null);
+
+      const { error: resultsErr } = await supabase
+        .from("race_results")
+        .delete()
+        .eq("race_id", raceId)
+        .eq("result_year", year);
+      if (resultsErr) throw new Error(resultsErr.message);
+
+      // Remove only the import records tied to this year so the file can be re-imported
+      if (linkedImports?.length) {
+        const ids = [...new Set(linkedImports.map((r: { import_id: string | null }) => r.import_id).filter(Boolean))] as string[];
+        if (ids.length) await supabase.from("race_result_imports").delete().in("id", ids);
+      }
+
+      await loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeletingResults((prev) => ({ ...prev, [key]: false }));
     }
   }
 
@@ -1116,6 +1175,11 @@ export default function RaceFilesPage() {
                         ✓ In Matcher
                       </span>
                     )}
+                    {resultYears[race.id]?.length > 0 && (
+                      <span style={{ padding: "3px 10px", borderRadius: "20px", background: "#f0fdf4", color: "#166534", border: "1px solid #86efac", fontSize: "11px", fontWeight: 600 }}>
+                        {resultYears[race.id].map((r) => r.year).join(", ")} results
+                      </span>
+                    )}
                     <span style={{
                       padding: "3px 10px",
                       borderRadius: "20px",
@@ -1232,6 +1296,38 @@ export default function RaceFilesPage() {
                       </div>
                     )}
 
+                    {/* Stored results summary */}
+                    {(() => {
+                      const years = resultYears[race.id];
+                      if (!years?.length) return null;
+                      return (
+                        <div style={{ marginBottom: "12px", padding: "10px 14px", background: "#f0fdf4", borderRadius: "8px", border: "1px solid #86efac" }}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "#15803d", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>
+                            Stored Results
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                            {years.map(({ year, count }) => {
+                              const key = `${race.id}_${year}`;
+                              return (
+                                <div key={year} style={{ display: "flex", alignItems: "center", gap: "6px", background: "#dcfce7", borderRadius: "6px", padding: "4px 10px" }}>
+                                  <span style={{ fontSize: "12px", fontWeight: 600, color: "#166534" }}>{year}</span>
+                                  <span style={{ fontSize: "11px", color: "#15803d" }}>{count.toLocaleString()} results</span>
+                                  <button
+                                    onClick={() => void handleDeleteResults(race.id, year)}
+                                    disabled={!!deletingResults[key]}
+                                    title={`Delete all ${year} results`}
+                                    style={{ background: "none", border: "none", cursor: deletingResults[key] ? "not-allowed" : "pointer", color: "#6b7280", fontSize: "13px", padding: "0 2px", lineHeight: 1 }}
+                                  >
+                                    {deletingResults[key] ? "…" : "×"}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Results import outcome */}
                     {resultsImport[race.id] && (() => {
                       const r = resultsImport[race.id];
@@ -1245,7 +1341,7 @@ export default function RaceFilesPage() {
                         }}>
                           {r.error && `⚠ Import error: ${r.error}`}
                           {r.warning && `ℹ ${r.warning}`}
-                          {isOk && `✓ Imported ${r.rowCount} Male/Female results with checkpoint times`}
+                          {isOk && `✓ Imported ${r.rowCount} results for ${r.raceYear ?? ""}`}
                         </div>
                       );
                     })()}
@@ -1275,6 +1371,18 @@ export default function RaceFilesPage() {
                                   if (file) handleFileSelected(race.id, ft, file);
                                 }}
                               />
+                              {ft === "results" && (
+                                <input
+                                  type="number"
+                                  placeholder="Year (auto)"
+                                  min={1980}
+                                  max={2100}
+                                  value={resultsYearInput[race.id] ?? ""}
+                                  onChange={(e) => setResultsYearInput((prev) => ({ ...prev, [race.id]: e.target.value }))}
+                                  style={{ width: "110px", padding: "5px 8px", borderRadius: "6px", border: "1px solid #d1d5db", fontSize: "12px", marginRight: "4px", verticalAlign: "middle" }}
+                                  title="Override year — leave blank to auto-detect from filename"
+                                />
+                              )}
                               <button
                                 disabled={isUploading}
                                 onClick={() => inputRefs.current[inputKey]?.click()}
