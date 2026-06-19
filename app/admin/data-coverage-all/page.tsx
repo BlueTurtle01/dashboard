@@ -104,7 +104,7 @@ export default function AllRaceDataCoveragePage() {
         supabase.from("races_meta").select("race_id").in("race_id", raceIds).eq("meta_key", "race_pace_strategy"),
         supabase.from("race_characteristics").select("race_id, terrain, hilliness, crowd_size, climate, distance_band, country").in("race_id", raceIds),
         supabase.from("race_dates").select("race_id").in("race_id", raceIds),
-        supabase.from("race_files").select("race_id").in("race_id", raceIds).eq("file_type", "results"),
+        supabase.rpc("get_latest_year_entrant_counts"),
       ]);
 
       const gpxSet      = new Set((gpxRows     ?? []).map(r => r.race_id as string));

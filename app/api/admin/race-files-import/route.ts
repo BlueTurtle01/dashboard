@@ -68,14 +68,12 @@ export async function POST(req: NextRequest) {
     // Apply year override if provided (e.g. user selected a specific year in the UI)
     const resultYear = yearOverride && !isNaN(yearOverride) ? yearOverride : parsed.raceYear;
 
-    // Filter to Male/Female only — excludes relay teams, sweeps, ungendered entries
-    const rows = parsed.rows.filter(
-      (r) => r.gender === "Male" || r.gender === "Female"
-    );
+    // Keep all rows with a name — includes finishers, DNFs, DNS, and relay teams
+    const rows = parsed.rows.filter((r) => r.full_name.trim() !== "");
 
     if (!rows.length) {
       return NextResponse.json({
-        warning: "No Male/Female rows found in CSV",
+        warning: "No result rows found in CSV",
         raceName: parsed.raceName,
         raceYear: parsed.raceYear,
         rowCount: 0,
