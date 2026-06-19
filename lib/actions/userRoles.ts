@@ -45,33 +45,17 @@ export async function listUsersWithRoles(): Promise<UserWithRoles[]> {
 
   const adminClient = createAdminClient();
 
-  // Query public.users table (synced from auth.users)
-  let users;
-  try {
-    const result = await adminClient
-      .from("users")
-      .select("id, email");
-    if (result.error) {
-      throw new Error(`users query error: ${result.error.message}`);
-    }
-    users = result.data ?? [];
-  } catch (err) {
-    throw new Error(`Failed to list users: ${err instanceof Error ? err.message : String(err)}`);
-  }
+  // Fetch users and roles in parallel
+  const [usersResult, rolesResult] = await Promise.all([
+    adminClient.from("users").select("id, email"),
+    adminClient.from("user_roles").select("user_id, role"),
+  ]);
 
-  // Use admin client to bypass RLS on user_roles table
-  let roleRows;
-  try {
-    const result = await adminClient
-      .from("user_roles")
-      .select("user_id, role");
-    if (result.error) {
-      throw new Error(`user_roles query error: ${result.error.message}`);
-    }
-    roleRows = result.data;
-  } catch (err) {
-    throw new Error(`Failed to load user roles: ${err instanceof Error ? err.message : String(err)}`);
-  }
+  if (usersResult.error) throw new Error(`users query error: ${usersResult.error.message}`);
+  if (rolesResult.error) throw new Error(`user_roles query error: ${rolesResult.error.message}`);
+
+  const users = usersResult.data ?? [];
+  const roleRows = rolesResult.data;
 
   const rolesByUser: Record<string, AppRole[]> = {};
   for (const row of roleRows ?? []) {
@@ -92,21 +76,20 @@ export async function getUserById(userId: string): Promise<UserDetail> {
 
   const adminClient = createAdminClient();
 
-  // Query public.users table (synced from auth.users)
-  const { data: userData, error: userError } = await adminClient
-    .from("users")
-    .select("id, email, phone, created_at, last_sign_in_at, email_confirmed_at")
-    .eq("id", userId)
-    .maybeSingle();
+  const [
+    { data: userData, error: userError },
+    { data: roleRows, error: rolesError },
+  ] = await Promise.all([
+    adminClient
+      .from("users")
+      .select("id, email, phone, created_at, last_sign_in_at, email_confirmed_at")
+      .eq("id", userId)
+      .maybeSingle(),
+    adminClient.from("user_roles").select("role").eq("user_id", userId),
+  ]);
 
   if (userError) throw new Error(userError.message);
   if (!userData) throw new Error("User not found");
-
-  // Use admin client to bypass RLS on user_roles table
-  const { data: roleRows, error: rolesError } = await adminClient
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
   if (rolesError) throw new Error(rolesError.message);
 
   return {

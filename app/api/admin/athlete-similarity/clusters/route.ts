@@ -14,7 +14,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("als_cluster_summaries")
-    .select("*")
+    .select("cluster_id, auto_label, custom_label, athlete_count")
     .order("cluster_id");
 
   if (error) {

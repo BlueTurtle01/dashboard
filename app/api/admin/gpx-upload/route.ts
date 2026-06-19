@@ -119,9 +119,11 @@ export async function POST(req: NextRequest) {
       .eq("race_id", race_id)
       .eq("file_type", "gpx");
 
-    for (const old of oldFiles ?? []) {
-      await adminClient.storage.from(BUCKET).remove([old.storage_path]);
-      await adminClient.from("race_files").delete().eq("id", old.id);
+    if ((oldFiles ?? []).length > 0) {
+      await Promise.all([
+        adminClient.storage.from(BUCKET).remove(oldFiles!.map((f) => f.storage_path)),
+        adminClient.from("race_files").delete().in("id", oldFiles!.map((f) => f.id)),
+      ]);
     }
 
     // ── Insert into race_files ────────────────────────────────────────────────

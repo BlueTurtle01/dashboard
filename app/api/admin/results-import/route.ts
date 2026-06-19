@@ -29,82 +29,107 @@ export async function POST(req: NextRequest) {
 
   const results = [];
 
-  for (const file of files) {
-    const filename = file.name;
-    try {
-      const text = await file.text();
-      const parsed = parseCsvFile(filename, text);
+  // Parse all files and read their text in parallel, then bulk-fetch matching races
+  // to avoid 3 sequential DB round-trips per file inside the loop.
+  const parsedFiles = await Promise.all(
+    files.map(async (file) => {
+      const filename = file.name;
+      try {
+        const text = await file.text();
+        return { filename, parsed: parseCsvFile(filename, text), error: null };
+      } catch (err) {
+        return { filename, parsed: null, error: String(err) };
+      }
+    })
+  );
 
-      // Check for duplicate import (same filename already imported)
-      const { data: existing } = await supabase
+  // Duplicate-import checks in parallel
+  const dupChecks = await Promise.all(
+    parsedFiles.map(({ filename }) =>
+      supabase
         .from("race_result_imports")
         .select("id, race_id")
         .eq("original_filename", filename)
-        .maybeSingle();
+        .maybeSingle()
+    )
+  );
+
+  // Pre-fetch all races matching any of the CSV race names in a single query
+  const uniqueRaceNames = [
+    ...new Set(
+      parsedFiles
+        .filter((pf, i) => !pf.error && !dupChecks[i].data)
+        .map((pf) => pf.parsed!.raceName)
+    ),
+  ];
+
+  // racesByName[name] = { published?, unpublished? }
+  const racesByName: Record<string, { published?: string; unpublished?: string }> = {};
+  if (uniqueRaceNames.length > 0) {
+    const { data: existingRaces } = await supabase
+      .from("races")
+      .select("id, name, is_published")
+      .in("name", uniqueRaceNames);
+    for (const race of existingRaces ?? []) {
+      if (!racesByName[race.name]) racesByName[race.name] = {};
+      if (race.is_published) racesByName[race.name].published = race.id;
+      else racesByName[race.name].unpublished = race.id;
+    }
+  }
+
+  for (let fileIdx = 0; fileIdx < parsedFiles.length; fileIdx++) {
+    const { filename, parsed, error: parseError } = parsedFiles[fileIdx];
+    if (parseError) {
+      results.push({ filename, error: parseError });
+      continue;
+    }
+
+    try {
+      const existing = dupChecks[fileIdx].data;
 
       if (existing) {
         results.push({ filename, warning: "Already imported — skipped", raceId: existing.race_id });
         continue;
       }
 
-      // Resolve race by name (3-step):
-      //   1. Prefer an existing published race with the same name — links directly to the
-      //      canonical course row, matching how manually-uploaded races are stored.
-      //   2. Fall back to an existing unpublished race with the same name — two CSVs for
-      //      the same course (different years) end up under one races row; result_year on
-      //      race_results distinguishes them.
-      //   3. Create a new unpublished row with no year in the slug — correct model where
-      //      the course is the identity and the year lives on race_results.result_year.
+      // Resolve race using pre-fetched data; only insert if truly new.
+      // Race model: the course (name) is the identity; result_year distinguishes editions.
       let raceId: string;
+      const knownRace = racesByName[parsed!.raceName];
 
-      const { data: publishedMatch } = await supabase
-        .from("races")
-        .select("id")
-        .eq("name", parsed.raceName)
-        .eq("is_published", true)
-        .maybeSingle();
-
-      if (publishedMatch) {
-        raceId = publishedMatch.id;
+      if (knownRace?.published) {
+        raceId = knownRace.published;
+      } else if (knownRace?.unpublished) {
+        raceId = knownRace.unpublished;
       } else {
-        const { data: unpublishedMatch } = await supabase
+        const courseSlug = parsed!.dedupSlug.replace(/-\d{4}$/, "");
+        const { data: newRace, error: raceErr } = await supabase
           .from("races")
+          .insert({
+            name: parsed!.raceName,
+            slug: courseSlug,
+            is_published: false,
+          })
           .select("id")
-          .eq("name", parsed.raceName)
-          .eq("is_published", false)
-          .maybeSingle();
+          .single();
 
-        if (unpublishedMatch) {
-          raceId = unpublishedMatch.id;
-        } else {
-          // slugify(raceName) without a year suffix — the slug is the course identity
-          const courseSlug = parsed.dedupSlug.replace(/-\d{4}$/, "");
-          const { data: newRace, error: raceErr } = await supabase
-            .from("races")
-            .insert({
-              name: parsed.raceName,
-              slug: courseSlug,
-              is_published: false,
-            })
-            .select("id")
-            .single();
-
-          if (raceErr || !newRace) {
-            results.push({ filename, error: raceErr?.message ?? "Failed to create race" });
-            continue;
-          }
-          raceId = newRace.id;
+        if (raceErr || !newRace) {
+          results.push({ filename, error: raceErr?.message ?? "Failed to create race" });
+          continue;
         }
+        raceId = newRace.id;
+        // Cache so sibling files with the same name reuse it
+        racesByName[parsed!.raceName] = { unpublished: raceId };
       }
 
       // If no rows were parsed, create/find the race but skip results.
       // No import record is created so the file can be re-uploaded after fixing the CSV.
-      if (!parsed.rows.length) {
+      if (!parsed!.rows.length) {
         results.push({
           filename,
-          warning: `Race created with no results — ${parsed.parseErrors[0] ?? "No rows parsed"}`,
-          raceName: parsed.raceName,
-          raceYear: parsed.raceYear,
+          warning: `Race created with no results — ${parsed!.parseErrors[0] ?? "No rows parsed"}`,
+          raceName: parsed!.raceName,
+          raceYear: parsed!.raceYear,
           rowCount: 0,
           raceId,
         });
@@ -118,7 +143,7 @@ export async function POST(req: NextRequest) {
           imported_by: user?.id ?? null,
           original_filename: filename,
           race_id: raceId,
-          row_count: parsed.rows.length,
+          row_count: parsed!.rows.length,
         })
         .select("id")
         .single();
@@ -132,8 +157,8 @@ export async function POST(req: NextRequest) {
       let insertedCount = 0;
       let batchError: string | null = null;
 
-      for (let i = 0; i < parsed.rows.length; i += BATCH_SIZE) {
-        const batch = parsed.rows.slice(i, i + BATCH_SIZE).map((r) => ({
+      for (let i = 0; i < parsed!.rows.length; i += BATCH_SIZE) {
+        const batch = parsed!.rows.slice(i, i + BATCH_SIZE).map((r) => ({
           race_id: raceId,
           import_id: importRecord.id,
           full_name: r.full_name,
@@ -161,12 +186,12 @@ export async function POST(req: NextRequest) {
       } else {
         results.push({
           filename,
-          raceName: parsed.raceName,
-          raceYear: parsed.raceYear,
+          raceName: parsed!.raceName,
+          raceYear: parsed!.raceYear,
           rowCount: insertedCount,
           raceId,
           importId: importRecord.id,
-          parseErrors: parsed.parseErrors,
+          parseErrors: parsed!.parseErrors,
         });
       }
     } catch (err) {

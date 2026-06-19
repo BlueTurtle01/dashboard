@@ -21,21 +21,28 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Get all links
-    const { data: links, error: linksError } = await supabase
-      .from('coach_athlete_links')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const adminClient = createAdminClient();
+
+    // Fetch all 4 independent data sets in parallel
+    const [
+      { data: links, error: linksError },
+      { data: allUsers },
+      { data: coachRoleUsers },
+      { data: athleteRoleUsers },
+    ] = await Promise.all([
+      supabase
+        .from('coach_athlete_links')
+        .select('id, coach_user_id, athlete_user_id, status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(500),
+      adminClient.from('users').select('id, full_name, email'),
+      supabase.from('user_roles').select('user_id').eq('role', 'coach'),
+      supabase.from('user_roles').select('user_id').eq('role', 'athlete'),
+    ]);
 
     if (linksError) {
       return NextResponse.json({ error: linksError.message }, { status: 500 });
     }
-
-    // Query public.users via admin client (bypasses RLS, gets all rows)
-    const adminClient = createAdminClient();
-    const { data: allUsers } = await adminClient
-      .from('users')
-      .select('id, full_name, email');
 
     const userMap: Record<string, { full_name: string | null; email: string | null }> = {};
     (allUsers || []).forEach((u: any) => {
@@ -45,22 +52,10 @@ export async function GET(req: Request) {
     const emailMap: Record<string, string> = {};
     (allUsers || []).forEach((u: any) => { if (u.email) emailMap[u.id] = u.email; });
 
-    // Coaches: users with role='coach'
-    const { data: coachRoleUsers } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .eq('role', 'coach');
-
     const coachProfiles = (coachRoleUsers || []).map((r: any) => ({
       user_id: r.user_id,
       full_name: userMap[r.user_id]?.full_name ?? null,
     }));
-
-    // Athletes: union of role='athlete' rows and athlete_user_ids in existing links
-    const { data: athleteRoleUsers } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .eq('role', 'athlete');
 
     const linkedAthleteIds = (links || []).map((l: any) => l.athlete_user_id);
     const allAthleteIds = Array.from(new Set([

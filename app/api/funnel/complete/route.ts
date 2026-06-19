@@ -88,7 +88,8 @@ export async function POST(req: NextRequest) {
     const assessmentId = assessment.id;
 
     // --------------------------------------------------
-    // 3. Save all answers
+    // 3 & 4. Build answers + derived profile (sync), then persist both
+    //         alongside the active-races fetch — all 3 are independent.
     // --------------------------------------------------
     const answerRows = Object.entries(answers)
       .filter(([key]) => !['first_name', 'email', 'country_of_residence', 'consent_marketing', 'consent_privacy'].includes(key))
@@ -114,56 +115,44 @@ export async function POST(req: NextRequest) {
         return row;
       });
 
-    if (answerRows.length > 0) {
-      const { error: answersError } = await supabase
-        .from('funnel_assessment_answers')
-        .insert(answerRows);
-
-      if (answersError) {
-        console.error('Answers insert error:', answersError);
-        // Non-fatal — continue
-      }
-    }
-
-    // --------------------------------------------------
-    // 4. Build derived profile
-    // --------------------------------------------------
     const profile = buildDerivedProfile(answers as AssessmentAnswers);
 
-    // Persist profile
-    await supabase.from('funnel_assessment_profiles').insert({
-      assessment_id: assessmentId,
-      profile_json: profile,
-      endurance_level: profile.endurance_level,
-      terrain_readiness_level: profile.terrain_readiness_level,
-      stage_race_readiness_level: profile.stage_race_readiness_level,
-      pack_readiness_level: profile.pack_readiness_level,
-      heat_readiness_level: profile.heat_readiness_level,
-      budget_band: profile.budget_band,
-      travel_willingness_level: profile.travel_willingness_level,
-      life_constraint_level: profile.life_constraint_level,
-      risk_appetite_level: profile.risk_appetite_level,
-      mds_goal_timeline: profile.mds_goal_timeline,
-      has_marathon: profile.has_marathon,
-      has_trail_marathon: profile.has_trail_marathon,
-      has_ultra: profile.has_ultra,
-      has_multi_stage: profile.has_multi_stage,
-      has_pack_experience: profile.has_pack_experience,
-      can_train_4_plus_days: profile.can_train_4_plus_days,
-      can_do_back_to_back: profile.can_do_back_to_back,
-      willing_heat_training: profile.willing_heat_training,
-      prefers_lower_risk: profile.prefers_lower_risk,
-      prefers_stage_race: profile.prefers_stage_race,
-      wants_desert_specificity: profile.wants_desert_specificity,
-    });
+    const [answersResult, , { data: races, error: racesError }] = await Promise.all([
+      answerRows.length > 0
+        ? supabase.from('funnel_assessment_answers').insert(answerRows)
+        : Promise.resolve({ data: null, error: null }),
+      supabase.from('funnel_assessment_profiles').insert({
+        assessment_id: assessmentId,
+        profile_json: profile,
+        endurance_level: profile.endurance_level,
+        terrain_readiness_level: profile.terrain_readiness_level,
+        stage_race_readiness_level: profile.stage_race_readiness_level,
+        pack_readiness_level: profile.pack_readiness_level,
+        heat_readiness_level: profile.heat_readiness_level,
+        budget_band: profile.budget_band,
+        travel_willingness_level: profile.travel_willingness_level,
+        life_constraint_level: profile.life_constraint_level,
+        risk_appetite_level: profile.risk_appetite_level,
+        mds_goal_timeline: profile.mds_goal_timeline,
+        has_marathon: profile.has_marathon,
+        has_trail_marathon: profile.has_trail_marathon,
+        has_ultra: profile.has_ultra,
+        has_multi_stage: profile.has_multi_stage,
+        has_pack_experience: profile.has_pack_experience,
+        can_train_4_plus_days: profile.can_train_4_plus_days,
+        can_do_back_to_back: profile.can_do_back_to_back,
+        willing_heat_training: profile.willing_heat_training,
+        prefers_lower_risk: profile.prefers_lower_risk,
+        prefers_stage_race: profile.prefers_stage_race,
+        wants_desert_specificity: profile.wants_desert_specificity,
+      }),
+      supabase.from('funnel_races').select('*').eq('is_active', true),
+    ]);
 
-    // --------------------------------------------------
-    // 5. Load active races from DB
-    // --------------------------------------------------
-    const { data: races, error: racesError } = await supabase
-      .from('funnel_races')
-      .select('*')
-      .eq('is_active', true);
+    if (answersResult.error) {
+      console.error('Answers insert error:', answersResult.error);
+      // Non-fatal — continue
+    }
 
     if (racesError || !races || races.length === 0) {
       console.error('Races fetch error:', racesError);
@@ -207,20 +196,21 @@ export async function POST(req: NextRequest) {
       explanation_json: s.explanation,
     }));
 
-    await supabase.from('funnel_assessment_race_scores').insert(scoreRows);
-
     // --------------------------------------------------
-    // 10. Persist final result
+    // 9 & 10. Persist race scores and final result in parallel
     // --------------------------------------------------
-    await supabase.from('funnel_assessment_results').insert({
-      assessment_id: assessmentId,
-      primary_race_id: result.primary_race.race.id,
-      alternative_race_ids_json: result.alternatives.map((a) => a.race.id),
-      lower_risk_race_id: result.lower_risk_race?.race.id ?? null,
-      stretch_race_id: result.stretch_race?.race.id ?? null,
-      summary_json: result.summary,
-      main_gaps_json: result.main_gaps,
-    });
+    await Promise.all([
+      supabase.from('funnel_assessment_race_scores').insert(scoreRows),
+      supabase.from('funnel_assessment_results').insert({
+        assessment_id: assessmentId,
+        primary_race_id: result.primary_race.race.id,
+        alternative_race_ids_json: result.alternatives.map((a) => a.race.id),
+        lower_risk_race_id: result.lower_risk_race?.race.id ?? null,
+        stretch_race_id: result.stretch_race?.race.id ?? null,
+        summary_json: result.summary,
+        main_gaps_json: result.main_gaps,
+      }),
+    ]);
 
     // --------------------------------------------------
     // 11. Return to client
