@@ -1,0 +1,23 @@
+# Migration files - already applied, schema is authoritative via Supabase MCP
+supabase/migrations/*.sql
+*.sql
+
+# One-off implementation docs - historical reference only
+CHAT_SYSTEM_GUIDE.md
+CHAT_SYSTEM_V2_SETUP.md
+CODEBASE_ANALYSIS.md
+STRAVA_IMPLEMENTATION_SUMMARY.md
+STRAVA_INTEGRATION.md
+STRAVA_REDIRECT_URI_FIX.md
+STRAVA_SETUP_QUICK_START.md
+STRAVA_WEBHOOKS.md
+STRAVA_WEBHOOKS_SETUP.md
+STRAVA_WEBHOOKS_SUMMARY.md
+
+# Build output and dependencies
+.next/
+node_modules/
+
+# Logs
+*.log
+dev.log
