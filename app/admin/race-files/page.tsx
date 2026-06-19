@@ -359,7 +359,7 @@ export default function RaceFilesPage() {
         supabase.from("race_characteristics").select("race_id, country, terrain, hilliness, crowd_size, climate, distance_band"),
         supabase.from("race_profiles").select("race_id, total_ascent_m, total_distance_km"),
         supabase.rpc("get_latest_year_entrant_counts"),
-        supabase.from("races_meta").select("race_id, meta_value").eq("meta_key", "race_date"),
+        supabase.from("race_dates").select("race_id, start_date").order("start_date", { ascending: false }),
       ]);
 
       if (racesErr || !racesData) throw new Error(racesErr?.message ?? "Failed to load races");
@@ -386,9 +386,11 @@ export default function RaceFilesPage() {
       );
       setEntrantCounts(Object.fromEntries(entrantByRaceId));
 
-      type RaceDateRow = { race_id: string; meta_value: string };
+      type RaceDateRow = { race_id: string; start_date: string };
       const newRaceDates: Record<string, string> = {};
-      for (const d of (raceDateRows ?? []) as RaceDateRow[]) newRaceDates[d.race_id] = d.meta_value;
+      for (const d of (raceDateRows ?? []) as RaceDateRow[]) {
+        if (!newRaceDates[d.race_id]) newRaceDates[d.race_id] = d.start_date; // ordered DESC so first is most recent
+      }
       setRaceDates(newRaceDates);
 
       type RaceRow = Omit<Race, "has_terrain_segments" | "files">;
@@ -940,10 +942,10 @@ export default function RaceFilesPage() {
     const val = raceDateEdits[raceId]?.trim();
     if (!val) return;
     setRaceDateSaving(prev => ({ ...prev, [raceId]: true }));
-    await supabase.from("races_meta").upsert(
-      { race_id: raceId, meta_key: "race_date", meta_value: val },
-      { onConflict: "race_id,meta_key" }
-    );
+    const year = new Date(val).getFullYear();
+    // Remove any existing entry for this race+year then insert fresh
+    await supabase.from("race_dates").delete().eq("race_id", raceId).eq("year", year);
+    await supabase.from("race_dates").insert({ race_id: raceId, start_date: val, end_date: val, year, status: "confirmed" });
     setRaceDateSaving(prev => ({ ...prev, [raceId]: false }));
     setRaceDateEdits(prev => ({ ...prev, [raceId]: "" }));
     await loadData();

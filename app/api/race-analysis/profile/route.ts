@@ -83,14 +83,15 @@ export async function POST(req: NextRequest) {
     }
     const gpxText = await gpxRes.text();
 
-    // Fetch race date from races_meta (canonical per-year date, not a fixed column)
-    const { data: raceDateMeta } = await supabase
-      .from("races_meta")
-      .select("meta_value")
+    // Fetch race date from race_dates (most recent, for climate inference)
+    const { data: raceDateRow } = await supabase
+      .from("race_dates")
+      .select("start_date")
       .eq("race_id", race_id)
-      .eq("meta_key", "race_date")
+      .order("start_date", { ascending: false })
+      .limit(1)
       .maybeSingle();
-    const raceDate = raceDateMeta?.meta_value ? new Date(raceDateMeta.meta_value) : null;
+    const raceDate = raceDateRow?.start_date ? new Date(raceDateRow.start_date) : null;
 
     let windCsvText: string | null = null;
     if (windFile) {

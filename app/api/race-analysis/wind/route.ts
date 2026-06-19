@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
     // ── Fetch race + GPX file record ──────────────────────────────────────────
     const supabase = await createClient();
 
-    const [{ data: raceDateMeta }, { data: gpxFile, error: gpxErr }] = await Promise.all([
-      supabase.from("races_meta").select("meta_value").eq("race_id", race_id).eq("meta_key", "race_date").maybeSingle(),
+    const [{ data: raceDateRow }, { data: gpxFile, error: gpxErr }] = await Promise.all([
+      supabase.from("race_dates").select("start_date").eq("race_id", race_id).order("start_date", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("race_files").select("id, public_url, file_name").eq("race_id", race_id).eq("file_type", "gpx").maybeSingle(),
     ]);
 
@@ -87,9 +87,8 @@ export async function POST(req: NextRequest) {
 
     const gpxText = await gpxRes.text();
 
-    // ── Resolve race date from races_meta ─────────────────────────────────────
-    const rawDate = raceDateMeta?.meta_value ?? null;
-    const raceEndDate = rawDate ? new Date(rawDate) : null;
+    // ── Resolve race date from race_dates ─────────────────────────────────────
+    const raceEndDate = raceDateRow?.start_date ? new Date(raceDateRow.start_date) : null;
 
     // Merge settings: explicit caller settings override, then stored race date, then defaults
     const settings: WindAnalysisSettings = {
@@ -102,7 +101,7 @@ export async function POST(req: NextRequest) {
       ...partialSettings,
     };
 
-    // If no date available (no races_meta.race_date + no explicit settings), skip gracefully
+    // If no date available (no race_dates row + no explicit settings), skip gracefully
     if (!raceEndDate && !partialSettings?.race_month) {
       return NextResponse.json({ skipped: true, reason: "no_date" });
     }
