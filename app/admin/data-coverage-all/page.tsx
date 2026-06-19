@@ -112,7 +112,7 @@ export default function AllRaceDataCoveragePage() {
       const strategySet = new Set((metaRows    ?? []).map(r => r.race_id as string));
       const charMap     = new Map((charRows    ?? []).map(r => [r.race_id as string, r]));
       const raceDateSet = new Set((raceDateRows ?? []).map(r => r.race_id as string));
-      const resultsSet  = new Set((resultsRows  ?? []).map(r => r.race_id as string));
+      const resultsSet  = new Set((resultsRows  ?? []).map((r: { race_id: string }) => r.race_id));
 
       setRows(racesData.map(r => {
         const ch = charMap.get(r.id as string) ?? null;
