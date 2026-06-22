@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { savePlanVersion } from "./actions";
 import type { WeatherDayRecord } from "@/lib/race-analysis/open-meteo";
 import {
   calculatePacingComplexityIndex,
@@ -1199,6 +1200,11 @@ export default function RaceReadinessPage() {
   const [includedRaceKeys, setIncludedRaceKeys] = useState<Set<string>>(new Set());
   const [athleteAidData, setAthleteAidData]     = useState<Record<string, AidStation[]>>({});
   const [assessmentTests, setAssessmentTests]   = useState<AssessmentTest[]>([]);
+  const [versionModal, setVersionModal]   = useState(false);
+  const [versionName, setVersionName]     = useState("");
+  const [versionNotes, setVersionNotes]   = useState("");
+  const [versionSaving, setVersionSaving] = useState(false);
+  const [versionResult, setVersionResult] = useState<{ version: number; fileCopied: boolean } | null>(null);
 
   const fetchAthlete = useCallback(async (key: string) => {
     if (!key.trim()) return;
@@ -1593,6 +1599,14 @@ export default function RaceReadinessPage() {
           </div>
         </div>
         {result && <button type="button" onClick={handleExportPdf} style={printBtn}>Export to PDF</button>}
+        <button
+          type="button"
+          className="no-print"
+          onClick={() => { setVersionModal(true); setVersionResult(null); setVersionName(""); setVersionNotes(""); }}
+          style={{ padding: "8px 16px", background: "#f0f9f0", color: "#1e3a1e", border: "1px solid #a7c4a7", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer", alignSelf: "flex-end" }}
+        >
+          Save version
+        </button>
 
         {/* ── Race picker — shows after athlete loads ── */}
         {athlete && !athleteLoading && (
@@ -4425,6 +4439,88 @@ export default function RaceReadinessPage() {
             );
           })()}
 
+        </div>
+      )}
+
+      {/* ── Save version modal ── */}
+      {versionModal && (
+        <div className="no-print" style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: "12px", padding: "28px 32px", width: "440px", maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: "17px", fontWeight: 700, color: "#1e3a1e" }}>Save as new version</h3>
+            <p style={{ margin: "0 0 18px", fontSize: "13px", color: "#666" }}>
+              Archives the current plan so you can return to it later for any race or athlete.
+            </p>
+
+            {versionResult ? (
+              <div>
+                <div style={{ padding: "14px 16px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", marginBottom: "16px" }}>
+                  <div style={{ fontWeight: 700, color: "#166534", marginBottom: "6px", fontSize: "14px" }}>✓ Saved as version {versionResult.version}</div>
+                  {versionResult.fileCopied ? (
+                    <div style={{ fontSize: "12px", color: "#15803d", lineHeight: 1.6 }}>
+                      File copied to <code style={{ background: "#dcfce7", padding: "0 4px", borderRadius: 3 }}>v{versionResult.version}/page.tsx</code>.
+                      Commit that directory and deploy — it will be live at <code style={{ background: "#dcfce7", padding: "0 4px", borderRadius: 3 }}>/admin/race-readiness/v{versionResult.version}</code>.
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "12px", color: "#166534", lineHeight: 1.6 }}>
+                      DB record created (v{versionResult.version}). The file copy must be done locally — run{" "}
+                      <code style={{ background: "#dcfce7", padding: "0 4px", borderRadius: 3 }}>npm run version:save</code>{" "}
+                      in the project directory, then commit and deploy.
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => setVersionModal(false)}
+                  style={{ width: "100%", padding: "9px", background: "#1e3a1e", color: "#fff", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#444", marginBottom: "4px" }}>
+                  Version name <span style={{ fontWeight: 400, color: "#999" }}>(optional)</span>
+                </label>
+                <input
+                  value={versionName}
+                  onChange={e => setVersionName(e.target.value)}
+                  placeholder="e.g. Added terrain section"
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "13px", marginBottom: "14px", outline: "none" }}
+                />
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#444", marginBottom: "4px" }}>What changed?</label>
+                <textarea
+                  value={versionNotes}
+                  onChange={e => setVersionNotes(e.target.value)}
+                  placeholder="Describe the changes in this version…"
+                  rows={4}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "13px", resize: "vertical", outline: "none", marginBottom: "18px" }}
+                />
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    disabled={versionSaving}
+                    onClick={async () => {
+                      setVersionSaving(true);
+                      try {
+                        const r = await savePlanVersion(versionName, versionNotes);
+                        setVersionResult(r);
+                      } catch (e) {
+                        alert("Failed to save version: " + (e instanceof Error ? e.message : String(e)));
+                      }
+                      setVersionSaving(false);
+                    }}
+                    style={{ flex: 1, padding: "9px", background: "#1e3a1e", color: "#fff", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", opacity: versionSaving ? 0.6 : 1 }}
+                  >
+                    {versionSaving ? "Saving…" : "Save version"}
+                  </button>
+                  <button
+                    onClick={() => setVersionModal(false)}
+                    style={{ padding: "9px 18px", background: "#f3f4f6", color: "#555", border: "none", borderRadius: "8px", fontSize: "14px", cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
