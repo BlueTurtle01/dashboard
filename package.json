@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "version:save": "node scripts/save-plan-version.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",
