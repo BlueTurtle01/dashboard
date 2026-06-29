@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserRoles } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function DELETE(
   _req: NextRequest,
@@ -15,6 +17,7 @@ export async function DELETE(
 
   const { id } = await params;
   const supabase = await createClient();
+  const adminSupabase = createAdminClient();
 
   const { data: race } = await supabase
     .from("races")
@@ -26,10 +29,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Race not found" }, { status: 404 });
   }
 
-  await supabase.from("race_results").delete().eq("race_id", id);
-  await supabase.from("race_result_imports").delete().eq("race_id", id);
-
-  const { error } = await supabase.from("races").delete().eq("id", id);
+  const { error } = await adminSupabase.rpc("admin_delete_race", { p_race_id: id });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
