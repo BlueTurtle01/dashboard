@@ -69,12 +69,6 @@ const GROUPS: ToolGroup[] = [
         description: "Entry counts, finisher rates, and DNF rates across all races for the latest year of results.",
         badge: "Active",
       },
-      {
-        href: "/admin/aid-stations",
-        title: "Aid Stations",
-        description: "Manage aid station positions and facilities for each race. Used in athlete readiness reports and displayed on public race pages.",
-        badge: "Active",
-      },
     ],
   },
   {
