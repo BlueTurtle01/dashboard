@@ -12,7 +12,6 @@ import { getUserRoles } from "@/lib/auth/core";
 import { createClient } from "@/lib/supabase/server";
 import { parseGpxPoints } from "@/lib/race-analysis/gpx";
 import type { StoredSection } from "@/lib/race-analysis/pacing-model";
-import type { AidStation } from "@/app/api/admin/aid-stations/route";
 
 export const maxDuration = 30;
 
@@ -269,7 +268,7 @@ export async function POST(req: NextRequest) {
       sustained_segments: meta.sustained_segments ?? null,
       terrain_sections:   terrainSections,
       aid_stations:       meta.aid_stations
-        ? (() => { try { return JSON.parse(meta.aid_stations) as AidStation[]; } catch { return null; } })()
+        ? (() => { try { return JSON.parse(meta.aid_stations) as unknown[]; } catch { return null; } })()
         : null,
     });
   } catch (err) {
