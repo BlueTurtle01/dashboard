@@ -9,6 +9,12 @@ import {
   calculatePacingComplexityIndex,
   type PacingComplexityComponents,
 } from "@/lib/race-analysis/pacing-complexity";
+import {
+  computeViability,
+  type CutOffPoint,
+  type ViabilityResult,
+  type RaceEntry as ViabilityRaceEntry,
+} from "@/lib/cutoff-viability";
 
 /* ── API types ── */
 interface RaceMeta {
@@ -1205,6 +1211,8 @@ export default function RaceReadinessPage() {
   const [versionNotes, setVersionNotes]   = useState("");
   const [versionSaving, setVersionSaving] = useState(false);
   const [versionResult, setVersionResult] = useState<{ version: number; fileCopied: boolean } | null>(null);
+  const [cutoffs, setCutoffs]                         = useState<CutOffPoint[] | null>(null);
+  const [athleteRiegelProfile, setAthleteRiegelProfile] = useState<{ riegel_b: number | null; riegel_b_confidence: number; longest_distance_km: number | null } | null>(null);
 
   const fetchAthlete = useCallback(async (key: string) => {
     if (!key.trim()) return;
@@ -1357,6 +1365,8 @@ export default function RaceReadinessPage() {
     setExpContext(null);
     setReportAthlete(null);
     setAthleteAidData({});
+    setCutoffs(null);
+    setAthleteRiegelProfile(null);
 
     // ── Step 1: Race overview (sequential — its response feeds downstream calls) ──
     let effectiveResult: OverviewResponse;
@@ -1428,8 +1438,35 @@ export default function RaceReadinessPage() {
           .then(r => r.ok ? r.json() as Promise<AthleteResponse> : null).catch(() => null)
       : Promise.resolve(null);
 
-    const [weatherData, resultsData, prepRacesData, expContextData, elevProfileMatchData, reportAthleteData] = await Promise.all([
-      weatherPromise, resultsPromise, prepRacesPromise, expContextPromise, elevProfileMatchPromise, reportAthletePromise,
+    const cutoffsPromise: Promise<CutOffPoint[] | null> = selectedRaceId
+      ? Promise.resolve(
+          supabase
+            .from("races_meta")
+            .select("meta_value")
+            .eq("race_id", selectedRaceId)
+            .eq("meta_key", "cut_offs")
+            .maybeSingle()
+            .then(({ data }) => {
+              if (!data?.meta_value) return null;
+              try { return JSON.parse(data.meta_value) as CutOffPoint[]; }
+              catch { return null; }
+            })
+        )
+      : Promise.resolve(null);
+
+    const riegelProfilePromise: Promise<{ riegel_b: number | null; riegel_b_confidence: number; longest_distance_km: number | null } | null> = selectedAthleteKey.trim()
+      ? Promise.resolve(
+          supabase
+            .from("als_athlete_profiles")
+            .select("riegel_b, riegel_b_confidence, longest_distance_km")
+            .eq("athlete_key", selectedAthleteKey.toLowerCase().trim())
+            .maybeSingle()
+            .then(({ data }) => data as { riegel_b: number | null; riegel_b_confidence: number; longest_distance_km: number | null } | null)
+        )
+      : Promise.resolve(null);
+
+    const [weatherData, resultsData, prepRacesData, expContextData, elevProfileMatchData, reportAthleteData, cutoffsData, riegelProfileData] = await Promise.all([
+      weatherPromise, resultsPromise, prepRacesPromise, expContextPromise, elevProfileMatchPromise, reportAthletePromise, cutoffsPromise, riegelProfilePromise,
     ]);
 
     // ── Step 3: Split analysis — needs the median derived from resultsData ──
@@ -1460,6 +1497,8 @@ export default function RaceReadinessPage() {
     setPrepRaces(prepRacesData);
     setExpContext(expContextData);
     setElevProfileMatch(elevProfileMatchData);
+    setCutoffs(cutoffsData);
+    setAthleteRiegelProfile(riegelProfileData);
     if (reportAthleteData) {
       setReportAthlete(reportAthleteData);
       // Fetch aid station data for athlete's previous races
@@ -1771,6 +1810,11 @@ export default function RaceReadinessPage() {
             <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 5 - Aid &amp; logistics</div>
             <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
               <strong style={{ color: "#1e3a1e" }}>Aid Station &amp; Logistics</strong>{" "}maps the support points, gaps between them, and drop bag availability. Logistics failures are rarely about fitness - this section flags where the risk lies.
+            </p>
+
+            <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 5b - Cut-off viability</div>
+            <p style={{ margin: 0, fontSize: "11px", lineHeight: 1.75, color: "#333" }}>
+              <strong style={{ color: "#1e3a1e" }}>Cut-off Viability Assessment</strong>{" "}uses your race history to fit a personal fatigue curve, then predicts your effort-adjusted pace at each cutoff point. The result is a per-checkpoint survival probability and an overall finish probability — so you can see exactly where the race could slip away.
             </p>
 
             <div style={{ fontSize: "9px", fontWeight: 700, color: "#aaa", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "16px", marginBottom: "5px" }}>Theme 6 - Physical readiness</div>
@@ -3749,7 +3793,198 @@ export default function RaceReadinessPage() {
 
 
           {/* ═══════════════════════════════════════
-              7 — Physical Readiness Checks  (p10)
+              7 — Cut-off Viability Assessment  (p12)
+          ═══════════════════════════════════════ */}
+          {result && (() => {
+            const viabilityEntries: ViabilityRaceEntry[] = filteredAthleteRaces
+              .filter(r => r.result_status === "FINISHED" && r.flat_equivalent_km && r.finish_seconds)
+              .map(r => ({ flat_equiv_km: r.flat_equivalent_km!, time_minutes: r.finish_seconds! / 60 }));
+
+            const longestDistKm =
+              (athleteRiegelProfile?.longest_distance_km ?? 0) > 0
+                ? athleteRiegelProfile!.longest_distance_km!
+                : filteredAthleteRaces.reduce((mx, r) => Math.max(mx, r.total_distance_km ?? 0), 0);
+
+            const sectionsForViability = (result.terrain_sections ?? []).map(sec => ({
+              start_distance_km: sec.start_km,
+              end_distance_km: sec.end_km,
+              distance_km: sec.distance_km,
+              elevation_change_m: sec.ascent_m - sec.descent_m,
+              ascent_m: sec.ascent_m,
+              descent_m: sec.descent_m,
+              avg_gradient_percent: sec.avg_gradient_percent,
+              section_type: sec.section_type,
+              terrain: sec.terrain,
+              flat_equivalent_km: sec.flat_equivalent_km,
+            }));
+
+            const viabilityResult: ViabilityResult | null = cutoffs && cutoffs.length >= 2
+              ? computeViability({
+                  raceEntries: viabilityEntries,
+                  cachedRiegelB: athleteRiegelProfile?.riegel_b ?? undefined,
+                  cachedRiegelConfidence: athleteRiegelProfile?.riegel_b_confidence ?? 0,
+                  longestDistanceKm: longestDistKm,
+                  goalRaceDistanceKm: result.race.total_distance_km,
+                  cutoffs,
+                  sections: sectionsForViability,
+                  fallbackTotalAscentM: result.race.total_ascent_m,
+                })
+              : null;
+
+            const pColor = viabilityResult
+              ? viabilityResult.overallFinishProbability >= 0.7 ? "#15803d"
+              : viabilityResult.overallFinishProbability >= 0.4 ? "#b45309"
+              : "#b91c1c"
+              : "#888";
+
+            const pBg = viabilityResult
+              ? viabilityResult.overallFinishProbability >= 0.7 ? "#dcfce7"
+              : viabilityResult.overallFinishProbability >= 0.4 ? "#fef3c7"
+              : "#fee2e2"
+              : "#f9fafb";
+
+            const bufferCellSty = (bufMin: number): React.CSSProperties => {
+              if (bufMin > 15) return { background: "#dcfce7", color: "#15803d", fontWeight: 600 };
+              if (bufMin >= 0) return { background: "#fef3c7", color: "#92400e", fontWeight: 600 };
+              return { background: "#fee2e2", color: "#b91c1c", fontWeight: 600 };
+            };
+
+            const fmtBuf = (min: number): string => {
+              const abs = Math.abs(min);
+              const h = Math.floor(abs / 60);
+              const m = Math.round(abs % 60);
+              const sign = min < 0 ? "−" : "+";
+              return h > 0 ? `${sign}${h}h ${m}m` : `${sign}${m}m`;
+            };
+
+            const fmtPaceSec = (secPerKm: number): string => {
+              const total = Math.round(secPerKm);
+              const m = Math.floor(total / 60);
+              const s = total % 60;
+              return `${m}:${s.toString().padStart(2, "0")}/km`;
+            };
+
+            return (
+              <div className="rr-page" style={a4Page}>
+                <div style={printHeader}>
+                  <img src="/tortoise-logo.png" alt="Tortoise Endurance" style={logoImg} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#1e3a1e" }}>{result.race.name}</div>
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>Cut-off Viability</div>
+                  </div>
+                </div>
+
+                <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>7 — Cut-off Viability Assessment</h2>
+                <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
+                  Pace predictions at each cutoff, adjusted for terrain and gradient, using your personal fatigue curve.
+                </p>
+
+                {!viabilityResult ? (
+                  <div style={{ padding: "14px", background: "#fafafa", border: "1px solid #e8e8e8", borderRadius: "6px", fontSize: "10.5px", color: "#666", lineHeight: 1.5 }}>
+                    {!cutoffs || cutoffs.length < 2
+                      ? "No cut-off data is available for this race. Add cut-offs in the race admin to enable this analysis."
+                      : "Insufficient data to compute viability."}
+                  </div>
+                ) : (
+                  <>
+                    {/* Summary card */}
+                    <div style={{ background: pBg, border: `1px solid ${pColor}30`, borderRadius: "8px", padding: "12px 16px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "20px" }}>
+                      <div style={{ textAlign: "center", minWidth: "80px" }}>
+                        <div style={{ fontSize: "32px", fontWeight: 800, color: pColor, lineHeight: 1 }}>
+                          {Math.round(viabilityResult.overallFinishProbability * 100)}%
+                        </div>
+                        <div style={{ fontSize: "9px", color: "#6b7280", marginTop: "2px" }}>finish probability</div>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "11px", marginBottom: "4px" }}>
+                          <strong>DCR {viabilityResult.distanceCoverageRatio.toFixed(2)}</strong>
+                          {" — distance coverage: "}
+                          <span style={{ fontWeight: 600 }}>
+                            {viabilityResult.dcRiskBand === "low" ? "Low risk"
+                              : viabilityResult.dcRiskBand === "moderate" ? "Moderate"
+                              : viabilityResult.dcRiskBand === "high" ? "High"
+                              : "Very high"}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#374151" }}>
+                          {(() => {
+                            const vp = viabilityResult.overallFinishProbability;
+                            const pinch = viabilityResult.checkpointResults[viabilityResult.pinchPointIndex];
+                            const label = pinch ? ` — tightest at ${pinch.checkpointName} (${pinch.cumulativeDistanceKm.toFixed(1)} km)` : "";
+                            if (vp >= 0.7) return `Cutoffs look achievable on current fitness${label}.`;
+                            if (vp >= 0.4) return `Cutoffs are marginal${label}. Pace discipline is critical.`;
+                            return `Cutoffs are at significant risk${label}. A revised target is recommended.`;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Per-checkpoint table */}
+                    <div style={{ marginBottom: "12px" }}>
+                      <div style={{ fontSize: "9px", color: "#9ca3af", marginBottom: "4px" }}>
+                        * Effort-equivalent flat pace (terrain &amp; gradient adjusted). ⚑ = pinch point.
+                      </div>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9.5px" }}>
+                        <thead>
+                          <tr style={{ background: "#1e3a1e" }}>
+                            {(["Checkpoint", "Dist (km)", "Req pace*", "Pred pace*", "Buffer", "P(surv)", "P(cum)"] as const).map((h, i) => (
+                              <th key={h} style={{ padding: "5px 7px", fontWeight: 700, color: "#fff", fontSize: "8px", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: i === 0 ? "left" : "right", whiteSpace: "nowrap" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {viabilityResult.checkpointResults.map((cp, i) => {
+                            const isPinch = i === viabilityResult.pinchPointIndex;
+                            return (
+                              <tr key={i} style={{ background: isPinch ? "#fffbeb" : i % 2 === 0 ? "#fafafa" : "#fff" }}>
+                                <td style={{ padding: "4px 7px", borderBottom: "1px solid #e5e7eb", fontSize: "9.5px" }}>
+                                  {isPinch && <span style={{ color: "#b45309", marginRight: "3px" }}>⚑</span>}
+                                  {cp.checkpointName}
+                                </td>
+                                <td style={{ padding: "4px 7px", borderBottom: "1px solid #e5e7eb", textAlign: "right" }}>{cp.cumulativeDistanceKm.toFixed(1)}</td>
+                                <td style={{ padding: "4px 7px", borderBottom: "1px solid #e5e7eb", textAlign: "right", fontFamily: "monospace" }}>{fmtPaceSec(cp.requiredPacePerKm)}</td>
+                                <td style={{ padding: "4px 7px", borderBottom: "1px solid #e5e7eb", textAlign: "right", fontFamily: "monospace" }}>{fmtPaceSec(cp.predictedPacePerKm)}</td>
+                                <td style={{ padding: "4px 7px", borderBottom: "1px solid #e5e7eb", textAlign: "right", ...bufferCellSty(cp.bufferMinutes) }}>{fmtBuf(cp.bufferMinutes)}</td>
+                                <td style={{ padding: "4px 7px", borderBottom: "1px solid #e5e7eb", textAlign: "right" }}>{cp.survivalProbability.toFixed(2)}</td>
+                                <td style={{ padding: "4px 7px", borderBottom: "1px solid #e5e7eb", textAlign: "right" }}>{cp.cumulativeSurvivalProbability.toFixed(2)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Confidence note */}
+                    <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "8px", fontSize: "9px", color: "#6b7280", lineHeight: 1.5 }}>
+                      <p style={{ margin: "0 0 2px" }}>
+                        Fatigue exponent: b = {viabilityResult.riegelB.toFixed(3)}, based on{" "}
+                        {viabilityResult.riegelBConfidence === 0
+                          ? "population average (no personal data)"
+                          : `${viabilityResult.riegelBConfidence} race result${viabilityResult.riegelBConfidence === 1 ? "" : "s"}`}.
+                      </p>
+                      {viabilityResult.riegelBConfidence < 2 && (
+                        <p style={{ margin: "0 0 2px", color: "#b45309" }}>
+                          ⚠ Fatigue estimate uses population averages. Log race times to personalise.
+                        </p>
+                      )}
+                      {viabilityResult.distanceCoverageRatio > 2.0 && (
+                        <p style={{ margin: "0 0 2px", color: "#b91c1c" }}>
+                          ⚠ This race is more than twice the athlete&apos;s longest known race. Prediction reliability is low.
+                        </p>
+                      )}
+                      <p style={{ margin: 0 }}>Terrain adjusted via Minetti et al. (2002). Probabilities use a logistic model (pace gap ÷ 60 s/km).</p>
+                    </div>
+                  </>
+                )}
+
+                <PageNumber n={12} />
+              </div>
+            );
+          })()}
+
+
+          {/* ═══════════════════════════════════════
+              8 — Physical Readiness Checks  (p10)
           ═══════════════════════════════════════ */}
           {reportAthlete && assessmentTests.length > 0 && (() => {
             const athleteMap: Record<string, number> = {};
@@ -3898,7 +4133,7 @@ export default function RaceReadinessPage() {
                     </div>
                   </div>
 
-                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>7 — Physical Self-Assessments</h2>
+                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>8 — Physical Self-Assessments</h2>
                   <p style={{ margin: "0 0 16px", fontSize: "12px", color: "#888" }}>
                     Tests to identify strength gaps, imbalances, and flexibility limitations that may not be visible in race data.
                   </p>
@@ -3922,7 +4157,7 @@ export default function RaceReadinessPage() {
                   {/* Only show recording CTA here when there are no optional items (single-page mode) */}
                   {optionalItems.length === 0 && recordingCta}
 
-                  <PageNumber n={12} />
+                  <PageNumber n={13} />
                 </div>
 
                 {/* ── Page 11: Optional assessments + recording CTA ─────── */}
@@ -3935,7 +4170,7 @@ export default function RaceReadinessPage() {
                     </div>
                   </div>
 
-                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>7 — Physical Self-Assessments (continued)</h2>
+                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>8 — Physical Self-Assessments (continued)</h2>
                   <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
                     Additional tests covering areas not highlighted by your specific gap profile.
                   </p>
@@ -3962,7 +4197,7 @@ export default function RaceReadinessPage() {
 
                   {recordingCta}
 
-                  <PageNumber n={13} />
+                  <PageNumber n={14} />
                 </div>
 
                 {/* ── Page 12: Assessment results recording table ─────── */}
@@ -3975,7 +4210,7 @@ export default function RaceReadinessPage() {
                     </div>
                   </div>
 
-                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>7 — Assessment Results</h2>
+                  <h2 style={{ margin: "0 0 2px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>8 — Assessment Results</h2>
                   <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
                     Use this page to record your results. Where a test measures each side separately, a row is provided for each.
                   </p>
@@ -4023,7 +4258,7 @@ export default function RaceReadinessPage() {
                     </tbody>
                   </table>
 
-                  <PageNumber n={14} />
+                  <PageNumber n={15} />
                 </div>
               </>
             );
@@ -4031,7 +4266,7 @@ export default function RaceReadinessPage() {
 
 
           {/* ═══════════════════════════════════════
-              8 — Suggested Preparation Priorities  (p11)
+              9 — Suggested Preparation Priorities  (p11)
           ═══════════════════════════════════════ */}
           {reportAthlete && (() => {
             const p = reportAthlete.profile;
@@ -4154,7 +4389,7 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>8 — Suggested Preparation Priorities</h2>
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>9 — Suggested Preparation Priorities</h2>
                 <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#888" }}>
                   Specific preparation actions derived from gap analysis and course demands
                 </p>
@@ -4195,14 +4430,14 @@ export default function RaceReadinessPage() {
                   </p>
                 </div>
 
-                <PageNumber n={15} />
+                <PageNumber n={16} />
               </div>
             );
           })()}
 
 
           {/* ═══════════════════════════════════════
-              9 — Suggested Preparation Races  (p12)
+              10 — Suggested Preparation Races  (p12)
           ═══════════════════════════════════════ */}
           {(prepRaces && reportAthlete) && (() => {
             const stl = (s: string) => s.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -4221,7 +4456,7 @@ export default function RaceReadinessPage() {
                   </div>
                 </div>
 
-                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>9 — Suggested Preparation Races</h2>
+                <h2 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 700, color: "#1e3a1e" }}>10 — Suggested Preparation Races</h2>
                 <p style={{ margin: "0 0 18px", fontSize: "12px", color: "#888" }}>
                   Races within {prepRaces?.radius_miles ?? radiusMiles} miles of {reportAthlete?.profile.athlete_key.split(" ")[0]}&apos;s race base
                   that best address identified experience gaps for {result.race.name}
@@ -4353,7 +4588,7 @@ export default function RaceReadinessPage() {
                   );
                 })()}
 
-                <PageNumber n={16} />
+                <PageNumber n={17} />
               </div>
             );
           })()}
@@ -4434,7 +4669,7 @@ export default function RaceReadinessPage() {
                   </table>
                 )}
 
-                <PageNumber n={17} />
+                <PageNumber n={18} />
               </div>
             );
           })()}
